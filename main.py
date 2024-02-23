@@ -7,22 +7,28 @@ import os.path
 from pydub import AudioSegment
 import numpy as np
 from math import ceil
+import re
 #from scipy.io import wavfile
 
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
-from ostilhou import load_segments_data, load_text_data
+from ostilhou import (
+    load_segments_data, load_text_data,
+    METADATA_PATTERN,
+)
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QFileDialog,
-    QWidget, QLayout, QVBoxLayout, QScrollArea, QSizePolicy,
-    QScrollBar, QSizeGrip, QPlainTextEdit, QSplitter,
+    QApplication, QMainWindow, QFileDialog, QMenu,
+    QWidget, QLayout, QVBoxLayout, QSizePolicy,
+    QScrollBar, QSizeGrip, QSplitter,
+    QPlainTextEdit, QTextEdit
 )
 from PySide6.QtCore import Qt, QRectF, QLineF, QSize, QTimer
 from PySide6.QtGui import (
     QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap,
     QPalette, QColor,
     QResizeEvent, QWheelEvent,
+    QTextBlockFormat, QTextCursor, QTextCharFormat
 )
 from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices
 
@@ -83,7 +89,7 @@ class WaveformWidget(QWidget):
         self.segpen = QPen(QColor(180, 120, 50), 1)
         self.segbrush = QBrush(QColor(180, 120, 50, 50))
         
-        self.ppsec = 100    # pixels per seconds (audio)
+        self.ppsec = 10    # pixels per seconds (audio)
         self.t0 = 0.0       # timecode (s) of left-most sample
         self.scroll_vel = 0.0
         self.head = 0.0
@@ -95,6 +101,7 @@ class WaveformWidget(QWidget):
     
     def setSamples(self, samples, sr):
         self.waveform = ScaledWaveform(samples, sr)
+        self.waveform.ppsec = self.ppsec
         self.t_total = len(samples) / sr
     
     def scroll(self, value):
@@ -130,7 +137,7 @@ class WaveformWidget(QWidget):
     
     def wheelEvent(self, event: QWheelEvent):
         if event.modifiers() & Qt.ControlModifier:
-            zoomFactor = 1.1
+            zoomFactor = 1.08
             zoomMax = 1000 # Pixels per second
             zoomLoc = event.position().x() / self.width()
             prev_ppsec = self.ppsec
@@ -246,16 +253,112 @@ class ScrollbarWidget(QScrollBar):
         self.waveform.draw()
 
 
+def plainTextToHtml(plain_text):
+    html_text = ""
+    match = METADATA_PATTERN.search(plain_text)
+    while match:
+        start, end = match.span()
+        html_text += plain_text[:start]
+        html_text += f"<span style='color: #860'>{plain_text[start:end]}</span>"
+        plain_text = plain_text[end:]
+        match = METADATA_PATTERN.search(plain_text)
+    html_text += plain_text
+    return f"<p>{html_text}</p>"
 
-class UtteranceWidget(QWidget):
+
+class TextUtterances(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        
-        self.textEdit = QPlainTextEdit()
-        self.textEdit.setMinimumHeight(50)
+                
+        # Signals
+        self.cursorPositionChanged.connect(self.cursor_changed)
+        # self.textChanged.connect(self.text_changed)
+        self.document().contentsChange.connect(self.contents_change)
+
+        #self.document().setDefaultStyleSheet()
     
-    def setText(text: str):
+    def setText(self, text: str):
+        self.locked = True
+        #self.setPlainText(text)
+        html_data = ""
+        for utt in text.split('\n'):
+            if utt.strip().startswith("#"):
+                html_data += f"<p style='color: #88A'>{utt.strip()}<\p>\n"
+            else:
+                html_data += plainTextToHtml(utt.strip()) + '\n'
+            #self.appendHtml(f"<p>{utt}<\p>\n")
+        self.setHtml(html_data)
+        
+        doc = self.document()
+        for blockIndex in range(doc.blockCount()):
+            block = doc.findBlockByNumber(blockIndex)
+            print(block.blockNumber(), block.text())
+        #     block.layout()
+            # block.blockFormat().setLineHeight(100.0, QTextBlockFormat.LineDistanceHeight)
+            # print(block.blockFormat().lineHeight())
+        self.locked = False
+    
+    def appendText(self, text: str):
+        self.locked = True
+        self.appendPlainText(text)
+        self.locked = False
+    
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if event.buttons() == Qt.LeftButton:
+            print()
+        elif event.buttons() == Qt.RightButton:
+            pass
+    
+    def cursor_changed(self):
+        if not self.locked:
+            cursor = self.textCursor()
+            print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
+            document = self.document()
+    
+    def text_changed(self):
+        print("text_changed")
+
+    def contents_change(self, pos, charsRemoved, charsAdded):
+        print("content changed", pos, charsRemoved, charsAdded)
+        pos = self.textCursor().position()
+        block = self.document().findBlock(pos)
+        self.updateTextFormat(block)
+    
+    def contextMenuEvent(self, event):
+        context = QMenu(self)
+        context.addAction(QAction("test 1", self))
+        context.addAction(QAction("test 2", self))
+        context.addAction(QAction("test 3", self))
+        context.exec(event.globalPos())
+    
+    def updateTextFormat(self, block):
+        cursor = QTextCursor(block)
+        plain_text = block.text()
+        print("text:", plain_text)
+        prev_pos = self.textCursor().position()
+        print("prev_pos", prev_pos)
+        
+        cursor.beginEditBlock()
+        # if plain_text.startswith('#'):
+        #     cursor.select(QTextCursor.LineUnderCursor)
+        #     cursor.removeSelectedText()
+        #     cursor.insertHtml(f"<p style='color: #88A'>{plain_text}<\p>")
+        # else:
+        #     cursor.select(QTextCursor.LineUnderCursor)
+        #     cursor.setBlockCharFormat(QTextCharFormat())
+        #     cursor.removeSelectedText()
+        #     cursor.insertText(plain_text)
+        cursor.select(QTextCursor.LineUnderCursor)
+        cursor.removeSelectedText()
+        cursor.insertHtml(plainTextToHtml(plain_text))
+        cursor.setPosition(prev_pos)
+        cursor.endEditBlock()
+        
+        self.setTextCursor(cursor)
+        # self.textCursor().setPosition(prev_pos)
+        print("new_pos", self.textCursor().position())
         
 
 
@@ -279,25 +382,13 @@ class AudioVisualizer(QMainWindow):
         bottomLayout.setContentsMargins(0, 0, 0, 0)
         bottomLayout.setSizeConstraint(QLayout.SetMaximumSize)
         bottomLayout.addWidget(self.scrollbar)
-        
-        utterancesArea = QScrollArea()
-        utterancesArea.setBackgroundRole(QPalette.Dark)
-        utterancesArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        utterancesArea.setWidgetResizable(True)
-        utterancesArea.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        utterancesWidget = QWidget()
-        utterancesWidget.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Expanding)
 
-        self.utterancesLayout = QVBoxLayout()
-        self.utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
-        #for i in range(4):
-        #    utterance = QPlainTextEdit()
-        #    self.utterancesLayout.addWidget(utterance)
-
-        utterancesWidget.setLayout(self.utterancesLayout)
-        utterancesArea.setWidget(utterancesWidget)
-        bottomLayout.addWidget(utterancesArea)
+        utterancesLayout = QVBoxLayout()
+        utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
+        self.utterances = TextUtterances()
+        utterancesLayout.addWidget(self.utterances)
         
+        bottomLayout.addWidget(self.utterances)
         self.bottomWidget = QWidget()
         self.bottomWidget.setLayout(bottomLayout)
         
@@ -365,11 +456,9 @@ class AudioVisualizer(QMainWindow):
         # Check for text file
         txt_filepath = basename + os.path.extsep + "txt"
         if os.path.exists(txt_filepath):
-            text = load_text_data(txt_filepath)
-            for sentence, metadata in text:
-                utterance = Utterance()
-                utterance.setText(sentence)
-                self.utterancesLayout.addWidget(utterance)
+            with open(txt_filepath, 'r') as text_data:
+                self.utterances.setText(text_data.read())
+
 
     def normalize_samples(self, samples):
         # Normalize audio samples to fit the visualization area
