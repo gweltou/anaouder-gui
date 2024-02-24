@@ -21,14 +21,14 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
     QWidget, QLayout, QVBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter,
-    QPlainTextEdit, QTextEdit
+    QPlainTextEdit, QTextEdit,
 )
-from PySide6.QtCore import Qt, QRectF, QLineF, QSize, QTimer
+from PySide6.QtCore import Qt, QRectF, QLineF, QSize, QTimer, QRegularExpression, QPointF
 from PySide6.QtGui import (
-    QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap,
-    QPalette, QColor,
+    QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
+    QPalette, QColor, QFont,
     QResizeEvent, QWheelEvent,
-    QTextBlockFormat, QTextCursor, QTextCharFormat
+    QTextBlockFormat, QTextCursor, QTextCharFormat, QSyntaxHighlighter,
 )
 from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices
 
@@ -73,7 +73,7 @@ class ScaledWaveform():
                     ymin += sample
             chart.append((ymin / mul, ymax / mul))
             
-        print(f"bins: {bi_right - bi_left}")
+        # print(f"bins: {bi_right - bi_left}")
         return chart
             
 
@@ -89,8 +89,8 @@ class WaveformWidget(QWidget):
         self.segpen = QPen(QColor(180, 120, 50), 1)
         self.segbrush = QBrush(QColor(180, 120, 50, 50))
         
-        self.ppsec = 10    # pixels per seconds (audio)
-        self.t0 = 0.0       # timecode (s) of left-most sample
+        self.ppsec = 10        # pixels per seconds (audio)
+        self.t_left = 0.0          # timecode (s) of left-most sample
         self.scroll_vel = 0.0
         self.head = 0.0
         
@@ -105,21 +105,21 @@ class WaveformWidget(QWidget):
         self.t_total = len(samples) / sr
     
     def scroll(self, value):
-        self.t0 = (value/100) * self.t_total
+        self.t_left = (value/100) * self.t_total
         self.draw()
     
     def _updateScroll(self):
         if self.scroll_vel > 0.001 or self.scroll_vel < -0.001:
-            self.t0 += self.scroll_vel
+            self.t_left += self.scroll_vel
             self.scroll_vel *= 0.9
-            if self.t0 < 0.0:
-                self.t0 = 0.0
+            if self.t_left < 0.0:
+                self.t_left = 0.0
                 self.scroll_vel = 0
-            if self.t0 + self.width() / self.ppsec >= self.t_total:
-                self.t0 = self.t_total - self.width() / self.ppsec
+            if self.t_left + self.width() / self.ppsec >= self.t_total:
+                self.t_left = self.t_total - self.width() / self.ppsec
                 self.scroll_vel = 0
             self.draw()
-            self.parent.scrollbar.setValue(int(100 * self.t0 / self.t_total))
+            self.parent.scrollbar.setValue(int(100 * self.t_left / self.t_total))
         else:
             self.timer.stop()
     
@@ -150,39 +150,51 @@ class WaveformWidget(QWidget):
                 if new_ppsec * len(self.waveform.samples) / self.waveform.sr >= self.width():
                     self.ppsec = new_ppsec
             delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
-            self.t0 -= delta_s * zoomLoc
-            self.t0 = min(max(self.t0, 0), self.t_total - self.width() / self.ppsec)
+            self.t_left -= delta_s * zoomLoc
+            self.t_left = min(max(self.t_left, 0), self.t_total - self.width() / self.ppsec)
             self.waveform.ppsec = self.ppsec
-            print("zoom", self.ppsec, zoomLoc, self.t0)
+            print("zoom", self.ppsec, zoomLoc, self.t_left)
         else:
             # Scroll
             pass
             #self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - event.angleDelta().y())
         self.draw()
     
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.buttons() == Qt.LeftButton:
-            self.mouse_pos = event.position().toPoint()
+            self.click_pos = event.position()
+            self.mouse_pos = event.position()
         elif event.buttons() == Qt.RightButton:
-            click_pos = event.position().x()
-            self.head = self.t0 + click_pos / self.ppsec
+            click_x = event.position().x()
+            self.head = self.t_left + click_x / self.ppsec
             self.draw()
+    
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        dx = event.position().x() - self.click_pos.x()
+        dy = event.position().y() - self.click_pos.y()
+        dist = dx * dx + dy * dy
+        if dist < 8:
+            # Select clicked segment
+            t = self.t_left + self.click_pos.x() / self.ppsec
+            print(t)
+            self.iselected = 0
+        return super().mouseReleaseEvent(event)
     
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton:
-            mouse_dpos = self.mouse_pos - event.position().toPoint()
+            mouse_dpos = self.mouse_pos - event.position()
             # Stop movement if drag direction is opposite
             if mouse_dpos.x() * self.scroll_vel < 0.0:
                 self.scroll_vel = 0.0
             self.scroll_vel += 0.1 * mouse_dpos.x() / self.ppsec
-            self.mouse_pos = event.position().toPoint()
+            self.mouse_pos = event.position()
             if not self.timer.isActive():
                 self.timer.start(1000/30)
     
     def draw(self):
         self.pixmap.fill(Qt.white)
-        tf = self.t0 + self.width() / self.ppsec
-        samples = self.waveform.get(self.t0, tf)
+        tf = self.t_left + self.width() / self.ppsec
+        samples = self.waveform.get(self.t_left, tf)
         
         if not samples:
             return
@@ -199,10 +211,10 @@ class WaveformWidget(QWidget):
         else:
             step = 30
         
-        ti = ceil(self.t0 / step) * step
+        ti = ceil(self.t_left / step) * step
         self.painter.setPen(QPen(QColor(180, 180, 180)))
         for t in range(ti, int(tf)+1, step):
-            t_x = (t - self.t0) * self.ppsec
+            t_x = (t - self.t_left) * self.ppsec
             self.painter.drawLine(t_x, 16, t_x, self.height())
             minutes, secs = divmod(t, 60)
             t_s = f"{secs}s" if not minutes else f"{minutes}m{secs:02}s"
@@ -220,17 +232,17 @@ class WaveformWidget(QWidget):
         self.painter.setPen(self.segpen)
         self.painter.setBrush(self.segbrush)
         for s_start, s_end in self.segments:
-            if s_end <= self.t0:
+            if s_end <= self.t_left:
                 continue
             if s_start >= tf:
                 break
-            x = (s_start - self.t0) * self.ppsec
+            x = (s_start - self.t_left) * self.ppsec
             w = (s_end - s_start) * self.ppsec
             self.painter.drawRect(x, 20, w, self.height()-40)
         
         # Draw head
-        if self.t0 <= self.head <= tf:
-            t_x = (self.head - self.t0) * self.ppsec
+        if self.t_left <= self.head <= tf:
+            t_x = (self.head - self.t_left) * self.ppsec
             self.painter.setPen(QPen(QColor(255, 20, 20)))
             self.painter.drawLine(t_x, 0, t_x, self.height())
         
@@ -253,17 +265,45 @@ class ScrollbarWidget(QScrollBar):
         self.waveform.draw()
 
 
-def plainTextToHtml(plain_text):
-    html_text = ""
-    match = METADATA_PATTERN.search(plain_text)
-    while match:
-        start, end = match.span()
-        html_text += plain_text[:start]
-        html_text += f"<span style='color: #860'>{plain_text[start:end]}</span>"
-        plain_text = plain_text[end:]
-        match = METADATA_PATTERN.search(plain_text)
-    html_text += plain_text
-    return f"<p>{html_text}</p>"
+
+
+class Highlighter(QSyntaxHighlighter):
+    def __init__(self, parent):
+        super().__init__(parent)
+
+        self.metadataFormat = QTextCharFormat()
+        self.metadataFormat.setForeground(Qt.darkMagenta)
+        self.metadataFormat.setFontWeight(QFont.Bold)
+
+        self.commentFormat = QTextCharFormat()
+        self.commentFormat.setForeground(Qt.gray)
+
+        self.stokenFormat = QTextCharFormat()
+        self.stokenFormat.setForeground(QColor(220, 180, 0))
+        self.stokenFormat.setFontWeight(QFont.Bold)
+
+    def highlightBlock(self, text):
+        # Comments
+        i = text.find('#')
+        if i >= 0:
+            self.setFormat(i, len(text)-i, self.commentFormat)
+            text = text[:i]
+
+        # Metadata        
+        expression = QRegularExpression(r"{\s*(.+?)\s*}")
+        i = expression.globalMatch(text)
+        while i.hasNext():
+            match = i.next()
+            self.setFormat(match.capturedStart(), match.capturedLength(), self.metadataFormat)
+        
+        # Special tokens
+        expression = QRegularExpression(r"<[A-Z\']+>")
+        i = expression.globalMatch(text)
+        while i.hasNext():
+            match = i.next()
+            self.setFormat(match.capturedStart(), match.capturedLength(), self.stokenFormat)
+        
+
 
 
 class TextUtterances(QTextEdit):
@@ -277,27 +317,28 @@ class TextUtterances(QTextEdit):
         self.document().contentsChange.connect(self.contents_change)
 
         #self.document().setDefaultStyleSheet()
+        self.highlighter = Highlighter(self.document())
     
-    def setText(self, text: str):
-        self.locked = True
-        #self.setPlainText(text)
-        html_data = ""
-        for utt in text.split('\n'):
-            if utt.strip().startswith("#"):
-                html_data += f"<p style='color: #88A'>{utt.strip()}<\p>\n"
-            else:
-                html_data += plainTextToHtml(utt.strip()) + '\n'
-            #self.appendHtml(f"<p>{utt}<\p>\n")
-        self.setHtml(html_data)
+    # def setText(self, text: str):
+    #     self.locked = True
+    #     #self.setPlainText(text)
+    #     html_data = ""
+    #     for utt in text.split('\n'):
+    #         if utt.strip().startswith("#"):
+    #             html_data += f"<p style='color: #88A'>{utt.strip()}<\p>\n"
+    #         else:
+    #             html_data += plainTextToHtml(utt.strip()) + '\n'
+    #         #self.appendHtml(f"<p>{utt}<\p>\n")
+    #     self.setHtml(html_data)
         
-        doc = self.document()
-        for blockIndex in range(doc.blockCount()):
-            block = doc.findBlockByNumber(blockIndex)
-            print(block.blockNumber(), block.text())
-        #     block.layout()
-            # block.blockFormat().setLineHeight(100.0, QTextBlockFormat.LineDistanceHeight)
-            # print(block.blockFormat().lineHeight())
-        self.locked = False
+    #     doc = self.document()
+    #     for blockIndex in range(doc.blockCount()):
+    #         block = doc.findBlockByNumber(blockIndex)
+    #         print(block.blockNumber(), block.text())
+    #     #     block.layout()
+    #         # block.blockFormat().setLineHeight(100.0, QTextBlockFormat.LineDistanceHeight)
+    #         # print(block.blockFormat().lineHeight())
+    #     self.locked = False
     
     def appendText(self, text: str):
         self.locked = True
@@ -312,10 +353,9 @@ class TextUtterances(QTextEdit):
             pass
     
     def cursor_changed(self):
-        if not self.locked:
-            cursor = self.textCursor()
-            print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
-            document = self.document()
+        cursor = self.textCursor()
+        print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
+        document = self.document()
     
     def text_changed(self):
         print("text_changed")
@@ -323,8 +363,7 @@ class TextUtterances(QTextEdit):
     def contents_change(self, pos, charsRemoved, charsAdded):
         print("content changed", pos, charsRemoved, charsAdded)
         pos = self.textCursor().position()
-        block = self.document().findBlock(pos)
-        self.updateTextFormat(block)
+        #self.updateTextFormat(pos)
     
     def contextMenuEvent(self, event):
         context = QMenu(self)
@@ -333,32 +372,23 @@ class TextUtterances(QTextEdit):
         context.addAction(QAction("test 3", self))
         context.exec(event.globalPos())
     
-    def updateTextFormat(self, block):
-        cursor = QTextCursor(block)
+    def updateTextFormat(self, pos):
+        block = self.document().findBlock(pos)
         plain_text = block.text()
         print("text:", plain_text)
-        prev_pos = self.textCursor().position()
-        print("prev_pos", prev_pos)
+        # cursor = QTextCursor(self.document())
+        cursor = self.textCursor()
+        prev_pos = cursor.position()
         
-        cursor.beginEditBlock()
-        # if plain_text.startswith('#'):
-        #     cursor.select(QTextCursor.LineUnderCursor)
-        #     cursor.removeSelectedText()
-        #     cursor.insertHtml(f"<p style='color: #88A'>{plain_text}<\p>")
-        # else:
-        #     cursor.select(QTextCursor.LineUnderCursor)
-        #     cursor.setBlockCharFormat(QTextCharFormat())
-        #     cursor.removeSelectedText()
-        #     cursor.insertText(plain_text)
-        cursor.select(QTextCursor.LineUnderCursor)
+        cursor.joinPreviousEditBlock()
+        cursor.select(QTextCursor.BlockUnderCursor)
         cursor.removeSelectedText()
+        cursor.insertBlock()
         cursor.insertHtml(plainTextToHtml(plain_text))
-        cursor.setPosition(prev_pos)
         cursor.endEditBlock()
         
+        cursor.setPosition(prev_pos)
         self.setTextCursor(cursor)
-        # self.textCursor().setPosition(prev_pos)
-        print("new_pos", self.textCursor().position())
         
 
 
@@ -368,7 +398,7 @@ class AudioVisualizer(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Anaouder-Qt")
-        self.setGeometry(50, 50, 800, 400)
+        self.setGeometry(50, 50, 800, 600)
         
         self.input_devices = QMediaDevices.audioInputs()
         
