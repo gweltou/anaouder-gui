@@ -14,8 +14,9 @@ from vosk import Model, KaldiRecognizer, SetLogLevel
 
 from ostilhou import (
     load_segments_data, load_text_data,
-    METADATA_PATTERN,
+    METADATA_PATTERN, extract_metadata,
 )
+# from ostilhou.asr import extract_metadata
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
@@ -23,14 +24,18 @@ from PySide6.QtWidgets import (
     QScrollBar, QSizeGrip, QSplitter,
     QPlainTextEdit, QTextEdit, QPushButton,
 )
-from PySide6.QtCore import Qt, QRectF, QLineF, QSize, QTimer, QRegularExpression, QPointF
+from PySide6.QtCore import (
+    Qt, QRectF, QLineF, QSize, QTimer, QRegularExpression, QPointF,
+    QByteArray, QBuffer, QIODevice, QUrl,
+)
 from PySide6.QtGui import (
     QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
     QPalette, QColor, QFont,
-    QResizeEvent, QWheelEvent,
+    QResizeEvent, QWheelEvent, QKeySequence, QShortcut,
     QTextBlockFormat, QTextCursor, QTextCharFormat, QSyntaxHighlighter,
+    QTextBlockUserData,
 )
-from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices
+from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput
 
 
 
@@ -174,7 +179,7 @@ class WaveformWidget(QWidget):
         dx = event.position().x() - self.click_pos.x()
         dy = event.position().y() - self.click_pos.y()
         dist = dx * dx + dy * dy
-        if dist < 12:
+        if dist < 16:
             # Select clicked segment
             t = self.t_left + self.click_pos.x() / self.ppsec
             print(t)
@@ -199,6 +204,13 @@ class WaveformWidget(QWidget):
             if not self.timer.isActive():
                 self.timer.start(1000/30)
     
+    def contextMenuEvent(self, event):
+        context = QMenu(self)
+        context.addAction(QAction("Set play head", self))
+        context.addAction(QAction("Segment from selection", self))
+        context.addAction(QAction("test 3", self))
+        context.exec(event.globalPos())
+
     def draw(self):
         self.pixmap.fill(Qt.white)
         tf = self.t_left + self.width() / self.ppsec
@@ -342,7 +354,39 @@ class TextUtterances(QTextEdit):
         self.defaultCharFormat = QTextCharFormat()
         self.lastActive = -1
     
-    # def setText(self, text: str):
+
+    def block_is_utt(self, i):
+        block = self.document().findBlockByNumber(i)
+        text = block.text()
+
+        i_comment = text.find('#')
+        if i_comment >= 0:
+            text = text[:i_comment]
+        
+        text, _ = extract_metadata(text)
+        return len(text.strip()) > 0
+
+
+    def setText(self, text: str):
+        super().setText(text)
+
+        doc = self.document()
+        for blockIndex in range(doc.blockCount()):
+            block = doc.findBlockByNumber(blockIndex)
+            text = block.text()
+
+            i_comment = text.find('#')
+            if i_comment >= 0:
+                text = text[:i_comment]
+            
+            text, _ = extract_metadata(text)
+            is_utt = len(text.strip()) > 0
+
+            if is_utt:
+                block.setUserData(QTextBlockUserData({"is_utt": True}))
+            else:
+                block.setUserData(QTextBlockUserData({"is_utt": False}))
+
     #     self.locked = True
     #     #self.setPlainText(text)
     #     html_data = ""
@@ -362,10 +406,14 @@ class TextUtterances(QTextEdit):
     #         # block.blockFormat().setLineHeight(100.0, QTextBlockFormat.LineDistanceHeight)
     #         # print(block.blockFormat().lineHeight())
     #     self.locked = False
-    
+
     def setActive(self, i: int):
-        print("setactiev", i)
         doc = self.document()
+
+        utt_blocks = []
+        for blockIndex in range(doc.blockCount()):
+            if self.block_is_utt(blockIndex):
+                utt_blocks.append(blockIndex)
 
         # for blockIndex in range(doc.blockCount()):
         if self.lastActive >= 0:
@@ -377,9 +425,10 @@ class TextUtterances(QTextEdit):
             cursor.select(QTextCursor.BlockUnderCursor)
             cursor.setCharFormat(QTextCharFormat())
             cursor.endEditBlock()
-        self.lastActive = i
+        
+        self.lastActive = utt_blocks[i]
 
-        block = doc.findBlockByNumber(i)
+        block = doc.findBlockByNumber(self.lastActive)
         block_format = block.blockFormat()
         block_format.setBackground(QColor(250, 255, 200))
         block_format.setBottomMargin(10)
@@ -402,13 +451,13 @@ class TextUtterances(QTextEdit):
 
         self.ensureCursorVisible()
 
-        scroll_bar.setValue(scroll_bar.value() - 50)
+        scroll_bar.setValue(scroll_bar.value() - 35)
         
 
-    def appendText(self, text: str):
-        self.locked = True
-        self.appendPlainText(text)
-        self.locked = False
+    # def appendText(self, text: str):
+    #     self.locked = True
+    #     self.appendPlainText(text)
+    #     self.locked = False
     
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
@@ -466,8 +515,19 @@ class AudioVisualizer(QMainWindow):
         self.setGeometry(50, 50, 800, 600)
         
         self.input_devices = QMediaDevices.audioInputs()
+
+        self.player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.player.setAudioOutput(self.audio_output)
         
         self.initUI()
+
+        shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        shortcut.activated.connect(self.on_search)
+        shortcut = QShortcut(QKeySequence("Alt+Right"), self)
+        shortcut.activated.connect(self.on_next_utt)
+        shortcut = QShortcut(QKeySequence("Alt+Left"), self)
+        shortcut.activated.connect(self.on_prev_utt)
 
     def initUI(self):
         self.waveform = WaveformWidget(self)
@@ -483,7 +543,7 @@ class AudioVisualizer(QMainWindow):
         buttonsLayout = QHBoxLayout()
         buttonsLayout.setSpacing(0)
         buttonsLayout.setContentsMargins(0, 0, 0, 0)
-        buttonsLayout.setAlignment(Qt.AlignLeft)
+        buttonsLayout.setAlignment(Qt.AlignHCenter)
         prevButton = QPushButton("<<")
         prevButton.setFixedWidth(25)
         # button.setIcon(QIcon(icon_path))
@@ -495,6 +555,8 @@ class AudioVisualizer(QMainWindow):
         nextButton.setFixedWidth(25)
         buttonsLayout.addWidget(nextButton)
         bottomLayout.addLayout(buttonsLayout)
+
+        curButton.clicked.connect(self.playSegment)
 
         utterancesLayout = QVBoxLayout()
         utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
@@ -508,6 +570,7 @@ class AudioVisualizer(QMainWindow):
         self.bottomWidget.setLayout(bottomLayout)
         
         splitter = QSplitter(Qt.Vertical)
+        splitter.setHandleWidth(5)
         splitter.addWidget(self.waveform)
         splitter.addWidget(self.bottomWidget)        
         splitter.setSizes([200, 400])
@@ -531,18 +594,44 @@ class AudioVisualizer(QMainWindow):
             deviceMenu.addAction(QAction(dev.description(), self))
         
         #self.waveform.scale(self.size())
-        self.loadAudio('/home/gweltaz/STT/aligned/Becedia/komzoù-brezhoneg_catherine-quiniou-tine-plounevez-du-faou.wav')
+        self.openFile('/home/gweltaz/STT/aligned/Becedia/komzoù-brezhoneg_catherine-quiniou-tine-plounevez-du-faou.wav')
     
-    def openFile(self):
-        filepath, _ = QFileDialog.getOpenFileName(self, "Open File", "", "Audio Files (*.wav *.mp3)")
-        if filepath:
-            self.loadAudio(filepath)
+    def on_search(self):
+        print("search tool")
+    
+    def on_next_utt(self):
+        n_segs = len(self.waveform.segments)
+        idx = min(self.waveform.iselected + 1, n_segs)
+        self.waveform.iselected = idx
         self.waveform.draw()
+        self.utterances.setActive(idx)
     
+    def on_prev_utt(self):
+        idx = max(self.waveform.iselected - 1, 0)
+        self.waveform.iselected = idx
+        self.waveform.draw()
+        self.utterances.setActive(idx)
+
+
+    def openFile(self, filepath: str = None):
+        if not filepath:
+            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", "", "Audio Files (*.wav *.mp3)")
+        if not filepath:
+            return
+
+        self.loadAudio(filepath)
+        self.waveform.iselected = 0
+        self.utterances.setActive(0)
+    
+
     def loadAudio(self, filepath):
         # Load audio file with pydub
         print("Loading", filepath)
+
+        self.player.setSource(QUrl(filepath))
+
         audio = AudioSegment.from_file(filepath)
+        self.original_audio = audio
         
         # Convert to mono by averaging channels if necessary
         if audio.channels > 1:
@@ -582,33 +671,44 @@ class AudioVisualizer(QMainWindow):
             return np.zeros(samples.shape)
         return samples / max_val
 
+
     def playSegment(self, seg_i):
+        start, end = self.waveform.segments[self.waveform.iselected]
+
         # Load the audio file using PyDub
-        audio_segment = AudioSegment.from_file("path_to_your_audio_file.mp3")
+        print("play segment", start, end)
 
-        # Convert the AudioSegment to raw audio data (16-bit PCM format)
-        raw_audio_data = audio_segment.raw_data
+        # audio_segment = self.original_audio[start:end]
+        # raw_audio_data = audio_segment.raw_data
+        # byte_array = QByteArray(raw_audio_data)
+        # self.buffer = QBuffer()
+        # self.buffer.setData(byte_array)
+        # self.buffer.open(QIODevice.WriteOnly)
+        # self.buffer.seek(0)
 
-        # Create a QByteArray from the raw audio data
-        byte_array = QByteArray(raw_audio_data)
+        # # Create a QAudioOutput instance
+        # format = QAudioFormat()
+        # format.setSampleRate(self.original_audio.frame_rate)
+        # format.setChannelCount(self.original_audio.channels)
+        # #format.setSampleFormat(2)
+        # format.setSampleSize(16)
+        # format.setCodec("audio/pcm")
+        #format.setByteOrder(QAudioFormat.LittleEndian)
+        #format.setSampleType(QAudioFormat.SignedInt)
 
-        # Create a QBuffer and open it in WriteOnly mode
-        self.buffer = QBuffer()
-        self.buffer.setData(byte_array)
-        self.buffer.open(QIODevice.WriteOnly)
+        # audio_output = QAudioOutput(format)
+        # audio_output.setVolume(100)
+        self.player.setPosition(start * 1000)
+        self.pause_timer = QTimer()
+        self.pause_timer.timeout.connect(self.pause_player)
 
-        # Create a QAudioOutput instance
-        format = QAudioFormat()
-        format.setSampleRate(audio_segment.frame_rate)
-        format.setChannelCount(audio_segment.channels)
-        format.setSampleSize(16)
-        format.setCodec("audio/pcm")
-        format.setByteOrder(QAudioFormat.LittleEndian)
-        format.setSampleType(QAudioFormat.SignedInt)
-
-        self.audio_output = QAudioOutput(format)
-        self.audio_output.start(self.buffer)
-
+        self.player.play()
+        self.pause_timer.start((end-start)*1000)
+    
+    def pause_player(self):
+        self.player.pause()
+        self.pause_timer.stop()
+        
 
 
 def main():
