@@ -19,9 +19,9 @@ from ostilhou import (
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
-    QWidget, QLayout, QVBoxLayout, QSizePolicy,
+    QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter,
-    QPlainTextEdit, QTextEdit,
+    QPlainTextEdit, QTextEdit, QPushButton,
 )
 from PySide6.QtCore import Qt, QRectF, QLineF, QSize, QTimer, QRegularExpression, QPointF
 from PySide6.QtGui import (
@@ -95,6 +95,7 @@ class WaveformWidget(QWidget):
         self.head = 0.0
         
         self.segments = []
+        self.iselected = -1
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._updateScroll)
@@ -173,11 +174,18 @@ class WaveformWidget(QWidget):
         dx = event.position().x() - self.click_pos.x()
         dy = event.position().y() - self.click_pos.y()
         dist = dx * dx + dy * dy
-        if dist < 8:
+        if dist < 12:
             # Select clicked segment
             t = self.t_left + self.click_pos.x() / self.ppsec
             print(t)
-            self.iselected = 0
+            self.iselected = -1
+            for i, (start, end) in enumerate(self.segments):
+                if start < t < end:
+                    self.iselected = i
+                    self.utterances.setActive(i)
+                    break
+            print(self.iselected)
+        self.draw()
         return super().mouseReleaseEvent(event)
     
     def mouseMoveEvent(self, event):
@@ -229,16 +237,27 @@ class WaveformWidget(QWidget):
             pass
         
         # Draw segments
-        self.painter.setPen(self.segpen)
-        self.painter.setBrush(self.segbrush)
-        for s_start, s_end in self.segments:
-            if s_end <= self.t_left:
+        for i, (start, end) in enumerate(self.segments):
+            if i == self.iselected:
                 continue
-            if s_start >= tf:
+            if end <= self.t_left:
+                continue
+            if start >= tf:
                 break
-            x = (s_start - self.t_left) * self.ppsec
-            w = (s_end - s_start) * self.ppsec
+            x = (start - self.t_left) * self.ppsec
+            w = (end - start) * self.ppsec
+            self.painter.setPen(self.segpen)
+            self.painter.setBrush(self.segbrush)
             self.painter.drawRect(x, 20, w, self.height()-40)
+        
+        if self.iselected >= 0:
+            start, end = self.segments[self.iselected]
+            if end > self.t_left or start < tf:
+                x = (start - self.t_left) * self.ppsec
+                w = (end - start) * self.ppsec
+                self.painter.setPen(QPen(QColor(220, 180, 60), 4))
+                self.painter.setBrush(QBrush(QColor(220, 180, 60, 50)))
+                self.painter.drawRect(x, 20, w, self.height()-40)
         
         # Draw head
         if self.t_left <= self.head <= tf:
@@ -318,6 +337,10 @@ class TextUtterances(QTextEdit):
 
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document())
+
+        self.defaultBlockFormat = QTextBlockFormat()
+        self.defaultCharFormat = QTextCharFormat()
+        self.lastActive = -1
     
     # def setText(self, text: str):
     #     self.locked = True
@@ -340,6 +363,48 @@ class TextUtterances(QTextEdit):
     #         # print(block.blockFormat().lineHeight())
     #     self.locked = False
     
+    def setActive(self, i: int):
+        print("setactiev", i)
+        doc = self.document()
+
+        # for blockIndex in range(doc.blockCount()):
+        if self.lastActive >= 0:
+            # Reset format of previously selected utterance
+            last_block = doc.findBlockByNumber(self.lastActive)
+            cursor = QTextCursor(last_block)
+            cursor.joinPreviousEditBlock()
+            cursor.setBlockFormat(self.defaultBlockFormat)
+            cursor.select(QTextCursor.BlockUnderCursor)
+            cursor.setCharFormat(QTextCharFormat())
+            cursor.endEditBlock()
+        self.lastActive = i
+
+        block = doc.findBlockByNumber(i)
+        block_format = block.blockFormat()
+        block_format.setBackground(QColor(250, 255, 200))
+        block_format.setBottomMargin(10)
+        block_format.setTopMargin(10)
+
+        cursor = QTextCursor(block)
+        cursor.joinPreviousEditBlock()
+        cursor.setBlockFormat(block_format)
+
+        char_format = QTextCharFormat()
+        char_format.setFontPointSize(14)
+        cursor.select(QTextCursor.BlockUnderCursor)
+        cursor.mergeCharFormat(char_format)
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.endEditBlock()
+
+        self.setTextCursor(cursor)
+        scroll_bar = self.verticalScrollBar()
+        scroll_bar.setValue(scroll_bar.maximum())
+
+        self.ensureCursorVisible()
+
+        scroll_bar.setValue(scroll_bar.value() - 50)
+        
+
     def appendText(self, text: str):
         self.locked = True
         self.appendPlainText(text)
@@ -372,23 +437,23 @@ class TextUtterances(QTextEdit):
         context.addAction(QAction("test 3", self))
         context.exec(event.globalPos())
     
-    def updateTextFormat(self, pos):
-        block = self.document().findBlock(pos)
-        plain_text = block.text()
-        print("text:", plain_text)
-        # cursor = QTextCursor(self.document())
-        cursor = self.textCursor()
-        prev_pos = cursor.position()
+    # def updateTextFormat(self, pos):
+    #     block = self.document().findBlock(pos)
+    #     plain_text = block.text()
+    #     print("text:", plain_text)
+    #     # cursor = QTextCursor(self.document())
+    #     cursor = self.textCursor()
+    #     prev_pos = cursor.position()
         
-        cursor.joinPreviousEditBlock()
-        cursor.select(QTextCursor.BlockUnderCursor)
-        cursor.removeSelectedText()
-        cursor.insertBlock()
-        cursor.insertHtml(plainTextToHtml(plain_text))
-        cursor.endEditBlock()
+    #     cursor.joinPreviousEditBlock()
+    #     cursor.select(QTextCursor.BlockUnderCursor)
+    #     cursor.removeSelectedText()
+    #     cursor.insertBlock()
+    #     cursor.insertHtml(plainTextToHtml(plain_text))
+    #     cursor.endEditBlock()
         
-        cursor.setPosition(prev_pos)
-        self.setTextCursor(cursor)
+    #     cursor.setPosition(prev_pos)
+    #     self.setTextCursor(cursor)
         
 
 
@@ -409,14 +474,34 @@ class AudioVisualizer(QMainWindow):
         self.scrollbar = ScrollbarWidget(self.waveform)
         
         bottomLayout = QVBoxLayout()
+        bottomLayout.setSpacing(0)
         bottomLayout.setContentsMargins(0, 0, 0, 0)
         bottomLayout.setSizeConstraint(QLayout.SetMaximumSize)
         bottomLayout.addWidget(self.scrollbar)
+
+        # Play buttons
+        buttonsLayout = QHBoxLayout()
+        buttonsLayout.setSpacing(0)
+        buttonsLayout.setContentsMargins(0, 0, 0, 0)
+        buttonsLayout.setAlignment(Qt.AlignLeft)
+        prevButton = QPushButton("<<")
+        prevButton.setFixedWidth(25)
+        # button.setIcon(QIcon(icon_path))
+        buttonsLayout.addWidget(prevButton)
+        curButton = QPushButton("=")
+        curButton.setFixedWidth(25)
+        buttonsLayout.addWidget(curButton)
+        nextButton = QPushButton(">>")
+        nextButton.setFixedWidth(25)
+        buttonsLayout.addWidget(nextButton)
+        bottomLayout.addLayout(buttonsLayout)
 
         utterancesLayout = QVBoxLayout()
         utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
         self.utterances = TextUtterances()
         utterancesLayout.addWidget(self.utterances)
+
+        self.waveform.utterances = self.utterances
         
         bottomLayout.addWidget(self.utterances)
         self.bottomWidget = QWidget()
@@ -496,6 +581,33 @@ class AudioVisualizer(QMainWindow):
         if max_val == 0:
             return np.zeros(samples.shape)
         return samples / max_val
+
+    def playSegment(self, seg_i):
+        # Load the audio file using PyDub
+        audio_segment = AudioSegment.from_file("path_to_your_audio_file.mp3")
+
+        # Convert the AudioSegment to raw audio data (16-bit PCM format)
+        raw_audio_data = audio_segment.raw_data
+
+        # Create a QByteArray from the raw audio data
+        byte_array = QByteArray(raw_audio_data)
+
+        # Create a QBuffer and open it in WriteOnly mode
+        self.buffer = QBuffer()
+        self.buffer.setData(byte_array)
+        self.buffer.open(QIODevice.WriteOnly)
+
+        # Create a QAudioOutput instance
+        format = QAudioFormat()
+        format.setSampleRate(audio_segment.frame_rate)
+        format.setChannelCount(audio_segment.channels)
+        format.setSampleSize(16)
+        format.setCodec("audio/pcm")
+        format.setByteOrder(QAudioFormat.LittleEndian)
+        format.setSampleType(QAudioFormat.SignedInt)
+
+        self.audio_output = QAudioOutput(format)
+        self.audio_output.start(self.buffer)
 
 
 
