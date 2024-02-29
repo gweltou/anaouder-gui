@@ -33,7 +33,7 @@ from PySide6.QtGui import (
     QPalette, QColor, QFont,
     QResizeEvent, QWheelEvent, QKeySequence, QShortcut,
     QTextBlockFormat, QTextCursor, QTextCharFormat, QSyntaxHighlighter,
-    QTextBlockUserData,
+    QTextBlockUserData, QIcon
 )
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput
 
@@ -481,7 +481,7 @@ class TextUtterances(QTextEdit):
     
     def contextMenuEvent(self, event):
         context = QMenu(self)
-        context.addAction(QAction("test 1", self))
+        context.addAction(QAction("Split here", self))
         context.addAction(QAction("test 2", self))
         context.addAction(QAction("test 3", self))
         context.exec(event.globalPos())
@@ -541,18 +541,22 @@ class AudioVisualizer(QMainWindow):
 
         # Play buttons
         buttonsLayout = QHBoxLayout()
-        buttonsLayout.setSpacing(0)
+        buttonsLayout.setSpacing(3)
         buttonsLayout.setContentsMargins(0, 0, 0, 0)
         buttonsLayout.setAlignment(Qt.AlignHCenter)
-        prevButton = QPushButton("<<")
-        prevButton.setFixedWidth(25)
+        button_size = 28
+        prevButton = QPushButton()
+        prevButton.setIcon(QIcon("icons/previous.png"))
+        prevButton.setFixedWidth(button_size)
         # button.setIcon(QIcon(icon_path))
         buttonsLayout.addWidget(prevButton)
-        curButton = QPushButton("=")
-        curButton.setFixedWidth(25)
+        curButton = QPushButton()
+        curButton.setIcon(QIcon("icons/play-button.png"))
+        curButton.setFixedWidth(button_size)
         buttonsLayout.addWidget(curButton)
-        nextButton = QPushButton(">>")
-        nextButton.setFixedWidth(25)
+        nextButton = QPushButton()
+        nextButton.setIcon(QIcon("icons/next.png"))
+        nextButton.setFixedWidth(button_size)
         buttonsLayout.addWidget(nextButton)
         bottomLayout.addLayout(buttonsLayout)
 
@@ -596,6 +600,7 @@ class AudioVisualizer(QMainWindow):
         #self.waveform.scale(self.size())
         self.openFile('/home/gweltaz/STT/aligned/Becedia/komzoù-brezhoneg_catherine-quiniou-tine-plounevez-du-faou.wav')
     
+
     def on_search(self):
         print("search tool")
     
