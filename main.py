@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
     QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter,
-    QPlainTextEdit, QTextEdit, QPushButton,
+    QPlainTextEdit, QTextEdit, QPushButton, QDial,
 )
 from PySide6.QtCore import (
     Qt, QRectF, QLineF, QSize, QTimer, QRegularExpression, QPointF,
@@ -39,52 +39,53 @@ from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAud
 
 
 
-
-
-class ScaledWaveform():
-    """
-        Manage the loading/unloading of samples chunks dynamically
-    """
-    def __init__(self, samples, sr):
-        self.samples = samples
-        self.sr = sr
-        self.ppsec = 100    # pixels per seconds (audio)
-        self.chunks = []
-        
-
-    def get(self, t_left, t_right):
-        samples_per_bin = int(self.sr / self.ppsec)
-        num_bins = ceil(len(self.samples) / samples_per_bin)
-        
-        si_left = int(t_left * self.sr)
-        bi_left = si_left // samples_per_bin
-        si_right = ceil(t_right * self.sr)
-        bi_right = si_right // samples_per_bin
-        
-        chart = []
-        s_step = 1 if samples_per_bin <= 16 else samples_per_bin // 16
-        mul = samples_per_bin / s_step
-        for i in range(bi_left, bi_right):
-            s0 = i * samples_per_bin
-            ymin = 0.0
-            ymax = 0.0
-            for si in range(s0, s0 + samples_per_bin, s_step):
-                #if si >= len(self.samples):
-                #    break
-                sample = self.samples[si]
-                if sample > 0.0:
-                    ymax += sample
-                else:
-                    ymin += sample
-            chart.append((ymin / mul, ymax / mul))
-            
-        # print(f"bins: {bi_right - bi_left}")
-        return chart
             
 
 
 
-class WaveformWidget(QWidget): 
+class WaveformWidget(QWidget):
+
+    class ScaledWaveform():
+        """
+            Manage the loading/unloading of samples chunks dynamically
+        """
+        def __init__(self, samples, sr):
+            self.samples = samples
+            self.sr = sr
+            self.ppsec = 100    # pixels per seconds (audio)
+            self.chunks = []
+            
+
+        def get(self, t_left, t_right):
+            samples_per_bin = int(self.sr / self.ppsec)
+            num_bins = ceil(len(self.samples) / samples_per_bin)
+            
+            si_left = int(t_left * self.sr)
+            bi_left = si_left // samples_per_bin
+            si_right = ceil(t_right * self.sr)
+            bi_right = si_right // samples_per_bin
+            
+            chart = []
+            s_step = 1 if samples_per_bin <= 16 else samples_per_bin // 16
+            mul = samples_per_bin / s_step
+            for i in range(bi_left, bi_right):
+                s0 = i * samples_per_bin
+                ymin = 0.0
+                ymax = 0.0
+                for si in range(s0, s0 + samples_per_bin, s_step):
+                    #if si >= len(self.samples):
+                    #    break
+                    sample = self.samples[si]
+                    if sample > 0.0:
+                        ymax += sample
+                    else:
+                        ymin += sample
+                chart.append((ymin / mul, ymax / mul))
+                
+            # print(f"bins: {bi_right - bi_left}")
+            return chart
+    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
@@ -106,15 +107,43 @@ class WaveformWidget(QWidget):
         self.timer.timeout.connect(self._updateScroll)
     
     def setSamples(self, samples, sr):
-        self.waveform = ScaledWaveform(samples, sr)
+        self.waveform = self.ScaledWaveform(samples, sr)
         self.waveform.ppsec = self.ppsec
         self.t_total = len(samples) / sr
     
-    def scroll(self, value):
-        self.t_left = (value/100) * self.t_total
-        self.draw()
+    def setActive(self, n):
+        """Select and center on the n-th utterance"""
+        if n == -1:
+            return
+        assert n >= 0
+        assert n < len(self.segments)
+
+        self.iselected = n
+        start, end = self.segments[n]
+        dur = end-start
+        self.scroll_goal = start + 0.5 * dur - 0.5 * self.width() / self.ppsec
+        if not self.timer.isActive():
+            self.timer.start(1000/30)
+        else:
+            self.draw()
+
+        # if start < self.t_left or end > self.t_left + self.width() / self.ppsec:
+        #     self.scroll_goal = start - 0.1 * self.width() / self.ppsec
+        #     if not self.timer.isActive():
+        #         self.timer.start(1000/30)
+        # else:
+        #     self.draw()
+
+    # def scroll(self, value):
+    #     self.t_left = (value/100) * self.t_total
+    #     self.draw()
     
     def _updateScroll(self):
+        if self.scroll_goal >= 0:
+            dist = self.scroll_goal - self.t_left
+            self.scroll_vel += 0.2 * dist
+            self.scroll_vel *= 0.6
+
         if self.scroll_vel > 0.001 or self.scroll_vel < -0.001:
             self.t_left += self.scroll_vel
             self.scroll_vel *= 0.9
@@ -124,10 +153,11 @@ class WaveformWidget(QWidget):
             if self.t_left + self.width() / self.ppsec >= self.t_total:
                 self.t_left = self.t_total - self.width() / self.ppsec
                 self.scroll_vel = 0
-            self.draw()
             self.parent.scrollbar.setValue(int(100 * self.t_left / self.t_total))
         else:
+            self.scroll_goal = -1
             self.timer.stop()
+        self.draw()
     
     def paintEvent(self, event: QPaintEvent):
         """Override method from QWidget
@@ -186,7 +216,6 @@ class WaveformWidget(QWidget):
             self.iselected = -1
             for i, (start, end) in enumerate(self.segments):
                 if start < t < end:
-                    self.iselected = i
                     self.utterances.setActive(i)
                     break
             print(self.iselected)
@@ -201,6 +230,7 @@ class WaveformWidget(QWidget):
                 self.scroll_vel = 0.0
             self.scroll_vel += 0.1 * mouse_dpos.x() / self.ppsec
             self.mouse_pos = event.position()
+            self.scroll_goal = -1 # Deactivate auto scroll
             if not self.timer.isActive():
                 self.timer.start(1000/30)
     
@@ -353,7 +383,25 @@ class TextUtterances(QTextEdit):
         self.defaultBlockFormat = QTextBlockFormat()
         self.defaultCharFormat = QTextCharFormat()
         self.lastActive = -1
+
+        self.scroll_goal = 0.0
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._updateScroll)
     
+    def wheelEvent(self, event: QWheelEvent):
+        if self.timer.isActive():
+            self.timer.stop()
+        super().wheelEvent(event)
+
+
+    def _updateScroll(self):
+        dist = self.scroll_goal - self.verticalScrollBar().value()
+        if abs(dist) > 7:
+            scroll_value = self.verticalScrollBar().value()
+            scroll_value += dist * 0.1
+            self.verticalScrollBar().setValue(scroll_value)
+        else:
+            self.timer.stop()
 
     def block_is_utt(self, i):
         block = self.document().findBlockByNumber(i)
@@ -387,35 +435,13 @@ class TextUtterances(QTextEdit):
             else:
                 block.setUserData(QTextBlockUserData({"is_utt": False}))
 
-    #     self.locked = True
-    #     #self.setPlainText(text)
-    #     html_data = ""
-    #     for utt in text.split('\n'):
-    #         if utt.strip().startswith("#"):
-    #             html_data += f"<p style='color: #88A'>{utt.strip()}<\p>\n"
-    #         else:
-    #             html_data += plainTextToHtml(utt.strip()) + '\n'
-    #         #self.appendHtml(f"<p>{utt}<\p>\n")
-    #     self.setHtml(html_data)
-        
-    #     doc = self.document()
-    #     for blockIndex in range(doc.blockCount()):
-    #         block = doc.findBlockByNumber(blockIndex)
-    #         print(block.blockNumber(), block.text())
-    #     #     block.layout()
-    #         # block.blockFormat().setLineHeight(100.0, QTextBlockFormat.LineDistanceHeight)
-    #         # print(block.blockFormat().lineHeight())
-    #     self.locked = False
-
-    def setActive(self, i: int):
+    def setActive(self, i: int, withcursor=True):
         doc = self.document()
-
         utt_blocks = []
         for blockIndex in range(doc.blockCount()):
             if self.block_is_utt(blockIndex):
                 utt_blocks.append(blockIndex)
 
-        # for blockIndex in range(doc.blockCount()):
         if self.lastActive >= 0:
             # Reset format of previously selected utterance
             last_block = doc.findBlockByNumber(self.lastActive)
@@ -428,9 +454,10 @@ class TextUtterances(QTextEdit):
         
         self.lastActive = utt_blocks[i]
 
+        # Format active utterance
         block = doc.findBlockByNumber(self.lastActive)
         block_format = block.blockFormat()
-        block_format.setBackground(QColor(250, 255, 200))
+        block_format.setBackground(QColor(250, 255, 210))
         block_format.setBottomMargin(10)
         block_format.setTopMargin(10)
 
@@ -439,26 +466,26 @@ class TextUtterances(QTextEdit):
         cursor.setBlockFormat(block_format)
 
         char_format = QTextCharFormat()
-        char_format.setFontPointSize(14)
+        char_format.setFontPointSize(13)
         cursor.select(QTextCursor.BlockUnderCursor)
         cursor.mergeCharFormat(char_format)
         cursor.movePosition(QTextCursor.StartOfBlock)
         cursor.endEditBlock()
 
-        self.setTextCursor(cursor)
-        scroll_bar = self.verticalScrollBar()
-        scroll_bar.setValue(scroll_bar.maximum())
+        if withcursor:
+            if not self.timer.isActive():
+                self.timer.start(1000/30)
+            
+            self.setTextCursor(cursor)
 
-        self.ensureCursorVisible()
-
-        scroll_bar.setValue(scroll_bar.value() - 35)
-        
-
-    # def appendText(self, text: str):
-    #     self.locked = True
-    #     self.appendPlainText(text)
-    #     self.locked = False
+            scroll_bar = self.verticalScrollBar()
+            scroll_old_val = scroll_bar.value()
+            scroll_bar.setValue(scroll_bar.maximum())
+            self.ensureCursorVisible()
+            self.scroll_goal = max(scroll_bar.value() - 40, 0)
+            scroll_bar.setValue(scroll_old_val)
     
+
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
         if event.buttons() == Qt.LeftButton:
@@ -467,9 +494,19 @@ class TextUtterances(QTextEdit):
             pass
     
     def cursor_changed(self):
+        doc = self.document()
         cursor = self.textCursor()
-        print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
-        document = self.document()
+        # print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
+        clicked_block = cursor.block()
+        n_utts = 0
+        for blockIndex in range(clicked_block.blockNumber()):
+            if self.block_is_utt(blockIndex):
+                n_utts += 1
+        self.setActive(n_utts, False)
+        # self.parent.waveform.iselected = n_utts
+        # self.parent.waveform.draw()
+        self.parent.waveform.setActive(n_utts)
+        
     
     def text_changed(self):
         print("text_changed")
@@ -523,11 +560,11 @@ class AudioVisualizer(QMainWindow):
         self.initUI()
 
         shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
-        shortcut.activated.connect(self.on_search)
+        shortcut.activated.connect(self.on_kbd_search)
         shortcut = QShortcut(QKeySequence("Alt+Right"), self)
-        shortcut.activated.connect(self.on_next_utt)
+        shortcut.activated.connect(self.on_kbd_next_utt)
         shortcut = QShortcut(QKeySequence("Alt+Left"), self)
-        shortcut.activated.connect(self.on_prev_utt)
+        shortcut.activated.connect(self.on_kbd_prev_utt)
 
     def initUI(self):
         self.waveform = WaveformWidget(self)
@@ -537,7 +574,7 @@ class AudioVisualizer(QMainWindow):
         bottomLayout.setSpacing(0)
         bottomLayout.setContentsMargins(0, 0, 0, 0)
         bottomLayout.setSizeConstraint(QLayout.SetMaximumSize)
-        bottomLayout.addWidget(self.scrollbar)
+        #bottomLayout.addWidget(self.scrollbar)
 
         # Play buttons
         buttonsLayout = QHBoxLayout()
@@ -558,13 +595,22 @@ class AudioVisualizer(QMainWindow):
         nextButton.setIcon(QIcon("icons/next.png"))
         nextButton.setFixedWidth(button_size)
         buttonsLayout.addWidget(nextButton)
+
+        volumeDial = QDial()
+        # volumeDial.setMaximumWidth(button_size*1.5)
+        volumeDial.setMaximumSize(QSize(button_size*1.1, button_size*1.1))
+        # volumeDial.minimumSizeHint(QSize(button_size, button_size))
+        buttonsLayout.addWidget(volumeDial)
+
         bottomLayout.addLayout(buttonsLayout)
 
         curButton.clicked.connect(self.playSegment)
+        nextButton.clicked.connect(self.playNext)
+        prevButton.clicked.connect(self.playPrev)
 
         utterancesLayout = QVBoxLayout()
         utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
-        self.utterances = TextUtterances()
+        self.utterances = TextUtterances(self)
         utterancesLayout.addWidget(self.utterances)
 
         self.waveform.utterances = self.utterances
@@ -601,17 +647,17 @@ class AudioVisualizer(QMainWindow):
         self.openFile('/home/gweltaz/STT/aligned/Becedia/komzoù-brezhoneg_catherine-quiniou-tine-plounevez-du-faou.wav')
     
 
-    def on_search(self):
+    def on_kbd_search(self):
         print("search tool")
     
-    def on_next_utt(self):
+    def on_kbd_next_utt(self):
         n_segs = len(self.waveform.segments)
-        idx = min(self.waveform.iselected + 1, n_segs)
+        idx = min(self.waveform.iselected + 1, n_segs - 1)
         self.waveform.iselected = idx
         self.waveform.draw()
         self.utterances.setActive(idx)
     
-    def on_prev_utt(self):
+    def on_kbd_prev_utt(self):
         idx = max(self.waveform.iselected - 1, 0)
         self.waveform.iselected = idx
         self.waveform.draw()
@@ -677,39 +723,40 @@ class AudioVisualizer(QMainWindow):
         return samples / max_val
 
 
-    def playSegment(self, seg_i):
+    def playSegment(self):
+        print(self.player.playbackState())
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
+            self.player.pause()
+            print("pause")
+            return
+        
         start, end = self.waveform.segments[self.waveform.iselected]
-
-        # Load the audio file using PyDub
-        print("play segment", start, end)
-
-        # audio_segment = self.original_audio[start:end]
-        # raw_audio_data = audio_segment.raw_data
-        # byte_array = QByteArray(raw_audio_data)
-        # self.buffer = QBuffer()
-        # self.buffer.setData(byte_array)
-        # self.buffer.open(QIODevice.WriteOnly)
-        # self.buffer.seek(0)
-
-        # # Create a QAudioOutput instance
-        # format = QAudioFormat()
-        # format.setSampleRate(self.original_audio.frame_rate)
-        # format.setChannelCount(self.original_audio.channels)
-        # #format.setSampleFormat(2)
-        # format.setSampleSize(16)
-        # format.setCodec("audio/pcm")
-        #format.setByteOrder(QAudioFormat.LittleEndian)
-        #format.setSampleType(QAudioFormat.SignedInt)
 
         # audio_output = QAudioOutput(format)
         # audio_output.setVolume(100)
-        self.player.setPosition(start * 1000)
+        self.player.setPosition(int(start * 1000))
         self.pause_timer = QTimer()
         self.pause_timer.timeout.connect(self.pause_player)
 
         self.player.play()
         self.pause_timer.start((end-start)*1000)
     
+    def playNext(self):
+        if self.player.playbackState == QMediaPlayer.PlayingState:
+            self.player.stop()
+        self.waveform.iselected = (self.waveform.iselected + 1) % len(self.waveform.segments)
+        self.waveform.draw()
+        self.utterances.setActive(self.waveform.iselected)
+        self.playSegment()
+
+    def playPrev(self):
+        if self.player.playbackState == QMediaPlayer.PlayingState:
+            self.player.stop()
+        self.waveform.iselected = (self.waveform.iselected - 1) % len(self.waveform.segments)
+        self.waveform.draw()
+        self.utterances.setActive(self.waveform.iselected)
+        self.playSegment()
+
     def pause_player(self):
         self.player.pause()
         self.pause_timer.stop()
