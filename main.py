@@ -8,6 +8,7 @@ from pydub import AudioSegment
 import numpy as np
 from math import ceil
 import re
+from time import time
 #from scipy.io import wavfile
 
 from vosk import Model, KaldiRecognizer, SetLogLevel
@@ -127,13 +128,10 @@ class WaveformWidget(QWidget):
         else:
             self.draw()
 
-        # if start < self.t_left or end > self.t_left + self.width() / self.ppsec:
-        #     self.scroll_goal = start - 0.1 * self.width() / self.ppsec
-        #     if not self.timer.isActive():
-        #         self.timer.start(1000/30)
-        # else:
-        #     self.draw()
-
+    def setHead(self, t):
+        """Set the playing head"""
+        self.head = t
+        self.draw()
     # def scroll(self, value):
     #     self.t_left = (value/100) * self.t_total
     #     self.draw()
@@ -202,8 +200,7 @@ class WaveformWidget(QWidget):
             self.mouse_pos = event.position()
         elif event.buttons() == Qt.RightButton:
             click_x = event.position().x()
-            self.head = self.t_left + click_x / self.ppsec
-            self.draw()
+            self.setHead(self.t_left + click_x / self.ppsec)
     
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         dx = event.position().x() - self.click_pos.x()
@@ -297,7 +294,7 @@ class WaveformWidget(QWidget):
             if end > self.t_left or start < tf:
                 x = (start - self.t_left) * self.ppsec
                 w = (end - start) * self.ppsec
-                self.painter.setPen(QPen(QColor(220, 180, 60), 4))
+                self.painter.setPen(QPen(QColor(220, 180, 60), 3))
                 self.painter.setBrush(QBrush(QColor(220, 180, 60, 50)))
                 self.painter.drawRect(x, 20, w, self.height()-40)
         
@@ -388,20 +385,6 @@ class TextUtterances(QTextEdit):
         self.timer = QTimer()
         self.timer.timeout.connect(self._updateScroll)
     
-    def wheelEvent(self, event: QWheelEvent):
-        if self.timer.isActive():
-            self.timer.stop()
-        super().wheelEvent(event)
-
-
-    def _updateScroll(self):
-        dist = self.scroll_goal - self.verticalScrollBar().value()
-        if abs(dist) > 7:
-            scroll_value = self.verticalScrollBar().value()
-            scroll_value += dist * 0.1
-            self.verticalScrollBar().setValue(scroll_value)
-        else:
-            self.timer.stop()
 
     def block_is_utt(self, i):
         block = self.document().findBlockByNumber(i)
@@ -442,15 +425,15 @@ class TextUtterances(QTextEdit):
             if self.block_is_utt(blockIndex):
                 utt_blocks.append(blockIndex)
 
-        if self.lastActive >= 0:
-            # Reset format of previously selected utterance
-            last_block = doc.findBlockByNumber(self.lastActive)
-            cursor = QTextCursor(last_block)
-            cursor.joinPreviousEditBlock()
-            cursor.setBlockFormat(self.defaultBlockFormat)
-            cursor.select(QTextCursor.BlockUnderCursor)
-            cursor.setCharFormat(QTextCharFormat())
-            cursor.endEditBlock()
+        # if self.lastActive >= 0:
+        #     # Reset format of previously selected utterance
+        #     last_block = doc.findBlockByNumber(self.lastActive)
+        #     cursor = QTextCursor(last_block)
+        #     cursor.joinPreviousEditBlock()
+        #     cursor.setBlockFormat(self.defaultBlockFormat)
+        #     cursor.select(QTextCursor.BlockUnderCursor)
+        #     cursor.setCharFormat(QTextCharFormat())
+        #     cursor.endEditBlock()
         
         self.lastActive = utt_blocks[i]
 
@@ -462,15 +445,15 @@ class TextUtterances(QTextEdit):
         block_format.setTopMargin(10)
 
         cursor = QTextCursor(block)
-        cursor.joinPreviousEditBlock()
-        cursor.setBlockFormat(block_format)
+        # cursor.joinPreviousEditBlock()
+        # cursor.setBlockFormat(block_format)
 
-        char_format = QTextCharFormat()
-        char_format.setFontPointSize(13)
-        cursor.select(QTextCursor.BlockUnderCursor)
-        cursor.mergeCharFormat(char_format)
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        cursor.endEditBlock()
+        # char_format = QTextCharFormat()
+        # char_format.setFontPointSize(13)
+        # cursor.select(QTextCursor.BlockUnderCursor)
+        # cursor.mergeCharFormat(char_format)
+        # cursor.movePosition(QTextCursor.StartOfBlock)
+        # cursor.endEditBlock()
 
         if withcursor:
             if not self.timer.isActive():
@@ -493,8 +476,24 @@ class TextUtterances(QTextEdit):
         elif event.buttons() == Qt.RightButton:
             pass
     
+
+    def wheelEvent(self, event: QWheelEvent):
+        if self.timer.isActive():
+            self.timer.stop()
+        super().wheelEvent(event)
+
+
+    def _updateScroll(self):
+        dist = self.scroll_goal - self.verticalScrollBar().value()
+        if abs(dist) > 7:
+            scroll_value = self.verticalScrollBar().value()
+            scroll_value += dist * 0.1
+            self.verticalScrollBar().setValue(scroll_value)
+        else:
+            self.timer.stop()
+    
     def cursor_changed(self):
-        doc = self.document()
+        # doc = self.document()
         cursor = self.textCursor()
         # print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
         clicked_block = cursor.block()
@@ -503,9 +502,14 @@ class TextUtterances(QTextEdit):
             if self.block_is_utt(blockIndex):
                 n_utts += 1
         self.setActive(n_utts, False)
-        # self.parent.waveform.iselected = n_utts
-        # self.parent.waveform.draw()
         self.parent.waveform.setActive(n_utts)
+    
+    def contextMenuEvent(self, event):
+        context = QMenu(self)
+        context.addAction(QAction("Split here", self))
+        context.addAction(QAction("Auto-recognition", self))
+        context.addAction(QAction("Auto-puncutate", self))
+        context.exec(event.globalPos())
         
     
     def text_changed(self):
@@ -513,15 +517,8 @@ class TextUtterances(QTextEdit):
 
     def contents_change(self, pos, charsRemoved, charsAdded):
         print("content changed", pos, charsRemoved, charsAdded)
-        pos = self.textCursor().position()
+        # pos = self.textCursor().position()
         #self.updateTextFormat(pos)
-    
-    def contextMenuEvent(self, event):
-        context = QMenu(self)
-        context.addAction(QAction("Split here", self))
-        context.addAction(QAction("test 2", self))
-        context.addAction(QAction("test 3", self))
-        context.exec(event.globalPos())
     
     # def updateTextFormat(self, pos):
     #     block = self.document().findBlock(pos)
@@ -545,7 +542,7 @@ class TextUtterances(QTextEdit):
 
 
 
-class AudioVisualizer(QMainWindow):
+class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Anaouder-Qt")
@@ -556,11 +553,16 @@ class AudioVisualizer(QMainWindow):
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
+
+        self.play_timer = QTimer()
+        self.play_timer.timeout.connect(self._update_player)
         
         self.initUI()
 
         shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         shortcut.activated.connect(self.on_kbd_search)
+        shortcut = QShortcut(QKeySequence("Ctrl+Space"), self)
+        shortcut.activated.connect(self.on_kbd_cur_utt)
         shortcut = QShortcut(QKeySequence("Alt+Right"), self)
         shortcut.activated.connect(self.on_kbd_next_utt)
         shortcut = QShortcut(QKeySequence("Alt+Left"), self)
@@ -650,6 +652,12 @@ class AudioVisualizer(QMainWindow):
     def on_kbd_search(self):
         print("search tool")
     
+    def on_kbd_cur_utt(self):
+        if self.player.playbackState == QMediaPlayer.PlayingState:
+            print("dub")
+            self.player.pause()
+        self.playSegment()
+
     def on_kbd_next_utt(self):
         n_segs = len(self.waveform.segments)
         idx = min(self.waveform.iselected + 1, n_segs - 1)
@@ -727,22 +735,25 @@ class AudioVisualizer(QMainWindow):
         print(self.player.playbackState())
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
-            print("pause")
+            self.play_timer.stop()
             return
         
         start, end = self.waveform.segments[self.waveform.iselected]
+        self.waveform.setHead(start)
 
         # audio_output = QAudioOutput(format)
         # audio_output.setVolume(100)
-        self.player.setPosition(int(start * 1000))
-        self.pause_timer = QTimer()
-        self.pause_timer.timeout.connect(self.pause_player)
 
+        self.player.setPosition(int(start * 1000))
         self.player.play()
-        self.pause_timer.start((end-start)*1000)
+
+        self.play_t0 = time()
+        self.play_start = start
+        self.play_length = end-start
+        self.play_timer.start(1/30)
     
     def playNext(self):
-        if self.player.playbackState == QMediaPlayer.PlayingState:
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.stop()
         self.waveform.iselected = (self.waveform.iselected + 1) % len(self.waveform.segments)
         self.waveform.draw()
@@ -750,22 +761,26 @@ class AudioVisualizer(QMainWindow):
         self.playSegment()
 
     def playPrev(self):
-        if self.player.playbackState == QMediaPlayer.PlayingState:
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.stop()
         self.waveform.iselected = (self.waveform.iselected - 1) % len(self.waveform.segments)
         self.waveform.draw()
         self.utterances.setActive(self.waveform.iselected)
         self.playSegment()
 
-    def pause_player(self):
-        self.player.pause()
-        self.pause_timer.stop()
+    def _update_player(self):
+        dt = time() - self.play_t0
+        if dt > self.play_length:
+            self.player.pause()
+            self.play_timer.stop()
+        else:
+            self.waveform.setHead(self.play_start + dt)
         
 
 
 def main():
     app = QApplication(sys.argv)
-    window = AudioVisualizer()
+    window = MainWindow()
     window.show()
     sys.exit(app.exec())
 
