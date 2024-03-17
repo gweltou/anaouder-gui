@@ -5,19 +5,20 @@ import sys
 import os.path
 
 from pydub import AudioSegment
-import numpy as np
+# import numpy as np
 from math import ceil
 import re
 from time import time
+import locale
 #from scipy.io import wavfile
 
-from vosk import Model, KaldiRecognizer, SetLogLevel
-
-from ostilhou import (
-    load_segments_data, load_text_data,
-    METADATA_PATTERN, extract_metadata,
+from ostilhou.asr import (
+    load_segments_data,
+    extract_metadata,
+    transcribe_segment,
 )
-# from ostilhou.asr import extract_metadata
+from ostilhou.asr.models import DEFAULT_MODEL, load_model, is_model_loaded
+from ostilhou.audio import split_to_segments
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import (
     Qt, QRectF, QLineF, QSize, QTimer, QRegularExpression, QPointF,
     QByteArray, QBuffer, QIODevice, QUrl, QEvent,
+    QThread, Signal,
 )
 from PySide6.QtGui import (
     QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
@@ -45,6 +47,9 @@ LAST_OPEN_FOLDER = ""
 LAST_SAVE_FOLDER = ""
 HEADER = """
 """
+AUTOSEG_MAX_LENGTH = 15
+AUTOSEG_MIN_LENGTH = 3
+ZOOM_Y = 4
 
 
 
@@ -97,7 +102,7 @@ class WaveformWidget(QWidget):
 
         self.painter = QPainter()
         self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
-        self.segpen = QPen(QColor(180, 150, 50), 1)
+        self.segpen = QPen(QColor(180, 150, 50, 180), 1)
         self.segbrush = QBrush(QColor(180, 170, 50, 50))
         self.handlepen = QPen(QColor(240, 220, 60, 160), 6)
         self.handlepen.setCapStyle(Qt.RoundCap)
@@ -127,10 +132,12 @@ class WaveformWidget(QWidget):
         self.scroll_vel = 0.0
         self.head = 0.0
         # self.iselected = -1
-        self.selected = -1
+        self.active = -1
         self.segments = dict()
         self.resizing_segment = 0
         self.id_counter = 0    
+        self.selection = None
+        self.selection_active = False
 
 
     def setSamples(self, samples, sr) -> None:
@@ -145,20 +152,20 @@ class WaveformWidget(QWidget):
 
 
     def findPrevSegment(self) -> int:
-        if self.selected < 0:
+        if self.active < 0:
             return -1
         sorted_segments = sorted(self.segments.keys(), key=lambda s: self.segments[s][0])
-        order = sorted_segments.index(self.selected)
+        order = sorted_segments.index(self.active)
         if order > 0:
             return sorted_segments[order - 1]
         return -1
 
 
     def findNextSegment(self) -> int:
-        if self.selected < 0:
+        if self.active < 0:
             return -1
         sorted_segments = sorted(self.segments.keys(), key=lambda s: self.segments[s][0])
-        order = sorted_segments.index(self.selected)
+        order = sorted_segments.index(self.active)
         if order < len(sorted_segments) - 1:
             return sorted_segments[order + 1]
         return -1
@@ -166,9 +173,10 @@ class WaveformWidget(QWidget):
 
     def setActive(self, id: int) -> None:
         if id not in self.segments:
-            self.selected = -1
+            self.active = -1
             return
-        self.selected = id
+        self.active = id
+        self.selection_active = False
         start, end = self.segments[id]
         dur = end-start
         self.scroll_goal = start + 0.5 * dur - 0.5 * self.width() / self.ppsec
@@ -176,7 +184,7 @@ class WaveformWidget(QWidget):
             self.timer.start(1000/30)
         else:
             self.draw()
-
+        self.parent.status_bar.showMessage(f"{start=} {end=}")
 
 
     def setHead(self, t):
@@ -207,10 +215,10 @@ class WaveformWidget(QWidget):
     
 
     def checkHandles(self, position):
-        if self.selected < 0:
+        if self.active < 0:
             return
         pos_x = self.t_left + position.x() / self.ppsec
-        start, end = self.segments[self.selected]
+        start, end = self.segments[self.active]
         self.over_start = False
         self.over_end = False
         if abs((start-pos_x)*self.ppsec) < 8:
@@ -234,10 +242,7 @@ class WaveformWidget(QWidget):
     
 
     def enterEvent(self, event: QEvent):
-        # Call the setFocus() method of the widget to give it focus
         self.setFocus()
-
-        # Call the base implementation of the enterEvent() method
         super().enterEvent(event)
 
     
@@ -266,13 +271,33 @@ class WaveformWidget(QWidget):
         self.draw()
     
 
+    def segmentUnderMouse(self, position: QPointF) -> int:
+        t = self.t_left + position.x() / self.ppsec
+        for id, (start, end) in self.segments.items():
+            if start <= t <= end:
+                return id
+        return -1
+
+    def selectionUnderMouse(self, position: QPointF) -> bool:
+        t = self.t_left + position.x() / self.ppsec
+        if self.selection:
+            start, end = self.selection
+            return start < t < end
+        return False
+
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.buttons() == Qt.LeftButton:
-            self.click_pos = event.position()
+        self.click_pos = event.position()
+        if event.button() == Qt.LeftButton:
             self.mouse_pos = event.position()
-        elif event.buttons() == Qt.RightButton:
-            click_x = event.position().x()
-            self.setHead(self.t_left + click_x / self.ppsec)
+        elif event.button() == Qt.RightButton:
+            # Show contextMenu only if right clicking on active segment
+            if self.segmentUnderMouse(self.click_pos) != self.active:
+                self.active = -1
+            self.selection_active = self.selectionUnderMouse(self.click_pos)
+            self.setHead(self.t_left + self.click_pos.x() / self.ppsec)
+            self.anchor = self.head
+            self.selection = None
         if self.over_start:
             self.resizing_segment = 1 # 0: None, 1: left, 2: right
             self.resizing_tinit = self.t_left + event.position().x() / self.ppsec
@@ -284,24 +309,39 @@ class WaveformWidget(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         self.resizing_segment = 0
-        dx = event.position().x() - self.click_pos.x()
-        dy = event.position().y() - self.click_pos.y()
-        dist = dx * dx + dy * dy
-        if dist < 20:
-            # Select clicked segment
-            t = self.t_left + self.click_pos.x() / self.ppsec
-            self.selected = -1
-            for id, (start, end) in self.segments.items():
-                if start < t < end:
-                    self.utterances.setActive(id)
-                    self.setActive(id)
-                    break
+        if event.button() == Qt.LeftButton:
+            dx = event.position().x() - self.click_pos.x()
+            dy = event.position().y() - self.click_pos.y()
+            dist = dx * dx + dy * dy
+            if dist < 20:
+                # Select clicked segment
+                id = self.segmentUnderMouse(event.position())
+                self.utterances.setActive(id)
+                self.setActive(id)
+                if id < 0:
+                    self.selection_active = self.selectionUnderMouse(event.position())
+                
         self.draw()
         return super().mouseReleaseEvent(event)
 
 
+    def contextMenuEvent(self, event):
+        if self.active < 0 and not self.selection_active:
+            return
+        context = QMenu(self)
+        if not self.selection_active:
+            action_split = QAction("Split here", self)
+            action_split.triggered.connect(self.parent.splitAction)
+            context.addAction(action_split)
+        action_recognize = QAction("Recognize", self)
+        action_recognize.triggered.connect(self.parent.recognizeAction)
+        context.addAction(action_recognize)
+        context.exec(event.globalPos())
+
+
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton and not self.ctrl_pressed:
+            # Scrolling
             mouse_dpos = self.mouse_pos - event.position()
             # Stop movement if drag direction is opposite
             if mouse_dpos.x() * self.scroll_vel < 0.0:
@@ -310,11 +350,20 @@ class WaveformWidget(QWidget):
             self.scroll_goal = -1 # Deactivate auto scroll
             if not self.timer.isActive():
                 self.timer.start(1000/30)
-        if self.ctrl_pressed and self.selected >= 0:
+        elif event.buttons() == Qt.RightButton:
+            head = self.t_left + event.position().x() / self.ppsec
+            self.selection = (min(head, self.anchor), max(head, self.anchor))
+            self.selection_active = True
+            if self.parent.player.playbackState() != QMediaPlayer.PlayingState:
+                self.setHead(head)
+            else:
+                self.draw()
+        if self.ctrl_pressed and self.active >= 0:
+            # Handle dragging
             self.checkHandles(event.position())
             pos_x = self.t_left + event.position().x() / self.ppsec
             sorted_segments = sorted(self.segments.keys(), key=lambda s: self.segments[s][0])
-            order = sorted_segments.index(self.selected)
+            order = sorted_segments.index(self.active)
             if self.resizing_segment == 1:
                 # Bound by segment on the left, if any
                 if order > 0:
@@ -322,7 +371,7 @@ class WaveformWidget(QWidget):
                     left_boundary = self.segments[id][1]
                     pos_x = max(pos_x, left_boundary)
                 pos_x = min(max(pos_x, 0.0), self.segments[order][1] - 0.01)
-                self.segments[self.selected][0] = pos_x
+                self.segments[self.active][0] = pos_x
             elif self.resizing_segment == 2:
                 # Bound by segment on the right, if any
                 if order < len(sorted_segments)-1:
@@ -330,7 +379,7 @@ class WaveformWidget(QWidget):
                     right_boundary = self.segments[id][0]
                     pos_x = min(pos_x, right_boundary)
                 pos_x = min(max(pos_x, self.segments[order][0] + 0.01), self.t_total)
-                self.segments[self.selected][1] = pos_x
+                self.segments[self.active][1] = pos_x
             self.draw()
         self.mouse_pos = event.position()
     
@@ -356,14 +405,6 @@ class WaveformWidget(QWidget):
             self.resizing_segment = 0
             self.draw()
         return super().keyReleaseEvent(event)
-
-
-    def contextMenuEvent(self, event):
-        context = QMenu(self)
-        context.addAction(QAction("Set play head", self))
-        context.addAction(QAction("Segment from selection", self))
-        context.addAction(QAction("test 3", self))
-        context.exec(event.globalPos())
 
 
     def draw(self):
@@ -396,6 +437,8 @@ class WaveformWidget(QWidget):
         # Draw head
         if self.t_left <= self.head <= tf:
             t_x = (self.head - self.t_left) * self.ppsec
+            self.painter.setPen(QPen(QColor(255, 20, 20, 40), 3))
+            self.painter.drawLine(t_x, 0, t_x, self.height())
             self.painter.setPen(QPen(QColor(255, 20, 20)))
             self.painter.drawLine(t_x, 0, t_x, self.height())
         
@@ -405,15 +448,15 @@ class WaveformWidget(QWidget):
         if pix_per_sample <= 1.0:
             for x, (ymin, ymax) in enumerate(samples):
                 self.painter.drawLine(x,
-                                      (self.height()-self.timecode_margin) * (0.5 + 2*ymin) + self.timecode_margin,
+                                      (self.height()-self.timecode_margin) * (0.5 + ZOOM_Y*ymin) + self.timecode_margin,
                                       x,
-                                      (self.height()-self.timecode_margin) * (0.5 + 2*ymax) + self.timecode_margin)
+                                      (self.height()-self.timecode_margin) * (0.5 + ZOOM_Y*ymax) + self.timecode_margin)
         else:
             pass
         
         # Draw segments
         for id, (start, end) in self.segments.items():
-            if id == self.selected:
+            if id == self.active:
                 continue
             if end <= self.t_left:
                 continue
@@ -423,11 +466,25 @@ class WaveformWidget(QWidget):
             w = (end - start) * self.ppsec
             self.painter.setPen(self.segpen)
             self.painter.setBrush(self.segbrush)
-            self.painter.drawRect(x, self.timecode_margin + 20, w, self.height()-(40+self.timecode_margin))
+            self.painter.drawRect(x, self.timecode_margin + 30, w, self.height()-(60+self.timecode_margin))
         
+        # Draw selection
+        if self.selection:
+            start, end = self.selection
+            if end > self.t_left and start < tf:
+                x = (start - self.t_left) * self.ppsec
+                w = (end - start) * self.ppsec
+                self.painter.setBrush(QBrush(QColor(100, 150, 220, 50)))
+                if self.selection_active:
+                    self.painter.setPen(QPen(QColor(100, 150, 220), 2))
+                    self.painter.drawRect(x, self.timecode_margin + 18, w, self.height()-(36+self.timecode_margin))
+                else:
+                    self.painter.setPen(QPen(QColor(100, 150, 220), 1))
+                    self.painter.drawRect(x, self.timecode_margin + 20, w, self.height()-(40+self.timecode_margin))
+
         # Draw selected segment
-        if self.selected >= 0:
-            start, end = self.segments[self.selected]
+        if self.active >= 0:
+            start, end = self.segments[self.active]
             if end > self.t_left or start < tf:
                 x = (start - self.t_left) * self.ppsec
                 w = (end - start) * self.ppsec
@@ -436,7 +493,7 @@ class WaveformWidget(QWidget):
                 else:
                     self.painter.setPen(QPen(QColor(220, 180, 60), 3))
                 self.painter.setBrush(QBrush(QColor(220, 180, 60, 50)))
-                self.painter.drawRect(x, self.timecode_margin + 14, w, self.height()-(28+self.timecode_margin))
+                self.painter.drawRect(x, self.timecode_margin + 24, w, self.height()-(48+self.timecode_margin))
 
                 # Draw handles
                 if self.ctrl_pressed:
@@ -536,7 +593,7 @@ class TextArea(QTextEdit):
 
         self.defaultBlockFormat = QTextBlockFormat()
         self.defaultCharFormat = QTextCharFormat()
-        self.lastActive = None
+        # self.lastActive = None
 
         self.scroll_goal = 0.0
         self.timer = QTimer()
@@ -559,12 +616,48 @@ class TextArea(QTextEdit):
         return len(text.strip()) > 0
 
 
+    def insertUtterance(self, text: str, id: int):
+        doc = self.document()
+        last_segment_start = 0
+        for block_idx in range(doc.blockCount()):
+            block = doc.findBlockByNumber(block_idx)
+            if not block.userData():
+                continue
+            user_data = block.userData().data
+            if "seg_id" in user_data:
+                seg_id = user_data["seg_id"]
+                if seg_id == id:
+                    # Replace text content
+                    cursor = QTextCursor(block)
+                    cursor.movePosition(QTextCursor.StartOfBlock)
+                    cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+                    cursor.insertText(text)
+                    # Re-select text
+                    cursor.movePosition(QTextCursor.EndOfBlock)
+                    cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+                    self.setTextCursor(cursor)
+                    return
+                else:
+                    if seg_id in self.parent.waveform.segments:
+                        last_segment_start = self.parent.waveform.segments[seg_id][0]
+                        # TODO
+        cursor = QTextCursor(doc)
+        # cursor.clearSelection()
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertBlock()
+        cursor.insertText(text)
+        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+        cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
+        self.setTextCursor(cursor)
+                
+
+
     def setText(self, text: str):
         super().setText(text)
 
         doc = self.document()
-        for blockIndex in range(doc.blockCount()):
-            block = doc.findBlockByNumber(blockIndex)
+        for block_idx in range(doc.blockCount()):
+            block = doc.findBlockByNumber(block_idx)
             text = block.text()
 
             i_comment = text.find('#')
@@ -593,6 +686,8 @@ class TextArea(QTextEdit):
 
     def setActive(self, id: int, withcursor=True):
         block = self.findBlockById(id)
+        if not block:
+            return
         # if self.lastActive >= 0:
         #     # Reset format of previously selected utterance
         #     last_block = doc.findBlockByNumber(self.lastActive)
@@ -603,7 +698,7 @@ class TextArea(QTextEdit):
         #     cursor.setCharFormat(QTextCharFormat())
         #     cursor.endEditBlock()
         
-        self.lastActive = block
+        # self.lastActive = block
 
         # Format active utterance
         # cursor.joinPreviousEditBlock()
@@ -667,14 +762,17 @@ class TextArea(QTextEdit):
         """
         cursor = self.textCursor()
         # print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
-        clicked_block = cursor.block()
-        if clicked_block.userData():
-            data = clicked_block.userData().data
-            self.parent.status_bar.showMessage(str(data))
+        current_block = cursor.block()
+        if current_block.userData():
+            data = current_block.userData().data
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
                 self.setActive(id, False)
                 self.parent.waveform.setActive(id)
+                start, end = self.parent.waveform.segments[id]
+                data.update({'start': start, 'end': end, 'dur': end-start})
+                
+            self.parent.status_bar.showMessage(str(data))
         else:
             self.parent.status_bar.showMessage("no data...")
         # n_utts = -1
@@ -705,6 +803,31 @@ class TextArea(QTextEdit):
 
 
 
+class RecognizerWorker(QThread):
+    loading = Signal()
+
+    def setAudio(self, audio: AudioSegment):
+        self.audio_data = audio
+
+    def setSegment(self, segment, id):
+        self.segment = segment
+        self.seg_id = id
+    
+    def run(self):
+        if not is_model_loaded():
+            self.loading.emit()
+            load_model()
+
+        start, end = self.segment
+        # Stupid hack with locale to avoid commas in json string
+        current_locale = locale.getlocale()
+        locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+        text = transcribe_segment(self.audio_data[start*1000:end*1000])
+        locale.setlocale(locale.LC_ALL, current_locale)
+        text = ' '.join(text)
+        self.result = text
+
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -717,11 +840,16 @@ class MainWindow(QMainWindow):
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
+        self.audio_data = None
 
         self.play_timer = QTimer()
         self.play_timer.timeout.connect(self._update_player)
         
         self.initUI()
+
+        self.recognizerWorker = RecognizerWorker()
+        self.recognizerWorker.loading.connect(lambda: self.status_bar.showMessage(f"Loading {DEFAULT_MODEL}..."))
+        self.recognizerWorker.finished.connect(self.retrieveRecognizerResult)
 
         # Keyboard shortcuts
         ## Open
@@ -737,10 +865,10 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence("Ctrl+Space"), self)
         shortcut.activated.connect(self.on_play_button)
         # Next
-        shortcut = QShortcut(QKeySequence("Alt+Right"), self)
+        shortcut = QShortcut(QKeySequence("Ctrl+Right"), self)
         shortcut.activated.connect(self.on_kbd_next_utt)
         # Prev
-        shortcut = QShortcut(QKeySequence("Alt+Left"), self)
+        shortcut = QShortcut(QKeySequence("Ctrl+Left"), self)
         shortcut.activated.connect(self.on_kbd_prev_utt)
 
         self.openFile('Meli_mila_Malou_1.m4a')
@@ -817,6 +945,11 @@ class MainWindow(QMainWindow):
         openAction = QAction("Save", self)
         openAction.triggered.connect(self.saveFile)
         fileMenu.addAction(openAction)
+
+        operationMenu = menuBar.addMenu("Operations")
+        findSegmentsAction = QAction("Find segments", self)
+        findSegmentsAction.triggered.connect(self.opFindSegments)
+        operationMenu.addAction(findSegmentsAction)
         
         deviceMenu = menuBar.addMenu("Device")
         for dev in self.input_devices:
@@ -835,8 +968,10 @@ class MainWindow(QMainWindow):
             self.play_timer.stop()
             return
 
-        if self.waveform.selected >= 0:
-            self.playSegment()
+        if self.waveform.active >= 0:
+            self.playSegment(self.waveform.segments[self.waveform.active])
+        elif self.waveform.selection_active:
+            self.playSegment(self.waveform.selection)
         else:
             self.player.setPosition(int(self.waveform.head * 1000))
             self.player.play()
@@ -860,8 +995,13 @@ class MainWindow(QMainWindow):
 
 
     def saveFile(self):
-        filepath, stuff = QFileDialog.getSaveFileName(self, "Save File")
+        global LAST_SAVE_FOLDER
+
+        filepath, stuff = QFileDialog.getSaveFileName(self, "Save File", LAST_SAVE_FOLDER)
         print(filepath, stuff)
+        if not filepath:
+            return
+        LAST_SAVE_FOLDER = os.path.split(filepath)[0]
         with open(filepath, 'w') as f:
             doc = self.textArea.document()
             for blockIndex in range(doc.blockCount()):
@@ -869,36 +1009,41 @@ class MainWindow(QMainWindow):
                 text = block.text()
                 userData = block.userData().data
                 if userData["is_utt"]:
-                    if "start" in userData and "end" in userData:
-                        f.write(f"{text} {{start: {userData['start']}; end: {userData['end']}}}")
-                    f.write(text + '\n')
+                    f.write(text)
+                    if "seg_id" in userData:
+                        start, end = self.waveform.segments[userData["seg_id"]]
+                        f.write(f" {{start: {start}; end: {end}}}")
+                    f.write('\n')
                 else:
                     f.write(text + '\n')
                     
 
     def openFile(self, filepath: str = None):
+        global LAST_OPEN_FOLDER
+
         if not filepath:
-            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", "", "Audio Files (*.wav *.mp3)")
+            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", LAST_OPEN_FOLDER, "Audio Files (*.wav *.mp3 *.m4a *.mp4)")
         if not filepath:
             return
+        LAST_OPEN_FOLDER = os.path.split(filepath)[0]
 
         self.waveform.clear()
         self.textArea.clear()
 
         print("Loading", filepath)
         self.loadAudio(filepath)
+        print("done")
 
         # Check for segment file
         basename = os.path.splitext(filepath)[0]
         seg_filepath = basename + os.path.extsep + "seg"
         if os.path.exists(seg_filepath):
-            print(seg_filepath, "exists")
             segments = load_segments_data(seg_filepath)
             # convert to seconds
             segments = [ [start/1000, end/1000] for start, end in segments ]
             for s in segments:
                 self.waveform.addSegment(s)
-            self.waveform.selected = None
+            self.waveform.active = None
         else:
             self.waveform.draw()
            
@@ -919,31 +1064,36 @@ class MainWindow(QMainWindow):
             self.textArea.setActive(0)
             # utterances = load_text_data(txt_filepath)
     
+
     def loadAudio(self, filepath):
         self.player.setSource(QUrl(filepath))
 
+        print("creating audio segment")
         audio_data = AudioSegment.from_file(filepath)
-        # self.original_audio = audio_data
         
+        print("set to mono, 16khz")
         if audio_data.channels > 1:
             audio_data = audio_data.set_channels(1)
-        
+        audio_data = audio_data.set_frame_rate(16000)
+        self.audio_data = audio_data
+        self.recognizerWorker.setAudio(audio_data)
+
         samples = audio_data.get_array_of_samples()
-        
         # Normalize
         sample_max = 2**(audio_data.sample_width*8)
         samples = [ s/sample_max for s in samples ]
 
+        print("setsamples")
         self.waveform.setSamples(samples, audio_data.frame_rate)
 
 
-    def playSegment(self):
+    def playSegment(self, segment):
         # if self.player.playbackState() == QMediaPlayer.PlayingState:
         #     self.player.pause()
         #     self.play_timer.stop()
         #     return
         
-        start, end = self.waveform.segments[self.waveform.selected]
+        start, end = segment
         self.waveform.setHead(start)
 
         # audio_output = QAudioOutput(format)
@@ -964,10 +1114,10 @@ class MainWindow(QMainWindow):
         # self.waveform.iselected = (self.waveform.iselected + 1) % len(self.waveform.segments)
         id = self.waveform.findNextSegment()
         if id < 0:
-            id = self.waveform.selected
+            id = self.waveform.active
         self.waveform.setActive(id)
         self.textArea.setActive(id)
-        self.playSegment()
+        self.playSegment(self.waveform.segments[id])
 
 
     def playPrev(self):
@@ -975,10 +1125,10 @@ class MainWindow(QMainWindow):
             self.player.stop()
         id = self.waveform.findPrevSegment()
         if id < 0:
-            id = self.waveform.selected
+            id = self.waveform.active
         self.waveform.setActive(id)
         self.textArea.setActive(id)
-        self.playSegment()
+        self.playSegment(self.waveform.segments[id])
 
 
     def _update_player(self):
@@ -988,7 +1138,58 @@ class MainWindow(QMainWindow):
             self.play_timer.stop()
         else:
             self.waveform.setHead(self.play_start + dt)
-        
+    
+
+    def opFindSegments(self):
+        print("Finding segments")
+        # segments = new_split_to_segments(
+		# 	self.audio_segment,
+		# 	max_length=AUTOSEG_MAX_LENGTH,
+		# 	min_length=AUTOSEG_MIN_LENGTH)
+        segments = split_to_segments(self.audio_data, 10, 0.05)
+        self.status_bar.showMessage(f"{len(segments)} segments found")
+        self.waveform.clear()
+        for start, end in segments:
+            self.waveform.addSegment([start/1000, end/1000])
+        self.waveform.draw()
+
+
+    def splitAction(self):
+        print("action split")
+    
+
+    # def recognizeAction(self):
+    #     if not is_model_loaded():
+    #         self.status_bar.showMessage(f"Loading {DEFAULT_MODEL}...")
+    #         load_model()
+
+    #     seg_id = -1
+    #     if self.waveform.selection_active:
+    #         start, end = self.waveform.selection
+    #     elif self.waveform.active >= 0:
+    #         seg_id = self.waveform.active
+    #         start, end = self.waveform.segments[seg_id]
+
+    #     # Stupid hack with locale to avoid commas in json string
+    #     current_locale = locale.getlocale()
+    #     locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+    #     text = transcribe_segment(self.audio_data[start*1000:end*1000])
+    #     locale.setlocale(locale.LC_ALL, current_locale)
+    #     text = ' '.join(text)
+    #     self.textArea.insertUtterance(text, seg_id)
+    def recognizeAction(self):
+        seg_id = -1
+        if self.waveform.selection_active:
+            self.recognizerWorker.setSegment(self.waveform.selection, seg_id)
+        elif self.waveform.active >= 0:
+            seg_id = self.waveform.active
+            self.recognizerWorker.setSegment(self.waveform.segments[seg_id], seg_id)
+        self.recognizerWorker.start()
+    
+    def retrieveRecognizerResult(self):
+        text = self.recognizerWorker.result
+        seg_id = self.recognizerWorker.seg_id
+        self.textArea.insertUtterance(text, seg_id)
 
 
 def main():
