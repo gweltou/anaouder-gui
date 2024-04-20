@@ -22,17 +22,17 @@ from ostilhou.audio import split_to_segments
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
     QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
-    QScrollBar, QSizeGrip, QSplitter,
+    QScrollBar, QSizeGrip, QSplitter, QProgressBar,
     QPlainTextEdit, QTextEdit, QPushButton, QDial,
     QLabel,
 )
 from PySide6.QtCore import (
     Qt, QRectF, QLineF, QSize, QTimer, QRegularExpression, QPointF,
     QByteArray, QBuffer, QIODevice, QUrl, QEvent,
-    QThread, Signal,
+    QThread, Signal, Slot,
 )
 from PySide6.QtGui import (
-    QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
+    QAction, QMouseEvent,
     QPalette, QColor, QFont, QIcon,
     QResizeEvent, QWheelEvent, QKeySequence, QShortcut, QKeyEvent,
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
@@ -124,7 +124,7 @@ class TextArea(QTextEdit):
         self.cursorPositionChanged.connect(self.cursor_changed)
         # self.textChanged.connect(self.text_changed)
         self.document().contentsChange.connect(self.contents_change)
-        self.lock = False # Disable waveform.setActive calls
+        self.setactive_lock = False # Disable waveform.setActive calls
 
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document())
@@ -295,9 +295,6 @@ class TextArea(QTextEdit):
     
 
     def cursor_changed(self):
-        """
-            TODO: "lock" variable when self.setActive is called from Waveform
-        """
         cursor = self.textCursor()
         # print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
         current_block = cursor.block()
@@ -306,14 +303,15 @@ class TextArea(QTextEdit):
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
                 self.setActive(id, withcursor=False)
-                if not self.lock:
+                if not self.setactive_lock:
                     self.parent.waveform.setActive(id)
                 start, end = self.parent.waveform.segments[id]
                 data.update({'start': start, 'end': end, 'dur': end-start})
                 
-            self.parent.status_bar.showMessage(str(data))
+            #self.parent.status_bar.showMessage(str(data))
         else:
-            self.parent.status_bar.showMessage("no data...")
+            #self.parent.status_bar.showMessage("no data...")
+            pass
         # n_utts = -1
         # for blockIndex in range(clicked_block.blockNumber()):
         #     if self.block_is_utt(blockIndex + 1):
@@ -343,28 +341,30 @@ class TextArea(QTextEdit):
 
 
 class RecognizerWorker(QThread):
-    loading = Signal()
+    message = Signal(str)
+    transcribed = Signal(str, int, int)
 
     def setAudio(self, audio: AudioSegment):
         self.audio_data = audio
 
-    def setSegment(self, segment, id):
-        self.segment = segment
-        self.seg_id = id
+    def setSegments(self, segments):
+        print(segments)
+        self.segments = segments
     
     def run(self):
         if not is_model_loaded():
-            self.loading.emit()
+            self.message.emit(f"Loading {DEFAULT_MODEL}")
             load_model()
 
-        start, end = self.segment
-        # Stupid hack with locale to avoid commas in json string
         current_locale = locale.getlocale()
         locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
-        text = transcribe_segment(self.audio_data[start*1000:end*1000])
+        for i, (seg_id, start, end) in enumerate(self.segments):
+            # Stupid hack with locale to avoid commas in json string
+            self.message.emit(f"{i+1}/{len(self.segments)}")
+            text = transcribe_segment(self.audio_data[start*1000:end*1000])
+            text = ' '.join(text)
+            self.transcribed.emit(text, seg_id, i)
         locale.setlocale(locale.LC_ALL, current_locale)
-        text = ' '.join(text)
-        self.result = text
 
 
 
@@ -387,8 +387,9 @@ class MainWindow(QMainWindow):
         self.initUI()
 
         self.recognizerWorker = RecognizerWorker()
-        self.recognizerWorker.loading.connect(lambda: self.status_bar.showMessage(f"Loading {DEFAULT_MODEL}..."))
-        self.recognizerWorker.finished.connect(self.retrieveRecognizerResult)
+        self.recognizerWorker.message.connect(self.status_message)
+        self.recognizerWorker.transcribed.connect(self.get_transcribtion)
+        self.recognizerWorker.finished.connect(self.progress_bar.hide)
 
         # Keyboard shortcuts
         ## Open
@@ -501,6 +502,19 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("Ready")
         self.status_bar.addPermanentWidget(self.status_label)
 
+        self.progress_bar = QProgressBar()
+        self.progress_bar.hide()
+        self.status_bar.addWidget(self.progress_bar, 1)
+
+    @Slot(str)
+    def status_message(self, message: str):
+        self.status_label.setText(message)
+
+    @Slot(str, int, int)
+    def get_transcribtion(self, text: str, seg_id: int, i: int):
+        self.progress_bar.setValue(i+1)
+        self.textArea.insertUtterance(text, seg_id)
+
     def on_kbd_search(self):
         print("search tool")
     
@@ -562,9 +576,13 @@ class MainWindow(QMainWindow):
 
     def openFile(self, filepath: str = None):
         global LAST_OPEN_FOLDER
+        audio_formats = ("wav", "mp3", "m4a", "ogg", "mp4")
+        all_formats = audio_formats + ("ali",)
+        supported_filter = f"Supported files ({' '.join(['*.'+fmt for fmt in all_formats])})"
+        audio_filter = f"Audio files ({' '.join(['*.'+fmt for fmt in audio_formats])})"
 
         if not filepath:
-            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", LAST_OPEN_FOLDER, "Audio Files (*.wav *.mp3 *.m4a *.mp4)")
+            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", LAST_OPEN_FOLDER, ";;".join([supported_filter, audio_filter]))
         if not filepath:
             return
         LAST_OPEN_FOLDER = os.path.split(filepath)[0]
@@ -572,12 +590,30 @@ class MainWindow(QMainWindow):
         self.waveform.clear()
         self.textArea.clear()
 
-        print("Loading", filepath)
-        self.loadAudio(filepath)
-        print("done")
+        basename, ext = os.path.splitext(filepath)
+        audio_file = None
+        ext = ext[1:]
+
+        if ext == "ali":
+            # Open file to check for an 'audio-source' metadata
+            with open(filepath, 'r') as fr:
+                for line in fr.readlines():
+                    text, metadata = extract_metadata(line)
+                    if metadata:
+                        print(text, metadata)
+                    if "source-audio" in metadata:
+                        audio_file = metadata["source-audio"]
+                        # break
+            if not audio_file:
+                # Check for an audio file with the same basename
+                pass
+        elif ext in audio_formats:
+            # Selected file is an audio file
+            print("Loading", filepath)
+            self.loadAudio(filepath)
+            print("done")
 
         # Check for segment file
-        basename = os.path.splitext(filepath)[0]
         seg_filepath = basename + os.path.extsep + "seg"
         split_filepath = basename + os.path.extsep + "split"
         if os.path.exists(split_filepath):
@@ -703,42 +739,27 @@ class MainWindow(QMainWindow):
         print("action split")
     
 
-    # def recognizeAction(self):
-    #     if not is_model_loaded():
-    #         self.status_bar.showMessage(f"Loading {DEFAULT_MODEL}...")
-    #         load_model()
-
-    #     seg_id = -1
-    #     if self.waveform.selection_active:
-    #         start, end = self.waveform.selection
-    #     elif self.waveform.active >= 0:
-    #         seg_id = self.waveform.active
-    #         start, end = self.waveform.segments[seg_id]
-
-    #     # Stupid hack with locale to avoid commas in json string
-    #     current_locale = locale.getlocale()
-    #     locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
-    #     text = transcribe_segment(self.audio_data[start*1000:end*1000])
-    #     locale.setlocale(locale.LC_ALL, current_locale)
-    #     text = ' '.join(text)
-    #     self.textArea.insertUtterance(text, seg_id)
     def recognizeAction(self):
         seg_id = -1
         if self.waveform.selection_active:
-            self.recognizerWorker.setSegment(self.waveform.selection, seg_id)
+            self.recognizerWorker.setSegments([(seg_id, *self.waveform.selection)])
         elif len(self.waveform.active_segments) > 0:
-            seg_id = self.waveform.last_segment_active
-            self.recognizerWorker.setSegment(self.waveform.segments[seg_id], seg_id)
+            self.recognizerWorker.setSegments(
+                [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
+                )
+        else:
+            return
+
+        # self.status_bar.clearMessage()
+        self.progress_bar.setRange(0, len(self.waveform.active_segments))
+        self.status_bar.show()
+        self.progress_bar.show()
+
         self.recognizerWorker.start()
     
     def joinAction(self):
         print("join action")
-        pass
 
-    def retrieveRecognizerResult(self):
-        text = self.recognizerWorker.result
-        seg_id = self.recognizerWorker.seg_id
-        self.textArea.insertUtterance(text, seg_id)
 
 
 def main():

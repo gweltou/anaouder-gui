@@ -173,7 +173,7 @@ class WaveformWidget(QWidget):
                 # self.scroll_goal = start + 0.5 * dur - 0.5 * self.width() / self.ppsec
                 if not self.timer.isActive():
                     self.timer.start(1000/30)
-            self.parent.status_bar.showMessage(f"{start=} {end=}")
+            #self.parent.status_bar.showMessage(f"{start=} {end=}")
         self.last_segment_active = clicked_id
         self.draw()
 
@@ -286,10 +286,11 @@ class WaveformWidget(QWidget):
             if self.getSegmentUnderMouse(self.click_pos) != self.last_segment_active:
                 self.active_segments = []
                 self.last_segment_active = -1
-            self.selection_active = self.isSelectionUnderMouse(self.click_pos)
+            if not self.isSelectionUnderMouse(self.click_pos):
+                self.selection_active = False
+                self.selection = None
             self.setHead(self.t_left + self.click_pos.x() / self.ppsec)
             self.anchor = self.head
-            self.selection = None
         if self.over_start:
             self.resizing_segment = 1 # 0: None, 1: left, 2: right
             self.resizing_tinit = self.t_left + event.position().x() / self.ppsec
@@ -317,27 +318,6 @@ class WaveformWidget(QWidget):
                 
         self.draw()
         return super().mouseReleaseEvent(event)
-
-
-    def contextMenuEvent(self, event):
-        if not self.active_segments and not self.selection_active:
-            return
-        clicked_id = self.getSegmentUnderMouse(event.globalPos())
-        print("context", clicked_id)
-        context = QMenu(self)
-        if len(self.active_segments) > 1:
-            action_join = QAction("Join segments", self)
-            action_join.triggered.connect(self.parent.joinAction)
-            context.addAction(action_join)
-        elif not self.selection_active:
-            action_split = QAction("Split here", self)
-            action_split.triggered.connect(self.parent.splitAction)
-            context.addAction(action_split)
-        context.addSeparator()
-        action_recognize = QAction("Recognize", self)
-        action_recognize.triggered.connect(self.parent.recognizeAction)
-        context.addAction(action_recognize)
-        context.exec(event.globalPos())
 
 
     def mouseMoveEvent(self, event):
@@ -383,7 +363,27 @@ class WaveformWidget(QWidget):
                 self.segments[self.last_segment_active][1] = pos_x
             self.draw()
         self.mouse_pos = event.position()
-    
+
+
+    def contextMenuEvent(self, event):
+        if not self.active_segments and not self.selection_active:
+            return
+        clicked_id = self.getSegmentUnderMouse(event.globalPos())
+        context = QMenu(self)
+        if len(self.active_segments) > 1:
+            action_join = QAction("Join segments", self)
+            action_join.triggered.connect(self.parent.joinAction)
+            context.addAction(action_join)
+        elif clicked_id >= 0:
+            action_split = QAction("Split here", self)
+            action_split.triggered.connect(self.parent.splitAction)
+            context.addAction(action_split)
+        context.addSeparator()
+        action_recognize = QAction("Recognize", self)
+        action_recognize.triggered.connect(self.parent.recognizeAction)
+        context.addAction(action_recognize)
+        context.exec(event.globalPos())
+
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.isAutoRepeat():
@@ -402,7 +402,6 @@ class WaveformWidget(QWidget):
         
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
-        print("release")
         if event.key() == Qt.Key_Control:
             self.ctrl_pressed = False
             self.over_start = False
