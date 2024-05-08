@@ -100,7 +100,7 @@ class WaveformWidget(QWidget):
         self.ppsec = 20        # pixels per seconds (audio)
         self.t_left = 0.0      # timecode (s) of left border
         self.scroll_vel = 0.0
-        self.head = 0.0
+        self.playhead = 0.0
         # self.iselected = -1
         #self.active = -1
         self.active_segments = []
@@ -109,7 +109,7 @@ class WaveformWidget(QWidget):
         self.resizing_segment = 0
         self.id_counter = 0    
         self.selection = None
-        self.selection_active = False
+        self.selection_is_active = False
 
 
     def setSamples(self, samples, sr) -> None:
@@ -118,9 +118,11 @@ class WaveformWidget(QWidget):
         self.t_total = len(samples) / sr
     
 
-    def addSegment(self, segment) -> None:
-        self.segments[self.id_counter] = segment
+    def addSegment(self, segment) -> int:
+        segment_id = self.id_counter
         self.id_counter += 1
+        self.segments[segment_id] = segment
+        return segment_id
 
 
     def findPrevSegment(self) -> int:
@@ -163,7 +165,7 @@ class WaveformWidget(QWidget):
         else:
             #self.active = clicked_id
             self.active_segments = [clicked_id]
-            self.selection_active = False
+            self.selection_is_active = False
             start, end = self.segments[clicked_id]
             t_right = self.t_left + self.width() / self.ppsec
             if end < self.t_left or start > t_right:
@@ -180,8 +182,13 @@ class WaveformWidget(QWidget):
 
     def setHead(self, t):
         """Set the playing head"""
-        self.head = t
+        self.playhead = t
         self.draw()
+    
+
+    def deselect(self):
+        self.selection_is_active = False
+        self.selection = None
     
 
     def _updateScroll(self):
@@ -262,14 +269,14 @@ class WaveformWidget(QWidget):
         self.draw()
     
 
-    def getSegmentUnderMouse(self, position: QPointF) -> int:
+    def getSegmentAtPosition(self, position: QPointF) -> int:
         t = self.t_left + position.x() / self.ppsec
         for id, (start, end) in self.segments.items():
             if start <= t <= end:
                 return id
         return -1
 
-    def isSelectionUnderMouse(self, position: QPointF) -> bool:
+    def isSelectionAtPosition(self, position: QPointF) -> bool:
         t = self.t_left + position.x() / self.ppsec
         if self.selection:
             start, end = self.selection
@@ -283,14 +290,13 @@ class WaveformWidget(QWidget):
             self.mouse_pos = event.position()
         elif event.button() == Qt.RightButton:
             # Show contextMenu only if right clicking on active segment
-            if self.getSegmentUnderMouse(self.click_pos) != self.last_segment_active:
+            if self.getSegmentAtPosition(self.click_pos) != self.last_segment_active:
                 self.active_segments = []
                 self.last_segment_active = -1
-            if not self.isSelectionUnderMouse(self.click_pos):
-                self.selection_active = False
-                self.selection = None
+            if not self.isSelectionAtPosition(self.click_pos):
+                self.deselect()
             self.setHead(self.t_left + self.click_pos.x() / self.ppsec)
-            self.anchor = self.head
+            self.anchor = self.playhead
         if self.over_start:
             self.resizing_segment = 1 # 0: None, 1: left, 2: right
             self.resizing_tinit = self.t_left + event.position().x() / self.ppsec
@@ -308,13 +314,13 @@ class WaveformWidget(QWidget):
             dist = dx * dx + dy * dy
             if dist < 20:
                 # Select only clicked segment
-                clicked_id = self.getSegmentUnderMouse(event.position())
+                clicked_id = self.getSegmentAtPosition(event.position())
                 self.utterances.lock = True
                 self.utterances.setActive(clicked_id)
                 self.utterances.lock = False
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
-                    self.selection_active = self.isSelectionUnderMouse(event.position())
+                    self.selection_is_active = self.isSelectionAtPosition(event.position())
                 
         self.draw()
         return super().mouseReleaseEvent(event)
@@ -334,7 +340,7 @@ class WaveformWidget(QWidget):
         elif event.buttons() == Qt.RightButton:
             head = self.t_left + event.position().x() / self.ppsec
             self.selection = (min(head, self.anchor), max(head, self.anchor))
-            self.selection_active = True
+            self.selection_is_active = True
             if self.parent.player.playbackState() != QMediaPlayer.PlayingState:
                 self.setHead(head)
             else:
@@ -366,21 +372,26 @@ class WaveformWidget(QWidget):
 
 
     def contextMenuEvent(self, event):
-        if not self.active_segments and not self.selection_active:
+        if not self.active_segments and not self.selection_is_active:
             return
-        clicked_id = self.getSegmentUnderMouse(event.globalPos())
+        
+        clicked_segment_id = self.getSegmentAtPosition(event.globalPos())
         context = QMenu(self)
+        if self.selection_is_active:
+            action_create_segment = QAction("Add segment", self)
+            action_create_segment.triggered.connect(self.parent.actionCreateNewSegment)
+            context.addAction(action_create_segment)
         if len(self.active_segments) > 1:
             action_join = QAction("Join segments", self)
-            action_join.triggered.connect(self.parent.joinAction)
+            action_join.triggered.connect(self.parent.actionJoin)
             context.addAction(action_join)
-        elif clicked_id >= 0:
+        elif clicked_segment_id >= 0:
             action_split = QAction("Split here", self)
-            action_split.triggered.connect(self.parent.splitAction)
+            action_split.triggered.connect(self.parent.actionSplitSegment)
             context.addAction(action_split)
         context.addSeparator()
         action_recognize = QAction("Recognize", self)
-        action_recognize.triggered.connect(self.parent.recognizeAction)
+        action_recognize.triggered.connect(self.parent.actionRecognize)
         context.addAction(action_recognize)
         context.exec(event.globalPos())
 
@@ -453,8 +464,8 @@ class WaveformWidget(QWidget):
             self.painter.drawText(t_x-8 * len(t_string) // 2, 12, t_string)
                 
         # Draw head
-        if self.t_left <= self.head <= tf:
-            t_x = (self.head - self.t_left) * self.ppsec
+        if self.t_left <= self.playhead <= tf:
+            t_x = (self.playhead - self.t_left) * self.ppsec
             self.painter.setPen(QPen(QColor(255, 20, 20, 40), 3))
             self.painter.drawLine(t_x, 0, t_x, self.height())
             self.painter.setPen(QPen(QColor(255, 20, 20)))
@@ -493,7 +504,7 @@ class WaveformWidget(QWidget):
                 x = (start - self.t_left) * self.ppsec
                 w = (end - start) * self.ppsec
                 self.painter.setBrush(QBrush(QColor(100, 150, 220, 50)))
-                if self.selection_active:
+                if self.selection_is_active:
                     self.painter.setPen(QPen(QColor(100, 150, 220), 2))
                     self.painter.drawRect(x, self.timecode_margin + 18, w, self.height()-(36+self.timecode_margin))
                 else:

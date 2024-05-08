@@ -124,6 +124,7 @@ class TextArea(QTextEdit):
         self.cursorPositionChanged.connect(self.cursor_changed)
         # self.textChanged.connect(self.text_changed)
         self.document().contentsChange.connect(self.contents_change)
+
         self.setactive_lock = False # Disable waveform.setActive calls
 
         #self.document().setDefaultStyleSheet()
@@ -142,29 +143,33 @@ class TextArea(QTextEdit):
         self.document().clear()
 
 
-    def block_is_utt(self, i):
-        block = self.document().findBlockByNumber(i)
-        text = block.text()
+    # def isUtteranceBlock(self, i):
+    #     block = self.document().findBlockByNumber(i)
+    #     text = block.text()
 
-        i_comment = text.find('#')
-        if i_comment >= 0:
-            text = text[:i_comment]
+    #     i_comment = text.find('#')
+    #     if i_comment >= 0:
+    #         text = text[:i_comment]
         
-        text, _ = extract_metadata(text)
-        return len(text.strip()) > 0
+    #     text, _ = extract_metadata(text)
+    #     return len(text.strip()) > 0
 
 
     def insertUtterance(self, text: str, id: int):
+        assert id in self.parent.waveform.segments
+
         doc = self.document()
-        last_segment_start = 0
+        seg_start, seg_end = self.parent.waveform.segments[id]
+
         for block_idx in range(doc.blockCount()):
             block = doc.findBlockByNumber(block_idx)
             if not block.userData():
                 continue
+
             user_data = block.userData().data
             if "seg_id" in user_data:
-                seg_id = user_data["seg_id"]
-                if seg_id == id:
+                other_id = user_data["seg_id"]
+                if other_id == id:
                     # Replace text content
                     cursor = QTextCursor(block)
                     cursor.movePosition(QTextCursor.StartOfBlock)
@@ -175,10 +180,20 @@ class TextArea(QTextEdit):
                     cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                     self.setTextCursor(cursor)
                     return
-                else:
-                    if seg_id in self.parent.waveform.segments:
-                        last_segment_start = self.parent.waveform.segments[seg_id][0]
-                        # TODO
+                other_start, _ = self.parent.waveform.segments[other_id]
+                if other_start > seg_end:
+                    # Insert new utterance right before this one
+                    cursor = QTextCursor(block)
+                    cursor.movePosition(QTextCursor.StartOfBlock)
+                    cursor.movePosition(QTextCursor.Left)
+                    cursor.insertBlock()
+                    cursor.insertText(text)
+                    cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+                    cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
+                    self.setTextCursor(cursor)
+                    return
+
+        # Insert new utterance at the end
         cursor = QTextCursor(doc)
         # cursor.clearSelection()
         cursor.movePosition(QTextCursor.End)
@@ -387,8 +402,8 @@ class MainWindow(QMainWindow):
         self.initUI()
 
         self.recognizerWorker = RecognizerWorker()
-        self.recognizerWorker.message.connect(self.status_message)
-        self.recognizerWorker.transcribed.connect(self.get_transcribtion)
+        self.recognizerWorker.message.connect(self.slotSetStatusMessage)
+        self.recognizerWorker.transcribed.connect(self.slotGetTranscription)
         self.recognizerWorker.finished.connect(self.progress_bar.hide)
 
         # Keyboard shortcuts
@@ -507,11 +522,11 @@ class MainWindow(QMainWindow):
         self.status_bar.addWidget(self.progress_bar, 1)
 
     @Slot(str)
-    def status_message(self, message: str):
+    def slotSetStatusMessage(self, message: str):
         self.status_label.setText(message)
 
     @Slot(str, int, int)
-    def get_transcribtion(self, text: str, seg_id: int, i: int):
+    def slotGetTranscription(self, text: str, seg_id: int, i: int):
         self.progress_bar.setValue(i+1)
         self.textArea.insertUtterance(text, seg_id)
 
@@ -526,14 +541,14 @@ class MainWindow(QMainWindow):
 
         if self.waveform.last_segment_active >= 0:
             self.playSegment(self.waveform.segments[self.waveform.last_segment_active])
-        elif self.waveform.selection_active:
+        elif self.waveform.selection_is_active:
             self.playSegment(self.waveform.selection)
         else:
-            self.player.setPosition(int(self.waveform.head * 1000))
+            self.player.setPosition(int(self.waveform.playhead * 1000))
             self.player.play()
             self.play_t0 = time()
-            self.play_start = self.waveform.head
-            self.play_length = self.waveform.t_total - self.waveform.head
+            self.play_start = self.waveform.playhead
+            self.play_length = self.waveform.t_total - self.waveform.playhead
             self.play_timer.start(1000/30)
 
 
@@ -735,13 +750,22 @@ class MainWindow(QMainWindow):
         self.waveform.draw()
 
 
-    def splitAction(self):
+    def actionCreateNewSegment(self):
+        """Create a new segment from waveform selection"""
+        print("New segment action", self.waveform.selection)
+        assert self.waveform.selection_is_active
+        segment_id = self.waveform.addSegment(self.waveform.selection)
+        self.waveform.deselect()
+        self.textArea.insertUtterance("*", segment_id)
+
+
+    def actionSplitSegment(self):
         print("action split")
     
 
-    def recognizeAction(self):
+    def actionRecognize(self):
         seg_id = -1
-        if self.waveform.selection_active:
+        if self.waveform.selection_is_active:
             self.recognizerWorker.setSegments([(seg_id, *self.waveform.selection)])
         elif len(self.waveform.active_segments) > 0:
             self.recognizerWorker.setSegments(
@@ -757,7 +781,7 @@ class MainWindow(QMainWindow):
 
         self.recognizerWorker.start()
     
-    def joinAction(self):
+    def actionJoin(self):
         print("join action")
 
 
