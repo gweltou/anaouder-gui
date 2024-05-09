@@ -146,10 +146,13 @@ class WaveformWidget(QWidget):
 
 
     def setActive(self, clicked_id: int, multi=False) -> None:
+        print("setActive", clicked_id, multi)
+
         if clicked_id not in self.segments:
             self.active_segments = []
             self.last_segment_active = -1
             return
+        
         if multi:
             # Find segment IDs between `last_segment_active` and `clicked_id`
             first, last = sorted([self.last_segment_active, clicked_id],
@@ -315,9 +318,10 @@ class WaveformWidget(QWidget):
             if dist < 20:
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPosition(event.position())
-                self.utterances.lock = True
+                self.utterances.setactive_lock = True
                 self.utterances.setActive(clicked_id)
-                self.utterances.lock = False
+                self.utterances.setactive_lock = False
+                print("mouseRelease")
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
@@ -400,15 +404,19 @@ class WaveformWidget(QWidget):
         if event.isAutoRepeat():
             event.ignore()
             return
+        
         if event.key() == Qt.Key_Control:
             self.ctrl_pressed = True
             self.scroll_vel = 0.0
             if self.mouse_pos:
                 self.checkHandles(self.mouse_pos)
             self.draw()
-        if event.key() == Qt.Key_Shift:
+        elif event.key() == Qt.Key_Shift:
             print("shift")
             self.shift_pressed = True
+        elif event.key() == Qt.Key_A and self.selection_is_active:
+            self.parent.actionCreateNewSegment()
+
         return super().keyPressEvent(event)
         
 
@@ -422,6 +430,7 @@ class WaveformWidget(QWidget):
         elif event.key() == Qt.Key_Shift:
             self.shift_pressed = False
         return super().keyReleaseEvent(event)
+
 
 
     def draw(self):

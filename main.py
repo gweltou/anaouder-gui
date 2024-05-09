@@ -226,7 +226,7 @@ class TextArea(QTextEdit):
                 block.setUserData(MyTextBlockUserData({"is_utt": False}))
 
 
-    def findBlockById(self, id: int) -> QTextBlock:
+    def findBlockByUtteranceId(self, id: int) -> QTextBlock:
         doc = self.document()
         for blockIndex in range(doc.blockCount()):
             block = doc.findBlockByNumber(blockIndex)
@@ -238,7 +238,7 @@ class TextArea(QTextEdit):
 
 
     def setActive(self, id: int, withcursor=True):
-        block = self.findBlockById(id)
+        block = self.findBlockByUtteranceId(id)
         if not block:
             return
         # if self.lastActive >= 0:
@@ -283,6 +283,9 @@ class TextArea(QTextEdit):
             self.ensureCursorVisible()
             self.scroll_goal = max(scroll_bar.value() - 40, 0)
             scroll_bar.setValue(scroll_old_val)
+        
+        if not self.setactive_lock:
+            self.parent.waveform.setActive(id)
     
 
     # def mousePressEvent(self, event):
@@ -318,10 +321,8 @@ class TextArea(QTextEdit):
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
                 self.setActive(id, withcursor=False)
-                if not self.setactive_lock:
-                    self.parent.waveform.setActive(id)
-                start, end = self.parent.waveform.segments[id]
-                data.update({'start': start, 'end': end, 'dur': end-start})
+                # start, end = self.parent.waveform.segments[id]
+                # data.update({'start': start, 'end': end, 'dur': end-start})
                 
             #self.parent.status_bar.showMessage(str(data))
         else:
@@ -430,8 +431,6 @@ class MainWindow(QMainWindow):
 
 
     def initUI(self):
-        self.waveform = WaveformWidget(self)
-        
         bottomLayout = QVBoxLayout()
         bottomLayout.setSpacing(0)
         bottomLayout.setContentsMargins(0, 0, 0, 0)
@@ -474,6 +473,7 @@ class MainWindow(QMainWindow):
         self.textArea = TextArea(self)
         utterancesLayout.addWidget(self.textArea)
 
+        self.waveform = WaveformWidget(self)
         self.waveform.utterances = self.textArea
         
         bottomLayout.addWidget(self.textArea)
