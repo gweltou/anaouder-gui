@@ -101,6 +101,11 @@ class Highlighter(QSyntaxHighlighter):
 
 
 class MyTextBlockUserData(QTextBlockUserData):
+    """
+        Fields:
+            - seg_id
+            - is_utt
+    """
     def __init__(self, data):
         super().__init__()
         self.data = data
@@ -154,8 +159,20 @@ class TextArea(QTextEdit):
     #     text, _ = extract_metadata(text)
     #     return len(text.strip()) > 0
 
+    def setUtteranceText(self, id: int, text: str):
+        block = self.getBlockByUtteranceId(id)
+        if not block:
+            return
+        cursor = QTextCursor(block)
+        cursor.movePosition(QTextCursor.EndOfBlock)
+        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+        cursor.insertText(text)
+
 
     def insertUtterance(self, text: str, id: int):
+        """
+            Utterances are supposed to be chronologically ordered
+        """
         assert id in self.parent.waveform.segments
 
         doc = self.document()
@@ -208,6 +225,7 @@ class TextArea(QTextEdit):
     def setText(self, text: str):
         super().setText(text)
 
+        # Add utterances metadata
         doc = self.document()
         for block_idx in range(doc.blockCount()):
             block = doc.findBlockByNumber(block_idx)
@@ -226,19 +244,20 @@ class TextArea(QTextEdit):
                 block.setUserData(MyTextBlockUserData({"is_utt": False}))
 
 
-    def findBlockByUtteranceId(self, id: int) -> QTextBlock:
+    def getBlockByUtteranceId(self, id: int) -> QTextBlock:
         doc = self.document()
         for blockIndex in range(doc.blockCount()):
             block = doc.findBlockByNumber(blockIndex)
-            if block.userData():
-                userData = block.userData().data
-                if "seg_id" in userData and userData["seg_id"] == id:
-                    return block
+            if not block.userData():
+                continue
+            userData = block.userData().data
+            if "seg_id" in userData and userData["seg_id"] == id:
+                return block
         return None
 
 
     def setActive(self, id: int, withcursor=True):
-        block = self.findBlockByUtteranceId(id)
+        block = self.getBlockByUtteranceId(id)
         if not block:
             return
         # if self.lastActive >= 0:
@@ -781,8 +800,36 @@ class MainWindow(QMainWindow):
 
         self.recognizerWorker.start()
     
+
     def actionJoin(self):
+        """
+            Join many segments in one.
+            Keep the segment ID of the earliest segment among the selected ones.
+        """
         print("join action")
+        segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
+        first_id = segments_id[0]
+        all_text = [self.textArea.getBlockByUtteranceId(id).text() for id in segments_id]
+
+        # Join text utterances
+        for id in segments_id[1:]:
+            block = self.textArea.getBlockByUtteranceId(id)
+            cursor = QTextCursor(block)
+            cursor.select(QTextCursor.BlockUnderCursor)
+            cursor.removeSelectedText()
+        self.textArea.setUtteranceText(first_id, ' '.join(all_text))
+
+        # Join waveform segments
+        new_seg_start = self.waveform.segments[first_id][0]
+        new_seg_end = self.waveform.segments[segments_id[-1]][1]
+        self.waveform.segments[first_id] = [new_seg_start, new_seg_end]
+        for id in segments_id[1:]:
+            del self.waveform.segments[id]
+        self.waveform.active_segments = [first_id]
+        self.waveform.draw()
+
+        print(all_text)
+        print(segments_id)
 
 
 

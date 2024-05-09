@@ -3,6 +3,7 @@
 
 
 ZOOM_Y = 3.5
+ZOOM_MAX = 1500
 
 
 
@@ -101,7 +102,6 @@ class WaveformWidget(QWidget):
         self.t_left = 0.0      # timecode (s) of left border
         self.scroll_vel = 0.0
         self.playhead = 0.0
-        # self.iselected = -1
         #self.active = -1
         self.active_segments = []
         self.last_segment_active = -1
@@ -146,8 +146,6 @@ class WaveformWidget(QWidget):
 
 
     def setActive(self, clicked_id: int, multi=False) -> None:
-        print("setActive", clicked_id, multi)
-
         if clicked_id not in self.segments:
             self.active_segments = []
             self.last_segment_active = -1
@@ -164,7 +162,6 @@ class WaveformWidget(QWidget):
                 if start >= first_t and end <= last_t:
                     self.active_segments.append(seg_id)
             self.active_segments.append(last)
-            print(self.active_segments)
         else:
             #self.active = clicked_id
             self.active_segments = [clicked_id]
@@ -246,31 +243,6 @@ class WaveformWidget(QWidget):
         self.setFocus()
         super().enterEvent(event)
 
-    
-    def wheelEvent(self, event: QWheelEvent):
-        if event.modifiers() & Qt.ControlModifier:
-            zoomFactor = 1.08
-            zoomMax = 1000 # Pixels per second
-            zoomLoc = event.position().x() / self.width()
-            prev_ppsec = self.ppsec
-            
-            if event.angleDelta().y() > 0:
-                self.ppsec = min(zoomMax, self.ppsec * zoomFactor)
-            else:
-                # Zoom out boundary
-                new_ppsec = self.ppsec / zoomFactor
-                if new_ppsec * len(self.waveform.samples) / self.waveform.sr >= self.width():
-                    self.ppsec = new_ppsec
-            delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
-            self.t_left -= delta_s * zoomLoc
-            self.t_left = min(max(self.t_left, 0), self.t_total - self.width() / self.ppsec)
-            self.waveform.ppsec = self.ppsec
-            print("zoom", self.ppsec, zoomLoc, self.t_left)
-        else:
-            # Scroll
-            pass
-        self.draw()
-    
 
     def getSegmentAtPosition(self, position: QPointF) -> int:
         t = self.t_left + position.x() / self.ppsec
@@ -286,6 +258,47 @@ class WaveformWidget(QWidget):
             return start < t < end
         return False
 
+
+
+    ###################################
+    ##   KEYBOARD AND MOUSE EVENTS   ##
+    ###################################
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.isAutoRepeat():
+            event.ignore()
+            return
+        
+        if event.key() == Qt.Key_Control:
+            self.ctrl_pressed = True
+            self.scroll_vel = 0.0
+            if self.mouse_pos:
+                self.checkHandles(self.mouse_pos)
+            self.draw()
+        elif event.key() == Qt.Key_Shift:
+            print("shift")
+            self.shift_pressed = True
+        elif event.key() == Qt.Key_A and self.selection_is_active:
+            # Create a new segment from selection
+            self.parent.actionCreateNewSegment()
+        elif event.key() == Qt.Key_J and len(self.active_segments) > 1:
+            # Join multiple segments
+            self.parent.actionJoin()
+
+
+        return super().keyPressEvent(event)
+        
+
+    def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key_Control:
+            self.ctrl_pressed = False
+            self.over_start = False
+            self.over_end = False
+            self.resizing_segment = 0
+            self.draw()
+        elif event.key() == Qt.Key_Shift:
+            self.shift_pressed = False
+        return super().keyReleaseEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.click_pos = event.position()
@@ -343,7 +356,7 @@ class WaveformWidget(QWidget):
                 self.timer.start(1000/30)
         elif event.buttons() == Qt.RightButton:
             head = self.t_left + event.position().x() / self.ppsec
-            self.selection = (min(head, self.anchor), max(head, self.anchor))
+            self.selection = [min(head, self.anchor), max(head, self.anchor)]
             self.selection_is_active = True
             if self.parent.player.playbackState() != QMediaPlayer.PlayingState:
                 self.setHead(head)
@@ -375,6 +388,30 @@ class WaveformWidget(QWidget):
         self.mouse_pos = event.position()
 
 
+    def wheelEvent(self, event: QWheelEvent):
+        if event.modifiers() & Qt.ControlModifier:
+            zoomFactor = 1.08
+            zoomLoc = event.position().x() / self.width()
+            prev_ppsec = self.ppsec
+            
+            if event.angleDelta().y() > 0:
+                self.ppsec = min(ZOOM_MAX, self.ppsec * zoomFactor)
+            else:
+                # Zoom out boundary
+                new_ppsec = self.ppsec / zoomFactor
+                if new_ppsec * len(self.waveform.samples) / self.waveform.sr >= self.width():
+                    self.ppsec = new_ppsec
+            delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
+            self.t_left -= delta_s * zoomLoc
+            self.t_left = min(max(self.t_left, 0), self.t_total - self.width() / self.ppsec)
+            self.waveform.ppsec = self.ppsec
+            print("zoom", self.ppsec, zoomLoc, self.t_left)
+        else:
+            # Scroll
+            pass
+        self.draw()
+    
+
     def contextMenuEvent(self, event):
         if not self.active_segments and not self.selection_is_active:
             return
@@ -399,37 +436,6 @@ class WaveformWidget(QWidget):
         context.addAction(action_recognize)
         context.exec(event.globalPos())
 
-
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.isAutoRepeat():
-            event.ignore()
-            return
-        
-        if event.key() == Qt.Key_Control:
-            self.ctrl_pressed = True
-            self.scroll_vel = 0.0
-            if self.mouse_pos:
-                self.checkHandles(self.mouse_pos)
-            self.draw()
-        elif event.key() == Qt.Key_Shift:
-            print("shift")
-            self.shift_pressed = True
-        elif event.key() == Qt.Key_A and self.selection_is_active:
-            self.parent.actionCreateNewSegment()
-
-        return super().keyPressEvent(event)
-        
-
-    def keyReleaseEvent(self, event: QKeyEvent) -> None:
-        if event.key() == Qt.Key_Control:
-            self.ctrl_pressed = False
-            self.over_start = False
-            self.over_end = False
-            self.resizing_segment = 0
-            self.draw()
-        elif event.key() == Qt.Key_Shift:
-            self.shift_pressed = False
-        return super().keyReleaseEvent(event)
 
 
 
@@ -554,4 +560,3 @@ class WaveformWidget(QWidget):
         
         self.painter.end()
         self.update()
-
