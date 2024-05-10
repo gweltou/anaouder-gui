@@ -334,7 +334,6 @@ class WaveformWidget(QWidget):
                 self.utterances.setactive_lock = True
                 self.utterances.setActive(clicked_id)
                 self.utterances.setactive_lock = False
-                print("mouseRelease")
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
                     self.selection_is_active = self.isSelectionAtPosition(event.position())

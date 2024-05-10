@@ -404,7 +404,7 @@ class RecognizerWorker(QThread):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, filepath=""):
         super().__init__()
         self.setWindowTitle("Anaouder-Qt")
         self.setGeometry(50, 50, 800, 600)
@@ -435,18 +435,19 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.saveFile)
         ## Search
         shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
-        shortcut.activated.connect(self.on_kbd_search)
+        shortcut.activated.connect(self.kbdSearch)
         ## Play
         shortcut = QShortcut(QKeySequence("Ctrl+Space"), self)
-        shortcut.activated.connect(self.on_play_button)
+        shortcut.activated.connect(self.play)
         # Next
         shortcut = QShortcut(QKeySequence("Ctrl+Right"), self)
-        shortcut.activated.connect(self.on_kbd_next_utt)
+        shortcut.activated.connect(self.kbdNext)
         # Prev
         shortcut = QShortcut(QKeySequence("Ctrl+Left"), self)
-        shortcut.activated.connect(self.on_kbd_prev_utt)
+        shortcut.activated.connect(self.kbdPrev)
 
-        self.openFile('daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.wav')
+        if filepath:
+            self.openFile(filepath)
 
 
     def initUI(self):
@@ -461,6 +462,11 @@ class MainWindow(QMainWindow):
         buttonsLayout.setContentsMargins(0, 0, 0, 0)
         buttonsLayout.setAlignment(Qt.AlignHCenter)
         button_size = 28
+        backButton = QPushButton()
+        backButton.setIcon(QIcon("icons/back.png"))
+        backButton.setFixedWidth(button_size)
+        buttonsLayout.addWidget(backButton)
+        #buttonsLayout.addSpacerItem(QSpacerItem())
         prevButton = QPushButton()
         prevButton.setIcon(QIcon("icons/previous.png"))
         prevButton.setFixedWidth(button_size)
@@ -483,9 +489,10 @@ class MainWindow(QMainWindow):
 
         bottomLayout.addLayout(buttonsLayout)
 
-        curButton.clicked.connect(self.on_play_button)
+        curButton.clicked.connect(self.play)
         nextButton.clicked.connect(self.playNext)
         prevButton.clicked.connect(self.playPrev)
+        backButton.clicked.connect(self.back)
 
         utterancesLayout = QVBoxLayout()
         utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
@@ -548,40 +555,6 @@ class MainWindow(QMainWindow):
     def slotGetTranscription(self, text: str, seg_id: int, i: int):
         self.progress_bar.setValue(i+1)
         self.textArea.insertUtterance(text, seg_id)
-
-    def on_kbd_search(self):
-        print("search tool")
-    
-    def on_play_button(self):
-        if self.player.playbackState() == QMediaPlayer.PlayingState:
-            self.player.pause()
-            self.play_timer.stop()
-            return
-
-        if self.waveform.last_segment_active >= 0:
-            self.playSegment(self.waveform.segments[self.waveform.last_segment_active])
-        elif self.waveform.selection_is_active:
-            self.playSegment(self.waveform.selection)
-        else:
-            self.player.setPosition(int(self.waveform.playhead * 1000))
-            self.player.play()
-            self.play_t0 = time()
-            self.play_start = self.waveform.playhead
-            self.play_length = self.waveform.t_total - self.waveform.playhead
-            self.play_timer.start(1000/30)
-
-
-    def on_kbd_next_utt(self):
-        id = self.waveform.findNextSegment()
-        if id >= 0:
-            self.waveform.setActive(id)
-            self.textArea.setActive(id)
-    
-    def on_kbd_prev_utt(self):
-        id = self.waveform.findPrevSegment()
-        if id >= 0:
-            self.waveform.setActive(id)
-            self.textArea.setActive(id)
 
 
     def saveFile(self):
@@ -702,6 +675,15 @@ class MainWindow(QMainWindow):
         self.waveform.setSamples(samples, audio_data.frame_rate)
 
 
+    def _update_player(self):
+        dt = time() - self.play_t0
+        if dt > self.play_length:
+            self.player.pause()
+            self.play_timer.stop()
+        else:
+            self.waveform.setHead(self.play_start + dt)
+
+
     def playSegment(self, segment):
         # if self.player.playbackState() == QMediaPlayer.PlayingState:
         #     self.player.pause()
@@ -746,14 +728,55 @@ class MainWindow(QMainWindow):
         self.playSegment(self.waveform.segments[id])
 
 
-    def _update_player(self):
-        dt = time() - self.play_t0
-        if dt > self.play_length:
+    def kbdSearch(self):
+        print("search tool")
+    
+    def play(self):
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
             self.play_timer.stop()
+            return
+
+        if self.waveform.last_segment_active >= 0:
+            self.playSegment(self.waveform.segments[self.waveform.last_segment_active])
+        elif self.waveform.selection_is_active:
+            self.playSegment(self.waveform.selection)
         else:
-            self.waveform.setHead(self.play_start + dt)
+            self.player.setPosition(int(self.waveform.playhead * 1000))
+            self.player.play()
+            self.play_t0 = time()
+            self.play_start = self.waveform.playhead
+            self.play_length = self.waveform.t_total - self.waveform.playhead
+            self.play_timer.start(1000/30)
+
+    def stop(self):
+        """Stop playback"""
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
+            self.player.pause()
+            self.play_timer.stop()
+
+    def kbdNext(self):
+        id = self.waveform.findNextSegment()
+        if id >= 0:
+            #self.waveform.setActive(id)
+            self.textArea.setActive(id)
     
+    def kbdPrev(self):
+        id = self.waveform.findPrevSegment()
+        if id >= 0:
+            #self.waveform.setActive(id)
+            self.textArea.setActive(id)
+
+    def back(self):
+        """Get back to the first segment or to the beginning of the recording"""
+        if len(self.waveform.segments) > 0:
+            first_seg_id = min(self.waveform.segments.keys(), key=lambda x: self.waveform.segments[x][0])
+            #self.waveform.setActive(id)
+            self.textArea.setActive(first_seg_id)
+        else:
+            self.stop()
+            self.waveform.setHead(0.0)
+
 
     def opFindSegments(self):
         print("Finding segments")
@@ -834,8 +857,9 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.wav"
     app = QApplication(sys.argv)
-    window = MainWindow()
+    window = MainWindow(file_path)
     window.show()
     sys.exit(app.exec())
 
