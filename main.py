@@ -27,9 +27,10 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 from PySide6.QtCore import (
-    Qt, QRectF, QLineF, QSize, QTimer, QRegularExpression, QPointF,
+    Qt, QSize, QTimer, QRegularExpression, QPointF,
     QByteArray, QBuffer, QIODevice, QUrl, QEvent,
     QThread, Signal, Slot,
+    QSettings,
 )
 from PySide6.QtGui import (
     QAction, QMouseEvent,
@@ -44,8 +45,6 @@ from waveform_widget import WaveformWidget
 
 
 # Config
-LAST_OPEN_FOLDER = ""
-LAST_SAVE_FOLDER = ""
 HEADER = """
 """
 AUTOSEG_MAX_LENGTH = 15
@@ -129,8 +128,6 @@ class TextArea(QTextEdit):
         self.cursorPositionChanged.connect(self.cursor_changed)
         # self.textChanged.connect(self.text_changed)
         self.document().contentsChange.connect(self.contents_change)
-
-        self.setactive_lock = False # Disable waveform.setActive calls
 
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document())
@@ -256,7 +253,7 @@ class TextArea(QTextEdit):
         return None
 
 
-    def setActive(self, id: int, withcursor=True):
+    def setActive(self, id: int, withcursor=True, update_waveform=True):
         block = self.getBlockByUtteranceId(id)
         if not block:
             return
@@ -303,7 +300,7 @@ class TextArea(QTextEdit):
             self.scroll_goal = max(scroll_bar.value() - 40, 0)
             scroll_bar.setValue(scroll_old_val)
         
-        if not self.setactive_lock:
+        if update_waveform:
             self.parent.waveform.setActive(id)
     
 
@@ -404,9 +401,11 @@ class RecognizerWorker(QThread):
 
 
 class MainWindow(QMainWindow):
+    APP_NAME = "Anaouder-Qt"
+
     def __init__(self, filepath=""):
         super().__init__()
-        self.setWindowTitle("Anaouder-Qt")
+        self.setWindowTitle(self.APP_NAME)
         self.setGeometry(50, 50, 800, 600)
         
         self.input_devices = QMediaDevices.audioInputs()
@@ -415,6 +414,7 @@ class MainWindow(QMainWindow):
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
         self.audio_data = None
+        self.filepath = ""
 
         self.play_timer = QTimer()
         self.play_timer.timeout.connect(self._update_player)
@@ -441,10 +441,10 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.play)
         # Next
         shortcut = QShortcut(QKeySequence("Ctrl+Right"), self)
-        shortcut.activated.connect(self.kbdNext)
+        shortcut.activated.connect(self.playNext)
         # Prev
         shortcut = QShortcut(QKeySequence("Ctrl+Left"), self)
-        shortcut.activated.connect(self.kbdPrev)
+        shortcut.activated.connect(self.playPrev)
 
         if filepath:
             self.openFile(filepath)
@@ -523,16 +523,20 @@ class MainWindow(QMainWindow):
         openAction.triggered.connect(self.openFile)
         fileMenu.addAction(openAction)
         ## Save
-        openAction = QAction("Save", self)
-        openAction.triggered.connect(self.saveFile)
-        fileMenu.addAction(openAction)
+        saveAction = QAction("Save", self)
+        saveAction.triggered.connect(self.saveFile)
+        fileMenu.addAction(saveAction)
+        ## Save as
+        saveAsAction = QAction("Save as", self)
+        saveAsAction.triggered.connect(self.saveFileAs)
+        fileMenu.addAction(saveAsAction)
 
         operationMenu = menuBar.addMenu("Operations")
         findSegmentsAction = QAction("Find segments", self)
         findSegmentsAction.triggered.connect(self.opFindSegments)
         operationMenu.addAction(findSegmentsAction)
         recognizeAction = QAction("Auto-transcribe", self)
-        recognizeAction.triggered.connect(self.opFindSegments)
+        recognizeAction.triggered.connect(self.recognize)
         operationMenu.addAction(recognizeAction)
         
         deviceMenu = menuBar.addMenu("Device")
@@ -557,14 +561,7 @@ class MainWindow(QMainWindow):
         self.textArea.insertUtterance(text, seg_id)
 
 
-    def saveFile(self):
-        global LAST_SAVE_FOLDER
-
-        filepath, stuff = QFileDialog.getSaveFileName(self, "Save File", LAST_SAVE_FOLDER)
-        print(filepath, stuff)
-        if not filepath:
-            return
-        LAST_SAVE_FOLDER = os.path.split(filepath)[0]
+    def _saveFile(self, filepath):
         with open(filepath, 'w') as f:
             doc = self.textArea.document()
             for blockIndex in range(doc.blockCount()):
@@ -579,82 +576,140 @@ class MainWindow(QMainWindow):
                     f.write('\n')
                 else:
                     f.write(text + '\n')
+
+    def saveFile(self):
+        if self.filepath:
+            self._saveFile(self.filepath)
+        else:
+            self.saveFileAs()
+
+    def saveFileAs(self):
+        dir = settings.value("editor/last_opened_folder", "")
+        filepath, stuff = QFileDialog.getSaveFileName(self, "Save File", dir)
+        self.waveform.ctrl_pressed = False
+        print(filepath, stuff)
+        if not filepath:
+            return
+        
+        self._saveFile(filepath)
                     
 
-    def openFile(self, filepath: str = None):
-        global LAST_OPEN_FOLDER
-        audio_formats = ("wav", "mp3", "m4a", "ogg", "mp4")
-        all_formats = audio_formats + ("ali",)
+    def openFile(self, filepath=""):
+        audio_formats = ("mp3", "m4a", "ogg", "mp4", "wav")
+        all_formats = audio_formats + ("ali", "seg", "split")
         supported_filter = f"Supported files ({' '.join(['*.'+fmt for fmt in all_formats])})"
         audio_filter = f"Audio files ({' '.join(['*.'+fmt for fmt in audio_formats])})"
 
         if not filepath:
-            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", LAST_OPEN_FOLDER, ";;".join([supported_filter, audio_filter]))
-        if not filepath:
-            return
-        LAST_OPEN_FOLDER = os.path.split(filepath)[0]
-
+            dir = settings.value("editor/last_opened_folder", "")
+            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", dir, ";;".join([supported_filter, audio_filter]))
+            if not filepath:
+                return
+            settings.setValue("editor/last_opened_folder", os.path.split(filepath)[0])
+            # settings.setValue("editor/last_opened_file", filepath)
+        
         self.waveform.clear()
         self.textArea.clear()
 
         basename, ext = os.path.splitext(filepath)
-        audio_file = None
         ext = ext[1:]
+        audio_path = None
 
-        if ext == "ali":
-            # Open file to check for an 'audio-source' metadata
-            with open(filepath, 'r') as fr:
-                for line in fr.readlines():
-                    text, metadata = extract_metadata(line)
-                    if metadata:
-                        print(text, metadata)
-                    if "source-audio" in metadata:
-                        audio_file = metadata["source-audio"]
-                        # break
-            if not audio_file:
-                # Check for an audio file with the same basename
-                pass
-        elif ext in audio_formats:
-            # Selected file is an audio file
-            print("Loading", filepath)
+        if ext in audio_formats:
+            # Selected file is an audio file, only load audio
+            print("Loading audio:", filepath)
             self.loadAudio(filepath)
             print("done")
+            self.filepath = ""
+            self.setWindowTitle(self.APP_NAME)
+            return
+        
+        if ext == "ali":
+            audio_path = ""
+            lines = []
+            seg_id_list = []
+            with open(filepath, 'r') as fr:
+                # Find associated audio file in metadata
+                for line in fr.readlines():
+                    text, metadata = extract_metadata(line)
+                    match = re.search(r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line)
+                    if match:
+                        segment = [float(match[1]), float(match[2])]
+                        seg_id = self.waveform.addSegment(segment)
+                        seg_id_list.append(seg_id)
+                        line = line[:match.start()] + line[match.end():]
+                    lines.append(line.strip())
 
-        # Check for segment file
-        seg_filepath = basename + os.path.extsep + "seg"
-        split_filepath = basename + os.path.extsep + "split"
-        if os.path.exists(split_filepath):
-            seg_filepath = split_filepath
-        if os.path.exists(seg_filepath):
-            segments = load_segments_data(seg_filepath)
-            # convert to seconds
-            segments = [ [start/1000, end/1000] for start, end in segments ]
-            for s in segments:
-                self.waveform.addSegment(s)
-            self.waveform.active = None
-        else:
-            self.waveform.draw()
-           
-        # Check for text file
-        txt_filepath = basename + os.path.extsep + "txt"
-        if os.path.exists(txt_filepath):
-            with open(txt_filepath, 'r') as text_data:
-                self.textArea.setText(text_data.read())
+                    if not audio_path and "audio_path" in metadata:
+                        dir = os.path.split(filepath)[0]
+                        audio_path = os.path.join(dir, metadata["audio_path"])
+                        audio_path = os.path.normpath(audio_path)
+            
+            self.textArea.setText('\n'.join(lines))
+
+            # Link text utterances with audio segments
             doc = self.textArea.document()
-            id_counter = 0
+            idx = 0
             for blockIndex in range(doc.blockCount()):
                 block = doc.findBlockByNumber(blockIndex)
                 if block.userData() and block.userData().data["is_utt"]:
                     userData = block.userData().data
-                    userData["seg_id"] = id_counter
-                    id_counter += 1
+                    userData["seg_id"] = seg_id_list[idx]
+                    idx += 1
 
-            self.textArea.setActive(0)
-            # utterances = load_text_data(txt_filepath)
+            if not audio_path:
+                # Check for an audio file with the same basename
+                for audio_ext in audio_formats:
+                    audio_path = os.path.extsep.join((basename, audio_ext))
+                    print(audio_path)
+                    if os.path.exists(audio_path):
+                        print("Found audio file:", audio_path)
+                        break
+            
+            if audio_path and os.path.exists(audio_path):
+                self.loadAudio(audio_path)
+
+        if ext in ("seg", "split"):
+            segments = load_segments_data(filepath)
+            # convert to seconds
+            segments = [ [start/1000, end/1000] for start, end in segments ]
+            seg_id_list = []
+            for s in segments:
+                seg_id = self.waveform.addSegment(s)
+                seg_id_list.append(seg_id)
+
+            # Check for the text file
+            txt_filepath = os.path.extsep.join((basename, "txt"))
+            if os.path.exists(txt_filepath):
+                with open(txt_filepath, 'r') as text_data:
+                    self.textArea.setText(text_data.read())
+                doc = self.textArea.document()
+                idx = 0
+                for blockIndex in range(doc.blockCount()):
+                    block = doc.findBlockByNumber(blockIndex)
+                    if block.userData() and block.userData().data["is_utt"]:
+                        userData = block.userData().data
+                        userData["seg_id"] = seg_id_list[idx]
+                        idx += 1
+
+                self.textArea.setActive(seg_id_list[0], update_waveform=False)
+            
+            # Check for an associated audio file
+            for audio_ext in audio_formats:
+                audio_path = os.path.extsep.join((basename, audio_ext))
+                if os.path.exists(audio_path):
+                    print("Found audio file:", audio_path)
+                    self.loadAudio(audio_path)
+                    break
+        
+        self.filepath = filepath
+        self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(filepath)[1]}")
     
 
     def loadAudio(self, filepath):
-        self.player.setSource(QUrl(filepath))
+        ## XXX: Use QAudioDecoder instead maybe ?
+        self.stop()
+        self.player.setSource(QUrl.fromLocalFile(filepath))
 
         print("creating audio segment")
         audio_data = AudioSegment.from_file(filepath)
@@ -671,8 +726,8 @@ class MainWindow(QMainWindow):
         sample_max = 2**(audio_data.sample_width*8)
         samples = [ s/sample_max for s in samples ]
 
-        print("setsamples")
         self.waveform.setSamples(samples, audio_data.frame_rate)
+        self.waveform.draw()
 
 
     def _update_player(self):
@@ -708,12 +763,11 @@ class MainWindow(QMainWindow):
     def playNext(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.stop()
-        # self.waveform.iselected = (self.waveform.iselected + 1) % len(self.waveform.segments)
         id = self.waveform.findNextSegment()
         if id < 0:
-            id = self.waveform.active
+            id = self.waveform.last_segment_active
         self.waveform.setActive(id)
-        self.textArea.setActive(id)
+        self.textArea.setActive(id, update_waveform=False)
         self.playSegment(self.waveform.segments[id])
 
 
@@ -722,15 +776,16 @@ class MainWindow(QMainWindow):
             self.player.stop()
         id = self.waveform.findPrevSegment()
         if id < 0:
-            id = self.waveform.active
+            id = self.waveform.last_segment_active
         self.waveform.setActive(id)
-        self.textArea.setActive(id)
+        self.textArea.setActive(id, update_waveform=False)
         self.playSegment(self.waveform.segments[id])
 
 
     def kbdSearch(self):
         print("search tool")
     
+
     def play(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
@@ -752,27 +807,28 @@ class MainWindow(QMainWindow):
     def stop(self):
         """Stop playback"""
         if self.player.playbackState() == QMediaPlayer.PlayingState:
-            self.player.pause()
+            self.player.stop()
             self.play_timer.stop()
 
-    def kbdNext(self):
-        id = self.waveform.findNextSegment()
-        if id >= 0:
-            #self.waveform.setActive(id)
-            self.textArea.setActive(id)
+
+    # def kbdNext(self):
+    #     id = self.waveform.findNextSegment()
+    #     if id >= 0:
+    #         #self.waveform.setActive(id)
+    #         self.textArea.setActive(id)
     
-    def kbdPrev(self):
-        id = self.waveform.findPrevSegment()
-        if id >= 0:
-            #self.waveform.setActive(id)
-            self.textArea.setActive(id)
+    # def kbdPrev(self):
+    #     id = self.waveform.findPrevSegment()
+    #     if id >= 0:
+    #         #self.waveform.setActive(id)
+    #         self.textArea.setActive(id)
 
     def back(self):
         """Get back to the first segment or to the beginning of the recording"""
         if len(self.waveform.segments) > 0:
             first_seg_id = min(self.waveform.segments.keys(), key=lambda x: self.waveform.segments[x][0])
-            #self.waveform.setActive(id)
-            self.textArea.setActive(first_seg_id)
+            self.waveform.setActive(id)
+            self.textArea.setActive(first_seg_id, update_waveform=False)
         else:
             self.stop()
             self.waveform.setHead(0.0)
@@ -805,15 +861,18 @@ class MainWindow(QMainWindow):
         print("action split")
     
 
-    def actionRecognize(self):
+    def recognize(self):
         seg_id = -1
         if self.waveform.selection_is_active:
+            # Transcribe selection
             self.recognizerWorker.setSegments([(seg_id, *self.waveform.selection)])
         elif len(self.waveform.active_segments) > 0:
+            # Transcribe selected segments
             self.recognizerWorker.setSegments(
                 [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
                 )
-        else:
+        elif not self.waveform.segments:
+            # Transcribe whole record
             return
 
         # self.status_bar.clearMessage()
@@ -857,6 +916,9 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    global settings
+    settings = QSettings("OTilde", "Anaouder")
+
     file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.wav"
     app = QApplication(sys.argv)
     window = MainWindow(file_path)

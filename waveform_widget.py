@@ -95,6 +95,8 @@ class WaveformWidget(QWidget):
         self.over_end = False
         self.mouse_pos = None
 
+        self.timecode_margin = 17
+
 
     def clear(self):
         """Reset Waveform"""
@@ -102,14 +104,17 @@ class WaveformWidget(QWidget):
         self.t_left = 0.0      # timecode (s) of left border
         self.scroll_vel = 0.0
         self.playhead = 0.0
-        #self.active = -1
+        self.ctrl_pressed = False
+        self.shift_pressed = False
+        self.timer.stop()
+
+        self.segments = dict()
         self.active_segments = []
         self.last_segment_active = -1
-        self.segments = dict()
         self.resizing_segment = 0
-        self.id_counter = 0    
         self.selection = None
         self.selection_is_active = False
+        self.id_counter = 0    
 
 
     def setSamples(self, samples, sr) -> None:
@@ -331,9 +336,7 @@ class WaveformWidget(QWidget):
             if dist < 20:
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPosition(event.position())
-                self.utterances.setactive_lock = True
-                self.utterances.setActive(clicked_id)
-                self.utterances.setactive_lock = False
+                self.utterances.setActive(clicked_id, update_waveform=False)
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
@@ -431,7 +434,7 @@ class WaveformWidget(QWidget):
             context.addAction(action_split)
         context.addSeparator()
         action_recognize = QAction("Recognize", self)
-        action_recognize.triggered.connect(self.parent.actionRecognize)
+        action_recognize.triggered.connect(self.parent.recognize)
         context.addAction(action_recognize)
         context.exec(event.globalPos())
 
@@ -442,16 +445,17 @@ class WaveformWidget(QWidget):
         if not self.pixmap:
             return
         self.pixmap.fill(Qt.white)
-        tf = self.t_left + self.width() / self.ppsec
-        samples = self.waveform.get(self.t_left, tf)
+        t_right = self.t_left + self.width() / self.ppsec
+        samples = self.waveform.get(self.t_left, t_right)
         
         if not samples:
             return
+        
+        wf_max_height = self.height() - self.timecode_margin
                 
         self.painter.begin(self.pixmap)
 
         # Paint timecode lines and text
-        self.timecode_margin = 17
         if self.ppsec > 60:
             step = 1
         elif self.ppsec > 6:
@@ -464,7 +468,7 @@ class WaveformWidget(QWidget):
             step = 300 # Every 5 min
         ti = ceil(self.t_left / step) * step
         self.painter.setPen(QPen(QColor(200, 200, 200)))
-        for t in range(ti, int(tf)+1, step):
+        for t in range(ti, int(t_right)+1, step):
             t_x = (t - self.t_left) * self.ppsec
             self.painter.drawLine(t_x, self.timecode_margin, t_x, self.height()-4)
             minutes, secs = divmod(t, 60)
@@ -478,7 +482,7 @@ class WaveformWidget(QWidget):
             self.painter.drawText(t_x-8 * len(t_string) // 2, 12, t_string)
                 
         # Draw head
-        if self.t_left <= self.playhead <= tf:
+        if self.t_left <= self.playhead <= t_right:
             t_x = (self.playhead - self.t_left) * self.ppsec
             self.painter.setPen(QPen(QColor(255, 20, 20, 40), 3))
             self.painter.drawLine(t_x, 0, t_x, self.height())
@@ -491,30 +495,32 @@ class WaveformWidget(QWidget):
         if pix_per_sample <= 1.0:
             for x, (ymin, ymax) in enumerate(samples):
                 self.painter.drawLine(x,
-                                      (self.height()-self.timecode_margin) * (0.5 + ZOOM_Y*ymin) + self.timecode_margin,
+                                      self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*ymin),
                                       x,
-                                      (self.height()-self.timecode_margin) * (0.5 + ZOOM_Y*ymax) + self.timecode_margin)
+                                      self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*ymax))
         else:
             pass
-        
+
         # Draw inactive segments
+        y_top = self.timecode_margin + 0.2 * wf_max_height
+        y_down = self.timecode_margin + 0.8 * wf_max_height - y_top
         for id, (start, end) in self.segments.items():
             if id in self.active_segments:
                 continue
             if end <= self.t_left:
                 continue
-            if start >= tf:
+            if start >= t_right:
                 continue
             x = (start - self.t_left) * self.ppsec
             w = (end - start) * self.ppsec
             self.painter.setPen(self.segpen)
             self.painter.setBrush(self.segbrush)
-            self.painter.drawRect(x, self.timecode_margin + 30, w, self.height()-(60+self.timecode_margin))
+            self.painter.drawRect(x, y_top, w, y_down)
         
         # Draw selection
         if self.selection:
             start, end = self.selection
-            if end > self.t_left and start < tf:
+            if end > self.t_left and start < t_right:
                 x = (start - self.t_left) * self.ppsec
                 w = (end - start) * self.ppsec
                 self.painter.setBrush(QBrush(QColor(100, 150, 220, 50)))
@@ -526,9 +532,13 @@ class WaveformWidget(QWidget):
                     self.painter.drawRect(x, self.timecode_margin + 20, w, self.height()-(40+self.timecode_margin))
 
         # Draw selected segment
+        y_top = self.timecode_margin + 0.15 * wf_max_height
+        y_down = self.timecode_margin + 0.85 * wf_max_height - y_top
+        y_handle_top = self.timecode_margin + 0.13 * wf_max_height
+        y_handle_down = self.timecode_margin + 0.87 * wf_max_height
         for seg_id in self.active_segments:
             start, end = self.segments[seg_id]
-            if end > self.t_left or start < tf:
+            if end > self.t_left or start < t_right:
                 x = (start - self.t_left) * self.ppsec
                 w = (end - start) * self.ppsec
                 if self.ctrl_pressed:
@@ -536,7 +546,7 @@ class WaveformWidget(QWidget):
                 else:
                     self.painter.setPen(QPen(QColor(220, 180, 60), 3))
                 self.painter.setBrush(QBrush(QColor(220, 180, 60, 50)))
-                self.painter.drawRect(x, self.timecode_margin + 24, w, self.height()-(48+self.timecode_margin))
+                self.painter.drawRect(x, y_top, w, y_down)
 
                 # Draw handles
                 if len(self.active_segments) != 1:
@@ -544,18 +554,18 @@ class WaveformWidget(QWidget):
                 if self.ctrl_pressed:
                     if self.over_start:
                         self.painter.setPen(self.handleActivePenShadow)
-                        self.painter.drawLine(x, self.timecode_margin + 12, x, self.height()-self.timecode_margin+5)
+                        self.painter.drawLine(x, y_handle_top, x, y_handle_down)
                         self.painter.setPen(self.handleActivePen)
-                        self.painter.drawLine(x, self.timecode_margin + 12, x, self.height()-self.timecode_margin+5)
+                        self.painter.drawLine(x, y_handle_top, x, y_handle_down)
                     elif self.over_end:
                         self.painter.setPen(self.handleActivePenShadow)
-                        self.painter.drawLine(x+w, self.timecode_margin + 12, x+w, self.height()-self.timecode_margin+5)
+                        self.painter.drawLine(x+w, y_handle_top, x+w, y_handle_down)
                         self.painter.setPen(self.handleActivePen)
-                        self.painter.drawLine(x+w, self.timecode_margin + 12, x+w, self.height()-self.timecode_margin+5)
+                        self.painter.drawLine(x+w, y_handle_top, x+w, y_handle_down)
                     else:
                         self.painter.setPen(self.handlepen)
-                        self.painter.drawLine(x, self.timecode_margin + 12, x, self.height()-self.timecode_margin+5)
-                        self.painter.drawLine(x+w, self.timecode_margin + 12, x+w, self.height()-self.timecode_margin+5)
+                        self.painter.drawLine(x, y_handle_top, x, y_handle_down)
+                        self.painter.drawLine(x+w, y_handle_top, x+w, y_handle_down)
         
         self.painter.end()
         self.update()
