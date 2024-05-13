@@ -151,6 +151,7 @@ class WaveformWidget(QWidget):
 
 
     def setActive(self, clicked_id: int, multi=False) -> None:
+        print("clicked", multi)
         if clicked_id not in self.segments:
             self.active_segments = []
             self.last_segment_active = -1
@@ -162,13 +163,14 @@ class WaveformWidget(QWidget):
                                  key=lambda x: self.segments[x][0])
             first_t = self.segments[first][1]
             last_t = self.segments[last][0]
+            print(self.last_segment_active, clicked_id)
             self.active_segments = [first]
             for seg_id, (start, end) in self.segments.items():
                 if start >= first_t and end <= last_t:
                     self.active_segments.append(seg_id)
             self.active_segments.append(last)
+            print(self.active_segments)
         else:
-            #self.active = clicked_id
             self.active_segments = [clicked_id]
             self.selection_is_active = False
             start, end = self.segments[clicked_id]
@@ -281,7 +283,6 @@ class WaveformWidget(QWidget):
                 self.checkHandles(self.mouse_pos)
             self.draw()
         elif event.key() == Qt.Key_Shift:
-            print("shift")
             self.shift_pressed = True
         elif event.key() == Qt.Key_A and self.selection_is_active:
             # Create a new segment from selection
@@ -336,7 +337,7 @@ class WaveformWidget(QWidget):
             if dist < 20:
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPosition(event.position())
-                self.utterances.setActive(clicked_id, update_waveform=False)
+                self.utterances.setActive(clicked_id, with_cursor=not self.shift_pressed, update_waveform=False)
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
                     self.selection_is_active = self.isSelectionAtPosition(event.position())

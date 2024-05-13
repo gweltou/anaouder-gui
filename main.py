@@ -156,6 +156,7 @@ class TextArea(QTextEdit):
     #     text, _ = extract_metadata(text)
     #     return len(text.strip()) > 0
 
+
     def setUtteranceText(self, id: int, text: str):
         block = self.getBlockByUtteranceId(id)
         if not block:
@@ -166,9 +167,31 @@ class TextArea(QTextEdit):
         cursor.insertText(text)
 
 
+    def addText(self, text: str, is_utt=False):
+        print(f"{text=}")
+        doc = self.document()
+        cursor = QTextCursor(doc)
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertBlock()
+        cursor.insertText(text)
+        # cursor.block().setUserData(MyTextBlockUserData({"is_utt": is_utt}))
+
+
+    def addUtterance(self, text: str, id: int):
+        # Insert new utterance at the end
+        doc = self.document()
+        cursor = QTextCursor(doc)
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertBlock()
+        cursor.insertText(text)
+        cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
+        # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+        # self.setTextCursor(cursor)
+
+
     def insertUtterance(self, text: str, id: int):
         """
-            Utterances are supposed to be chronologically ordered
+            Utterances are supposed to be chronologically ordered in textArea
         """
         assert id in self.parent.waveform.segments
 
@@ -253,7 +276,7 @@ class TextArea(QTextEdit):
         return None
 
 
-    def setActive(self, id: int, withcursor=True, update_waveform=True):
+    def setActive(self, id: int, with_cursor=True, update_waveform=True):
         block = self.getBlockByUtteranceId(id)
         if not block:
             return
@@ -284,7 +307,7 @@ class TextArea(QTextEdit):
         # cursor.endEditBlock()
         # cursor.movePosition(QTextCursor.StartOfBlock)
 
-        if withcursor:
+        if with_cursor:
             # Select text of current utterance
             cursor.movePosition(QTextCursor.EndOfBlock)
             cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
@@ -336,7 +359,7 @@ class TextArea(QTextEdit):
             data = current_block.userData().data
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
-                self.setActive(id, withcursor=False)
+                self.setActive(id, with_cursor=False)
                 # start, end = self.parent.waveform.segments[id]
                 # data.update({'start': start, 'end': end, 'dur': end-start})
                 
@@ -562,20 +585,21 @@ class MainWindow(QMainWindow):
 
 
     def _saveFile(self, filepath):
+        print("Saving file to", os.path.abspath(filepath))
+
         with open(filepath, 'w') as f:
             doc = self.textArea.document()
             for blockIndex in range(doc.blockCount()):
                 block = doc.findBlockByNumber(blockIndex)
                 text = block.text()
-                userData = block.userData().data
-                if userData["is_utt"]:
-                    f.write(text)
+                if block.userData():
+                    userData = block.userData().data
                     if "seg_id" in userData:
-                        start, end = self.waveform.segments[userData["seg_id"]]
-                        f.write(f" {{start: {start}; end: {end}}}")
-                    f.write('\n')
-                else:
-                    f.write(text + '\n')
+                        seg_id = userData["seg_id"]
+                        start, end = self.waveform.segments[seg_id]
+                        text += f" {{start: {start:.4}; end: {end:.4}}}"
+                f.write(text + '\n')
+
 
     def saveFile(self):
         if self.filepath:
@@ -591,6 +615,7 @@ class MainWindow(QMainWindow):
         if not filepath:
             return
         
+        self.filepath = filepath
         self._saveFile(filepath)
                     
 
@@ -626,36 +651,24 @@ class MainWindow(QMainWindow):
         
         if ext == "ali":
             audio_path = ""
-            lines = []
-            seg_id_list = []
             with open(filepath, 'r') as fr:
                 # Find associated audio file in metadata
                 for line in fr.readlines():
+                    line = line.strip()
                     text, metadata = extract_metadata(line)
                     match = re.search(r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line)
                     if match:
                         segment = [float(match[1]), float(match[2])]
                         seg_id = self.waveform.addSegment(segment)
-                        seg_id_list.append(seg_id)
                         line = line[:match.start()] + line[match.end():]
-                    lines.append(line.strip())
+                        self.textArea.addUtterance(line, seg_id)
+                    else:
+                        self.textArea.addText(line)
 
                     if not audio_path and "audio_path" in metadata:
                         dir = os.path.split(filepath)[0]
                         audio_path = os.path.join(dir, metadata["audio_path"])
                         audio_path = os.path.normpath(audio_path)
-            
-            self.textArea.setText('\n'.join(lines))
-
-            # Link text utterances with audio segments
-            doc = self.textArea.document()
-            idx = 0
-            for blockIndex in range(doc.blockCount()):
-                block = doc.findBlockByNumber(blockIndex)
-                if block.userData() and block.userData().data["is_utt"]:
-                    userData = block.userData().data
-                    userData["seg_id"] = seg_id_list[idx]
-                    idx += 1
 
             if not audio_path:
                 # Check for an audio file with the same basename
@@ -844,7 +857,8 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"{len(segments)} segments found")
         self.waveform.clear()
         for start, end in segments:
-            self.waveform.addSegment([start/1000, end/1000])
+            segment_id = self.waveform.addSegment([start/1000, end/1000])
+            self.textArea.insertUtterance('*', segment_id)
         self.waveform.draw()
 
 
@@ -854,7 +868,7 @@ class MainWindow(QMainWindow):
         assert self.waveform.selection_is_active
         segment_id = self.waveform.addSegment(self.waveform.selection)
         self.waveform.deselect()
-        self.textArea.insertUtterance("*", segment_id)
+        self.textArea.insertUtterance('*', segment_id)
 
 
     def actionSplitSegment(self):
