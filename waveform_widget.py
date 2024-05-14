@@ -8,6 +8,7 @@ ZOOM_MAX = 1500
 
 
 from math import ceil
+from enum import Enum
 
 from PySide6.QtWidgets import (
     QMenu, QWidget
@@ -21,6 +22,8 @@ from PySide6.QtGui import (
 )
 from PySide6.QtMultimedia import QMediaPlayer
 
+
+Handle = Enum("Handle", ["NONE", "LEFT", "RIGHT"])
 
 class WaveformWidget(QWidget):
 
@@ -111,7 +114,7 @@ class WaveformWidget(QWidget):
         self.segments = dict()
         self.active_segments = []
         self.last_segment_active = -1
-        self.resizing_segment = 0
+        self.resizing_segment = Handle.NONE
         self.selection = None
         self.selection_is_active = False
         self.id_counter = 0    
@@ -151,7 +154,6 @@ class WaveformWidget(QWidget):
 
 
     def setActive(self, clicked_id: int, multi=False) -> None:
-        print("clicked", multi)
         if clicked_id not in self.segments:
             self.active_segments = []
             self.last_segment_active = -1
@@ -272,6 +274,7 @@ class WaveformWidget(QWidget):
     ###################################
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        print("waveform", event)
         if event.isAutoRepeat():
             event.ignore()
             return
@@ -291,7 +294,6 @@ class WaveformWidget(QWidget):
             # Join multiple segments
             self.parent.actionJoin()
 
-
         return super().keyPressEvent(event)
         
 
@@ -300,7 +302,7 @@ class WaveformWidget(QWidget):
             self.ctrl_pressed = False
             self.over_start = False
             self.over_end = False
-            self.resizing_segment = 0
+            self.resizing_segment = Handle.NONE
             self.draw()
         elif event.key() == Qt.Key_Shift:
             self.shift_pressed = False
@@ -320,16 +322,16 @@ class WaveformWidget(QWidget):
             self.setHead(self.t_left + self.click_pos.x() / self.ppsec)
             self.anchor = self.playhead
         if self.over_start:
-            self.resizing_segment = 1 # 0: None, 1: left, 2: right
-            self.resizing_tinit = self.t_left + event.position().x() / self.ppsec
+            self.resizing_segment = Handle.LEFT
+            self.resizing_t_init = self.t_left + event.position().x() / self.ppsec
         elif self.over_end:
-            self.resizing_segment = 2 # 0: None, 1: left, 2: right
-            self.resizing_tinit = self.t_left + event.position().x() / self.ppsec
+            self.resizing_segment = Handle.RIGHT
+            self.resizing_t_init = self.t_left + event.position().x() / self.ppsec
         return super().mousePressEvent(event)
     
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        self.resizing_segment = 0
+        self.resizing_segment = Handle.NONE
         if event.button() == Qt.LeftButton:
             dx = event.position().x() - self.click_pos.x()
             dy = event.position().y() - self.click_pos.y()
@@ -366,27 +368,30 @@ class WaveformWidget(QWidget):
             else:
                 self.draw()
         if self.ctrl_pressed and self.last_segment_active >= 0:
+            current_segment = self.last_segment_active
             # Handle dragging
             self.checkHandles(event.position())
-            pos_x = self.t_left + event.position().x() / self.ppsec
+            pos_t = self.t_left + event.position().x() / self.ppsec
             sorted_segments = sorted(self.segments.keys(), key=lambda s: self.segments[s][0])
-            order = sorted_segments.index(self.last_segment_active)
-            if self.resizing_segment == 1:
+            order = sorted_segments.index(current_segment)
+            if self.resizing_segment == Handle.LEFT:
                 # Bound by segment on the left, if any
                 if order > 0:
-                    id = sorted_segments[order-1]
-                    left_boundary = self.segments[id][1]
-                    pos_x = max(pos_x, left_boundary)
-                pos_x = min(max(pos_x, 0.0), self.segments[order][1] - 0.01)
-                self.segments[self.last_segment_active][0] = pos_x
-            elif self.resizing_segment == 2:
+                    prev_segment_id = sorted_segments[order-1]
+                    left_boundary = self.segments[prev_segment_id][1]
+                    pos_t = max(pos_t, left_boundary)
+                # Left segment boundary cannot outgrow right boundary
+                pos_t = min(max(pos_t, 0.0), self.segments[current_segment][1] - 0.01)
+                self.segments[current_segment][0] = pos_t
+            elif self.resizing_segment == Handle.RIGHT:
                 # Bound by segment on the right, if any
                 if order < len(sorted_segments)-1:
-                    id = sorted_segments[order+1]
-                    right_boundary = self.segments[id][0]
-                    pos_x = min(pos_x, right_boundary)
-                pos_x = min(max(pos_x, self.segments[order][0] + 0.01), self.t_total)
-                self.segments[self.last_segment_active][1] = pos_x
+                    next_segment_id = sorted_segments[order+1]
+                    right_boundary = self.segments[next_segment_id][0]
+                    pos_t = min(pos_t, right_boundary)
+                # Right segment boundary cannot be earlier than left boundary
+                pos_t = min(max(pos_t, self.segments[current_segment][0] + 0.01), self.t_total)
+                self.segments[current_segment][1] = pos_t
             self.draw()
         self.mouse_pos = event.position()
 
@@ -438,7 +443,6 @@ class WaveformWidget(QWidget):
         action_recognize.triggered.connect(self.parent.recognize)
         context.addAction(action_recognize)
         context.exec(event.globalPos())
-
 
 
 

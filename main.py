@@ -126,7 +126,6 @@ class TextArea(QTextEdit):
                 
         # Signals
         self.cursorPositionChanged.connect(self.cursor_changed)
-        # self.textChanged.connect(self.text_changed)
         self.document().contentsChange.connect(self.contents_change)
 
         #self.document().setDefaultStyleSheet()
@@ -134,7 +133,6 @@ class TextArea(QTextEdit):
 
         self.defaultBlockFormat = QTextBlockFormat()
         self.defaultCharFormat = QTextCharFormat()
-        # self.lastActive = None
 
         self.scroll_goal = 0.0
         self.timer = QTimer()
@@ -384,14 +382,37 @@ class TextArea(QTextEdit):
         context.exec(event.globalPos())
         
     
-    def text_changed(self):
-        print("text_changed")
-
-
     def contents_change(self, pos, charsRemoved, charsAdded):
         print("content changed", pos, charsRemoved, charsAdded)
+
+        if charsRemoved == 0 and charsAdded > 0:
+            # Get added content
+            cursor = self.textCursor()
+            cursor.setPosition(pos)
+            cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, n=charsAdded)
+            print(cursor.selectedText())
+        elif charsRemoved > 0 and charsAdded == 0:
+            cursor = self.textCursor()
+            cursor.setPosition(pos)
+            cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, n=charsRemoved)
+            print(cursor.selectedText())
         # pos = self.textCursor().position()
         #self.updateTextFormat(pos)
+    
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        print("key", event)
+
+        if event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_Z:
+            self.parent.undo()
+            return
+
+        if event.key() == Qt.Key_Return:
+            print("ENTER")
+        else:
+            pass
+
+        return super().keyPressEvent(event)
 
 
 
@@ -468,6 +489,12 @@ class MainWindow(QMainWindow):
         # Prev
         shortcut = QShortcut(QKeySequence("Ctrl+Left"), self)
         shortcut.activated.connect(self.playPrev)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
+        shortcut.activated.connect(self.undo)
+
+        shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
+        shortcut.activated.connect(self.selectAll)
 
         if filepath:
             self.openFile(filepath)
@@ -905,7 +932,7 @@ class MainWindow(QMainWindow):
         print("join action")
         segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
         first_id = segments_id[0]
-        all_text = [self.textArea.getBlockByUtteranceId(id).text() for id in segments_id]
+        segments_text = [self.textArea.getBlockByUtteranceId(id).text() for id in segments_id]
 
         # Join text utterances
         for id in segments_id[1:]:
@@ -913,7 +940,7 @@ class MainWindow(QMainWindow):
             cursor = QTextCursor(block)
             cursor.select(QTextCursor.BlockUnderCursor)
             cursor.removeSelectedText()
-        self.textArea.setUtteranceText(first_id, ' '.join(all_text))
+        self.textArea.setUtteranceText(first_id, ' '.join(segments_text))
 
         # Join waveform segments
         new_seg_start = self.waveform.segments[first_id][0]
@@ -924,8 +951,14 @@ class MainWindow(QMainWindow):
         self.waveform.active_segments = [first_id]
         self.waveform.draw()
 
-        print(all_text)
+        print(segments_text)
         print(segments_id)
+
+    def undo(self):
+        print("undo")
+
+    def selectAll(self):
+        print("select all")
 
 
 
