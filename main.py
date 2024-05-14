@@ -871,6 +871,8 @@ class MainWindow(QMainWindow):
             self.textArea.setActive(first_seg_id, update_waveform=False)
         else:
             self.stop()
+            self.waveform.t_left = 0.0
+            self.waveform.scroll_vel = 0.0
             self.waveform.setHead(0.0)
 
 

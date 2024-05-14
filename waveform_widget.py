@@ -179,7 +179,7 @@ class WaveformWidget(QWidget):
             t_right = self.t_left + self.width() / self.ppsec
             if end < self.t_left or start > t_right:
                 # re-center segment
-                self.scroll_goal = start - 10 / self.ppsec
+                self.scroll_goal = max(0.0, start - 10 / self.ppsec)
                 # dur = end-start
                 # self.scroll_goal = start + 0.5 * dur - 0.5 * self.width() / self.ppsec
                 if not self.timer.isActive():
@@ -201,7 +201,7 @@ class WaveformWidget(QWidget):
     
 
     def _updateScroll(self):
-        if self.scroll_goal >= 0:
+        if self.scroll_goal >= 0.0:
             dist = self.scroll_goal - self.t_left
             self.scroll_vel += 0.2 * dist
             self.scroll_vel *= 0.6
