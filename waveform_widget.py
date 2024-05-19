@@ -252,6 +252,11 @@ class WaveformWidget(QWidget):
         self.setFocus()
         super().enterEvent(event)
 
+    def getSegmentAtTime(self, time: float) -> int:
+        for id, (start, end) in self.segments.items():
+            if start <= time <= end:
+                return id
+        return -1
 
     def getSegmentAtPosition(self, position: QPointF) -> int:
         t = self.t_left + position.x() / self.ppsec

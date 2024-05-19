@@ -17,7 +17,7 @@ from ostilhou.asr import (
     transcribe_segment,
 )
 from ostilhou.asr.models import DEFAULT_MODEL, load_model, is_model_loaded
-from ostilhou.audio import split_to_segments
+from ostilhou.audio import split_to_segments, convert_to_mp3
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
@@ -39,9 +39,10 @@ from PySide6.QtGui import (
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
     QSyntaxHighlighter,
 )
-from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput
+from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
 from waveform_widget import WaveformWidget
+from video_widget import VideoWindow, VideoWindow2
 
 
 # Config
@@ -166,7 +167,6 @@ class TextArea(QTextEdit):
 
 
     def addText(self, text: str, is_utt=False):
-        print(f"{text=}")
         doc = self.document()
         cursor = QTextCursor(doc)
         cursor.movePosition(QTextCursor.End)
@@ -455,20 +455,16 @@ class MainWindow(QMainWindow):
         self.input_devices = QMediaDevices.audioInputs()
 
         self.player = QMediaPlayer()
+        self.video_window = None
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
         self.audio_data = None
-        self.filepath = ""
+        self.filepath = filepath
 
         self.play_timer = QTimer()
         self.play_timer.timeout.connect(self._update_player)
         
         self.initUI()
-
-        self.recognizerWorker = RecognizerWorker()
-        self.recognizerWorker.message.connect(self.slotSetStatusMessage)
-        self.recognizerWorker.transcribed.connect(self.slotGetTranscription)
-        self.recognizerWorker.finished.connect(self.progress_bar.hide)
 
         # Keyboard shortcuts
         ## Open
@@ -479,7 +475,7 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.saveFile)
         ## Search
         shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
-        shortcut.activated.connect(self.kbdSearch)
+        shortcut.activated.connect(self.search)
         ## Play
         shortcut = QShortcut(QKeySequence("Ctrl+Space"), self)
         shortcut.activated.connect(self.play)
@@ -495,6 +491,11 @@ class MainWindow(QMainWindow):
 
         shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
         shortcut.activated.connect(self.selectAll)
+
+        self.recognizer_worker = RecognizerWorker()
+        self.recognizer_worker.message.connect(self.slotSetStatusMessage)
+        self.recognizer_worker.transcribed.connect(self.slotGetTranscription)
+        self.recognizer_worker.finished.connect(self.progress_bar.hide)
 
         if filepath:
             self.openFile(filepath)
@@ -512,47 +513,52 @@ class MainWindow(QMainWindow):
         buttonsLayout.setContentsMargins(0, 0, 0, 0)
         buttonsLayout.setAlignment(Qt.AlignHCenter)
         button_size = 28
+
         backButton = QPushButton()
         backButton.setIcon(QIcon("icons/back.png"))
         backButton.setFixedWidth(button_size)
+        backButton.clicked.connect(self.back)
         buttonsLayout.addWidget(backButton)
+
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prevButton = QPushButton()
         prevButton.setIcon(QIcon("icons/previous.png"))
         prevButton.setFixedWidth(button_size)
         # button.setIcon(QIcon(icon_path))
+        prevButton.clicked.connect(self.playPrev)
         buttonsLayout.addWidget(prevButton)
+
         curButton = QPushButton()
         curButton.setIcon(QIcon("icons/play-button.png"))
         curButton.setFixedWidth(button_size)
+        curButton.clicked.connect(self.play)
         buttonsLayout.addWidget(curButton)
+
         nextButton = QPushButton()
         nextButton.setIcon(QIcon("icons/next.png"))
         nextButton.setFixedWidth(button_size)
+        nextButton.clicked.connect(self.playNext)
         buttonsLayout.addWidget(nextButton)
 
         volumeDial = QDial()
         # volumeDial.setMaximumWidth(button_size*1.5)
         volumeDial.setMaximumSize(QSize(button_size*1.1, button_size*1.1))
         # volumeDial.minimumSizeHint(QSize(button_size, button_size))
+        volumeDial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
+        volumeDial.setValue(100)
         buttonsLayout.addWidget(volumeDial)
 
         bottomLayout.addLayout(buttonsLayout)
 
-        curButton.clicked.connect(self.play)
-        nextButton.clicked.connect(self.playNext)
-        prevButton.clicked.connect(self.playPrev)
-        backButton.clicked.connect(self.back)
-
         utterancesLayout = QVBoxLayout()
         utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
-        self.textArea = TextArea(self)
-        utterancesLayout.addWidget(self.textArea)
+        self.text_area = TextArea(self)
+        utterancesLayout.addWidget(self.text_area)
 
         self.waveform = WaveformWidget(self)
-        self.waveform.utterances = self.textArea
+        self.waveform.utterances = self.text_area
         
-        bottomLayout.addWidget(self.textArea)
+        bottomLayout.addWidget(self.text_area)
         self.bottomWidget = QWidget()
         self.bottomWidget.setLayout(bottomLayout)
         
@@ -588,6 +594,11 @@ class MainWindow(QMainWindow):
         recognizeAction = QAction("Auto-transcribe", self)
         recognizeAction.triggered.connect(self.recognize)
         operationMenu.addAction(recognizeAction)
+
+        displayMenu = menuBar.addMenu("Display")
+        toggleVideo = QAction("Show video", self)
+        toggleVideo.triggered.connect(self.toggleVideo)
+        displayMenu.addAction(toggleVideo)
         
         deviceMenu = menuBar.addMenu("Device")
         for dev in self.input_devices:
@@ -608,14 +619,20 @@ class MainWindow(QMainWindow):
     @Slot(str, int, int)
     def slotGetTranscription(self, text: str, seg_id: int, i: int):
         self.progress_bar.setValue(i+1)
-        self.textArea.insertUtterance(text, seg_id)
+        self.text_area.insertUtterance(text, seg_id)
+
+
+    def closeEvent(self, event):
+        if self.video_window:
+            self.video_window.close()
+        super().closeEvent(event)
 
 
     def _saveFile(self, filepath):
         print("Saving file to", os.path.abspath(filepath))
 
         with open(filepath, 'w') as f:
-            doc = self.textArea.document()
+            doc = self.text_area.document()
             for blockIndex in range(doc.blockCount()):
                 block = doc.findBlockByNumber(blockIndex)
                 text = block.text()
@@ -647,7 +664,7 @@ class MainWindow(QMainWindow):
                     
 
     def openFile(self, filepath=""):
-        audio_formats = ("mp3", "m4a", "ogg", "mp4", "wav")
+        audio_formats = ("mp3", "m4a", "ogg", "mp4", "wav", "mkv")
         all_formats = audio_formats + ("ali", "seg", "split")
         supported_filter = f"Supported files ({' '.join(['*.'+fmt for fmt in all_formats])})"
         audio_filter = f"Audio files ({' '.join(['*.'+fmt for fmt in audio_formats])})"
@@ -661,9 +678,11 @@ class MainWindow(QMainWindow):
             # settings.setValue("editor/last_opened_file", filepath)
         
         self.waveform.clear()
-        self.textArea.clear()
+        self.text_area.clear()
 
-        basename, ext = os.path.splitext(filepath)
+        folder, filename = os.path.split(filepath)
+        basename, ext = os.path.splitext(filename)
+        print(f"{filepath=}\n{filename=}\n{basename}")
         ext = ext[1:]
         audio_path = None
 
@@ -688,9 +707,9 @@ class MainWindow(QMainWindow):
                         segment = [float(match[1]), float(match[2])]
                         seg_id = self.waveform.addSegment(segment)
                         line = line[:match.start()] + line[match.end():]
-                        self.textArea.addUtterance(line, seg_id)
+                        self.text_area.addUtterance(line, seg_id)
                     else:
-                        self.textArea.addText(line)
+                        self.text_area.addText(line)
 
                     if not audio_path and "audio_path" in metadata:
                         dir = os.path.split(filepath)[0]
@@ -701,6 +720,7 @@ class MainWindow(QMainWindow):
                 # Check for an audio file with the same basename
                 for audio_ext in audio_formats:
                     audio_path = os.path.extsep.join((basename, audio_ext))
+                    audio_path = os.path.join(folder, audio_path)
                     print(audio_path)
                     if os.path.exists(audio_path):
                         print("Found audio file:", audio_path)
@@ -722,8 +742,8 @@ class MainWindow(QMainWindow):
             txt_filepath = os.path.extsep.join((basename, "txt"))
             if os.path.exists(txt_filepath):
                 with open(txt_filepath, 'r') as text_data:
-                    self.textArea.setText(text_data.read())
-                doc = self.textArea.document()
+                    self.text_area.setText(text_data.read())
+                doc = self.text_area.document()
                 idx = 0
                 for blockIndex in range(doc.blockCount()):
                     block = doc.findBlockByNumber(blockIndex)
@@ -732,11 +752,12 @@ class MainWindow(QMainWindow):
                         userData["seg_id"] = seg_id_list[idx]
                         idx += 1
 
-                self.textArea.setActive(seg_id_list[0], update_waveform=False)
+                self.text_area.setActive(seg_id_list[0], update_waveform=False)
             
             # Check for an associated audio file
             for audio_ext in audio_formats:
                 audio_path = os.path.extsep.join((basename, audio_ext))
+                audio_path = os.path.join(folder, audio_path)
                 if os.path.exists(audio_path):
                     print("Found audio file:", audio_path)
                     self.loadAudio(audio_path)
@@ -751,6 +772,15 @@ class MainWindow(QMainWindow):
         self.stop()
         self.player.setSource(QUrl.fromLocalFile(filepath))
 
+        # Convert to MP3 in case of MKV file
+        # (problems with PyDub it seems)
+        _, ext = os.path.splitext(filepath)
+        if ext.lower() == ".mkv":
+            mp3_file = filepath[:-4] + ".mp3"
+            if not os.path.exists(mp3_file):
+                convert_to_mp3(filepath, mp3_file)
+                filepath = mp3_file
+
         print("creating audio segment")
         audio_data = AudioSegment.from_file(filepath)
         
@@ -759,7 +789,7 @@ class MainWindow(QMainWindow):
             audio_data = audio_data.set_channels(1)
         audio_data = audio_data.set_frame_rate(16000)
         self.audio_data = audio_data
-        self.recognizerWorker.setAudio(audio_data)
+        self.recognizer_worker.setAudio(audio_data)
 
         samples = audio_data.get_array_of_samples()
         # Normalize
@@ -778,6 +808,24 @@ class MainWindow(QMainWindow):
         else:
             self.waveform.setHead(self.play_start + dt)
 
+        # Update video subtitles
+        if self.video_window and int(dt*100) % 10 == 0:
+            seg_id = self.waveform.getSegmentAtTime(self.waveform.playhead)
+            if seg_id == -1:
+                self.video_window.text_item.setText("")
+                return
+            utt = self.text_area.getBlockByUtteranceId(seg_id)
+            if not utt:
+                self.video_window.text_item.setText("")
+                return
+            self.video_window.text_item.setText(utt.text())
+            vid_rect = self.video_window.video_item.boundingRect()
+            text_rect = self.video_window.text_item.boundingRect()
+            self.video_window.text_item.setPos(
+                (vid_rect.width() - text_rect.width()) * 0.5,
+                vid_rect.height()
+            )
+
 
     def playSegment(self, segment):
         # if self.player.playbackState() == QMediaPlayer.PlayingState:
@@ -787,9 +835,6 @@ class MainWindow(QMainWindow):
         
         start, end = segment
         self.waveform.setHead(start)
-
-        # audio_output = QAudioOutput(format)
-        # audio_output.setVolume(100)
 
         self.player.setPosition(int(start * 1000))
         self.player.play()
@@ -807,7 +852,7 @@ class MainWindow(QMainWindow):
         if id < 0:
             id = self.waveform.last_segment_active
         self.waveform.setActive(id)
-        self.textArea.setActive(id, update_waveform=False)
+        self.text_area.setActive(id, update_waveform=False)
         self.playSegment(self.waveform.segments[id])
 
 
@@ -818,12 +863,8 @@ class MainWindow(QMainWindow):
         if id < 0:
             id = self.waveform.last_segment_active
         self.waveform.setActive(id)
-        self.textArea.setActive(id, update_waveform=False)
+        self.text_area.setActive(id, update_waveform=False)
         self.playSegment(self.waveform.segments[id])
-
-
-    def kbdSearch(self):
-        print("search tool")
     
 
     def play(self):
@@ -868,12 +909,25 @@ class MainWindow(QMainWindow):
         if len(self.waveform.segments) > 0:
             first_seg_id = min(self.waveform.segments.keys(), key=lambda x: self.waveform.segments[x][0])
             self.waveform.setActive(id)
-            self.textArea.setActive(first_seg_id, update_waveform=False)
+            self.text_area.setActive(first_seg_id, update_waveform=False)
         else:
             self.stop()
             self.waveform.t_left = 0.0
             self.waveform.scroll_vel = 0.0
             self.waveform.setHead(0.0)
+
+
+    def toggleVideo(self):
+        if not self.video_window:
+            self.video_window = VideoWindow2()
+            self.player.setVideoOutput(self.video_window.video_item)
+            vid_size = self.player.metaData().value(QMediaMetaData.Resolution)
+            print(vid_size)
+            self.video_window.resize(vid_size)
+            print(self.video_window.size())
+            self.video_window.show()
+        else:
+            self.video_window = None
 
 
     def opFindSegments(self):
@@ -887,7 +941,7 @@ class MainWindow(QMainWindow):
         self.waveform.clear()
         for start, end in segments:
             segment_id = self.waveform.addSegment([start/1000, end/1000])
-            self.textArea.insertUtterance('*', segment_id)
+            self.text_area.insertUtterance('*', segment_id)
         self.waveform.draw()
 
 
@@ -897,7 +951,7 @@ class MainWindow(QMainWindow):
         assert self.waveform.selection_is_active
         segment_id = self.waveform.addSegment(self.waveform.selection)
         self.waveform.deselect()
-        self.textArea.insertUtterance('*', segment_id)
+        self.text_area.insertUtterance('*', segment_id)
 
 
     def actionSplitSegment(self):
@@ -908,10 +962,10 @@ class MainWindow(QMainWindow):
         seg_id = -1
         if self.waveform.selection_is_active:
             # Transcribe selection
-            self.recognizerWorker.setSegments([(seg_id, *self.waveform.selection)])
+            self.recognizer_worker.setSegments([(seg_id, *self.waveform.selection)])
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
-            self.recognizerWorker.setSegments(
+            self.recognizer_worker.setSegments(
                 [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
                 )
         elif not self.waveform.segments:
@@ -923,7 +977,7 @@ class MainWindow(QMainWindow):
         self.status_bar.show()
         self.progress_bar.show()
 
-        self.recognizerWorker.start()
+        self.recognizer_worker.start()
     
 
     def actionJoin(self):
@@ -934,15 +988,15 @@ class MainWindow(QMainWindow):
         print("join action")
         segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
         first_id = segments_id[0]
-        segments_text = [self.textArea.getBlockByUtteranceId(id).text() for id in segments_id]
+        segments_text = [self.text_area.getBlockByUtteranceId(id).text() for id in segments_id]
 
         # Join text utterances
         for id in segments_id[1:]:
-            block = self.textArea.getBlockByUtteranceId(id)
+            block = self.text_area.getBlockByUtteranceId(id)
             cursor = QTextCursor(block)
             cursor.select(QTextCursor.BlockUnderCursor)
             cursor.removeSelectedText()
-        self.textArea.setUtteranceText(first_id, ' '.join(segments_text))
+        self.text_area.setUtteranceText(first_id, ' '.join(segments_text))
 
         # Join waveform segments
         new_seg_start = self.waveform.segments[first_id][0]
@@ -962,13 +1016,17 @@ class MainWindow(QMainWindow):
     def selectAll(self):
         print("select all")
 
+    def search(self):
+        print("search tool")
+    
 
 
 def main():
     global settings
     settings = QSettings("OTilde", "Anaouder")
 
-    file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.wav"
+    # file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.wav"
+    file_path = "/home/gweltaz/dwhelper/Archive An Taol Lagad témoignage de deux anciens Poilus en 1989.mp4"
     app = QApplication(sys.argv)
     window = MainWindow(file_path)
     window.show()
