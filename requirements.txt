@@ -1,4 +1,4 @@
-pyside6==6.2.4
-pydub==0.25.1
-vosk==0.3.45
-ostilhou
+pyside6
+pydub
+vosk
+/home/gweltaz/STT/ostilhoù/
