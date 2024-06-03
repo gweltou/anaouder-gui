@@ -1,4 +1,5 @@
 pyside6
 pydub
 vosk
+language-tool-python
 /home/gweltaz/STT/ostilhoù/

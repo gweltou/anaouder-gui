@@ -42,7 +42,8 @@ from PySide6.QtGui import (
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
 from waveform_widget import WaveformWidget
-from video_widget import VideoWindow, VideoWindow2
+from text_widget import TextArea
+from video_widget import VideoWindow
 
 
 # Config
@@ -50,369 +51,6 @@ HEADER = """
 """
 AUTOSEG_MAX_LENGTH = 15
 AUTOSEG_MIN_LENGTH = 3
-
-
-
-class Highlighter(QSyntaxHighlighter):
-    def __init__(self, parent):
-        super().__init__(parent)
-
-        self.metadataFormat = QTextCharFormat()
-        self.metadataFormat.setForeground(Qt.darkMagenta)
-        self.metadataFormat.setFontWeight(QFont.Bold)
-
-        self.commentFormat = QTextCharFormat()
-        self.commentFormat.setForeground(Qt.gray)
-
-        self.sp_tokenFormat = QTextCharFormat()
-        self.sp_tokenFormat.setForeground(QColor(220, 180, 0))
-        self.sp_tokenFormat.setFontWeight(QFont.Bold)
-
-        self.utt_format = QTextCharFormat()
-        self.utt_format.setBackground(QColor(220, 180, 180))
-
-
-    def highlightBlock(self, text):
-        # Comments
-        i = text.find('#')
-        if i >= 0:
-            self.setFormat(i, len(text)-i, self.commentFormat)
-            text = text[:i]
-
-        # Metadata        
-        expression = QRegularExpression(r"{\s*(.+?)\s*}")
-        i = expression.globalMatch(text)
-        while i.hasNext():
-            match = i.next()
-            self.setFormat(match.capturedStart(), match.capturedLength(), self.metadataFormat)
-        
-        # Special tokens
-        expression = QRegularExpression(r"<[A-Z\']+>")
-        i = expression.globalMatch(text)
-        while i.hasNext():
-            match = i.next()
-            self.setFormat(match.capturedStart(), match.capturedLength(), self.sp_tokenFormat)
-        
-        if self.currentBlockUserData():
-            pass
-            # self.setFormat(0, len(text), self.utt_format)
-        
-
-
-
-class MyTextBlockUserData(QTextBlockUserData):
-    """
-        Fields:
-            - seg_id
-            - is_utt
-    """
-    def __init__(self, data):
-        super().__init__()
-        self.data = data
-
-    def clone(self):
-        # This method is required by QTextBlockUserData.
-        # It should return a copy of the user data object.
-        return MyTextBlockUserData(self.data)
-
-
-
-
-class TextArea(QTextEdit):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.parent = parent
-
-        self.setUndoRedoEnabled(False)
-                
-        # Signals
-        self.cursorPositionChanged.connect(self.cursor_changed)
-        self.document().contentsChange.connect(self.contents_change)
-
-        #self.document().setDefaultStyleSheet()
-        self.highlighter = Highlighter(self.document())
-
-        self.defaultBlockFormat = QTextBlockFormat()
-        self.defaultCharFormat = QTextCharFormat()
-
-        self.scroll_goal = 0.0
-        self.timer = QTimer()
-        self.timer.timeout.connect(self._updateScroll)
-    
-
-    def clear(self):
-        self.document().clear()
-
-
-    # def isUtteranceBlock(self, i):
-    #     block = self.document().findBlockByNumber(i)
-    #     text = block.text()
-
-    #     i_comment = text.find('#')
-    #     if i_comment >= 0:
-    #         text = text[:i_comment]
-        
-    #     text, _ = extract_metadata(text)
-    #     return len(text.strip()) > 0
-
-
-    def setUtteranceText(self, id: int, text: str):
-        block = self.getBlockByUtteranceId(id)
-        if not block:
-            return
-        cursor = QTextCursor(block)
-        cursor.movePosition(QTextCursor.EndOfBlock)
-        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-        cursor.insertText(text)
-
-
-    def addText(self, text: str, is_utt=False):
-        doc = self.document()
-        cursor = QTextCursor(doc)
-        cursor.movePosition(QTextCursor.End)
-        cursor.insertBlock()
-        cursor.insertText(text)
-        # cursor.block().setUserData(MyTextBlockUserData({"is_utt": is_utt}))
-
-
-    def addUtterance(self, text: str, id: int):
-        # Insert new utterance at the end
-        doc = self.document()
-        cursor = QTextCursor(doc)
-        cursor.movePosition(QTextCursor.End)
-        cursor.insertBlock()
-        cursor.insertText(text)
-        cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
-        # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-        # self.setTextCursor(cursor)
-
-
-    def insertUtterance(self, text: str, id: int):
-        """
-            Utterances are supposed to be chronologically ordered in textArea
-        """
-        assert id in self.parent.waveform.segments
-
-        doc = self.document()
-        seg_start, seg_end = self.parent.waveform.segments[id]
-
-        for block_idx in range(doc.blockCount()):
-            block = doc.findBlockByNumber(block_idx)
-            if not block.userData():
-                continue
-
-            user_data = block.userData().data
-            if "seg_id" in user_data:
-                other_id = user_data["seg_id"]
-                if other_id == id:
-                    # Replace text content
-                    cursor = QTextCursor(block)
-                    cursor.movePosition(QTextCursor.StartOfBlock)
-                    cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
-                    cursor.insertText(text)
-                    # Re-select text
-                    cursor.movePosition(QTextCursor.EndOfBlock)
-                    cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-                    self.setTextCursor(cursor)
-                    return
-                other_start, _ = self.parent.waveform.segments[other_id]
-                if other_start > seg_end:
-                    # Insert new utterance right before this one
-                    cursor = QTextCursor(block)
-                    cursor.movePosition(QTextCursor.StartOfBlock)
-                    cursor.movePosition(QTextCursor.Left)
-                    cursor.insertBlock()
-                    cursor.insertText(text)
-                    cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-                    cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
-                    self.setTextCursor(cursor)
-                    return
-
-        # Insert new utterance at the end
-        cursor = QTextCursor(doc)
-        # cursor.clearSelection()
-        cursor.movePosition(QTextCursor.End)
-        cursor.insertBlock()
-        cursor.insertText(text)
-        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-        cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
-        self.setTextCursor(cursor)
-                
-
-
-    def setText(self, text: str):
-        super().setText(text)
-
-        # Add utterances metadata
-        doc = self.document()
-        for block_idx in range(doc.blockCount()):
-            block = doc.findBlockByNumber(block_idx)
-            text = block.text()
-
-            i_comment = text.find('#')
-            if i_comment >= 0:
-                text = text[:i_comment]
-            
-            text, _ = extract_metadata(text)
-            is_utt = len(text.strip()) > 0
-
-            if is_utt:
-                block.setUserData(MyTextBlockUserData({"is_utt": True}))
-            else:
-                block.setUserData(MyTextBlockUserData({"is_utt": False}))
-
-
-    def getBlockByUtteranceId(self, id: int) -> QTextBlock:
-        doc = self.document()
-        for blockIndex in range(doc.blockCount()):
-            block = doc.findBlockByNumber(blockIndex)
-            if not block.userData():
-                continue
-            userData = block.userData().data
-            if "seg_id" in userData and userData["seg_id"] == id:
-                return block
-        return None
-
-
-    def setActive(self, id: int, with_cursor=True, update_waveform=True):
-        block = self.getBlockByUtteranceId(id)
-        if not block:
-            return
-        # if self.lastActive >= 0:
-        #     # Reset format of previously selected utterance
-        #     last_block = doc.findBlockByNumber(self.lastActive)
-        #     cursor = QTextCursor(last_block)
-        #     cursor.joinPreviousEditBlock()
-        #     # cursor.select(QTextCursor.BlockUnderCursor)
-        #     cursor.setBlockFormat(self.defaultBlockFormat)
-        #     cursor.setCharFormat(QTextCharFormat())
-        #     cursor.endEditBlock()
-        
-        # self.lastActive = block
-
-        # Format active utterance
-        # cursor.joinPreviousEditBlock()
-        # block_format = block.blockFormat()
-        # block_format.setBackground(QColor(250, 255, 210))
-        # block_format.setBottomMargin(10)
-        # block_format.setTopMargin(10)
-        # char_format = QTextCharFormat()
-        # char_format.setFontPointSize(13)
-        cursor = QTextCursor(block)
-        # # cursor.select(QTextCursor.BlockUnderCursor)
-        # cursor.setBlockFormat(block_format)
-        # cursor.mergeCharFormat(char_format)
-        # cursor.endEditBlock()
-        # cursor.movePosition(QTextCursor.StartOfBlock)
-
-        if with_cursor:
-            # Select text of current utterance
-            cursor.movePosition(QTextCursor.EndOfBlock)
-            cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-            self.setTextCursor(cursor)
-
-            # Scroll to selected utterance
-            if not self.timer.isActive():
-                self.timer.start(1000/30)
-            scroll_bar = self.verticalScrollBar()
-            scroll_old_val = scroll_bar.value()
-            scroll_bar.setValue(scroll_bar.maximum())
-            self.ensureCursorVisible()
-            self.scroll_goal = max(scroll_bar.value() - 40, 0)
-            scroll_bar.setValue(scroll_old_val)
-        
-        if update_waveform:
-            self.parent.waveform.setActive(id)
-    
-
-    # def mousePressEvent(self, event):
-    #     super().mousePressEvent(event)
-    #     if event.buttons() == Qt.LeftButton:
-    #         pass
-    #     elif event.buttons() == Qt.RightButton:
-    #         pass
-    
-
-    def wheelEvent(self, event: QWheelEvent):
-        if self.timer.isActive():
-            self.timer.stop()
-        super().wheelEvent(event)
-
-
-    def _updateScroll(self):
-        dist = self.scroll_goal - self.verticalScrollBar().value()
-        if abs(dist) > 7:
-            scroll_value = self.verticalScrollBar().value()
-            scroll_value += dist * 0.1
-            self.verticalScrollBar().setValue(scroll_value)
-        else:
-            self.timer.stop()
-    
-
-    def cursor_changed(self):
-        cursor = self.textCursor()
-        # print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
-        current_block = cursor.block()
-        if current_block.userData():
-            data = current_block.userData().data
-            if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
-                id = data["seg_id"]
-                self.setActive(id, with_cursor=False)
-                # start, end = self.parent.waveform.segments[id]
-                # data.update({'start': start, 'end': end, 'dur': end-start})
-                
-            #self.parent.status_bar.showMessage(str(data))
-        else:
-            #self.parent.status_bar.showMessage("no data...")
-            pass
-        # n_utts = -1
-        # for blockIndex in range(clicked_block.blockNumber()):
-        #     if self.block_is_utt(blockIndex + 1):
-        #         n_utts += 1
-        # self.setActive(n_utts, False)
-        # if n_utts >= 0:
-        #     self.parent.waveform.setActive(n_utts)
-
-
-    def contextMenuEvent(self, event):
-        context = QMenu(self)
-        context.addAction(QAction("Split here", self))
-        context.addAction(QAction("Auto-recognition", self))
-        context.addAction(QAction("Auto-puncutate", self))
-        context.exec(event.globalPos())
-        
-    
-    def contents_change(self, pos, charsRemoved, charsAdded):
-        print("content changed", pos, charsRemoved, charsAdded)
-
-        if charsRemoved == 0 and charsAdded > 0:
-            # Get added content
-            cursor = self.textCursor()
-            cursor.setPosition(pos)
-            cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, n=charsAdded)
-            print(cursor.selectedText())
-        elif charsRemoved > 0 and charsAdded == 0:
-            cursor = self.textCursor()
-            cursor.setPosition(pos)
-            cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, n=charsRemoved)
-            print(cursor.selectedText())
-        # pos = self.textCursor().position()
-        #self.updateTextFormat(pos)
-    
-
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        print("key", event)
-
-        if event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_Z:
-            self.parent.undo()
-            return
-
-        if event.key() == Qt.Key_Return:
-            print("ENTER")
-        else:
-            pass
-
-        return super().keyPressEvent(event)
 
 
 
@@ -445,7 +83,7 @@ class RecognizerWorker(QThread):
 
 
 class MainWindow(QMainWindow):
-    APP_NAME = "Anaouder-Qt"
+    APP_NAME = "Anaouder-editor"
 
     def __init__(self, filepath=""):
         super().__init__()
@@ -721,7 +359,6 @@ class MainWindow(QMainWindow):
                 for audio_ext in audio_formats:
                     audio_path = os.path.extsep.join((basename, audio_ext))
                     audio_path = os.path.join(folder, audio_path)
-                    print(audio_path)
                     if os.path.exists(audio_path):
                         print("Found audio file:", audio_path)
                         break
@@ -811,20 +448,16 @@ class MainWindow(QMainWindow):
         # Update video subtitles
         if self.video_window and int(dt*100) % 10 == 0:
             seg_id = self.waveform.getSegmentAtTime(self.waveform.playhead)
+            if seg_id == self.video_window.current_caption_id:
+                return
             if seg_id == -1:
-                self.video_window.text_item.setText("")
+                self.video_window.setCaption("", -1)
                 return
             utt = self.text_area.getBlockByUtteranceId(seg_id)
             if not utt:
-                self.video_window.text_item.setText("")
+                self.video_window.setCaption("", -1)
                 return
-            self.video_window.text_item.setText(utt.text())
-            vid_rect = self.video_window.video_item.boundingRect()
-            text_rect = self.video_window.text_item.boundingRect()
-            self.video_window.text_item.setPos(
-                (vid_rect.width() - text_rect.width()) * 0.5,
-                vid_rect.height()
-            )
+            self.video_window.setCaption(utt.text(), seg_id)
 
 
     def playSegment(self, segment):
@@ -859,6 +492,8 @@ class MainWindow(QMainWindow):
     def playPrev(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.stop()
+        if not self.waveform.active_segments:
+            return
         id = self.waveform.findPrevSegment()
         if id < 0:
             id = self.waveform.last_segment_active
@@ -919,13 +554,12 @@ class MainWindow(QMainWindow):
 
     def toggleVideo(self):
         if not self.video_window:
-            self.video_window = VideoWindow2()
+            self.video_window = VideoWindow()
             self.player.setVideoOutput(self.video_window.video_item)
             vid_size = self.player.metaData().value(QMediaMetaData.Resolution)
-            print(vid_size)
-            self.video_window.resize(vid_size)
-            print(self.video_window.size())
+            print("vid size", vid_size)
             self.video_window.show()
+            # self.video_window.resize(vid_size)
         else:
             self.video_window = None
 
@@ -1023,10 +657,10 @@ class MainWindow(QMainWindow):
 
 def main():
     global settings
-    settings = QSettings("OTilde", "Anaouder")
+    settings = QSettings("OTilde", MainWindow.APP_NAME)
 
     # file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.wav"
-    file_path = "/home/gweltaz/dwhelper/Archive An Taol Lagad témoignage de deux anciens Poilus en 1989.mp4"
+    file_path = "/home/gweltaz/dwhelper/Ar Vran Fest, ur festival folk metal - 4 Munud e Breizh.ali"
     app = QApplication(sys.argv)
     window = MainWindow(file_path)
     window.show()
