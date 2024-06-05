@@ -3,6 +3,7 @@
 
 import sys
 import os.path
+from typing import List
 
 from pydub import AudioSegment
 # import numpy as np
@@ -42,7 +43,7 @@ from PySide6.QtGui import (
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
 from waveform_widget import WaveformWidget
-from text_widget import TextArea
+from text_widget import TextArea, MyTextBlockUserData
 from video_widget import VideoWindow
 
 
@@ -83,7 +84,7 @@ class RecognizerWorker(QThread):
 
 
 class MainWindow(QMainWindow):
-    APP_NAME = "Anaouder-editor"
+    APP_NAME = "Anaouder-mich"
 
     def __init__(self, filepath=""):
         super().__init__()
@@ -437,6 +438,23 @@ class MainWindow(QMainWindow):
         self.waveform.draw()
 
 
+    def updateSubtitle(self, force=False):
+        if not self.video_window:
+            return
+        
+        seg_id = self.waveform.getSegmentAtTime(self.waveform.playhead)
+        if not force and seg_id == self.video_window.current_caption_id:
+            return
+        if seg_id == -1:
+            self.video_window.setCaption("", -1)
+            return
+        utt = self.text_area.getBlockByUtteranceId(seg_id)
+        if not utt:
+            self.video_window.setCaption("", -1)
+            return
+        self.video_window.setCaption(utt.text(), seg_id)
+
+
     def _update_player(self):
         dt = time() - self.play_t0
         if dt > self.play_length:
@@ -445,19 +463,8 @@ class MainWindow(QMainWindow):
         else:
             self.waveform.setHead(self.play_start + dt)
 
-        # Update video subtitles
         if self.video_window and int(dt*100) % 10 == 0:
-            seg_id = self.waveform.getSegmentAtTime(self.waveform.playhead)
-            if seg_id == self.video_window.current_caption_id:
-                return
-            if seg_id == -1:
-                self.video_window.setCaption("", -1)
-                return
-            utt = self.text_area.getBlockByUtteranceId(seg_id)
-            if not utt:
-                self.video_window.setCaption("", -1)
-                return
-            self.video_window.setCaption(utt.text(), seg_id)
+            self.updateSubtitle()
 
 
     def playSegment(self, segment):
@@ -554,10 +561,10 @@ class MainWindow(QMainWindow):
 
     def toggleVideo(self):
         if not self.video_window:
-            self.video_window = VideoWindow()
-            self.player.setVideoOutput(self.video_window.video_item)
             vid_size = self.player.metaData().value(QMediaMetaData.Resolution)
             print("vid size", vid_size)
+            self.video_window = VideoWindow(size=vid_size)
+            self.player.setVideoOutput(self.video_window.video_item)
             self.video_window.show()
             # self.video_window.resize(vid_size)
         else:
@@ -588,10 +595,30 @@ class MainWindow(QMainWindow):
         self.text_area.insertUtterance('*', segment_id)
 
 
-    def actionSplitSegment(self):
-        print("action split")
-    
+    def splitUtterance(self, seg_id:int, pc:float):
+        # Split segment at pc
+        segment = self.waveform.segments[seg_id]
+        seg_length = segment[1] - segment[0]
+        seg_left = [segment[0], segment[0] + seg_length*pc - 0.1]
+        seg_right = [segment[0] + seg_length*pc + 0.1, segment[1]]
+        seg_left_id = self.waveform.addSegment(seg_left)
+        seg_right_id = self.waveform.addSegment(seg_right)
+        self.waveform.setActive(seg_right_id)
+        del self.waveform.segments[seg_id]
+        self.waveform.draw()
 
+        left_block = self.text_area.getBlockByUtteranceId(seg_id)
+        user_data = left_block.userData().data
+        user_data["seg_id"] = seg_left_id
+        left_block.setUserData(MyTextBlockUserData(user_data))
+
+        right_block = self.text_area.textCursor().block()
+        user_data = {}
+        user_data["seg_id"] = seg_right_id
+        right_block.setUserData(MyTextBlockUserData(user_data))
+
+        
+    
     def recognize(self):
         seg_id = -1
         if self.waveform.selection_is_active:
@@ -643,6 +670,16 @@ class MainWindow(QMainWindow):
 
         print(segments_text)
         print(segments_id)
+
+    def deleteSegment(self, segments_id:List) -> None:
+        for seg_id in segments_id:
+            # Delete text utterance
+            self.text_area.deleteUtterance(seg_id)
+            # Delete waveform segment
+            del self.waveform.segments[seg_id]
+        self.waveform.active_segments = []
+        self.waveform.last_segment_active = -1
+        self.waveform.draw()
 
     def undo(self):
         print("undo")

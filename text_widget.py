@@ -1,3 +1,5 @@
+from typing import List
+
 from PySide6.QtWidgets import (
     QMenu, QTextEdit,
 )
@@ -48,7 +50,7 @@ class Highlighter(QSyntaxHighlighter):
             self.setFormat(match.capturedStart(), match.capturedLength(), self.metadataFormat)
         
         # Special tokens
-        expression = QRegularExpression(r"<[A-Z\']+>")
+        expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
         i = expression.globalMatch(text)
         while i.hasNext():
             match = i.next()
@@ -66,6 +68,7 @@ class MyTextBlockUserData(QTextBlockUserData):
         Fields:
             - seg_id
             - is_utt
+            - words_timecoded
     """
     def __init__(self, data):
         super().__init__()
@@ -198,7 +201,18 @@ class TextArea(QTextEdit):
         cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
         cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
         self.setTextCursor(cursor)
-                
+    
+
+    def deleteUtterance(self, utt_id:int) -> None:
+        block = self.getBlockByUtteranceId(utt_id)
+        if not block:
+            return
+        cursor = QTextCursor(block)
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        cursor.removeSelectedText()
+        if cursor.position() > 0:
+            cursor.deletePreviousChar()
 
 
     def setText(self, text: str):
@@ -286,6 +300,7 @@ class TextArea(QTextEdit):
             self.parent.waveform.setActive(id)
     
 
+
     # def mousePressEvent(self, event):
     #     super().mousePressEvent(event)
     #     if event.buttons() == Qt.LeftButton:
@@ -357,6 +372,9 @@ class TextArea(QTextEdit):
             cursor.setPosition(pos)
             cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, n=charsRemoved)
             print(cursor.selectedText())
+        
+        # Update vide subtitle if necessary
+        self.parent.updateSubtitle(force=True)
         # pos = self.textCursor().position()
         #self.updateTextFormat(pos)
     
@@ -368,9 +386,32 @@ class TextArea(QTextEdit):
             self.parent.undo()
             return
 
+        cursor = self.textCursor()
+
+        # Check if there's an active text selection
+        has_selection = not cursor.selection().isEmpty()
+
+        pos = cursor.position()
+        pos_in_block = cursor.positionInBlock()
+        current_block = cursor.block()
+        text_len = current_block.length()
+        
         if event.key() == Qt.Key_Return:
             print("ENTER")
-        else:
-            pass
+
+            if pos_in_block > 0 and pos_in_block < text_len and not has_selection:
+                # Check if current block has an associated segment
+                block_data = current_block.userData()
+                if block_data and "seg_id" in block_data.data:
+                    seg_id = block_data.data["seg_id"]
+                    if seg_id in self.parent.waveform.segments:
+                        # Split sentence and segment
+                        pc = pos_in_block / text_len
+                        ret = super().keyPressEvent(event)
+                        self.parent.splitUtterance(seg_id, pc)
+                        return ret
+
+        if event.key() == Qt.Key_Delete:
+            print("Delete")
 
         return super().keyPressEvent(event)

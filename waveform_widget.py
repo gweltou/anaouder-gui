@@ -127,6 +127,7 @@ class WaveformWidget(QWidget):
     
 
     def addSegment(self, segment) -> int:
+        print("add segment", segment)
         segment_id = self.id_counter
         self.id_counter += 1
         self.segments[segment_id] = segment
@@ -298,6 +299,10 @@ class WaveformWidget(QWidget):
         elif event.key() == Qt.Key_J and len(self.active_segments) > 1:
             # Join multiple segments
             self.parent.actionJoin()
+        elif event.key() == Qt.Key_Delete and self.active_segments:
+            print("Deleting", self.active_segments)
+            self.parent.deleteSegment(self.active_segments)
+            # Delete segment
 
         return super().keyPressEvent(event)
         
@@ -312,6 +317,7 @@ class WaveformWidget(QWidget):
         elif event.key() == Qt.Key_Shift:
             self.shift_pressed = False
         return super().keyReleaseEvent(event)
+
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.click_pos = event.position()
