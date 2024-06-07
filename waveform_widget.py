@@ -298,7 +298,7 @@ class WaveformWidget(QWidget):
             self.parent.actionCreateNewSegment()
         elif event.key() == Qt.Key_J and len(self.active_segments) > 1:
             # Join multiple segments
-            self.parent.actionJoin()
+            self.parent.joinUtterances()
         elif event.key() == Qt.Key_Delete and self.active_segments:
             print("Deleting", self.active_segments)
             self.parent.deleteSegment(self.active_segments)
@@ -443,11 +443,11 @@ class WaveformWidget(QWidget):
             context.addAction(action_create_segment)
         if len(self.active_segments) > 1:
             action_join = QAction("Join segments", self)
-            action_join.triggered.connect(self.parent.actionJoin)
+            action_join.triggered.connect(self.parent.joinUtterances)
             context.addAction(action_join)
         elif clicked_segment_id >= 0:
             action_split = QAction("Split here", self)
-            action_split.triggered.connect(self.parent.actionSplitSegment)
+            action_split.triggered.connect(self.parent.splitUtterance)
             context.addAction(action_split)
         context.addSeparator()
         action_recognize = QAction("Recognize", self)

@@ -641,7 +641,7 @@ class MainWindow(QMainWindow):
         self.recognizer_worker.start()
     
 
-    def actionJoin(self):
+    def joinUtterances(self):
         """
             Join many segments in one.
             Keep the segment ID of the earliest segment among the selected ones.

@@ -168,6 +168,9 @@ class TextArea(QTextEdit):
             user_data = block.userData().data
             if "seg_id" in user_data:
                 other_id = user_data["seg_id"]
+                if other_id not in self.parent.waveform.segments:
+                    continue
+                
                 if other_id == id:
                     # Replace text content
                     cursor = QTextCursor(block)
@@ -411,7 +414,22 @@ class TextArea(QTextEdit):
                         self.parent.splitUtterance(seg_id, pc)
                         return ret
 
-        if event.key() == Qt.Key_Delete:
+        elif event.key() == Qt.Key_Delete:
             print("Delete")
+            
+
+        elif event.key() == Qt.Key_Backspace:
+            print("Backspace")
+            if pos_in_block == 0 and self._block_is_aligned(current_block):
+
+                self.parent.joinUtterances([])
+                return
 
         return super().keyPressEvent(event)
+
+    def _block_is_aligned(self, block):
+        block_data = block.userData()
+        if block_data and "seg_id" in block_data.data:
+            if block_data.data["seg_id"] in self.parent.waveform.segments:
+                return True
+        return False
