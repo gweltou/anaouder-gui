@@ -268,6 +268,11 @@ class MainWindow(QMainWindow):
 
 
     def _saveFile(self, filepath):
+        def format_timecode(timecode):
+            if isinstance(timecode, int):
+                return str(timecode)
+            return "{:.3f}".format(timecode).rstrip('0').rstrip('.')
+
         print("Saving file to", os.path.abspath(filepath))
 
         with open(filepath, 'w') as f:
@@ -280,12 +285,12 @@ class MainWindow(QMainWindow):
                     if "seg_id" in userData:
                         seg_id = userData["seg_id"]
                         start, end = self.waveform.segments[seg_id]
-                        text += f" {{start: {start:.4}; end: {end:.4}}}"
+                        text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
                 f.write(text + '\n')
 
 
     def saveFile(self):
-        if self.filepath:
+        if self.filepath and self.filepath.endswith(".ali"):
             self._saveFile(self.filepath)
         else:
             self.saveFileAs()
@@ -378,6 +383,7 @@ class MainWindow(QMainWindow):
 
             # Check for the text file
             txt_filepath = os.path.extsep.join((basename, "txt"))
+            txt_filepath = os.path.join(folder, txt_filepath)
             if os.path.exists(txt_filepath):
                 with open(txt_filepath, 'r') as text_data:
                     self.text_area.setText(text_data.read())
@@ -391,6 +397,8 @@ class MainWindow(QMainWindow):
                         idx += 1
 
                 self.text_area.setActive(seg_id_list[0], update_waveform=False)
+            else:
+                print(f"Couldn't find text file {txt_filepath}")
             
             # Check for an associated audio file
             for audio_ext in audio_formats:
@@ -696,8 +704,8 @@ def main():
     global settings
     settings = QSettings("OTilde", MainWindow.APP_NAME)
 
-    # file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.wav"
-    file_path = "/home/gweltaz/dwhelper/Ar Vran Fest, ur festival folk metal - 4 Munud e Breizh.ali"
+    file_path = "/home/gweltaz/STT/todo/bali_breizh_poc'her1.ali"
+    # file_path = "/home/gweltaz/dwhelper/Ar Vran Fest, ur festival folk metal - 4 Munud e Breizh.ali"
     app = QApplication(sys.argv)
     window = MainWindow(file_path)
     window.show()
