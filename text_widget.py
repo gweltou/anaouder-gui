@@ -120,8 +120,8 @@ class TextArea(QTextEdit):
     #     return len(text.strip()) > 0
 
 
-    def setUtteranceText(self, id: int, text: str):
-        block = self.getBlockByUtteranceId(id)
+    def setSentenceText(self, id: int, text: str):
+        block = self.getBlockBySentenceId(id)
         if not block:
             return
         cursor = QTextCursor(block)
@@ -139,7 +139,7 @@ class TextArea(QTextEdit):
         # cursor.block().setUserData(MyTextBlockUserData({"is_utt": is_utt}))
 
 
-    def addUtterance(self, text: str, id: int):
+    def addSentence(self, text: str, id: int):
         # Insert new utterance at the end
         doc = self.document()
         cursor = QTextCursor(doc)
@@ -151,7 +151,7 @@ class TextArea(QTextEdit):
         # self.setTextCursor(cursor)
 
 
-    def insertUtterance(self, text: str, id: int):
+    def insertSentence(self, text: str, id: int):
         """
             Utterances are supposed to be chronologically ordered in textArea
         """
@@ -206,8 +206,8 @@ class TextArea(QTextEdit):
         self.setTextCursor(cursor)
     
 
-    def deleteUtterance(self, utt_id:int) -> None:
-        block = self.getBlockByUtteranceId(utt_id)
+    def deleteSentence(self, utt_id:int) -> None:
+        block = self.getBlockBySentenceId(utt_id)
         if not block:
             return
         cursor = QTextCursor(block)
@@ -240,7 +240,7 @@ class TextArea(QTextEdit):
                 block.setUserData(MyTextBlockUserData({"is_utt": False}))
 
 
-    def getBlockByUtteranceId(self, id: int) -> QTextBlock:
+    def getBlockBySentenceId(self, id: int) -> QTextBlock:
         doc = self.document()
         for blockIndex in range(doc.blockCount()):
             block = doc.findBlockByNumber(blockIndex)
@@ -253,7 +253,7 @@ class TextArea(QTextEdit):
 
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
-        block = self.getBlockByUtteranceId(id)
+        block = self.getBlockBySentenceId(id)
         if not block:
             return
         # if self.lastActive >= 0:

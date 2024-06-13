@@ -16,6 +16,7 @@ from ostilhou.asr import (
     load_segments_data,
     extract_metadata,
     transcribe_segment,
+    transcribe_segment_timecoded_callback,
 )
 from ostilhou.asr.models import DEFAULT_MODEL, load_model, is_model_loaded
 from ostilhou.audio import split_to_segments, convert_to_mp3
@@ -57,10 +58,11 @@ AUTOSEG_MIN_LENGTH = 3
 
 class RecognizerWorker(QThread):
     message = Signal(str)
-    transcribed = Signal(str, int, int)
+    transcribedSegment = Signal(str, int, int)
+    transcribed = Signal(str, list)
 
     def setAudio(self, audio: AudioSegment):
-        self.audio_data = audio
+        self.audio_data: AudioSegment = audio
 
     def setSegments(self, segments):
         print(segments)
@@ -73,12 +75,23 @@ class RecognizerWorker(QThread):
 
         current_locale = locale.getlocale()
         locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
-        for i, (seg_id, start, end) in enumerate(self.segments):
-            # Stupid hack with locale to avoid commas in json string
-            self.message.emit(f"{i+1}/{len(self.segments)}")
-            text = transcribe_segment(self.audio_data[start*1000:end*1000])
-            text = ' '.join(text)
-            self.transcribed.emit(text, seg_id, i)
+        if self.segments:
+            for i, (seg_id, start, end) in enumerate(self.segments):
+                # Stupid hack with locale to avoid commas in json string
+                self.message.emit(f"{i+1}/{len(self.segments)}")
+                text = transcribe_segment(self.audio_data[start*1000:end*1000])
+                text = ' '.join(text)
+                self.transcribedSegment.emit(text, seg_id, i)
+        else:
+            # Transcribe whole file
+            def parse_vosk_result(result):
+                text = []
+                for vosk_token in result:
+                    text.append(vosk_token['word'])
+                segment = [result[0]['start'], result[-1]['end']]
+                self.transcribed.emit(' '.join(text), segment)
+            self.message.emit(f"Transcribing...")
+            transcribe_segment_timecoded_callback(self.audio_data, parse_vosk_result)
         locale.setlocale(locale.LC_ALL, current_locale)
 
 
@@ -133,7 +146,8 @@ class MainWindow(QMainWindow):
 
         self.recognizer_worker = RecognizerWorker()
         self.recognizer_worker.message.connect(self.slotSetStatusMessage)
-        self.recognizer_worker.transcribed.connect(self.slotGetTranscription)
+        self.recognizer_worker.transcribedSegment.connect(self.slotGetTranscription)
+        self.recognizer_worker.transcribed.connect(self.createUtterance)
         self.recognizer_worker.finished.connect(self.progress_bar.hide)
 
         if filepath:
@@ -258,7 +272,7 @@ class MainWindow(QMainWindow):
     @Slot(str, int, int)
     def slotGetTranscription(self, text: str, seg_id: int, i: int):
         self.progress_bar.setValue(i+1)
-        self.text_area.insertUtterance(text, seg_id)
+        self.text_area.insertSentence(text, seg_id)
 
 
     def closeEvent(self, event):
@@ -279,7 +293,7 @@ class MainWindow(QMainWindow):
             doc = self.text_area.document()
             for blockIndex in range(doc.blockCount()):
                 block = doc.findBlockByNumber(blockIndex)
-                text = block.text()
+                text = block.text().strip()
                 if block.userData():
                     userData = block.userData().data
                     if "seg_id" in userData:
@@ -351,7 +365,7 @@ class MainWindow(QMainWindow):
                         segment = [float(match[1]), float(match[2])]
                         seg_id = self.waveform.addSegment(segment)
                         line = line[:match.start()] + line[match.end():]
-                        self.text_area.addUtterance(line, seg_id)
+                        self.text_area.addSentence(line.strip(), seg_id)
                     else:
                         self.text_area.addText(line)
 
@@ -456,7 +470,7 @@ class MainWindow(QMainWindow):
         if seg_id == -1:
             self.video_window.setCaption("", -1)
             return
-        utt = self.text_area.getBlockByUtteranceId(seg_id)
+        utt = self.text_area.getBlockBySentenceId(seg_id)
         if not utt:
             self.video_window.setCaption("", -1)
             return
@@ -535,6 +549,7 @@ class MainWindow(QMainWindow):
             self.play_length = self.waveform.t_total - self.waveform.playhead
             self.play_timer.start(1000/30)
 
+
     def stop(self):
         """Stop playback"""
         if self.player.playbackState() == QMediaPlayer.PlayingState:
@@ -590,7 +605,7 @@ class MainWindow(QMainWindow):
         self.waveform.clear()
         for start, end in segments:
             segment_id = self.waveform.addSegment([start/1000, end/1000])
-            self.text_area.insertUtterance('*', segment_id)
+            self.text_area.insertSentence('*', segment_id)
         self.waveform.draw()
 
 
@@ -600,7 +615,15 @@ class MainWindow(QMainWindow):
         assert self.waveform.selection_is_active
         segment_id = self.waveform.addSegment(self.waveform.selection)
         self.waveform.deselect()
-        self.text_area.insertUtterance('*', segment_id)
+        self.text_area.insertSentence('*', segment_id)
+
+
+    @Slot(str, list)
+    def createUtterance(self, text, segment):
+        print(text)
+        segment_id = self.waveform.addSegment(segment)
+        self.text_area.insertSentence(text, segment_id)
+        self.waveform.draw()
 
 
     def splitUtterance(self, seg_id:int, pc:float):
@@ -615,7 +638,7 @@ class MainWindow(QMainWindow):
         del self.waveform.segments[seg_id]
         self.waveform.draw()
 
-        left_block = self.text_area.getBlockByUtteranceId(seg_id)
+        left_block = self.text_area.getBlockBySentenceId(seg_id)
         user_data = left_block.userData().data
         user_data["seg_id"] = seg_left_id
         left_block.setUserData(MyTextBlockUserData(user_data))
@@ -639,6 +662,9 @@ class MainWindow(QMainWindow):
                 )
         elif not self.waveform.segments:
             # Transcribe whole record
+            self.progress_bar.show()
+            self.recognizer_worker.setSegments([])
+            self.recognizer_worker.start()
             return
 
         # self.status_bar.clearMessage()
@@ -657,15 +683,15 @@ class MainWindow(QMainWindow):
         print("join action")
         segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
         first_id = segments_id[0]
-        segments_text = [self.text_area.getBlockByUtteranceId(id).text() for id in segments_id]
+        segments_text = [self.text_area.getBlockBySentenceId(id).text() for id in segments_id]
 
         # Join text utterances
         for id in segments_id[1:]:
-            block = self.text_area.getBlockByUtteranceId(id)
+            block = self.text_area.getBlockBySentenceId(id)
             cursor = QTextCursor(block)
             cursor.select(QTextCursor.BlockUnderCursor)
             cursor.removeSelectedText()
-        self.text_area.setUtteranceText(first_id, ' '.join(segments_text))
+        self.text_area.setSentenceText(first_id, ' '.join(segments_text))
 
         # Join waveform segments
         new_seg_start = self.waveform.segments[first_id][0]
@@ -682,7 +708,7 @@ class MainWindow(QMainWindow):
     def deleteSegment(self, segments_id:List) -> None:
         for seg_id in segments_id:
             # Delete text utterance
-            self.text_area.deleteUtterance(seg_id)
+            self.text_area.deleteSentence(seg_id)
             # Delete waveform segment
             del self.waveform.segments[seg_id]
         self.waveform.active_segments = []
@@ -704,7 +730,7 @@ def main():
     global settings
     settings = QSettings("OTilde", MainWindow.APP_NAME)
 
-    file_path = "/home/gweltaz/STT/todo/bali_breizh_poc'her1.ali"
+    file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
     # file_path = "/home/gweltaz/dwhelper/Ar Vran Fest, ur festival folk metal - 4 Munud e Breizh.ali"
     app = QApplication(sys.argv)
     window = MainWindow(file_path)

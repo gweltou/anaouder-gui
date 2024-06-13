@@ -90,7 +90,7 @@ class WaveformWidget(QWidget):
         self.clear()
 
         # Accept focus for keyboard events
-        self.setFocusPolicy(Qt.StrongFocus)
+        #self.setFocusPolicy(Qt.StrongFocus)
         self.ctrl_pressed = False
         self.shift_pressed = False
         self.setMouseTracking(True)
