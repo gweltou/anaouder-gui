@@ -397,14 +397,20 @@ class TextArea(QTextEdit):
         pos = cursor.position()
         pos_in_block = cursor.positionInBlock()
         current_block = cursor.block()
-        text_len = current_block.length()
+        block_data = current_block.userData()
+        block_text = current_block.text()
+        block_len = current_block.length()        
         
         if event.key() == Qt.Key_Return:
             print("ENTER")
+            text = current_block.text()
+            text_len = len(text.strip())
+            first_letter = 0
+            while first_letter < len(text) and text[first_letter].isspace():
+                first_letter += 1
 
-            if pos_in_block > 0 and pos_in_block < text_len and not has_selection:
+            if pos_in_block > first_letter and pos_in_block < text_len and not has_selection:
                 # Check if current block has an associated segment
-                block_data = current_block.userData()
                 if block_data and "seg_id" in block_data.data:
                     seg_id = block_data.data["seg_id"]
                     if seg_id in self.parent.waveform.segments:
@@ -416,13 +422,40 @@ class TextArea(QTextEdit):
 
         elif event.key() == Qt.Key_Delete:
             print("Delete")
+        
+            if pos_in_block < block_len-1 or not self._block_is_aligned(current_block):
+                return super().keyPressEvent(event)
             
+            next_block = current_block.next()
+            if not next_block:
+                return super().keyPressEvent(event)
+            
+            next_block_data = next_block.userData()
+            pos_bck = pos
+            if (next_block_data and "seg_id" in next_block_data.data
+                    and block_data and "seg_id" in block_data.data):
+                seg_id = block_data.data["seg_id"]
+                next_seg_id = next_block_data.data["seg_id"]
+                self.parent.joinUtterances([seg_id, next_seg_id])
+                cursor.setPosition(pos_bck)
+                self.setTextCursor(cursor)
+                return
 
         elif event.key() == Qt.Key_Backspace:
             print("Backspace")
-            if pos_in_block == 0 and self._block_is_aligned(current_block):
-
-                self.parent.joinUtterances([])
+            if pos_in_block > 0 or not self._block_is_aligned(current_block):
+                return super().keyPressEvent(event)
+            
+            next_block = current_block.previous()
+            if not next_block:
+                return super().keyPressEvent(event)
+            
+            next_block_data = next_block.userData()
+            if (next_block_data and "seg_id" in next_block_data.data
+                    and block_data and "seg_id" in block_data.data):
+                seg_id = block_data.data["seg_id"]
+                next_seg_id = next_block_data.data["seg_id"]
+                self.parent.joinUtterances([next_seg_id, seg_id])
                 return
 
         return super().keyPressEvent(event)

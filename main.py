@@ -319,6 +319,7 @@ class MainWindow(QMainWindow):
         
         self.filepath = filepath
         self._saveFile(filepath)
+        self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(self.filepath)[1]}")
                     
 
     def openFile(self, filepath=""):
@@ -424,7 +425,7 @@ class MainWindow(QMainWindow):
                     break
         
         self.filepath = filepath
-        self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(filepath)[1]}")
+        self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(self.filepath)[1]}")
     
 
     def loadAudio(self, filepath):
@@ -675,13 +676,13 @@ class MainWindow(QMainWindow):
         self.recognizer_worker.start()
     
 
-    def joinUtterances(self):
+    def joinUtterances(self, segments_id):
         """
             Join many segments in one.
             Keep the segment ID of the earliest segment among the selected ones.
         """
         print("join action")
-        segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
+        #segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
         first_id = segments_id[0]
         segments_text = [self.text_area.getBlockBySentenceId(id).text() for id in segments_id]
 
@@ -704,6 +705,7 @@ class MainWindow(QMainWindow):
 
         print(segments_text)
         print(segments_id)
+
 
     def deleteSegment(self, segments_id:List) -> None:
         for seg_id in segments_id:
@@ -730,8 +732,12 @@ def main():
     global settings
     settings = QSettings("OTilde", MainWindow.APP_NAME)
 
-    file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
-    # file_path = "/home/gweltaz/dwhelper/Ar Vran Fest, ur festival folk metal - 4 Munud e Breizh.ali"
+    #file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
+    file_path = "/home/gweltaz/59533_anjela_duval.seg"
+    
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+    
     app = QApplication(sys.argv)
     window = MainWindow(file_path)
     window.show()
