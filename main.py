@@ -426,6 +426,8 @@ class MainWindow(QMainWindow):
         
         self.filepath = filepath
         self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(self.filepath)[1]}")
+
+        self.text_area.setActive(0)
     
 
     def loadAudio(self, filepath):
@@ -732,8 +734,8 @@ def main():
     global settings
     settings = QSettings("OTilde", MainWindow.APP_NAME)
 
-    #file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
-    file_path = "/home/gweltaz/59533_anjela_duval.seg"
+    file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
+    #file_path = "/home/gweltaz/59533_anjela_duval.seg"
     
     if len(sys.argv) > 1:
         file_path = sys.argv[1]

@@ -301,9 +301,9 @@ class WaveformWidget(QWidget):
             segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])
             self.parent.joinUtterances(segments_id)
         elif event.key() == Qt.Key_Delete and self.active_segments:
+            # Delete segment(s)
             print("Deleting", self.active_segments)
             self.parent.deleteSegment(self.active_segments)
-            # Delete segment
 
         return super().keyPressEvent(event)
         

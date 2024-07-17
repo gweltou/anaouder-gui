@@ -13,12 +13,15 @@ from PySide6.QtGui import (
 )
 
 from ostilhou.asr import extract_metadata
+from ostilhou.hspell import hs_dict
 
+active_utterance = None
 
 
 class Highlighter(QSyntaxHighlighter):
-    def __init__(self, parent):
+    def __init__(self, parent, main):
         super().__init__(parent)
+        self.main = main
 
         self.metadataFormat = QTextCharFormat()
         self.metadataFormat.setForeground(Qt.darkMagenta)
@@ -33,16 +36,45 @@ class Highlighter(QSyntaxHighlighter):
 
         self.utt_format = QTextCharFormat()
         self.utt_format.setBackground(QColor(220, 180, 180))
+        
+        self.mispellformat = QTextCharFormat()
+        self.mispellformat.setUnderlineColor(QColor("red"))
+        self.mispellformat.setUnderlineStyle(QTextCharFormat.SpellCheckUnderline)
+
+        self.aligned_block_format = QTextBlockFormat()
+        self.aligned_block_format.setBackground(QColor(175, 250, 190))
+
+        self.unaligned_block_format = QTextBlockFormat()
+        self.unaligned_block_format.setBackground(QColor(255, 150, 160))
 
 
     def highlightBlock(self, text):
+        # Background color
+        if self.currentBlockUserData():
+            block = self.currentBlock()
+            cursor = QTextCursor(block)
+            data = self.currentBlockUserData().data
+            if "seg_id" in data and data["seg_id"] in self.main.waveform.segments:
+                # Utterance is aligned
+                cursor.setBlockFormat(self.aligned_block_format)
+                if data["seg_id"] == active_utterance:
+                    char_format = QTextCharFormat()
+                    char_format.setFontWeight(QFont.DemiBold)
+                    self.setFormat(0, len(text), char_format)
+            else:
+                cursor.setBlockFormat(self.unaligned_block_format)
+        else:
+            block = self.currentBlock()
+            cursor = QTextCursor(block)
+            cursor.setBlockFormat(QTextBlockFormat())
+        
         # Comments
         i = text.find('#')
         if i >= 0:
             self.setFormat(i, len(text)-i, self.commentFormat)
             text = text[:i]
 
-        # Metadata        
+        # Metadata  
         expression = QRegularExpression(r"{\s*(.+?)\s*}")
         i = expression.globalMatch(text)
         while i.hasNext():
@@ -56,9 +88,14 @@ class Highlighter(QSyntaxHighlighter):
             match = i.next()
             self.setFormat(match.capturedStart(), match.capturedLength(), self.sp_tokenFormat)
         
-        if self.currentBlockUserData():
-            pass
-            # self.setFormat(0, len(text), self.utt_format)
+        # Check misspelled words
+        if self.currentBlockUserData() and self.currentBlockUserData().data.get("is_utt", False):
+            expression = QRegularExpression(r'\b([\w\']+)\b', QRegularExpression.UseUnicodePropertiesOption)
+            matches = expression.globalMatch(text)
+            while matches.hasNext():
+                match = matches.next()
+                if not hs_dict.spell(match.captured()):
+                    self.setFormat(match.capturedStart(), match.capturedLength(), self.mispellformat)
         
 
 
@@ -94,10 +131,12 @@ class TextArea(QTextEdit):
         self.document().contentsChange.connect(self.contents_change)
 
         #self.document().setDefaultStyleSheet()
-        self.highlighter = Highlighter(self.document())
+        self.highlighter = Highlighter(self.document(), main=self.parent)
 
         self.defaultBlockFormat = QTextBlockFormat()
         self.defaultCharFormat = QTextCharFormat()
+        self.lastActiveSentenceId = -1
+        self.ignoreCursorChange = False
 
         self.scroll_goal = 0.0
         self.timer = QTimer()
@@ -207,15 +246,27 @@ class TextArea(QTextEdit):
     
 
     def deleteSentence(self, utt_id:int) -> None:
+        # TODO: fix this (userData aren't deleted)
         block = self.getBlockBySentenceId(utt_id)
         if not block:
             return
+        
+        self.ignoreCursorChange = True
         cursor = QTextCursor(block)
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        cursor.select(QTextCursor.BlockUnderCursor)
+        # cursor.movePosition(QTextCursor.StartOfBlock)
+        # cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         cursor.removeSelectedText()
-        if cursor.position() > 0:
-            cursor.deletePreviousChar()
+
+        # cursor. deleteChar()
+        # if cursor.position() > 0:
+        #     cursor.deletePreviousChar()
+        new_block = cursor.block()
+        if not new_block.text():
+            new_block.setUserData(None)
+        
+        self.ignoreCursorChange = False
+        self.lastActiveSentenceId = -1
 
 
     def setText(self, text: str):
@@ -253,35 +304,17 @@ class TextArea(QTextEdit):
 
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
+        global active_utterance
+
+        active_utterance = id
+        self.highlighter.rehighlight()
+
+        print("setactive")
         block = self.getBlockBySentenceId(id)
         if not block:
-            return
-        # if self.lastActive >= 0:
-        #     # Reset format of previously selected utterance
-        #     last_block = doc.findBlockByNumber(self.lastActive)
-        #     cursor = QTextCursor(last_block)
-        #     cursor.joinPreviousEditBlock()
-        #     # cursor.select(QTextCursor.BlockUnderCursor)
-        #     cursor.setBlockFormat(self.defaultBlockFormat)
-        #     cursor.setCharFormat(QTextCharFormat())
-        #     cursor.endEditBlock()
-        
-        # self.lastActive = block
+            return    
 
-        # Format active utterance
-        # cursor.joinPreviousEditBlock()
-        # block_format = block.blockFormat()
-        # block_format.setBackground(QColor(250, 255, 210))
-        # block_format.setBottomMargin(10)
-        # block_format.setTopMargin(10)
-        # char_format = QTextCharFormat()
-        # char_format.setFontPointSize(13)
         cursor = QTextCursor(block)
-        # # cursor.select(QTextCursor.BlockUnderCursor)
-        # cursor.setBlockFormat(block_format)
-        # cursor.mergeCharFormat(char_format)
-        # cursor.endEditBlock()
-        # cursor.movePosition(QTextCursor.StartOfBlock)
 
         if with_cursor:
             # Select text of current utterance
@@ -329,6 +362,9 @@ class TextArea(QTextEdit):
     
 
     def cursor_changed(self):
+        if self.ignoreCursorChange:
+            return
+        
         cursor = self.textCursor()
         # print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
         current_block = cursor.block()
@@ -340,9 +376,9 @@ class TextArea(QTextEdit):
                 # start, end = self.parent.waveform.segments[id]
                 # data.update({'start': start, 'end': end, 'dur': end-start})
                 
-            #self.parent.status_bar.showMessage(str(data))
+            self.parent.status_bar.showMessage(str(data))
         else:
-            #self.parent.status_bar.showMessage("no data...")
+            self.parent.status_bar.showMessage("no data...")
             pass
         # n_utts = -1
         # for blockIndex in range(clicked_block.blockNumber()):
@@ -398,7 +434,6 @@ class TextArea(QTextEdit):
         pos_in_block = cursor.positionInBlock()
         current_block = cursor.block()
         block_data = current_block.userData()
-        block_text = current_block.text()
         block_len = current_block.length()        
         
         if event.key() == Qt.Key_Return:
@@ -409,6 +444,24 @@ class TextArea(QTextEdit):
             while first_letter < len(text) and text[first_letter].isspace():
                 first_letter += 1
 
+            if pos_in_block == 0:
+                # Create an empty block before
+                print("before", f"{cursor.position()=}")
+                ret = super().keyPressEvent(event)
+                # Fix the shift of userData
+                block = cursor.block()
+                prev_block = block.previous()
+                block_data = prev_block.userData().clone()
+                prev_block.setUserData(None)
+                block.setUserData(block_data)
+                self.highlighter.rehighlight()
+                return ret
+            
+            if pos_in_block >= text_len:
+                # Create an empty block after
+                print("after")
+                return super().keyPressEvent(event)
+            
             if pos_in_block > first_letter and pos_in_block < text_len and not has_selection:
                 # Check if current block has an associated segment
                 if block_data and "seg_id" in block_data.data:
