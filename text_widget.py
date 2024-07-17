@@ -42,7 +42,7 @@ class Highlighter(QSyntaxHighlighter):
         self.mispellformat.setUnderlineStyle(QTextCharFormat.SpellCheckUnderline)
 
         self.aligned_block_format = QTextBlockFormat()
-        self.aligned_block_format.setBackground(QColor(175, 250, 190))
+        self.aligned_block_format.setBackground(QColor(210, 255, 230))
 
         self.unaligned_block_format = QTextBlockFormat()
         self.unaligned_block_format.setBackground(QColor(255, 150, 160))
@@ -451,10 +451,11 @@ class TextArea(QTextEdit):
                 # Fix the shift of userData
                 block = cursor.block()
                 prev_block = block.previous()
-                block_data = prev_block.userData().clone()
-                prev_block.setUserData(None)
-                block.setUserData(block_data)
-                self.highlighter.rehighlight()
+                if prev_block.userData():
+                    block_data = prev_block.userData().clone()
+                    prev_block.setUserData(None)
+                    block.setUserData(block_data)
+                    self.highlighter.rehighlight()
                 return ret
             
             if pos_in_block >= text_len:
