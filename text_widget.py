@@ -15,8 +15,6 @@ from PySide6.QtGui import (
 from ostilhou.asr import extract_metadata
 from ostilhou.hspell import hs_dict
 
-active_utterance = None
-
 
 class Highlighter(QSyntaxHighlighter):
     def __init__(self, parent, main):
@@ -57,10 +55,6 @@ class Highlighter(QSyntaxHighlighter):
             if "seg_id" in data and data["seg_id"] in self.main.waveform.segments:
                 # Utterance is aligned
                 cursor.setBlockFormat(self.aligned_block_format)
-                if data["seg_id"] == active_utterance:
-                    char_format = QTextCharFormat()
-                    char_format.setFontWeight(QFont.DemiBold)
-                    self.setFormat(0, len(text), char_format)
             else:
                 cursor.setBlockFormat(self.unaligned_block_format)
         else:
@@ -127,15 +121,17 @@ class TextArea(QTextEdit):
         self.setUndoRedoEnabled(False)
                 
         # Signals
-        self.cursorPositionChanged.connect(self.cursor_changed)
-        self.document().contentsChange.connect(self.contents_change)
+        self.cursorPositionChanged.connect(self.cursorChanged)
+        self.document().contentsChange.connect(self.contentsChange)
 
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document(), main=self.parent)
 
         self.defaultBlockFormat = QTextBlockFormat()
         self.defaultCharFormat = QTextCharFormat()
-        self.lastActiveSentenceId = -1
+        self.activeCharFormat = QTextCharFormat()
+        self.activeCharFormat.setFontWeight(QFont.DemiBold)
+        self.lastActiveSentenceId = None
         self.ignoreCursorChange = False
 
         self.scroll_goal = 0.0
@@ -266,7 +262,7 @@ class TextArea(QTextEdit):
             new_block.setUserData(None)
         
         self.ignoreCursorChange = False
-        self.lastActiveSentenceId = -1
+        self.lastActiveSentenceId = None
 
 
     def setText(self, text: str):
@@ -304,22 +300,29 @@ class TextArea(QTextEdit):
 
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
-        global active_utterance
-
-        active_utterance = id
-        self.highlighter.rehighlight()
-
-        print("setactive")
-        block = self.getBlockBySentenceId(id)
-        if not block:
-            return    
-
-        cursor = QTextCursor(block)
-
-        if with_cursor:
-            # Select text of current utterance
+        # Cannot use highlighter.rehighilght() here as it would slow thing down
+        print("setactive", id, self.lastActiveSentenceId)
+        
+        # Reset previously selected utterance
+        if self.lastActiveSentenceId != None:
+            block = self.getBlockBySentenceId(self.lastActiveSentenceId)
+            cursor = QTextCursor(block)
             cursor.movePosition(QTextCursor.EndOfBlock)
             cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+            cursor.setCharFormat(self.defaultCharFormat)
+
+        block = self.getBlockBySentenceId(id)
+        if not block:
+            return
+        self.lastActiveSentenceId = id
+
+        cursor = QTextCursor(block)
+        cursor.movePosition(QTextCursor.EndOfBlock)
+        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+        cursor.setCharFormat(self.activeCharFormat)
+
+        if with_cursor:
+            cursor.clearSelection()
             self.setTextCursor(cursor)
 
             # Scroll to selected utterance
@@ -361,7 +364,8 @@ class TextArea(QTextEdit):
             self.timer.stop()
     
 
-    def cursor_changed(self):
+    def cursorChanged(self):
+        """"""
         if self.ignoreCursorChange:
             return
         
@@ -372,6 +376,7 @@ class TextArea(QTextEdit):
             data = current_block.userData().data
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
+                print("cursor_changed")
                 self.setActive(id, with_cursor=False)
                 # start, end = self.parent.waveform.segments[id]
                 # data.update({'start': start, 'end': end, 'dur': end-start})
@@ -380,13 +385,6 @@ class TextArea(QTextEdit):
         else:
             self.parent.status_bar.showMessage("no data...")
             pass
-        # n_utts = -1
-        # for blockIndex in range(clicked_block.blockNumber()):
-        #     if self.block_is_utt(blockIndex + 1):
-        #         n_utts += 1
-        # self.setActive(n_utts, False)
-        # if n_utts >= 0:
-        #     self.parent.waveform.setActive(n_utts)
 
 
     def contextMenuEvent(self, event):
@@ -397,7 +395,7 @@ class TextArea(QTextEdit):
         context.exec(event.globalPos())
         
     
-    def contents_change(self, pos, charsRemoved, charsAdded):
+    def contentsChange(self, pos, charsRemoved, charsAdded):
         #print("content changed", pos, charsRemoved, charsAdded)
 
         if charsRemoved == 0 and charsAdded > 0:

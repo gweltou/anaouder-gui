@@ -341,9 +341,10 @@ class MainWindow(QMainWindow):
 
         folder, filename = os.path.split(filepath)
         basename, ext = os.path.splitext(filename)
-        print(f"{filepath=}\n{filename=}\n{basename}")
+        print(f"{filepath=}\n{filename=}\n{basename=}")
         ext = ext[1:]
         audio_path = None
+        first_utt_id = None
 
         if ext in audio_formats:
             # Selected file is an audio file, only load audio
@@ -355,7 +356,6 @@ class MainWindow(QMainWindow):
             return
         
         if ext == "ali":
-            audio_path = ""
             with open(filepath, 'r') as fr:
                 # Find associated audio file in metadata
                 for line in fr.readlines():
@@ -365,14 +365,17 @@ class MainWindow(QMainWindow):
                     if match:
                         segment = [float(match[1]), float(match[2])]
                         seg_id = self.waveform.addSegment(segment)
+                        if first_utt_id == None:
+                            first_utt_id = seg_id
                         line = line[:match.start()] + line[match.end():]
                         self.text_area.addSentence(line.strip(), seg_id)
                     else:
                         self.text_area.addText(line)
 
-                    if not audio_path and "audio_path" in metadata:
+                    # Check for an "audio_path" metadata in current line
+                    if not audio_path and "audio-path" in metadata:
                         dir = os.path.split(filepath)[0]
-                        audio_path = os.path.join(dir, metadata["audio_path"])
+                        audio_path = os.path.join(dir, metadata["audio-path"])
                         audio_path = os.path.normpath(audio_path)
 
             if not audio_path:
@@ -395,6 +398,8 @@ class MainWindow(QMainWindow):
             for s in segments:
                 seg_id = self.waveform.addSegment(s)
                 seg_id_list.append(seg_id)
+                if first_utt_id == None:
+                    first_utt_id = seg_id
 
             # Check for the text file
             txt_filepath = os.path.extsep.join((basename, "txt"))
@@ -410,7 +415,7 @@ class MainWindow(QMainWindow):
                         userData = block.userData().data
                         userData["seg_id"] = seg_id_list[idx]
                         idx += 1
-
+                
                 self.text_area.setActive(seg_id_list[0], update_waveform=False)
             else:
                 print(f"Couldn't find text file {txt_filepath}")
@@ -427,7 +432,11 @@ class MainWindow(QMainWindow):
         self.filepath = filepath
         self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(self.filepath)[1]}")
 
-        self.text_area.setActive(0)
+        # Select the first utterance
+        if first_utt_id != None:
+            print("first", first_utt_id)
+            block = self.text_area.getBlockBySentenceId(first_utt_id)
+            self.text_area.setTextCursor(QTextCursor(block))
     
 
     def loadAudio(self, filepath):
@@ -454,7 +463,7 @@ class MainWindow(QMainWindow):
         self.audio_data = audio_data
         self.recognizer_worker.setAudio(audio_data)
 
-        samples = audio_data.get_array_of_samples()
+        samples = audio_data.get_array_of_samples() # Slow
         # Normalize
         sample_max = 2**(audio_data.sample_width*8)
         samples = [ s/sample_max for s in samples ]
