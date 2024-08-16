@@ -46,6 +46,33 @@ class Highlighter(QSyntaxHighlighter):
         self.unaligned_block_format.setBackground(QColor(255, 150, 160))
 
 
+    def sub_segment(self, segments: list, start: int, end: int) -> list:
+        """Substitute a segment from a list of segments"""
+        assert start < end
+        new_segments = []
+        for seg_start, seg_end in segments:
+            if start >= seg_start and end <= seg_end:
+                # Split this segment
+                if start > seg_start:
+                    pre_segment = (seg_start, start)
+                    new_segments.append(pre_segment)
+                if end < seg_end:
+                    post_segment = (end, seg_end)
+                    new_segments.append(post_segment)
+            else:
+                new_segments.append((seg_start, seg_end))
+        return new_segments
+
+
+    def is_subsegment(self, segments: list, start: int, end: int) -> bool:
+        assert start < end
+        for seg_start, seg_end in segments:
+            if start >= seg_start and end <= seg_end:
+                return True
+            elif seg_start >= end:
+                return False
+
+
     def highlightBlock(self, text):
         # Background color
         if self.currentBlockUserData():
@@ -66,21 +93,28 @@ class Highlighter(QSyntaxHighlighter):
         i = text.find('#')
         if i >= 0:
             self.setFormat(i, len(text)-i, self.commentFormat)
+            # Crop commented text
             text = text[:i]
+        if not text:
+            return
+        
+        text_segments = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
 
         # Metadata  
         expression = QRegularExpression(r"{\s*(.+?)\s*}")
-        i = expression.globalMatch(text)
-        while i.hasNext():
-            match = i.next()
+        matches = expression.globalMatch(text)
+        while matches.hasNext():
+            match = matches.next()
             self.setFormat(match.capturedStart(), match.capturedLength(), self.metadataFormat)
+            text_segments = self.sub_segment(text_segments, match.capturedStart(), match.capturedStart()+match.capturedLength())
         
         # Special tokens
         expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
-        i = expression.globalMatch(text)
-        while i.hasNext():
-            match = i.next()
+        matches = expression.globalMatch(text)
+        while matches.hasNext():
+            match = matches.next()
             self.setFormat(match.capturedStart(), match.capturedLength(), self.sp_tokenFormat)
+            text_segments = self.sub_segment(text_segments, match.capturedStart(), match.capturedStart()+match.capturedLength())
         
         # Check misspelled words
         if self.currentBlockUserData() and self.currentBlockUserData().data.get("is_utt", False):
@@ -88,6 +122,8 @@ class Highlighter(QSyntaxHighlighter):
             matches = expression.globalMatch(text)
             while matches.hasNext():
                 match = matches.next()
+                if not self.is_subsegment(text_segments, match.capturedStart(), match.capturedStart()+match.capturedLength()):
+                    continue
                 if not hs_dict.spell(match.captured()):
                     self.setFormat(match.capturedStart(), match.capturedLength(), self.mispellformat)
         
@@ -300,16 +336,17 @@ class TextArea(QTextEdit):
 
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
-        # Cannot use highlighter.rehighilght() here as it would slow thing down
+        # Cannot use highlighter.rehighilght() here as it would slow thing down too much
         print("setactive", id, self.lastActiveSentenceId)
         
         # Reset previously selected utterance
         if self.lastActiveSentenceId != None:
             block = self.getBlockBySentenceId(self.lastActiveSentenceId)
-            cursor = QTextCursor(block)
-            cursor.movePosition(QTextCursor.EndOfBlock)
-            cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-            cursor.setCharFormat(self.defaultCharFormat)
+            if block:
+                cursor = QTextCursor(block)
+                cursor.movePosition(QTextCursor.EndOfBlock)
+                cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+                cursor.setCharFormat(self.defaultCharFormat)
 
         block = self.getBlockBySentenceId(id)
         if not block:
@@ -365,7 +402,7 @@ class TextArea(QTextEdit):
     
 
     def cursorChanged(self):
-        """"""
+        """Set current utterance active"""
         if self.ignoreCursorChange:
             return
         
@@ -453,7 +490,7 @@ class TextArea(QTextEdit):
                     block_data = prev_block.userData().clone()
                     prev_block.setUserData(None)
                     block.setUserData(block_data)
-                    self.highlighter.rehighlight()
+                    #self.highlighter.rehighlight() # So slow
                 return ret
             
             if pos_in_block >= text_len:
@@ -468,8 +505,14 @@ class TextArea(QTextEdit):
                     if seg_id in self.parent.waveform.segments:
                         # Split sentence and segment
                         pc = pos_in_block / text_len
+                        # Unset active style
+                        cursor.movePosition(QTextCursor.EndOfBlock)
+                        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+                        cursor.setCharFormat(self.defaultCharFormat)
+                        self.lastActiveSentenceId = None
                         ret = super().keyPressEvent(event)
                         self.parent.splitUtterance(seg_id, pc)
+
                         return ret
 
         elif event.key() == Qt.Key_Delete:

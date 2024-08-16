@@ -639,26 +639,28 @@ class MainWindow(QMainWindow):
 
 
     def splitUtterance(self, seg_id:int, pc:float):
+        print("split utterance", seg_id)
         # Split segment at pc
         segment = self.waveform.segments[seg_id]
         seg_length = segment[1] - segment[0]
         seg_left = [segment[0], segment[0] + seg_length*pc - 0.1]
         seg_right = [segment[0] + seg_length*pc + 0.1, segment[1]]
+        del self.waveform.segments[seg_id]
+
         seg_left_id = self.waveform.addSegment(seg_left)
         seg_right_id = self.waveform.addSegment(seg_right)
-        self.waveform.setActive(seg_right_id)
-        del self.waveform.segments[seg_id]
-        self.waveform.draw()
-
+        # self.waveform.draw()
+        
+        # Set old sentence id to left id
         left_block = self.text_area.getBlockBySentenceId(seg_id)
         user_data = left_block.userData().data
         user_data["seg_id"] = seg_left_id
         left_block.setUserData(MyTextBlockUserData(user_data))
 
         right_block = self.text_area.textCursor().block()
-        user_data = {}
-        user_data["seg_id"] = seg_right_id
+        user_data = {"seg_id": seg_right_id}
         right_block.setUserData(MyTextBlockUserData(user_data))
+        self.text_area.setActive(seg_right_id, with_cursor=False, update_waveform=True)
 
         
     
