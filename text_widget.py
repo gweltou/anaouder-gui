@@ -518,9 +518,12 @@ class TextArea(QTextEdit):
         elif event.key() == Qt.Key_Delete:
             print("Delete")
         
-            if pos_in_block < block_len-1 or not self._block_is_aligned(current_block):
+            if has_selection:
                 return super().keyPressEvent(event)
             
+            if pos_in_block < block_len-1 or not self._block_is_aligned(current_block):
+                return super().keyPressEvent(event)
+
             next_block = current_block.next()
             if not next_block:
                 return super().keyPressEvent(event)
@@ -538,9 +541,12 @@ class TextArea(QTextEdit):
 
         elif event.key() == Qt.Key_Backspace:
             print("Backspace")
-            if pos_in_block > 0 or not self._block_is_aligned(current_block):
+            if has_selection:
                 return super().keyPressEvent(event)
             
+            if pos_in_block > 0 or not self._block_is_aligned(current_block):
+                return super().keyPressEvent(event)
+
             next_block = current_block.previous()
             if not next_block:
                 return super().keyPressEvent(event)

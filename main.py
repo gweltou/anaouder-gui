@@ -10,6 +10,7 @@ from pydub import AudioSegment
 import re
 from time import time
 import locale
+import srt
 #from scipy.io import wavfile
 
 from ostilhou.asr import (
@@ -74,7 +75,9 @@ class RecognizerWorker(QThread):
             load_model()
 
         current_locale = locale.getlocale()
-        locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+        print(f"{current_locale=}")
+        locale.setlocale(locale.LC_ALL, ("C", "UTF-8"))
+        print(f"{locale.getlocale()=}")
         if self.segments:
             for i, (seg_id, start, end) in enumerate(self.segments):
                 # Stupid hack with locale to avoid commas in json string
@@ -323,8 +326,8 @@ class MainWindow(QMainWindow):
                     
 
     def openFile(self, filepath=""):
-        audio_formats = ("mp3", "m4a", "ogg", "mp4", "wav", "mkv")
-        all_formats = audio_formats + ("ali", "seg", "split")
+        audio_formats = ("mp3", "wav", "m4a", "ogg", "mp4", "mkv")
+        all_formats = audio_formats + ("ali", "seg", "split", "srt")
         supported_filter = f"Supported files ({' '.join(['*.'+fmt for fmt in all_formats])})"
         audio_filter = f"Audio files ({' '.join(['*.'+fmt for fmt in audio_formats])})"
 
@@ -342,7 +345,7 @@ class MainWindow(QMainWindow):
         folder, filename = os.path.split(filepath)
         basename, ext = os.path.splitext(filename)
         print(f"{filepath=}\n{filename=}\n{basename=}")
-        ext = ext[1:]
+        ext = ext[1:].lower()
         audio_path = None
         first_utt_id = None
 
@@ -363,6 +366,7 @@ class MainWindow(QMainWindow):
                     text, metadata = extract_metadata(line)
                     match = re.search(r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line)
                     if match:
+                        # It is an utterance
                         segment = [float(match[1]), float(match[2])]
                         seg_id = self.waveform.addSegment(segment)
                         if first_utt_id == None:
@@ -429,6 +433,29 @@ class MainWindow(QMainWindow):
                     self.loadAudio(audio_path)
                     break
         
+        if ext == "srt":
+            # Check for an associated audio file
+            for audio_ext in audio_formats:
+                audio_path = os.path.extsep.join((basename, audio_ext))
+                audio_path = os.path.join(folder, audio_path)
+                if os.path.exists(audio_path):
+                    print("Found audio file:", audio_path)
+                    self.loadAudio(audio_path)
+                    break
+            
+            # Subtitle file
+            with open(filepath, 'r') as f_in:
+                subtitle_generator = srt.parse(f_in.read())
+            subtitles = list(subtitle_generator)
+            for subtitle in subtitles:
+                segment = [subtitle.start.seconds, subtitle.end.seconds]
+                seg_id = self.waveform.addSegment(segment)
+                content = subtitle.content.strip().replace('\n', '<BR>')
+                self.text_area.addSentence(content, seg_id)
+
+            self.waveform.draw()
+                
+
         self.filepath = filepath
         self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(self.filepath)[1]}")
 
