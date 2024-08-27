@@ -130,7 +130,7 @@ class WaveformWidget(QWidget):
         segment_id = self.id_counter
         self.id_counter += 1
         self.segments[segment_id] = segment
-        print("add segment", segment, segment_id)
+        #print("add segment", segment, segment_id)
         return segment_id
 
 

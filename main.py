@@ -326,7 +326,7 @@ class MainWindow(QMainWindow):
                     
 
     def openFile(self, filepath=""):
-        audio_formats = ("mp3", "wav", "m4a", "ogg", "mp4", "mkv")
+        audio_formats = ("mp3", "wav", "m4a", "ogg", "mp4", "mkv", "webm")
         all_formats = audio_formats + ("ali", "seg", "split", "srt")
         supported_filter = f"Supported files ({' '.join(['*.'+fmt for fmt in all_formats])})"
         audio_filter = f"Audio files ({' '.join(['*.'+fmt for fmt in audio_formats])})"
@@ -448,7 +448,9 @@ class MainWindow(QMainWindow):
                 subtitle_generator = srt.parse(f_in.read())
             subtitles = list(subtitle_generator)
             for subtitle in subtitles:
-                segment = [subtitle.start.seconds, subtitle.end.seconds]
+                start = subtitle.start.seconds + subtitle.start.microseconds/1e6
+                end = subtitle.end.seconds + subtitle.end.microseconds/1e6
+                segment = [start, end]
                 seg_id = self.waveform.addSegment(segment)
                 content = subtitle.content.strip().replace('\n', '<BR>')
                 self.text_area.addSentence(content, seg_id)
@@ -724,7 +726,7 @@ class MainWindow(QMainWindow):
         print("join action")
         #segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
         first_id = segments_id[0]
-        segments_text = [self.text_area.getBlockBySentenceId(id).text() for id in segments_id]
+        segments_text = [self.text_area.getBlockBySentenceId(id).text().strip() for id in segments_id]
 
         # Join text utterances
         for id in segments_id[1:]:

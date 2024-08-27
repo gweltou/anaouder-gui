@@ -440,12 +440,12 @@ class TextArea(QTextEdit):
             cursor = self.textCursor()
             cursor.setPosition(pos)
             cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, n=charsAdded)
-            print(cursor.selectedText())
+            #print(cursor.selectedText())
         elif charsRemoved > 0 and charsAdded == 0:
             cursor = self.textCursor()
             cursor.setPosition(pos)
             cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, n=charsRemoved)
-            print(cursor.selectedText())
+            #print(cursor.selectedText())
         
         # Update vide subtitle if necessary
         self.parent.updateSubtitle(force=True)
