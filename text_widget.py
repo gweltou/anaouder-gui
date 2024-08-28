@@ -202,24 +202,16 @@ class TextArea(QTextEdit):
 
 
     def addText(self, text: str, is_utt=False):
-        doc = self.document()
-        cursor = QTextCursor(doc)
-        cursor.movePosition(QTextCursor.End)
-        cursor.insertBlock()
-        cursor.insertText(text)
-        # cursor.block().setUserData(MyTextBlockUserData({"is_utt": is_utt}))
+        self.append(text)
 
 
     def addSentence(self, text: str, id: int):
         # Insert new utterance at the end
+        self.append(text)
         doc = self.document()
         cursor = QTextCursor(doc)
         cursor.movePosition(QTextCursor.End)
-        cursor.insertBlock()
-        cursor.insertText(text)
         cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
-        # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-        # self.setTextCursor(cursor)
 
 
     def insertSentence(self, text: str, id: int):
@@ -268,7 +260,6 @@ class TextArea(QTextEdit):
 
         # Insert new utterance at the end
         cursor = QTextCursor(doc)
-        # cursor.clearSelection()
         cursor.movePosition(QTextCursor.End)
         cursor.insertBlock()
         cursor.insertText(text)

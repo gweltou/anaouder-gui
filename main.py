@@ -366,7 +366,7 @@ class MainWindow(QMainWindow):
                     text, metadata = extract_metadata(line)
                     match = re.search(r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line)
                     if match:
-                        # It is an utterance
+                        # An utterance sentence
                         segment = [float(match[1]), float(match[2])]
                         seg_id = self.waveform.addSegment(segment)
                         if first_utt_id == None:
@@ -374,6 +374,7 @@ class MainWindow(QMainWindow):
                         line = line[:match.start()] + line[match.end():]
                         self.text_area.addSentence(line.strip(), seg_id)
                     else:
+                        # Regular text or comments or metadata only
                         self.text_area.addText(line)
 
                     # Check for an "audio_path" metadata in current line
