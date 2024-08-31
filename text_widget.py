@@ -463,6 +463,10 @@ class TextArea(QTextEdit):
         block_len = current_block.length()        
         
         if event.key() == Qt.Key_Return:
+            if event.modifiers() == Qt.ControlModifier:
+                # Prevent Ctrl + ENTER
+                return
+            
             print("ENTER")
             text = current_block.text()
             text_len = len(text.strip())

@@ -104,20 +104,20 @@ class MainWindow(QMainWindow):
 
     def __init__(self, filepath=""):
         super().__init__()
+        
         self.setWindowTitle(self.APP_NAME)
         self.setGeometry(50, 50, 800, 600)
         
         self.input_devices = QMediaDevices.audioInputs()
 
-        self.player = QMediaPlayer()
-        self.video_window = None
-        self.audio_output = QAudioOutput()
-        self.player.setAudioOutput(self.audio_output)
-        self.audio_data = None
         self.filepath = filepath
-
-        self.play_timer = QTimer()
-        self.play_timer.timeout.connect(self._update_player)
+        self.video_window = None
+        self.audio_data = None
+        self.audio_output = QAudioOutput()
+        self.player = QMediaPlayer()
+        self.player.positionChanged.connect(self.updatePlayer)
+        self.player.setAudioOutput(self.audio_output)
+        self.playing_segment = -1
         
         self.initUI()
 
@@ -519,35 +519,54 @@ class MainWindow(QMainWindow):
         self.video_window.setCaption(utt.text(), seg_id)
 
 
-    def _update_player(self):
-        dt = time() - self.play_t0
-        if dt > self.play_length:
-            self.player.pause()
-            self.play_timer.stop()
-        else:
-            self.waveform.setHead(self.play_start + dt)
+    def updatePlayer(self, position):
+        player_seconds = position / 1000
+        self.waveform.setHead(player_seconds)
 
-        if self.video_window and int(dt*100) % 10 == 0:
+        # Check if end of current segment is reached
+        if self.playing_segment >= 0:
+            segment = self.waveform.segments[self.playing_segment]
+            if player_seconds >= segment[1]:
+                self.player.pause()
+                self.waveform.setHead(segment[1])
+        elif self.waveform.selection_is_active:
+            if player_seconds >= self.waveform.selection[1]:
+                self.player.pause()
+                self.waveform.setHead(self.waveform.selection[1])
+        
+        # Update subtitles
+        if self.video_window and position % 100 == 0: # 10Hz
             self.updateSubtitle()
+    
+
+    def play(self):
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
+            self.player.pause()
+            return
+
+        if self.waveform.last_segment_active >= 0:
+            self.playing_segment = self.waveform.last_segment_active
+            self.playSegment(self.waveform.segments[self.waveform.last_segment_active])
+        elif self.waveform.selection_is_active:
+            self.playing_segment = -1
+            self.playSegment(self.waveform.selection)
+        else:
+            self.playing_segment = -1
+            self.player.setPosition(int(self.waveform.playhead * 1000))
+            self.player.play()
+
+
+    def stop(self):
+        """Stop playback"""
+        if self.player.playbackState() == QMediaPlayer.PlayingState:
+            self.player.stop()
 
 
     def playSegment(self, segment):
-        # if self.player.playbackState() == QMediaPlayer.PlayingState:
-        #     self.player.pause()
-        #     self.play_timer.stop()
-        #     return
-        
-        start, end = segment
-        self.waveform.setHead(start)
-
+        start, _ = segment
         self.player.setPosition(int(start * 1000))
         self.player.play()
 
-        self.play_t0 = time()
-        self.play_start = start
-        self.play_length = end-start
-        self.play_timer.start(1/30)
-    
 
     def playNext(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
@@ -557,6 +576,7 @@ class MainWindow(QMainWindow):
             id = self.waveform.last_segment_active
         self.waveform.setActive(id)
         self.text_area.setActive(id, update_waveform=False)
+        self.playing_segment = id
         self.playSegment(self.waveform.segments[id])
 
 
@@ -570,34 +590,9 @@ class MainWindow(QMainWindow):
             id = self.waveform.last_segment_active
         self.waveform.setActive(id)
         self.text_area.setActive(id, update_waveform=False)
+        self.playing_segment = id
         self.playSegment(self.waveform.segments[id])
     
-
-    def play(self):
-        if self.player.playbackState() == QMediaPlayer.PlayingState:
-            self.player.pause()
-            self.play_timer.stop()
-            return
-
-        if self.waveform.last_segment_active >= 0:
-            self.playSegment(self.waveform.segments[self.waveform.last_segment_active])
-        elif self.waveform.selection_is_active:
-            self.playSegment(self.waveform.selection)
-        else:
-            self.player.setPosition(int(self.waveform.playhead * 1000))
-            self.player.play()
-            self.play_t0 = time()
-            self.play_start = self.waveform.playhead
-            self.play_length = self.waveform.t_total - self.waveform.playhead
-            self.play_timer.start(1000/30)
-
-
-    def stop(self):
-        """Stop playback"""
-        if self.player.playbackState() == QMediaPlayer.PlayingState:
-            self.player.stop()
-            self.play_timer.stop()
-
 
     # def kbdNext(self):
     #     id = self.waveform.findNextSegment()
@@ -622,6 +617,11 @@ class MainWindow(QMainWindow):
             self.waveform.t_left = 0.0
             self.waveform.scroll_vel = 0.0
             self.waveform.setHead(0.0)
+
+
+    def movePlayHead(self, t: float):
+        self.waveform.setHead(t)
+        self.player.setPosition(int(self.waveform.playhead * 1000))
 
 
     def toggleVideo(self):
@@ -775,7 +775,8 @@ def main():
     global settings
     settings = QSettings("OTilde", MainWindow.APP_NAME)
 
-    file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
+    file_path = ""
+    #file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
     #file_path = "/home/gweltaz/59533_anjela_duval.seg"
     
     if len(sys.argv) > 1:

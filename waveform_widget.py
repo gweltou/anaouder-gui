@@ -55,7 +55,7 @@ class WaveformWidget(QWidget):
                 ymin = 0.0
                 ymax = 0.0
                 for si in range(s0, s0 + samples_per_bin, s_step):
-                    #if si >= len(self.samples):
+                    # if si >= len(self.samples):
                     #    break
                     sample = self.samples[si]
                     if sample > 0.0:
@@ -72,6 +72,7 @@ class WaveformWidget(QWidget):
         super().__init__(parent)
         self.parent = parent
 
+        self.waveform = None
         self.pixmap = None
         self.painter = QPainter()
         self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
@@ -93,7 +94,7 @@ class WaveformWidget(QWidget):
         #self.setFocusPolicy(Qt.StrongFocus)
         self.ctrl_pressed = False
         self.shift_pressed = False
-        self.setMouseTracking(True)
+        self.setMouseTracking(True) # get mouse move events even when no buttons are held down
         self.over_start = False
         self.over_end = False
         self.mouse_pos = None
@@ -322,8 +323,10 @@ class WaveformWidget(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.click_pos = event.position()
+
         if event.button() == Qt.LeftButton:
             self.mouse_pos = event.position()
+
         elif event.button() == Qt.RightButton:
             # Show contextMenu only if right clicking on active segment
             if self.getSegmentAtPosition(self.click_pos) != self.last_segment_active:
@@ -331,8 +334,10 @@ class WaveformWidget(QWidget):
                 self.last_segment_active = -1
             if not self.isSelectionAtPosition(self.click_pos):
                 self.deselect()
-            self.setHead(self.t_left + self.click_pos.x() / self.ppsec)
+            # self.setHead(self.t_left + self.click_pos.x() / self.ppsec)
+            self.parent.movePlayHead(self.t_left + self.click_pos.x() / self.ppsec)
             self.anchor = self.playhead
+
         if self.over_start:
             self.resizing_segment = Handle.LEFT
             self.resizing_t_init = self.t_left + event.position().x() / self.ppsec
@@ -351,6 +356,7 @@ class WaveformWidget(QWidget):
             if dist < 20:
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPosition(event.position())
+                # self.utterances is set from main
                 self.utterances.setActive(clicked_id, with_cursor=not self.shift_pressed, update_waveform=False)
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
@@ -461,7 +467,11 @@ class WaveformWidget(QWidget):
     def draw(self):
         if not self.pixmap:
             return
+        if not self.waveform:
+            self.pixmap.fill(QColor(240, 240, 240))
+            return
         self.pixmap.fill(Qt.white)
+    
         t_right = self.t_left + self.width() / self.ppsec
         samples = self.waveform.get(self.t_left, t_right)
         
