@@ -1,31 +1,38 @@
 from typing import Optional
 
 from PySide6.QtCore import Qt, QMargins, QRectF, QSize, QPointF
-from PySide6.QtGui import QFont, QPainter, QResizeEvent, QBrush, QPen, QColor
+from PySide6.QtGui import QFont, QPainter, QResizeEvent, QBrush, QPen, QColor, QTextOption
 from PySide6.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PySide6.QtWidgets import (
     QFrame, QMainWindow,
-    QGraphicsView, QGraphicsScene, QGraphicsSimpleTextItem, QWidget,
+    QGraphicsView, QGraphicsScene, QGraphicsSimpleTextItem, QWidget, QGraphicsTextItem,
     QGraphicsRectItem, QStyleOptionGraphicsItem, QGraphicsItemGroup, QGraphicsItem,
 )
 
 
-class CenteredTextItem(QGraphicsSimpleTextItem):
+
+class CenteredTextItem(QGraphicsTextItem):
     def __init__(self, parent=None):
         super().__init__(parent)
+        # text_option = QTextOption()
+        # text_option.setAlignment(Qt.AlignCenter)
+        # self.document().setDefaultTextOption(text_option)
 
-    def paint(self, painter:QPainter, option:QStyleOptionGraphicsItem, widget:QWidget) -> None:
-        # custom_font = QtGui.QFont(self.font_family)
-        # custom_font.setPointSizeF(self.font_size)
-        # painter.setFont(custom_font)
-        painter.drawText(self.boundingRect(), Qt.AlignCenter, self.text())
+        font = QFont()
+        # font.setBold(True)
+        font.setPointSize(24)
+        self.setFont(font)
+        self.setDefaultTextColor(QColor(255, 255, 0))
+    
+    def setText(self, text):
+        html_text = f"<div style='text-align: center;'>{text.replace('\n', '<br>')}</div>"
+        self.setHtml(html_text)    
+
 
 
 class VideoWindow(QMainWindow):
     def __init__(self, parent=None, size:Optional[QSize]=None):
         super().__init__(parent)
-
-        self.video_item = QGraphicsVideoItem()
 
         # Create a QGraphicsView object to display the text overlay
         self.graphics_view = QGraphicsView(self)
@@ -41,8 +48,7 @@ class VideoWindow(QMainWindow):
         self.graphics_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.graphics_view.setBackgroundBrush(Qt.black)
         self.graphics_view.setFrameStyle(QFrame.NoFrame)
-        self.graphics_view.setAlignment(Qt.AlignCenter | Qt.AlignCenter)
-        # self.graphics_view.fitInView(self.video_item, Qt.KeepAspectRatio)
+        # self.graphics_view.setAlignment(Qt.AlignCenter | Qt.AlignCenter)
 
         self.graphics_scene = QGraphicsScene(self, size)
         self.graphics_view.setScene(self.graphics_scene)
@@ -50,39 +56,40 @@ class VideoWindow(QMainWindow):
         self.background_rect = QGraphicsRectItem()
         self.background_rect.setPen(Qt.NoPen)
         self.background_rect.setBrush(QBrush(QColor(255, 0, 0, 80)))
-        self.text_item = CenteredTextItem()
-        self.text_item.setFont(QFont("Arial", 12))
-        self.text_item.setBrush(QBrush(Qt.white))
-
-        self.graphics_scene.addItem(self.video_item)
-        # self.graphics_scene.addItem(self.background_rect)
-        self.graphics_scene.addItem(self.text_item)
-
         # self.background_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
+        # self.graphics_scene.addItem(self.background_rect)
+        
+        self.video_item = QGraphicsVideoItem()
+        self.graphics_scene.addItem(self.video_item)
+        # self.video_item.setPos(0.0, -self.video_item.boundingRect().height()/2)
+        
+        self.text_item = CenteredTextItem()
+        self.graphics_scene.addItem(self.text_item)
 
         self.setCentralWidget(self.graphics_view)
 
         self.current_caption_id = -1
 
-        self.setBaseSize(size)
-        # self.resizeEvent(QResizeEvent(size, size))
+        if size:
+            self.setBaseSize(size)
 
 
     def resizeEvent(self, event:QResizeEvent):
-        print("resizing video window")
         super().resizeEvent(event)
 
-        # self.graphics_view.centerOn(0,0)
+        vid_rect = self.video_item.boundingRect()
+        #self.video_item.setPos(0.0, -vid_rect.height()/2)
         self.graphics_view.fitInView(self.video_item, Qt.KeepAspectRatio)
 
-        vid_rect = self.video_item.boundingRect()
+        # self.background_rect.setPos(caption_pos)
+        # self.background_rect.setRect(caption_rect)
         caption_rect = self.text_item.boundingRect()
-        caption_pos = QPointF(
-            (vid_rect.width() - caption_rect.width()) * 0.5,
-            vid_rect.height() - caption_rect.height() + 25)
-        self.background_rect.setPos(caption_pos)
-        self.background_rect.setRect(caption_rect)
+        caption_pos = QPointF(0.0, vid_rect.y() + vid_rect.height() - caption_rect.height())
         self.text_item.setPos(caption_pos)
+        self.text_item.setTextWidth(vid_rect.width())
+
+        # self.graphics_view.centerOn(vid_rect.center())
+
 
     def setCaption(self, caption_text:str, seg_id:int):
         if len(caption_text) > 32:
@@ -99,10 +106,10 @@ class VideoWindow(QMainWindow):
         self.text_item.setText(caption_text)
         vid_rect = self.video_item.boundingRect()
         caption_rect = self.text_item.boundingRect()
-        caption_pos = QPointF(
-            (vid_rect.width() - caption_rect.width()) * 0.5,
-            vid_rect.height() - caption_rect.height() + 25)
+        # self.background_rect.setPos(caption_pos)
+        # self.background_rect.setRect(caption_rect)
+        #     vid_rect.height() - caption_rect.height() + 25)
+        caption_pos = QPointF(0.0, vid_rect.y() + vid_rect.height() - caption_rect.height())
         self.text_item.setPos(caption_pos)
-        self.background_rect.setPos(caption_pos)
-        self.background_rect.setRect(caption_rect)
+        self.text_item.setTextWidth(vid_rect.width())
         self.current_caption_id = seg_id
