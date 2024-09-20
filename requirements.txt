@@ -2,5 +2,4 @@ pyside6
 pydub
 vosk
 srt
-language-tool-python
-/home/gweltaz/STT/ostilhoù/
+git+https://github.com/gweltou/ostilhou
