@@ -16,13 +16,13 @@ source .venv/bin/activate
 python3 main.py
 ```
 
-## Kempunañ (compiler?) gant PyInstaller
+## Packaging gant PyInstaller
 
 ```bash
 pyinstaller Anaouder-editor.spec
 ```
 
-Lakaet e vo ar meziant kempunet en doser `dist`
+Lakaet e vo restr ar meziant en doser `dist`
 
 ## Enframmañ e Linux
 
