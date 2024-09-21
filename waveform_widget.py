@@ -34,7 +34,7 @@ class WaveformWidget(QWidget):
         def __init__(self, samples, sr):
             self.samples = samples
             self.sr = sr
-            self.ppsec = 100    # pixels per seconds (audio)
+            self.ppsec = 150    # pixels per seconds (audio)
             self.chunks = []
             
 
@@ -55,8 +55,9 @@ class WaveformWidget(QWidget):
                 ymin = 0.0
                 ymax = 0.0
                 for si in range(s0, s0 + samples_per_bin, s_step):
-                    # if si >= len(self.samples):
-                    #    break
+                    if si >= len(self.samples):
+                       # End of audio data
+                       break
                     sample = self.samples[si]
                     if sample > 0.0:
                         ymax += sample
@@ -245,6 +246,7 @@ class WaveformWidget(QWidget):
     
 
     def resizeEvent(self, event: QResizeEvent):
+        print("waveform resize")
         super().resizeEvent(event)
         self.pixmap = QPixmap(self.size())
         self.draw()
@@ -254,11 +256,13 @@ class WaveformWidget(QWidget):
         self.setFocus()
         super().enterEvent(event)
 
+
     def getSegmentAtTime(self, time: float) -> int:
         for id, (start, end) in self.segments.items():
             if start <= time <= end:
                 return id
         return -1
+
 
     def getSegmentAtPosition(self, position: QPointF) -> int:
         t = self.t_left + position.x() / self.ppsec
@@ -266,6 +270,7 @@ class WaveformWidget(QWidget):
             if start <= t <= end:
                 return id
         return -1
+
 
     def isSelectionAtPosition(self, position: QPointF) -> bool:
         t = self.t_left + position.x() / self.ppsec

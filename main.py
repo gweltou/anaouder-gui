@@ -40,12 +40,12 @@ from PySide6.QtGui import (
     QPalette, QColor, QFont, QIcon,
     QResizeEvent, QWheelEvent, QKeySequence, QShortcut, QKeyEvent,
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
-    QSyntaxHighlighter,
+    QUndoStack, QUndoCommand,
 )
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
 from waveform_widget import WaveformWidget
-from text_widget import TextArea, MyTextBlockUserData
+from text_widget import TextEdit, MyTextBlockUserData
 from video_widget import VideoWindow
 
 
@@ -99,6 +99,20 @@ class RecognizerWorker(QThread):
 
 
 
+
+class DeleteSegmentCommand(QUndoCommand):
+    def __init__(self, segment):
+        super().__init__()
+    
+    def undo(self):
+        pass
+
+    def redo(self):
+        pass
+
+
+
+
 class MainWindow(QMainWindow):
     APP_NAME = "Anaouder-mich"
 
@@ -118,6 +132,9 @@ class MainWindow(QMainWindow):
         self.player.positionChanged.connect(self.updatePlayer)
         self.player.setAudioOutput(self.audio_output)
         self.playing_segment = -1
+        self.caption_counter = 0
+
+        self.undo_stack = QUndoStack(self)
         
         self.initUI()
 
@@ -141,8 +158,8 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence("Ctrl+Left"), self)
         shortcut.activated.connect(self.playPrev)
 
-        shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
-        shortcut.activated.connect(self.undo)
+        # shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
+        # shortcut.activated.connect(self.undo)
 
         shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
         shortcut.activated.connect(self.selectAll)
@@ -208,13 +225,13 @@ class MainWindow(QMainWindow):
 
         utterancesLayout = QVBoxLayout()
         utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
-        self.text_area = TextArea(self)
-        utterancesLayout.addWidget(self.text_area)
+        self.text_edit = TextEdit(self)
+        utterancesLayout.addWidget(self.text_edit)
 
         self.waveform = WaveformWidget(self)
-        self.waveform.utterances = self.text_area
+        self.waveform.utterances = self.text_edit
         
-        bottomLayout.addWidget(self.text_area)
+        bottomLayout.addWidget(self.text_edit)
         self.bottomWidget = QWidget()
         self.bottomWidget.setLayout(bottomLayout)
         
@@ -275,7 +292,7 @@ class MainWindow(QMainWindow):
     @Slot(str, int, int)
     def slotGetTranscription(self, text: str, seg_id: int, i: int):
         self.progress_bar.setValue(i+1)
-        self.text_area.insertSentence(text, seg_id)
+        self.text_edit.insertSentence(text, seg_id)
 
 
     def closeEvent(self, event):
@@ -293,7 +310,7 @@ class MainWindow(QMainWindow):
         print("Saving file to", os.path.abspath(filepath))
 
         with open(filepath, 'w') as f:
-            doc = self.text_area.document()
+            doc = self.text_edit.document()
             for blockIndex in range(doc.blockCount()):
                 block = doc.findBlockByNumber(blockIndex)
                 text = block.text().strip()
@@ -340,7 +357,7 @@ class MainWindow(QMainWindow):
             # settings.setValue("editor/last_opened_file", filepath)
         
         self.waveform.clear()
-        self.text_area.clear()
+        self.text_edit.clear()
 
         folder, filename = os.path.split(filepath)
         basename, ext = os.path.splitext(filename)
@@ -372,10 +389,10 @@ class MainWindow(QMainWindow):
                         if first_utt_id == None:
                             first_utt_id = seg_id
                         line = line[:match.start()] + line[match.end():]
-                        self.text_area.addSentence(line.strip(), seg_id)
+                        self.text_edit.addSentence(line.strip(), seg_id)
                     else:
                         # Regular text or comments or metadata only
-                        self.text_area.addText(line)
+                        self.text_edit.addText(line)
 
                     # Check for an "audio_path" metadata in current line
                     if not audio_path and "audio-path" in metadata:
@@ -411,8 +428,8 @@ class MainWindow(QMainWindow):
             txt_filepath = os.path.join(folder, txt_filepath)
             if os.path.exists(txt_filepath):
                 with open(txt_filepath, 'r') as text_data:
-                    self.text_area.setText(text_data.read())
-                doc = self.text_area.document()
+                    self.text_edit.setText(text_data.read())
+                doc = self.text_edit.document()
                 idx = 0
                 for blockIndex in range(doc.blockCount()):
                     block = doc.findBlockByNumber(blockIndex)
@@ -421,7 +438,7 @@ class MainWindow(QMainWindow):
                         userData["seg_id"] = seg_id_list[idx]
                         idx += 1
                 
-                self.text_area.setActive(seg_id_list[0], update_waveform=False)
+                self.text_edit.setActive(seg_id_list[0], update_waveform=False)
             else:
                 print(f"Couldn't find text file {txt_filepath}")
             
@@ -454,7 +471,7 @@ class MainWindow(QMainWindow):
                 segment = [start, end]
                 seg_id = self.waveform.addSegment(segment)
                 content = subtitle.content.strip().replace('\n', '<BR>')
-                self.text_area.addSentence(content, seg_id)
+                self.text_edit.addSentence(content, seg_id)
 
             self.waveform.draw()
                 
@@ -464,9 +481,13 @@ class MainWindow(QMainWindow):
 
         # Select the first utterance
         if first_utt_id != None:
-            print("first", first_utt_id)
-            block = self.text_area.getBlockBySentenceId(first_utt_id)
-            self.text_area.setTextCursor(QTextCursor(block))
+            block = self.text_edit.getBlockBySentenceId(first_utt_id)
+            self.text_edit.setTextCursor(QTextCursor(block))
+        
+        # Scroll bar to top
+        # scroll_bar = self.text_edit.verticalScrollBar()
+        # print(scroll_bar.value())
+        # scroll_bar.setValue(scroll_bar.minimum())
     
 
     def loadAudio(self, filepath):
@@ -512,7 +533,7 @@ class MainWindow(QMainWindow):
         if seg_id == -1:
             self.video_window.setCaption("", -1)
             return
-        utt = self.text_area.getBlockBySentenceId(seg_id)
+        utt = self.text_edit.getBlockBySentenceId(seg_id)
         if not utt:
             self.video_window.setCaption("", -1)
             return
@@ -535,7 +556,9 @@ class MainWindow(QMainWindow):
                 self.waveform.setHead(self.waveform.selection[1])
         
         # Update subtitles
-        if self.video_window and position % 100 == 0: # 10Hz
+        self.caption_counter += 1
+        if self.video_window and self.caption_counter % 10 == 0: # ~10Hz
+            self.caption_counter = 0
             self.updateSubtitle()
     
 
@@ -575,7 +598,7 @@ class MainWindow(QMainWindow):
         if id < 0:
             id = self.waveform.last_segment_active
         self.waveform.setActive(id)
-        self.text_area.setActive(id, update_waveform=False)
+        self.text_edit.setActive(id, update_waveform=False)
         self.playing_segment = id
         self.playSegment(self.waveform.segments[id])
 
@@ -589,7 +612,7 @@ class MainWindow(QMainWindow):
         if id < 0:
             id = self.waveform.last_segment_active
         self.waveform.setActive(id)
-        self.text_area.setActive(id, update_waveform=False)
+        self.text_edit.setActive(id, update_waveform=False)
         self.playing_segment = id
         self.playSegment(self.waveform.segments[id])
     
@@ -611,7 +634,7 @@ class MainWindow(QMainWindow):
         if len(self.waveform.segments) > 0:
             first_seg_id = min(self.waveform.segments.keys(), key=lambda x: self.waveform.segments[x][0])
             self.waveform.setActive(id)
-            self.text_area.setActive(first_seg_id, update_waveform=False)
+            self.text_edit.setActive(first_seg_id, update_waveform=False)
         else:
             self.stop()
             self.waveform.t_left = 0.0
@@ -631,7 +654,11 @@ class MainWindow(QMainWindow):
             self.video_window = VideoWindow(size=vid_size)
             self.player.setVideoOutput(self.video_window.video_item)
             self.video_window.show()
-            # self.video_window.resize(vid_size)
+
+            # self.video_window.video_item.setPos(0.0, -self.video_item.boundingRect().height()/2)
+            self.video_window.resize(vid_size)
+            self.video_window.video_item.setSize(vid_size)
+            self.video_window.graphics_view.fitInView(self.video_window.video_item, Qt.KeepAspectRatio)
         else:
             self.video_window = None
 
@@ -647,7 +674,7 @@ class MainWindow(QMainWindow):
         self.waveform.clear()
         for start, end in segments:
             segment_id = self.waveform.addSegment([start/1000, end/1000])
-            self.text_area.insertSentence('*', segment_id)
+            self.text_edit.insertSentence('*', segment_id)
         self.waveform.draw()
 
 
@@ -657,14 +684,14 @@ class MainWindow(QMainWindow):
         assert self.waveform.selection_is_active
         segment_id = self.waveform.addSegment(self.waveform.selection)
         self.waveform.deselect()
-        self.text_area.insertSentence('*', segment_id)
+        self.text_edit.insertSentence('*', segment_id)
 
 
     @Slot(str, list)
     def createUtterance(self, text, segment):
         print(text)
         segment_id = self.waveform.addSegment(segment)
-        self.text_area.insertSentence(text, segment_id)
+        self.text_edit.insertSentence(text, segment_id)
         self.waveform.draw()
 
 
@@ -682,15 +709,15 @@ class MainWindow(QMainWindow):
         # self.waveform.draw()
         
         # Set old sentence id to left id
-        left_block = self.text_area.getBlockBySentenceId(seg_id)
+        left_block = self.text_edit.getBlockBySentenceId(seg_id)
         user_data = left_block.userData().data
         user_data["seg_id"] = seg_left_id
         left_block.setUserData(MyTextBlockUserData(user_data))
 
-        right_block = self.text_area.textCursor().block()
+        right_block = self.text_edit.textCursor().block()
         user_data = {"seg_id": seg_right_id}
         right_block.setUserData(MyTextBlockUserData(user_data))
-        self.text_area.setActive(seg_right_id, with_cursor=False, update_waveform=True)
+        self.text_edit.setActive(seg_right_id, with_cursor=False, update_waveform=True)
 
         
     
@@ -727,15 +754,15 @@ class MainWindow(QMainWindow):
         print("join action")
         #segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
         first_id = segments_id[0]
-        segments_text = [self.text_area.getBlockBySentenceId(id).text().strip() for id in segments_id]
+        segments_text = [self.text_edit.getBlockBySentenceId(id).text().strip() for id in segments_id]
 
         # Join text utterances
         for id in segments_id[1:]:
-            block = self.text_area.getBlockBySentenceId(id)
+            block = self.text_edit.getBlockBySentenceId(id)
             cursor = QTextCursor(block)
             cursor.select(QTextCursor.BlockUnderCursor)
             cursor.removeSelectedText()
-        self.text_area.setSentenceText(first_id, ' '.join(segments_text))
+        self.text_edit.setSentenceText(first_id, ' '.join(segments_text))
 
         # Join waveform segments
         new_seg_start = self.waveform.segments[first_id][0]
@@ -753,18 +780,33 @@ class MainWindow(QMainWindow):
     def deleteSegment(self, segments_id:List) -> None:
         for seg_id in segments_id:
             # Delete text utterance
-            self.text_area.deleteSentence(seg_id)
+            self.text_edit.deleteSentence(seg_id)
             # Delete waveform segment
             del self.waveform.segments[seg_id]
         self.waveform.active_segments = []
         self.waveform.last_segment_active = -1
         self.waveform.draw()
 
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.matches(QKeySequence.Undo):
+            self.undo()
+        elif event.matches(QKeySequence.Redo):
+            self.redo()
+
+
     def undo(self):
         print("undo")
+        self.undo_stack.undo()
+
+    def redo(self):
+        print("redo")
+        self.undo_stack.redo()
+
 
     def selectAll(self):
         print("select all")
+
 
     def search(self):
         print("search tool")

@@ -9,11 +9,76 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QAction, QColor, QFont, QWheelEvent, QKeyEvent,
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
-    QSyntaxHighlighter,
+    QSyntaxHighlighter, QUndoCommand
 )
 
 from ostilhou.asr import extract_metadata
 from ostilhou.hspell import hs_dict
+
+
+
+class InsertTextCommand(QUndoCommand):
+    def __init__(self, parent, text, position):
+        super().__init__()
+        self.parent : QTextEdit = parent
+        self.text : str = text
+        self.position : int = position
+    
+    def undo(self):
+        cursor : QTextCursor = self.parent.textCursor()
+        cursor.setPosition(self.position)
+        cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(self.text))
+        cursor.removeSelectedText()
+
+    def redo(self):
+        cursor : QTextCursor = self.parent.textCursor()
+        cursor.setPosition(self.position)
+        cursor.insertText(self.text)
+
+
+class DeleteTextCommand(QUndoCommand):
+    def __init__(self, parent, position: int, n: int):
+        super().__init__()
+        self.parent : QTextEdit = parent
+        self.position : int = position  
+        self.size = abs(n)
+        self.direction = QTextCursor.Left if n >= 0 else QTextCursor.Right
+
+    def undo(self):
+        cursor : QTextCursor = self.parent.textCursor()
+        if self.direction == QTextCursor.Left:
+            cursor.setPosition(self.position - len(self.text))
+            cursor.insertText(self.text)
+        elif self.direction == QTextCursor.Right:
+            cursor.setPosition(self.position)
+            print(cursor.position())
+            cursor.insertText(self.text)
+            print(cursor.position())
+            cursor.setPosition(self.position)
+            self.parent.setTextCursor(cursor)
+    
+    def redo(self):
+        cursor : QTextCursor = self.parent.textCursor()
+        cursor.setPosition(self.position)
+        cursor.movePosition(self.direction, QTextCursor.KeepAnchor, self.size)
+        self.text = cursor.selectedText()
+        cursor.removeSelectedText()
+
+
+def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
+    pos = cursor.selectionEnd()
+    start_block_number = parent.getBlockNumber(cursor.selectionStart())
+    end_block_number = parent.getBlockNumber(cursor.selectionEnd())
+    if start_block_number == end_block_number:
+        # Deletion in a single utterance
+        text = cursor.selectedText()
+        n = cursor.selectionEnd() - cursor.selectionStart()
+        parent.undo_stack.push(DeleteTextCommand(parent, pos, n))
+    else:
+        # Deletion over many blocks
+        pass
+
+    
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -149,12 +214,14 @@ class MyTextBlockUserData(QTextBlockUserData):
 
 
 
-class TextArea(QTextEdit):
+class TextEdit(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
 
+        # Disable default undo stack to use our own instead
         self.setUndoRedoEnabled(False)
+        self.undo_stack = self.parent.undo_stack
                 
         # Signals
         self.cursorPositionChanged.connect(self.cursorChanged)
@@ -216,7 +283,7 @@ class TextArea(QTextEdit):
 
     def insertSentence(self, text: str, id: int):
         """
-            Utterances are supposed to be chronologically ordered in textArea
+            Utterances are supposed to be chronologically ordered in textEdit
         """
         assert id in self.parent.waveform.segments
 
@@ -324,11 +391,17 @@ class TextArea(QTextEdit):
             if "seg_id" in userData and userData["seg_id"] == id:
                 return block
         return None
+    
+
+    def getBlockNumber(self, position: int) -> int:
+        document = self.document()
+        block = document.findBlock(position)
+        return block.blockNumber()
 
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
         # Cannot use highlighter.rehighilght() here as it would slow thing down too much
-        print("setactive", id, self.lastActiveSentenceId)
+        # print("setactive", id, self.lastActiveSentenceId)
         
         # Reset previously selected utterance
         if self.lastActiveSentenceId != None:
@@ -424,39 +497,53 @@ class TextArea(QTextEdit):
         
     
     def contentsChange(self, pos, charsRemoved, charsAdded):
-        #print("content changed", pos, charsRemoved, charsAdded)
+        # print("content changed", pos, charsRemoved, charsAdded)
 
-        if charsRemoved == 0 and charsAdded > 0:
-            # Get added content
-            cursor = self.textCursor()
-            cursor.setPosition(pos)
-            cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, n=charsAdded)
-            #print(cursor.selectedText())
-        elif charsRemoved > 0 and charsAdded == 0:
-            cursor = self.textCursor()
-            cursor.setPosition(pos)
-            cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, n=charsRemoved)
-            #print(cursor.selectedText())
-        
         # Update vide subtitle if necessary
         self.parent.updateSubtitle(force=True)
-        # pos = self.textCursor().position()
-        #self.updateTextFormat(pos)
     
+
+    def inputMethodEvent(self, event):
+        cursor = self.textCursor()
+        has_selection = not cursor.selection().isEmpty()
+        pos = cursor.position()
+        char = event.commitString()
+
+        if has_selection:
+            DeleteSelectedText(self, cursor)
+            pos = cursor.selectionStart()
+            self.undo_stack.push(InsertTextCommand(self, char, pos))
+        else:
+            self.undo_stack.push(InsertTextCommand(self, char, pos))
+
+
+    def _block_is_aligned(self, block):
+        block_data = block.userData()
+        if block_data and "seg_id" in block_data.data:
+            if block_data.data["seg_id"] in self.parent.waveform.segments:
+                return True
+        return False
+
     
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        print("key", event)
-
-        if event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_Z:
-            self.parent.undo()
-            return
+        # print("key", event.key())
 
         cursor = self.textCursor()
-
-        # Check if there's an active text selection
         has_selection = not cursor.selection().isEmpty()
-
         pos = cursor.position()
+
+        # Regular character
+        char = event.text()
+        if char and char.isprintable():
+            print("regular char", char)
+            if has_selection:
+                DeleteSelectedText(self, cursor)
+                pos = cursor.selectionStart()
+                self.undo_stack.push(InsertTextCommand(self, char, pos))
+            else:
+                self.undo_stack.push(InsertTextCommand(self, char, pos))
+            return
+
         pos_in_block = cursor.positionInBlock()
         current_block = cursor.block()
         block_data = current_block.userData()
@@ -468,12 +555,18 @@ class TextArea(QTextEdit):
                 return
             
             print("ENTER")
+
+            if has_selection:
+                DeleteSelectedText(self, cursor)
+                return
+
             text = current_block.text()
-            text_len = len(text.strip())
+            text_len = len(text.rstrip())
             first_letter = 0
             while first_letter < len(text) and text[first_letter].isspace():
                 first_letter += 1
 
+            # Cursor at the beginning of sentence
             if pos_in_block == 0:
                 # Create an empty block before
                 print("before", f"{cursor.position()=}")
@@ -488,11 +581,13 @@ class TextArea(QTextEdit):
                     #self.highlighter.rehighlight() # So slow
                 return ret
             
+            # Cursor at the end of sentence
             if pos_in_block >= text_len:
                 # Create an empty block after
                 print("after")
                 return super().keyPressEvent(event)
             
+            # Cursor in the middle of the sentence
             if pos_in_block > first_letter and pos_in_block < text_len and not has_selection:
                 # Check if current block has an associated segment
                 if block_data and "seg_id" in block_data.data:
@@ -514,10 +609,12 @@ class TextArea(QTextEdit):
             print("Delete")
         
             if has_selection:
-                return super().keyPressEvent(event)
+                DeleteSelectedText(self, cursor)
+                return
             
             if pos_in_block < block_len-1 or not self._block_is_aligned(current_block):
-                return super().keyPressEvent(event)
+                self.undo_stack.push(DeleteTextCommand(self, pos, -1))
+                return
 
             next_block = current_block.next()
             if not next_block:
@@ -537,12 +634,15 @@ class TextArea(QTextEdit):
         elif event.key() == Qt.Key_Backspace:
             print("Backspace")
             if has_selection:
-                return super().keyPressEvent(event)
+                DeleteSelectedText(self, cursor)
+                return
             
             if pos_in_block > 0 or not self._block_is_aligned(current_block):
-                return super().keyPressEvent(event)
+                self.undo_stack.push(DeleteTextCommand(self, pos, 1))
+                return
+                # return super().keyPressEvent(event)
 
-            next_block = current_block.previous()
+            next_block = current_block.previous() # ?
             if not next_block:
                 return super().keyPressEvent(event)
             
@@ -554,11 +654,6 @@ class TextArea(QTextEdit):
                 self.parent.joinUtterances([next_seg_id, seg_id])
                 return
 
-        return super().keyPressEvent(event)
-
-    def _block_is_aligned(self, block):
-        block_data = block.userData()
-        if block_data and "seg_id" in block_data.data:
-            if block_data.data["seg_id"] in self.parent.waveform.segments:
-                return True
-        return False
+        else:
+            event.ignore()
+        # return super().keyPressEvent(event)
