@@ -7,62 +7,16 @@ from PySide6.QtCore import (
     Qt, QTimer, QRegularExpression,
 )
 from PySide6.QtGui import (
-    QAction, QColor, QFont, QWheelEvent, QKeyEvent,
+    QAction, QColor, QFont,
+    QWheelEvent, QKeyEvent, QKeySequence,
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
-    QSyntaxHighlighter, QUndoCommand
+    QSyntaxHighlighter
 )
+from commands import InsertTextCommand, DeleteTextCommand
 
 from ostilhou.asr import extract_metadata
 from ostilhou.hspell import hs_dict
 
-
-
-class InsertTextCommand(QUndoCommand):
-    def __init__(self, parent, text, position):
-        super().__init__()
-        self.parent : QTextEdit = parent
-        self.text : str = text
-        self.position : int = position
-    
-    def undo(self):
-        cursor : QTextCursor = self.parent.textCursor()
-        cursor.setPosition(self.position)
-        cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(self.text))
-        cursor.removeSelectedText()
-
-    def redo(self):
-        cursor : QTextCursor = self.parent.textCursor()
-        cursor.setPosition(self.position)
-        cursor.insertText(self.text)
-
-
-class DeleteTextCommand(QUndoCommand):
-    def __init__(self, parent, position: int, n: int):
-        super().__init__()
-        self.parent : QTextEdit = parent
-        self.position : int = position  
-        self.size = abs(n)
-        self.direction = QTextCursor.Left if n >= 0 else QTextCursor.Right
-
-    def undo(self):
-        cursor : QTextCursor = self.parent.textCursor()
-        if self.direction == QTextCursor.Left:
-            cursor.setPosition(self.position - len(self.text))
-            cursor.insertText(self.text)
-        elif self.direction == QTextCursor.Right:
-            cursor.setPosition(self.position)
-            print(cursor.position())
-            cursor.insertText(self.text)
-            print(cursor.position())
-            cursor.setPosition(self.position)
-            self.parent.setTextCursor(cursor)
-    
-    def redo(self):
-        cursor : QTextCursor = self.parent.textCursor()
-        cursor.setPosition(self.position)
-        cursor.movePosition(self.direction, QTextCursor.KeepAnchor, self.size)
-        self.text = cursor.selectedText()
-        cursor.removeSelectedText()
 
 
 def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
@@ -71,9 +25,8 @@ def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
     end_block_number = parent.getBlockNumber(cursor.selectionEnd())
     if start_block_number == end_block_number:
         # Deletion in a single utterance
-        text = cursor.selectedText()
-        n = cursor.selectionEnd() - cursor.selectionStart()
-        parent.undo_stack.push(DeleteTextCommand(parent, pos, n))
+        size = cursor.selectionEnd() - cursor.selectionStart()
+        parent.undo_stack.push(DeleteTextCommand(parent, pos, size, QTextCursor.Left))
     else:
         # Deletion over many blocks
         pass
@@ -501,14 +454,26 @@ class TextEdit(QTextEdit):
 
         # Update vide subtitle if necessary
         self.parent.updateSubtitle(force=True)
-    
+
+
+    def _isBlockAligned(self, block):
+        block_data = block.userData()
+        if block_data and "seg_id" in block_data.data:
+            if block_data.data["seg_id"] in self.parent.waveform.segments:
+                return True
+        return False
+        
 
     def inputMethodEvent(self, event):
         cursor = self.textCursor()
-        has_selection = not cursor.selection().isEmpty()
         pos = cursor.position()
         char = event.commitString()
+        print("inputMethodEvent", f"{char=}")
 
+        if not len(char):
+            return super().inputMethodEvent(event)
+
+        has_selection = not cursor.selection().isEmpty()
         if has_selection:
             DeleteSelectedText(self, cursor)
             pos = cursor.selectionStart()
@@ -517,16 +482,13 @@ class TextEdit(QTextEdit):
             self.undo_stack.push(InsertTextCommand(self, char, pos))
 
 
-    def _block_is_aligned(self, block):
-        block_data = block.userData()
-        if block_data and "seg_id" in block_data.data:
-            if block_data.data["seg_id"] in self.parent.waveform.segments:
-                return True
-        return False
-
-    
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        # print("key", event.key())
+        print("keyPressEvent", event.key())
+
+        if (event.matches(QKeySequence.Undo) or
+            event.matches(QKeySequence.Redo)):
+            event.ignore()
+            return
 
         cursor = self.textCursor()
         has_selection = not cursor.selection().isEmpty()
@@ -612,8 +574,8 @@ class TextEdit(QTextEdit):
                 DeleteSelectedText(self, cursor)
                 return
             
-            if pos_in_block < block_len-1 or not self._block_is_aligned(current_block):
-                self.undo_stack.push(DeleteTextCommand(self, pos, -1))
+            if pos_in_block < block_len-1 or not self._isBlockAligned(current_block):
+                self.undo_stack.push(DeleteTextCommand(self, pos, 1, QTextCursor.Right))
                 return
 
             next_block = current_block.next()
@@ -637,8 +599,8 @@ class TextEdit(QTextEdit):
                 DeleteSelectedText(self, cursor)
                 return
             
-            if pos_in_block > 0 or not self._block_is_aligned(current_block):
-                self.undo_stack.push(DeleteTextCommand(self, pos, 1))
+            if pos_in_block > 0 or not self._isBlockAligned(current_block):
+                self.undo_stack.push(DeleteTextCommand(self, pos, 1, QTextCursor.Left))
                 return
                 # return super().keyPressEvent(event)
 
@@ -654,6 +616,4 @@ class TextEdit(QTextEdit):
                 self.parent.joinUtterances([next_seg_id, seg_id])
                 return
 
-        else:
-            event.ignore()
-        # return super().keyPressEvent(event)
+        return super().keyPressEvent(event)
