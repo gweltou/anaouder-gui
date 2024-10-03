@@ -12,5 +12,6 @@ xdg-desktop-menu install anaouder-editor.desktop
 # Install the mime file type
 sudo xdg-mime install anaouder-ali_filetype.xml
 
-# Link the mime file type to the application
+# Link mime file types to the application
 xdg-mime default anaouder-editor.desktop text/x-ali
+xdg-mime default anaouder-editor.desktop application/x-subrip
