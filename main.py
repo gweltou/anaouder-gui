@@ -56,6 +56,15 @@ AUTOSEG_MAX_LENGTH = 15
 AUTOSEG_MIN_LENGTH = 3
 
 
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
 
 class RecognizerWorker(QThread):
     message = Signal(str)
@@ -324,27 +333,27 @@ class MainWindow(QMainWindow):
         button_size = 28
 
         backButton = QPushButton()
-        backButton.setIcon(QIcon("icons/back.png"))
+        backButton.setIcon(QIcon(resource_path("icons/back.png")))
         backButton.setFixedWidth(button_size)
         backButton.clicked.connect(self.back)
         buttonsLayout.addWidget(backButton)
 
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prevButton = QPushButton()
-        prevButton.setIcon(QIcon("icons/previous.png"))
+        prevButton.setIcon(QIcon(resource_path("icons/previous.png")))
         prevButton.setFixedWidth(button_size)
         # button.setIcon(QIcon(icon_path))
         prevButton.clicked.connect(self.playPrev)
         buttonsLayout.addWidget(prevButton)
 
         curButton = QPushButton()
-        curButton.setIcon(QIcon("icons/play-button.png"))
+        curButton.setIcon(QIcon(resource_path("icons/play-button.png")))
         curButton.setFixedWidth(button_size)
         curButton.clicked.connect(self.play)
         buttonsLayout.addWidget(curButton)
 
         nextButton = QPushButton()
-        nextButton.setIcon(QIcon("icons/next.png"))
+        nextButton.setIcon(QIcon(resource_path("icons/next.png")))
         nextButton.setFixedWidth(button_size)
         nextButton.clicked.connect(self.playNext)
         buttonsLayout.addWidget(nextButton)
@@ -904,7 +913,7 @@ class MainWindow(QMainWindow):
 
     def search(self):
         print("search tool")
-    
+
 
 
 def main():
@@ -925,4 +934,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print(os.getcwd())
     main()
