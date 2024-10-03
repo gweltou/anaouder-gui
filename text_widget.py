@@ -556,16 +556,13 @@ class TextEdit(QTextEdit):
                     seg_id = block_data.data["seg_id"]
                     if seg_id in self.parent.waveform.segments:
                         # Split sentence and segment
-                        pc = pos_in_block / text_len
                         # Unset active style
-                        cursor.movePosition(QTextCursor.EndOfBlock)
-                        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-                        cursor.setCharFormat(self.defaultCharFormat)
+                        # cursor.movePosition(QTextCursor.EndOfBlock)
+                        # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+                        # cursor.setCharFormat(self.defaultCharFormat)
                         self.lastActiveSentenceId = None
-                        ret = super().keyPressEvent(event)
-                        self.parent.splitUtterance(seg_id, pc)
-
-                        return ret
+                        self.parent.splitUtterance(seg_id, pos_in_block)
+                        return
 
         elif event.key() == Qt.Key_Delete:
             print("Delete")

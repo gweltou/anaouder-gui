@@ -128,12 +128,12 @@ class WaveformWidget(QWidget):
         self.t_total = len(samples) / sr
     
 
-    def addSegment(self, segment) -> int:
-        segment_id = self.id_counter
-        self.id_counter += 1
-        self.segments[segment_id] = segment
-        #print("add segment", segment, segment_id)
-        return segment_id
+    def addSegment(self, segment, seg_id=None) -> int:
+        if not seg_id:
+            seg_id = self.id_counter
+            self.id_counter += 1
+        self.segments[seg_id] = segment
+        return seg_id
 
 
     def findPrevSegment(self) -> int:

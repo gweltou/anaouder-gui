@@ -99,6 +99,80 @@ class RecognizerWorker(QThread):
 
 
 
+class SplitUtteranceCommand(QUndoCommand):
+    def __init__(self, text_edit, waveform, seg_id:int, pos:int):
+        super().__init__()
+        self.text_edit : QTextEdit = text_edit
+        self.waveform : WaveformWidget = waveform
+        self.seg_id = seg_id
+        self.pos = pos
+        self.text = self.text_edit.getBlockBySentenceId(seg_id).text()
+    
+    def undo(self):
+        del self.waveform.segments[self.seg_left_id]
+        del self.waveform.segments[self.seg_right_id]
+        self.waveform.addSegment(self.segment, self.seg_id)
+        
+        # Delete new sentences
+        right_block = self.text_edit.getBlockBySentenceId(self.seg_right_id)
+        cursor = self.text_edit.textCursor()
+        cursor.setPosition(right_block.position())
+        cursor.select(QTextCursor.BlockUnderCursor)
+        cursor.removeSelectedText()
+        cursor.select(QTextCursor.BlockUnderCursor)
+        cursor.removeSelectedText()
+
+        # Add old sentence
+        cursor.insertBlock()
+        cursor.insertText(self.text)
+        cursor.block().setUserData(MyTextBlockUserData(self.user_data))
+
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, self.pos)
+        self.text_edit.setTextCursor(cursor)
+        self.waveform.setActive(self.seg_id)
+
+    def redo(self):
+        # Split audio segment at pc
+        pc = self.pos / len(self.text)
+        self.segment = self.waveform.segments[self.seg_id]
+        seg_length = self.segment[1] - self.segment[0]
+        seg_left = [self.segment[0], self.segment[0] + seg_length*pc - 0.1]
+        seg_right = [self.segment[0] + seg_length*pc + 0.1, self.segment[1]]
+
+        # Delete and recreate waveform segments
+        del self.waveform.segments[self.seg_id]
+        self.seg_left_id = self.waveform.addSegment(seg_left)
+        self.seg_right_id = self.waveform.addSegment(seg_right)
+        
+        # Set old sentence id to left id
+        old_block : QTextBlock = self.text_edit.getBlockBySentenceId(self.seg_id)
+        self.user_data : dict = old_block.userData().data
+        cursor = self.text_edit.textCursor()
+        cursor.setPosition(old_block.position())
+        cursor.select(QTextCursor.BlockUnderCursor)
+        cursor.removeSelectedText()
+
+        # Create left text block
+        cursor.insertBlock()
+        cursor.insertText(self.text[:self.pos].rstrip())
+        user_data = self.user_data.copy()
+        user_data["seg_id"] = self.seg_left_id
+        cursor.block().setUserData(MyTextBlockUserData(user_data))
+        
+        # Create right text block
+        cursor.insertBlock()
+        cursor.insertText(self.text[self.pos:].lstrip())
+        user_data = self.user_data.copy()
+        user_data["seg_id"] = self.seg_right_id
+        cursor.block().setUserData(MyTextBlockUserData(user_data))
+
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        self.text_edit.setTextCursor(cursor)
+
+        # self.text_edit.setActive(self.seg_right_id, with_cursor=False, update_waveform=True)
+
+
 
 class DeleteSegmentCommand(QUndoCommand):
     def __init__(self, segment):
@@ -697,27 +771,7 @@ class MainWindow(QMainWindow):
 
     def splitUtterance(self, seg_id:int, pc:float):
         print("split utterance", seg_id)
-        # Split segment at pc
-        segment = self.waveform.segments[seg_id]
-        seg_length = segment[1] - segment[0]
-        seg_left = [segment[0], segment[0] + seg_length*pc - 0.1]
-        seg_right = [segment[0] + seg_length*pc + 0.1, segment[1]]
-        del self.waveform.segments[seg_id]
-
-        seg_left_id = self.waveform.addSegment(seg_left)
-        seg_right_id = self.waveform.addSegment(seg_right)
-        # self.waveform.draw()
-        
-        # Set old sentence id to left id
-        left_block = self.text_edit.getBlockBySentenceId(seg_id)
-        user_data = left_block.userData().data
-        user_data["seg_id"] = seg_left_id
-        left_block.setUserData(MyTextBlockUserData(user_data))
-
-        right_block = self.text_edit.textCursor().block()
-        user_data = {"seg_id": seg_right_id}
-        right_block.setUserData(MyTextBlockUserData(user_data))
-        self.text_edit.setActive(seg_right_id, with_cursor=False, update_waveform=True)
+        self.undo_stack.push(SplitUtteranceCommand(self.text_edit, self.waveform, seg_id, pc))
 
         
     

@@ -3,9 +3,8 @@ from PySide6.QtWidgets import (
     QTextEdit,
 )
 from PySide6.QtGui import (
-    QTextCursor, QUndoCommand
+    QTextCursor, QUndoCommand,
 )
-
 
 
 

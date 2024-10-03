@@ -24,22 +24,11 @@ pyinstaller Anaouder-editor.spec
 
 Lakaet e vo restr ar meziant en doser `dist`
 
-## Enframmañ e Linux
+## Staliañ dindan Linux
 
-Staliañ al "launcher" (cheñch al linenn `exec=` er restr `anaouder-editor.desktop` da gentañ) :
-
-```bash
-xdg-desktop-menu install anaouder-editor.desktop
-```
-
-Staliañ an doare restroù `ali`
+Ret e vo cheñch al linenn `exec=` er restr `anaouder-editor.desktop` da gentañ.
 
 ```bash
-sudo xdg-mime install anaouder-ali_filetype.xml
-```
-
-Liammañ ar restroù `ali` gant ar meziant :
-
-```bash
-xdg-mime default anaouder-editor.desktop text/x-ali
+chmod +x install.sh
+sudo ./install.sh
 ```
