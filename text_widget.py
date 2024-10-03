@@ -61,7 +61,7 @@ class Highlighter(QSyntaxHighlighter):
         self.aligned_block_format.setBackground(QColor(210, 255, 230))
 
         self.unaligned_block_format = QTextBlockFormat()
-        self.unaligned_block_format.setBackground(QColor(255, 150, 160))
+        self.unaligned_block_format.setBackground(QColor(255, 190, 190))
 
 
     def sub_segment(self, segments: list, start: int, end: int) -> list:
@@ -580,14 +580,11 @@ class TextEdit(QTextEdit):
                 return super().keyPressEvent(event)
             
             next_block_data = next_block.userData()
-            pos_bck = pos
             if (next_block_data and "seg_id" in next_block_data.data
                     and block_data and "seg_id" in block_data.data):
                 seg_id = block_data.data["seg_id"]
                 next_seg_id = next_block_data.data["seg_id"]
-                self.parent.joinUtterances([seg_id, next_seg_id])
-                cursor.setPosition(pos_bck)
-                self.setTextCursor(cursor)
+                self.parent.joinUtterances([seg_id, next_seg_id], pos)
                 return
 
         elif event.key() == Qt.Key_Backspace:
@@ -610,7 +607,7 @@ class TextEdit(QTextEdit):
                     and block_data and "seg_id" in block_data.data):
                 seg_id = block_data.data["seg_id"]
                 next_seg_id = next_block_data.data["seg_id"]
-                self.parent.joinUtterances([next_seg_id, seg_id])
+                self.parent.joinUtterances([next_seg_id, seg_id], pos)
                 return
 
         return super().keyPressEvent(event)

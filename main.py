@@ -3,7 +3,7 @@
 
 import sys
 import os.path
-from typing import List
+from typing import List, Optional
 
 from pydub import AudioSegment
 # import numpy as np
@@ -102,7 +102,7 @@ class RecognizerWorker(QThread):
 class SplitUtteranceCommand(QUndoCommand):
     def __init__(self, text_edit, waveform, seg_id:int, pos:int):
         super().__init__()
-        self.text_edit : QTextEdit = text_edit
+        self.text_edit : TextEdit = text_edit
         self.waveform : WaveformWidget = waveform
         self.seg_id = seg_id
         self.pos = pos
@@ -148,8 +148,7 @@ class SplitUtteranceCommand(QUndoCommand):
         # Set old sentence id to left id
         old_block : QTextBlock = self.text_edit.getBlockBySentenceId(self.seg_id)
         self.user_data : dict = old_block.userData().data
-        cursor = self.text_edit.textCursor()
-        cursor.setPosition(old_block.position())
+        cursor = QTextCursor(old_block)
         cursor.select(QTextCursor.BlockUnderCursor)
         cursor.removeSelectedText()
 
@@ -172,6 +171,69 @@ class SplitUtteranceCommand(QUndoCommand):
 
         # self.text_edit.setActive(self.seg_right_id, with_cursor=False, update_waveform=True)
 
+
+class JoinUtterancesCommand(QUndoCommand):
+    def __init__(self, text_edit, waveform, seg_ids, pos):
+        super().__init__()
+        self.text_edit : TextEdit = text_edit
+        self.waveform : WaveformWidget = waveform
+        self.seg_ids = sorted(seg_ids, key=lambda x: waveform.segments[x][0])
+        self.segments : list
+        self.segments_text : list
+        
+        # If no pos is given, take pos of first block
+        self.pos : int = pos or self.text_edit.getBlockBySentenceId(self.seg_ids[0]).position()
+
+    def undo(self):
+        # Restore first utterance
+        first_id = self.seg_ids[0]
+        self.text_edit.setSentenceText(first_id, self.segments_text[0])
+        self.waveform.segments[first_id] = self.segments[0]
+        
+        block = self.text_edit.getBlockBySentenceId(first_id)
+        cursor = QTextCursor(block)
+        cursor.movePosition(QTextCursor.EndOfBlock)
+
+        # Restore other utterances
+        for i, id in enumerate(self.seg_ids[1:]):
+            cursor.insertBlock()
+            cursor.insertText(self.segments_text[i+1])
+            user_data = {"is_utt": True, "seg_id": id}
+            cursor.block().setUserData(MyTextBlockUserData(user_data))
+            self.waveform.segments[id] = self.segments[i+1]
+        
+        cursor.setPosition(self.pos)
+        self.text_edit.setTextCursor(cursor)
+        self.waveform.draw()
+
+    def redo(self):
+        self.segments = [self.waveform.segments[id] for id in self.seg_ids]
+        self.segments_text = [self.text_edit.getBlockBySentenceId(id).text() for id in self.seg_ids]
+
+        # Remove all sentences except the first one
+        for id in self.seg_ids[1:]:
+            block = self.text_edit.getBlockBySentenceId(id)
+            cursor = QTextCursor(block)
+            cursor.select(QTextCursor.BlockUnderCursor)
+            cursor.removeSelectedText()
+        
+        joined_text = ' '.join( [ t.strip() for t in self.segments_text ] )
+        self.text_edit.setSentenceText(self.seg_ids[0], joined_text)
+
+        # Join waveform segments
+        first_id = self.seg_ids[0]
+        new_seg_start = self.waveform.segments[first_id][0]
+        new_seg_end = self.waveform.segments[self.seg_ids[-1]][1]
+        self.waveform.segments[first_id] = [new_seg_start, new_seg_end]
+        for id in self.seg_ids[1:]:
+            del self.waveform.segments[id]
+        
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, len(self.segments_text[0]))
+        self.text_edit.setTextCursor(cursor)
+
+        self.waveform.active_segments = [first_id]
+        self.waveform.draw()
 
 
 class DeleteSegmentCommand(QUndoCommand):
@@ -769,11 +831,6 @@ class MainWindow(QMainWindow):
         self.waveform.draw()
 
 
-    def splitUtterance(self, seg_id:int, pc:float):
-        print("split utterance", seg_id)
-        self.undo_stack.push(SplitUtteranceCommand(self.text_edit, self.waveform, seg_id, pc))
-
-        
     
     def recognize(self):
         seg_id = -1
@@ -800,35 +857,18 @@ class MainWindow(QMainWindow):
         self.recognizer_worker.start()
     
 
-    def joinUtterances(self, segments_id):
+    def splitUtterance(self, seg_id:int, pc:float):
+        print("split utterance", seg_id)
+        self.undo_stack.push(SplitUtteranceCommand(self.text_edit, self.waveform, seg_id, pc))
+
+
+    def joinUtterances(self, seg_ids, pos=None):
         """
             Join many segments in one.
             Keep the segment ID of the earliest segment among the selected ones.
         """
         print("join action")
-        #segments_id = sorted(self.waveform.active_segments, key=lambda x: self.waveform.segments[x][0])
-        first_id = segments_id[0]
-        segments_text = [self.text_edit.getBlockBySentenceId(id).text().strip() for id in segments_id]
-
-        # Join text utterances
-        for id in segments_id[1:]:
-            block = self.text_edit.getBlockBySentenceId(id)
-            cursor = QTextCursor(block)
-            cursor.select(QTextCursor.BlockUnderCursor)
-            cursor.removeSelectedText()
-        self.text_edit.setSentenceText(first_id, ' '.join(segments_text))
-
-        # Join waveform segments
-        new_seg_start = self.waveform.segments[first_id][0]
-        new_seg_end = self.waveform.segments[segments_id[-1]][1]
-        self.waveform.segments[first_id] = [new_seg_start, new_seg_end]
-        for id in segments_id[1:]:
-            del self.waveform.segments[id]
-        self.waveform.active_segments = [first_id]
-        self.waveform.draw()
-
-        print(segments_text)
-        print(segments_id)
+        self.undo_stack.push(JoinUtterancesCommand(self.text_edit, self.waveform, seg_ids, pos))
 
 
     def deleteSegment(self, segments_id:List) -> None:
