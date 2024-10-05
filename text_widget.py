@@ -352,18 +352,23 @@ class TextEdit(QTextEdit):
         return block.blockNumber()
 
 
-    def setActive(self, id: int, with_cursor=True, update_waveform=True):
-        # Cannot use highlighter.rehighilght() here as it would slow thing down too much
-        # print("setactive", id, self.lastActiveSentenceId)
-        
-        # Reset previously selected utterance
-        if self.lastActiveSentenceId != None:
-            block = self.getBlockBySentenceId(self.lastActiveSentenceId)
+    def deactivate(self, id=None):
+        """ Reset format of currently active sentence """
+        if id or self.lastActiveSentenceId != None:
+            block = self.getBlockBySentenceId(id or self.lastActiveSentenceId)
             if block:
                 cursor = QTextCursor(block)
                 cursor.movePosition(QTextCursor.EndOfBlock)
                 cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                 cursor.setCharFormat(self.defaultCharFormat)
+
+
+    def setActive(self, id: int, with_cursor=True, update_waveform=True):
+        # Cannot use highlighter.rehighilght() here as it would slow thing down too much
+        print("setactive", id, self.lastActiveSentenceId)
+        
+        # Reset previously selected utterance
+        self.deactivate()
 
         block = self.getBlockBySentenceId(id)
         if not block:
@@ -430,7 +435,8 @@ class TextEdit(QTextEdit):
             data = current_block.userData().data
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
-                print("cursor_changed")
+                if id == self.lastActiveSentenceId:
+                    return
                 self.setActive(id, with_cursor=False)
                 # start, end = self.parent.waveform.segments[id]
                 # data.update({'start': start, 'end': end, 'dur': end-start})
@@ -560,7 +566,7 @@ class TextEdit(QTextEdit):
                         # cursor.movePosition(QTextCursor.EndOfBlock)
                         # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                         # cursor.setCharFormat(self.defaultCharFormat)
-                        self.lastActiveSentenceId = None
+                        # self.lastActiveSentenceId = None
                         self.parent.splitUtterance(seg_id, pos_in_block)
                         return
 

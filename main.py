@@ -141,7 +141,7 @@ class SplitUtteranceCommand(QUndoCommand):
         self.text_edit.setTextCursor(cursor)
         self.waveform.setActive(self.seg_id)
 
-    def redo(self):
+    def redo(self):        
         # Split audio segment at pc
         pc = self.pos / len(self.text)
         self.segment = self.waveform.segments[self.seg_id]
@@ -167,6 +167,8 @@ class SplitUtteranceCommand(QUndoCommand):
         user_data = self.user_data.copy()
         user_data["seg_id"] = self.seg_left_id
         cursor.block().setUserData(MyTextBlockUserData(user_data))
+        self.text_edit.deactivate(self.seg_left_id)
+
         
         # Create right text block
         cursor.insertBlock()
@@ -202,7 +204,7 @@ class JoinUtterancesCommand(QUndoCommand):
         block = self.text_edit.getBlockBySentenceId(first_id)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.EndOfBlock)
-
+        
         # Restore other utterances
         for i, id in enumerate(self.seg_ids[1:]):
             cursor.insertBlock()
@@ -210,6 +212,7 @@ class JoinUtterancesCommand(QUndoCommand):
             user_data = {"is_utt": True, "seg_id": id}
             cursor.block().setUserData(MyTextBlockUserData(user_data))
             self.waveform.segments[id] = self.segments[i+1]
+            self.text_edit.deactivate(id)
         
         cursor.setPosition(self.pos)
         self.text_edit.setTextCursor(cursor)
