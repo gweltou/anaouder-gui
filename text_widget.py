@@ -35,13 +35,17 @@ def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
 
 
 class Highlighter(QSyntaxHighlighter):
-    def __init__(self, parent, main):
+    utt_block_margin = 4
+    aligned_color = QColor(210, 255, 230)
+    unaligned_color = QColor(255, 190, 190)
+
+    def __init__(self, parent, text_edit):
         super().__init__(parent)
-        self.main = main
+        self.text_edit : TextEdit = text_edit
 
         self.metadataFormat = QTextCharFormat()
         self.metadataFormat.setForeground(Qt.darkMagenta)
-        self.metadataFormat.setFontWeight(QFont.Bold)
+        self.metadataFormat.setFontWeight(QFont.DemiBold)
 
         self.commentFormat = QTextCharFormat()
         self.commentFormat.setForeground(Qt.gray)
@@ -49,19 +53,20 @@ class Highlighter(QSyntaxHighlighter):
         self.sp_tokenFormat = QTextCharFormat()
         self.sp_tokenFormat.setForeground(QColor(220, 180, 0))
         self.sp_tokenFormat.setFontWeight(QFont.Bold)
-
-        self.utt_format = QTextCharFormat()
-        self.utt_format.setBackground(QColor(220, 180, 180))
         
         self.mispellformat = QTextCharFormat()
         self.mispellformat.setUnderlineColor(QColor("red"))
         self.mispellformat.setUnderlineStyle(QTextCharFormat.SpellCheckUnderline)
 
         self.aligned_block_format = QTextBlockFormat()
-        self.aligned_block_format.setBackground(QColor(210, 255, 230))
+        self.aligned_block_format.setBackground(self.aligned_color)
+        self.aligned_block_format.setTopMargin(self.utt_block_margin)
+        self.aligned_block_format.setBottomMargin(self.utt_block_margin)
 
         self.unaligned_block_format = QTextBlockFormat()
-        self.unaligned_block_format.setBackground(QColor(255, 190, 190))
+        self.unaligned_block_format.setBackground(self.unaligned_color)
+        self.unaligned_block_format.setTopMargin(self.utt_block_margin)
+        self.unaligned_block_format.setBottomMargin(self.utt_block_margin)
 
 
     def sub_segment(self, segments: list, start: int, end: int) -> list:
@@ -92,13 +97,12 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def highlightBlock(self, text):
+        print("hgi")
         # Background color
         if self.currentBlockUserData():
             block = self.currentBlock()
             cursor = QTextCursor(block)
-            data = self.currentBlockUserData().data
-            if "seg_id" in data and data["seg_id"] in self.main.waveform.segments:
-                # Utterance is aligned
+            if self.text_edit.isAligned(block):
                 cursor.setBlockFormat(self.aligned_block_format)
             else:
                 cursor.setBlockFormat(self.unaligned_block_format)
@@ -181,7 +185,7 @@ class TextEdit(QTextEdit):
         self.document().contentsChange.connect(self.contentsChange)
 
         #self.document().setDefaultStyleSheet()
-        self.highlighter = Highlighter(self.document(), main=self.parent)
+        self.highlighter = Highlighter(self.document(), self)
 
         self.defaultBlockFormat = QTextBlockFormat()
         self.defaultCharFormat = QTextCharFormat()
@@ -379,6 +383,7 @@ class TextEdit(QTextEdit):
         cursor.movePosition(QTextCursor.EndOfBlock)
         cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
         cursor.setCharFormat(self.activeCharFormat)
+        # We can't set a block format from here, for some reason...
 
         if with_cursor:
             cursor.clearSelection()
@@ -462,7 +467,7 @@ class TextEdit(QTextEdit):
         self.parent.updateSubtitle(force=True)
 
 
-    def _isBlockAligned(self, block):
+    def isAligned(self, block):
         block_data = block.userData()
         if block_data and "seg_id" in block_data.data:
             if block_data.data["seg_id"] in self.parent.waveform.segments:
@@ -577,7 +582,7 @@ class TextEdit(QTextEdit):
                 DeleteSelectedText(self, cursor)
                 return
             
-            if pos_in_block < block_len-1 or not self._isBlockAligned(current_block):
+            if pos_in_block < block_len-1 or not self.isAligned(current_block):
                 self.undo_stack.push(DeleteTextCommand(self, pos, 1, QTextCursor.Right))
                 return
 
@@ -599,7 +604,7 @@ class TextEdit(QTextEdit):
                 DeleteSelectedText(self, cursor)
                 return
             
-            if pos_in_block > 0 or not self._isBlockAligned(current_block):
+            if pos_in_block > 0 or not self.isAligned(current_block):
                 self.undo_stack.push(DeleteTextCommand(self, pos, 1, QTextCursor.Left))
                 return
                 # return super().keyPressEvent(event)

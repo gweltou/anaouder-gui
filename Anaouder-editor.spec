@@ -4,7 +4,10 @@
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[("./.venv/lib/python3.12/site-packages/vosk/libvosk.so", "vosk"),],
+    binaries=[
+        ("./.venv/lib/python3.12/site-packages/vosk/libvosk.so", "vosk"),
+        ("./.venv/lib/python3.12/site-packages/static_ffmpeg/bin/linux/*", "static_ffmpeg/bin/linux"),
+    ],
     datas=[
         ("./.venv/lib/python3.12/site-packages/ostilhou/asr/*.tsv", "ostilhou/asr"),
         ("./.venv/lib/python3.12/site-packages/ostilhou/hspell/*.txt", "ostilhou/hspell"),
