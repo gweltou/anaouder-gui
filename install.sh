@@ -7,10 +7,11 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Install the desktop menu entry
+
 xdg-desktop-menu install anaouder-editor.desktop
 
 # Install the mime file type
-sudo xdg-mime install anaouder-ali_filetype.xml
+xdg-mime install anaouder-ali_filetype.xml
 
 # Link mime file types to the application
 xdg-mime default anaouder-editor.desktop text/x-ali

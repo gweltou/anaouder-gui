@@ -5,6 +5,9 @@ import sys
 import os.path
 from typing import List, Optional
 
+import static_ffmpeg
+static_ffmpeg.add_paths()
+
 from pydub import AudioSegment
 # import numpy as np
 import re
@@ -921,7 +924,7 @@ class MainWindow(QMainWindow):
 
 def main():
     global settings
-    settings = QSettings("OTilde", MainWindow.APP_NAME)
+    settings = QSettings("anaouder", MainWindow.APP_NAME)
 
     file_path = ""
     #file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
