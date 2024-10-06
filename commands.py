@@ -33,7 +33,6 @@ class InsertTextCommand(QUndoCommand):
     def mergeWith(self, other: QUndoCommand) -> bool:
         print(self.position, self.text, other.position, other.text)
         if other.position - (self.position + len(self.text)) == 0:
-            print("merge")
             self.text += other.text
             return True
         return False

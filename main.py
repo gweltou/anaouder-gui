@@ -24,6 +24,7 @@ from ostilhou.asr import (
 )
 from ostilhou.asr.models import DEFAULT_MODEL, load_model, is_model_loaded
 from ostilhou.audio import split_to_segments, convert_to_mp3
+from ostilhou.asr.dataset import format_timecode
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
@@ -453,11 +454,6 @@ class MainWindow(QMainWindow):
 
 
     def _saveFile(self, filepath):
-        def format_timecode(timecode):
-            if isinstance(timecode, int):
-                return str(timecode)
-            return "{:.3f}".format(timecode).rstrip('0').rstrip('.')
-
         print("Saving file to", os.path.abspath(filepath))
 
         with open(filepath, 'w') as f:
@@ -469,8 +465,9 @@ class MainWindow(QMainWindow):
                     userData = block.userData().data
                     if "seg_id" in userData:
                         seg_id = userData["seg_id"]
-                        start, end = self.waveform.segments[seg_id]
-                        text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
+                        if seg_id in self.waveform.segments:
+                            start, end = self.waveform.segments[seg_id]
+                            text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
                 f.write(text + '\n')
 
 

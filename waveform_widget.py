@@ -359,12 +359,14 @@ class WaveformWidget(QWidget):
             dy = event.position().y() - self.click_pos.y()
             dist = dx * dx + dy * dy
             if dist < 20:
+                # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPosition(event.position())
                 # self.utterances is set from main
                 self.utterances.setActive(clicked_id, with_cursor=not self.shift_pressed, update_waveform=False)
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
+                    # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
                 
         self.draw()

@@ -97,7 +97,6 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def highlightBlock(self, text):
-        print("hgi")
         # Background color
         if self.currentBlockUserData():
             block = self.currentBlock()
@@ -369,15 +368,15 @@ class TextEdit(QTextEdit):
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
         # Cannot use highlighter.rehighilght() here as it would slow thing down too much
-        print("setactive", id, self.lastActiveSentenceId)
+        print("setactive", self.lastActiveSentenceId, id)
         
         # Reset previously selected utterance
         self.deactivate()
+        self.lastActiveSentenceId = id
 
         block = self.getBlockBySentenceId(id)
         if not block:
             return
-        self.lastActiveSentenceId = id
 
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.EndOfBlock)
@@ -500,6 +499,14 @@ class TextEdit(QTextEdit):
             event.matches(QKeySequence.Redo)):
             event.ignore()
             return
+        
+        if (event.matches(QKeySequence.ZoomIn) or
+            (event.modifiers() & Qt.ControlModifier and event.text() == '+')):
+            self.zoomIn(1)
+            return
+        if event.matches(QKeySequence.ZoomOut):
+            self.zoomOut(1)
+            return
 
         cursor = self.textCursor()
         has_selection = not cursor.selection().isEmpty()
@@ -566,12 +573,6 @@ class TextEdit(QTextEdit):
                 if block_data and "seg_id" in block_data.data:
                     seg_id = block_data.data["seg_id"]
                     if seg_id in self.parent.waveform.segments:
-                        # Split sentence and segment
-                        # Unset active style
-                        # cursor.movePosition(QTextCursor.EndOfBlock)
-                        # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-                        # cursor.setCharFormat(self.defaultCharFormat)
-                        # self.lastActiveSentenceId = None
                         self.parent.splitUtterance(seg_id, pos_in_block)
                         return
 
