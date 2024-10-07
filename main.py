@@ -72,8 +72,8 @@ def resource_path(relative_path):
 
 class RecognizerWorker(QThread):
     message = Signal(str)
-    transcribedSegment = Signal(str, int, int)
-    transcribed = Signal(str, list)
+    transcribedSegment = Signal(str, int, int) # Transcribe a pre-defined segment
+    transcribed = Signal(str, list) # Create a segment with transcription
 
     def setAudio(self, audio: AudioSegment):
         self.audio_data: AudioSegment = audio
@@ -87,13 +87,14 @@ class RecognizerWorker(QThread):
             self.message.emit(f"Loading {DEFAULT_MODEL}")
             load_model()
 
+        # Stupid hack with locale to avoid commas in json string
         current_locale = locale.getlocale()
         print(f"{current_locale=}")
         locale.setlocale(locale.LC_ALL, ("C", "UTF-8"))
         print(f"{locale.getlocale()=}")
+        
         if self.segments:
             for i, (seg_id, start, end) in enumerate(self.segments):
-                # Stupid hack with locale to avoid commas in json string
                 self.message.emit(f"{i+1}/{len(self.segments)}")
                 text = transcribe_segment(self.audio_data[start*1000:end*1000])
                 text = ' '.join(text)
@@ -713,7 +714,8 @@ class MainWindow(QMainWindow):
     def play(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
-            return
+            if self.playing_segment == self.waveform.last_segment_active:
+                return
 
         if self.waveform.last_segment_active >= 0:
             self.playing_segment = self.waveform.last_segment_active
@@ -839,9 +841,8 @@ class MainWindow(QMainWindow):
     def createUtterance(self, text, segment):
         print(text)
         segment_id = self.waveform.addSegment(segment)
-        self.text_edit.insertSentence(text, segment_id)
+        self.text_edit.insertSentence(text, segment_id, with_cursor=False)
         self.waveform.draw()
-
 
     
     def recognize(self):

@@ -237,10 +237,7 @@ class TextEdit(QTextEdit):
         cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
 
 
-    def insertSentence(self, text: str, id: int):
-        """
-            Utterances are supposed to be chronologically ordered in textEdit
-        """
+    def insertSentence(self, text: str, id: int, with_cursor=False):
         assert id in self.parent.waveform.segments
 
         doc = self.document()
@@ -266,7 +263,8 @@ class TextEdit(QTextEdit):
                     # Re-select text
                     cursor.movePosition(QTextCursor.EndOfBlock)
                     cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-                    self.setTextCursor(cursor)
+                    if with_cursor:
+                        self.setTextCursor(cursor)
                     return
                 other_start, _ = self.parent.waveform.segments[other_id]
                 if other_start > seg_end:
@@ -278,7 +276,8 @@ class TextEdit(QTextEdit):
                     cursor.insertText(text)
                     cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                     cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
-                    self.setTextCursor(cursor)
+                    if with_cursor:
+                        self.setTextCursor(cursor)
                     return
 
         # Insert new utterance at the end
@@ -288,7 +287,8 @@ class TextEdit(QTextEdit):
         cursor.insertText(text)
         cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
         cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
-        self.setTextCursor(cursor)
+        if with_cursor:
+            self.setTextCursor(cursor)
     
 
     def deleteSentence(self, utt_id:int) -> None:
