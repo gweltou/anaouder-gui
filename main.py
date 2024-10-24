@@ -719,7 +719,7 @@ class MainWindow(QMainWindow):
 
         if self.waveform.last_segment_active >= 0:
             self.playing_segment = self.waveform.last_segment_active
-            self.playSegment(self.waveform.segments[self.waveform.last_segment_active])
+            self.playSegment(self.waveform.segments[self.playing_segment])
         elif self.waveform.selection_is_active:
             self.playing_segment = -1
             self.playSegment(self.waveform.selection)

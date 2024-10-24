@@ -97,13 +97,19 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def highlightBlock(self, text):
+        block = self.currentBlock()
+
         # Find Comments
         i = text.find('#')
         if i >= 0:
             self.setFormat(i, len(text)-i, self.commentFormat)
             # Crop commented text
             text = text[:i]
-        if not text:
+        
+        cursor = QTextCursor(block)
+
+        if not text.strip():
+            cursor.setBlockFormat(QTextBlockFormat())
             return
 
         sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
@@ -126,15 +132,11 @@ class Highlighter(QSyntaxHighlighter):
         
         # Background color
         if self.currentBlockUserData():
-            block = self.currentBlock()
-            cursor = QTextCursor(block)
             if self.text_edit.isAligned(block):
                 cursor.setBlockFormat(self.aligned_block_format)
             else:
                 cursor.setBlockFormat(self.unaligned_block_format)
         else:
-            block = self.currentBlock()
-            cursor = QTextCursor(block)
             if sentence_splits:
                 cursor.setBlockFormat(self.unaligned_block_format)
             else:
