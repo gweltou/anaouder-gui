@@ -264,6 +264,34 @@ class DeleteSegmentCommand(QUndoCommand):
         pass
 
 
+class AlignWithSelectionCommand(QUndoCommand):
+    def __init__(self, text_edit, waveform, block):
+        super().__init__()
+        self.text_edit : TextEdit = text_edit
+        self.waveform : WaveformWidget = waveform
+        self.block : QTextBlock = block
+        self.old_block_data = None
+        if self.block.userData():
+            self.old_block_data = self.block.userData().data.copy()
+    
+    def undo(self):
+        self.waveform.selection = self.waveform.segments[self.segment_id]
+        del self.waveform.segments[self.segment_id]
+        self.block.setUserData(self.old_block_data)
+        self.text_edit.highlighter.rehighlightBlock(self.block)
+        self.waveform.draw()
+
+    def redo(self):
+        print("aligning")
+        self.selection = self.waveform.selection[:]
+        self.segment_id = self.waveform.addSegment(self.waveform.selection)
+        self.waveform.deselect()
+        self.text_edit.setBlockId(self.block, self.segment_id)
+        self.text_edit.highlighter.rehighlightBlock(self.block)
+        self.waveform.draw()
+
+
+
 
 
 class MainWindow(QMainWindow):
@@ -815,10 +843,6 @@ class MainWindow(QMainWindow):
 
     def opFindSegments(self):
         print("Finding segments")
-        # segments = new_split_to_segments(
-		# 	self.audio_segment,
-		# 	max_length=AUTOSEG_MAX_LENGTH,
-		# 	min_length=AUTOSEG_MIN_LENGTH)
         segments = split_to_segments(self.audio_data, 10, 0.05)
         self.status_bar.showMessage(f"{len(segments)} segments found")
         self.waveform.clear()
@@ -882,6 +906,10 @@ class MainWindow(QMainWindow):
         """
         print("join action")
         self.undo_stack.push(JoinUtterancesCommand(self.text_edit, self.waveform, seg_ids, pos))
+
+
+    def alignUtterance(self, block:QTextBlock):
+        self.undo_stack.push(AlignWithSelectionCommand(self.text_edit, self.waveform, block))
 
 
     def deleteSegment(self, segments_id:List) -> None:

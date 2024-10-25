@@ -1,4 +1,5 @@
 from typing import List
+from enum import Enum
 
 from PySide6.QtWidgets import (
     QMenu, QTextEdit,
@@ -99,11 +100,10 @@ class Highlighter(QSyntaxHighlighter):
     def highlightBlock(self, text):
         block = self.currentBlock()
 
-        # Find Comments
+        # Find and crop comments
         i = text.find('#')
         if i >= 0:
             self.setFormat(i, len(text)-i, self.commentFormat)
-            # Crop commented text
             text = text[:i]
         
         cursor = QTextCursor(block)
@@ -143,7 +143,6 @@ class Highlighter(QSyntaxHighlighter):
                 cursor.setBlockFormat(QTextBlockFormat())
 
         # Check misspelled words
-        #if self.currentBlockUserData() and self.currentBlockUserData().data.get("is_utt", False):
         expression = QRegularExpression(r'\b([\w\']+)\b', QRegularExpression.UseUnicodePropertiesOption)
         matches = expression.globalMatch(text)
         while matches.hasNext():
@@ -171,6 +170,15 @@ class MyTextBlockUserData(QTextBlockUserData):
         # This method is required by QTextBlockUserData.
         # It should return a copy of the user data object.
         return MyTextBlockUserData(self.data)
+
+
+
+
+class BlockType(Enum):
+    EMPTY_OR_COMMENT = 0
+    METADATA_ONLY = 1
+    ALIGNED = 2
+    NOT_ALIGNED = 3
 
 
 
@@ -205,18 +213,89 @@ class TextEdit(QTextEdit):
 
     def clear(self):
         self.document().clear()
+    
 
+    def getBlockType(self, block : QTextBlock) -> BlockType:
+        text = block.text()
 
-    # def isUtteranceBlock(self, i):
-    #     block = self.document().findBlockByNumber(i)
-    #     text = block.text()
+        # Find and crop comments
+        i = text.find('#')
+        if i >= 0:
+            text = text[:i]
+        text = text.strip()
 
-    #     i_comment = text.find('#')
-    #     if i_comment >= 0:
-    #         text = text[:i_comment]
+        if not text:
+            return BlockType.EMPTY_OR_COMMENT
         
-    #     text, _ = extract_metadata(text)
-    #     return len(text.strip()) > 0
+        text, metadata = extract_metadata(text)
+        if metadata and not text.strip():
+            return BlockType.METADATA_ONLY
+
+        # This block is a sentence, check if it is aligned or not
+        if not block.userData():
+            return BlockType.NOT_ALIGNED
+        
+        user_data = block.userData().data
+        if "seg_id" in user_data:
+            segment_id = user_data["seg_id"]
+            if segment_id in self.parent.waveform.segments:
+                return BlockType.ALIGNED
+        
+        return BlockType.NOT_ALIGNED
+    
+
+    def getBlockId(self, block: QTextBlock) -> int:
+        if not block.userData():
+            return -1
+        user_data = block.userData().data
+        if "seg_id" in user_data:
+            return user_data["seg_id"]
+        return -1
+
+
+    def setBlockId(self, block: QTextBlock, id: int):
+        if not block.userData():
+            block.setUserData(MyTextBlockUserData({"seg_id": id}))
+        else:
+            user_data = block.userData().data
+            user_data["seg_id"] = id
+
+
+    def getBlockBySentenceId(self, id: int) -> QTextBlock:
+        # TODO: rewrite
+        doc = self.document()
+        for blockIndex in range(doc.blockCount()):
+            block = doc.findBlockByNumber(blockIndex)
+            if not block.userData():
+                continue
+            userData = block.userData().data
+            if "seg_id" in userData and userData["seg_id"] == id:
+                return block
+        return None
+    
+
+    def getNextAlignedBlock(self, block: QTextBlock) -> QTextBlock:
+        while True:
+            block = block.next()
+            if block.blockNumber() == -1:
+                return None
+            if self.getBlockType(block) == BlockType.ALIGNED:
+                return block
+
+
+    def getPrevAlignedBlock(self, block: QTextBlock) -> QTextBlock:
+        while True:
+            block = block.previous()
+            if block.blockNumber() == -1:
+                return None
+            if self.getBlockType(block) == BlockType.ALIGNED:
+                return block
+
+
+    # def getBlockNumber(self, position: int) -> int:
+    #     document = self.document()
+    #     block = document.findBlock(position)
+    #     return block.blockNumber()
 
 
     def setSentenceText(self, id: int, text: str):
@@ -342,24 +421,6 @@ class TextEdit(QTextEdit):
                 block.setUserData(MyTextBlockUserData({"is_utt": False}))
 
 
-    def getBlockBySentenceId(self, id: int) -> QTextBlock:
-        doc = self.document()
-        for blockIndex in range(doc.blockCount()):
-            block = doc.findBlockByNumber(blockIndex)
-            if not block.userData():
-                continue
-            userData = block.userData().data
-            if "seg_id" in userData and userData["seg_id"] == id:
-                return block
-        return None
-    
-
-    def getBlockNumber(self, position: int) -> int:
-        document = self.document()
-        block = document.findBlock(position)
-        return block.blockNumber()
-
-
     def deactivate(self, id=None):
         """ Reset format of currently active sentence """
         if id or self.lastActiveSentenceId != None:
@@ -457,11 +518,44 @@ class TextEdit(QTextEdit):
 
 
     def contextMenuEvent(self, event):
+        cursor = self.cursorForPosition(event.pos())
+        block = cursor.block()
+        block_type = self.getBlockType(block)
+        
+        # context = self.createStandardContextMenu(event.pos())
         context = QMenu(self)
-        context.addAction(QAction("Split here", self))
-        context.addAction(QAction("Auto-recognition", self))
-        context.addAction(QAction("Auto-puncutate", self))
-        context.exec(event.globalPos())
+        context.addAction(QAction("Copy", self))
+        context.addAction(QAction("Cut", self))
+        context.addAction(QAction("Paste", self))
+
+        if block_type == BlockType.NOT_ALIGNED:
+            context.addSeparator()
+            align_action = context.addAction("Align with selection")
+            align_action.setEnabled(False)
+
+            selection = self.parent.waveform.selection
+            if selection:
+                # Check if the selection is between the previous aligned
+                # block's segment and the next aligned block's segment
+                left_time_boundary = 0.0
+                prev_aligned_block = self.getPrevAlignedBlock(block)
+                if prev_aligned_block:
+                    id = self.getBlockId(prev_aligned_block)
+                    left_time_boundary = self.parent.waveform.segments[id][1]
+
+                right_time_boundary = self.parent.waveform.audio_len
+                next_aligned_block = self.getNextAlignedBlock(block)
+                if next_aligned_block:
+                    id = self.getBlockId(next_aligned_block)
+                    right_time_boundary = self.parent.waveform.segments[id][0]
+            
+                if selection[0] >= left_time_boundary and selection[1] <= right_time_boundary:
+                    align_action.setEnabled(True)
+                    align_action.triggered.connect(lambda checked, b=block: self.parent.alignUtterance(b))
+                
+        
+        action = context.exec(event.globalPos())
+        print(action)
         
     
     def contentsChange(self, pos, charsRemoved, charsAdded):
