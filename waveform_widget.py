@@ -181,13 +181,11 @@ class WaveformWidget(QWidget):
                                  key=lambda x: self.segments[x][0])
             first_t = self.segments[first][1]
             last_t = self.segments[last][0]
-            print(self.last_segment_active, clicked_id)
             self.active_segments = [first]
             for seg_id, (start, end) in self.segments.items():
                 if start >= first_t and end <= last_t:
                     self.active_segments.append(seg_id)
             self.active_segments.append(last)
-            print(self.active_segments)
         else:
             self.active_segments = [clicked_id]
             self.selection_is_active = False

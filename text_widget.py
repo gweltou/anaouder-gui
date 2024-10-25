@@ -434,8 +434,7 @@ class TextEdit(QTextEdit):
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
         # Cannot use highlighter.rehighilght() here as it would slow thing down too much
-        print("setactive", self.lastActiveSentenceId, id)
-        
+            
         # Reset previously selected utterance
         self.deactivate()
         self.lastActiveSentenceId = id
@@ -499,7 +498,6 @@ class TextEdit(QTextEdit):
             return
         
         cursor = self.textCursor()
-        # print(cursor.position(), cursor.anchor(), cursor.block().blockNumber())
         current_block = cursor.block()
         if current_block.userData():
             data = current_block.userData().data
@@ -519,6 +517,7 @@ class TextEdit(QTextEdit):
 
     def contextMenuEvent(self, event):
         cursor = self.cursorForPosition(event.pos())
+        self.setTextCursor(cursor)
         block = cursor.block()
         block_type = self.getBlockType(block)
         
@@ -553,14 +552,10 @@ class TextEdit(QTextEdit):
                     align_action.setEnabled(True)
                     align_action.triggered.connect(lambda checked, b=block: self.parent.alignUtterance(b))
                 
-        
         action = context.exec(event.globalPos())
-        print(action)
         
     
     def contentsChange(self, pos, charsRemoved, charsAdded):
-        # print("content changed", pos, charsRemoved, charsAdded)
-
         # Update vide subtitle if necessary
         self.parent.updateSubtitle(force=True)
 
