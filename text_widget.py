@@ -292,10 +292,10 @@ class TextEdit(QTextEdit):
                 return block
 
 
-    # def getBlockNumber(self, position: int) -> int:
-    #     document = self.document()
-    #     block = document.findBlock(position)
-    #     return block.blockNumber()
+    def getBlockNumber(self, position: int) -> int:
+        document = self.document()
+        block = document.findBlock(position)
+        return block.blockNumber()
 
 
     def setSentenceText(self, id: int, text: str):

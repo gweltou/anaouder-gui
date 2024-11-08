@@ -1,13 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import platform
+
+binaries = []
+if platform.system() == "Linux":
+    binaries = [
+        ("./.venv/lib/python3.12/site-packages/vosk/libvosk.so", "vosk"),
+        ("./.venv/lib/python3.12/site-packages/static_ffmpeg/bin/linux/*", "static_ffmpeg/bin/linux"),
+    ]
+elif platform.system() == "Darwin":
+    binaries = [
+        ("./.venv/lib/python3.12/site-packages/vosk/libvosk.dyld", "vosk"),
+        ("./.venv/lib/python3.12/site-packages/static_ffmpeg/bin/darwin/*", "static_ffmpeg/bin/darwin"),
+    ]
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[
-        ("./.venv/lib/python3.12/site-packages/vosk/libvosk.so", "vosk"),
-        ("./.venv/lib/python3.12/site-packages/static_ffmpeg/bin/linux/*", "static_ffmpeg/bin/linux"),
-    ],
+    binaries=binaries,
     datas=[
         ("./.venv/lib/python3.12/site-packages/ostilhou/asr/*.tsv", "ostilhou/asr"),
         ("./.venv/lib/python3.12/site-packages/ostilhou/hspell/*.txt", "ostilhou/hspell"),

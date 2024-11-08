@@ -273,18 +273,24 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.old_block_data = None
         if self.block.userData():
             self.old_block_data = self.block.userData().data.copy()
+        self.selection = self.waveform.selection[:]
+        self.prev_active_segments = self.waveform.active_segments[:]
+        self.prev_last_segment_active = self.waveform.last_segment_active
+        self.segment_id = None
     
     def undo(self):
-        self.waveform.selection = self.waveform.segments[self.segment_id]
-        del self.waveform.segments[self.segment_id]
+        self.text_edit.setActive(self.prev_last_segment_active, update_waveform=False)
         self.block.setUserData(self.old_block_data)
         self.text_edit.highlighter.rehighlightBlock(self.block)
+
+        self.waveform.selection = self.selection
+        self.waveform.active_segments = self.prev_active_segments[:]
+        self.waveform.last_segment_active = self.prev_last_segment_active
+        del self.waveform.segments[self.segment_id]
         self.waveform.draw()
 
     def redo(self):
-        print("aligning")
-        self.selection = self.waveform.selection[:]
-        self.segment_id = self.waveform.addSegment(self.waveform.selection)
+        self.segment_id = self.waveform.addSegment(self.waveform.selection, self.segment_id)
         self.waveform.deselect()
         self.text_edit.setBlockId(self.block, self.segment_id)
         self.text_edit.highlighter.rehighlightBlock(self.block)
