@@ -172,7 +172,7 @@ class SplitUtteranceCommand(QUndoCommand):
         user_data = self.user_data.copy()
         user_data["seg_id"] = self.seg_left_id
         cursor.block().setUserData(MyTextBlockUserData(user_data))
-        self.text_edit.deactivate(self.seg_left_id)
+        self.text_edit.deactivateSentence(self.seg_left_id)
 
         
         # Create right text block
@@ -217,7 +217,7 @@ class JoinUtterancesCommand(QUndoCommand):
             user_data = {"is_utt": True, "seg_id": id}
             cursor.block().setUserData(MyTextBlockUserData(user_data))
             self.waveform.segments[id] = self.segments[i+1]
-            self.text_edit.deactivate(id)
+            self.text_edit.deactivateSentence(id)
         
         cursor.setPosition(self.pos)
         self.text_edit.setTextCursor(cursor)
@@ -748,7 +748,8 @@ class MainWindow(QMainWindow):
     def play(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
-            if self.playing_segment == self.waveform.last_segment_active:
+            if (self.playing_segment == self.waveform.last_segment_active
+                or self.waveform.last_segment_active == -1):
                 return
 
         if self.waveform.last_segment_active >= 0:

@@ -143,13 +143,13 @@ class Highlighter(QSyntaxHighlighter):
                 cursor.setBlockFormat(QTextBlockFormat())
 
         # Check misspelled words
-        expression = QRegularExpression(r'\b([\w\']+)\b', QRegularExpression.UseUnicodePropertiesOption)
+        expression = QRegularExpression(r'\b([\w’\']+)\b', QRegularExpression.UseUnicodePropertiesOption)
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
             if not self.is_subsentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength()):
                 continue
-            if not hs_dict.spell(match.captured()):
+            if not hs_dict.spell(match.captured().replace('’', "'")):
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.mispellformat)
         
 
@@ -203,7 +203,7 @@ class TextEdit(QTextEdit):
         self.defaultCharFormat = QTextCharFormat()
         self.activeCharFormat = QTextCharFormat()
         self.activeCharFormat.setFontWeight(QFont.DemiBold)
-        self.lastActiveSentenceId = None
+        self.active_sentence_id = None
         self.ignoreCursorChange = False
 
         self.scroll_goal = 0.0
@@ -396,7 +396,7 @@ class TextEdit(QTextEdit):
             new_block.setUserData(None)
         
         self.ignoreCursorChange = False
-        self.lastActiveSentenceId = None
+        self.active_sentence_id = None
 
 
     def setText(self, text: str):
@@ -421,27 +421,29 @@ class TextEdit(QTextEdit):
                 block.setUserData(MyTextBlockUserData({"is_utt": False}))
 
 
-    def deactivate(self, id=None):
+    def deactivateSentence(self, id=None):
         """ Reset format of currently active sentence """
-        if id or self.lastActiveSentenceId != None:
-            block = self.getBlockBySentenceId(id or self.lastActiveSentenceId)
+        if id or self.active_sentence_id != None:
+            block = self.getBlockBySentenceId(id or self.active_sentence_id)
             if block:
                 cursor = QTextCursor(block)
                 cursor.movePosition(QTextCursor.EndOfBlock)
                 cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                 cursor.setCharFormat(self.defaultCharFormat)
+            self.active_sentence_id = None
 
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
         # Cannot use highlighter.rehighilght() here as it would slow thing down too much
             
         # Reset previously selected utterance
-        self.deactivate()
-        self.lastActiveSentenceId = id
+        self.deactivateSentence()
 
         block = self.getBlockBySentenceId(id)
         if not block:
             return
+
+        self.active_sentence_id = id
 
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.EndOfBlock)
@@ -503,7 +505,7 @@ class TextEdit(QTextEdit):
             data = current_block.userData().data
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
-                if id == self.lastActiveSentenceId:
+                if id == self.active_sentence_id:
                     return
                 self.setActive(id, with_cursor=False)
                 # start, end = self.parent.waveform.segments[id]
@@ -511,8 +513,8 @@ class TextEdit(QTextEdit):
                 
             self.parent.status_bar.showMessage(str(data))
         else:
-            self.parent.status_bar.showMessage("no data...")
-            pass
+            self.deactivateSentence()
+            self.parent.waveform.setActive(None)
 
 
     def contextMenuEvent(self, event):
