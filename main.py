@@ -23,7 +23,7 @@ from ostilhou.asr import (
     transcribe_segment_timecoded_callback,
 )
 from ostilhou.asr.models import DEFAULT_MODEL, load_model, is_model_loaded
-from ostilhou.audio import split_to_segments, convert_to_mp3
+from ostilhou.audio import split_to_segments, convert_to_mp3, prepare_segment_for_decoding
 from ostilhou.asr.dataset import format_timecode
 
 from PySide6.QtWidgets import (
@@ -174,7 +174,6 @@ class SplitUtteranceCommand(QUndoCommand):
         cursor.block().setUserData(MyTextBlockUserData(user_data))
         self.text_edit.deactivateSentence(self.seg_left_id)
 
-        
         # Create right text block
         cursor.insertBlock()
         cursor.insertText(self.text[self.pos:].lstrip())
@@ -299,15 +298,18 @@ class AlignWithSelectionCommand(QUndoCommand):
 
 
 
+###############################################################################
+####                                                                       ####
+####                             MAIN WINDOW                               ####
+####                                                                       ####
+###############################################################################
+
 
 class MainWindow(QMainWindow):
     APP_NAME = "Anaouder-mich"
 
     def __init__(self, filepath=""):
         super().__init__()
-        
-        self.setWindowTitle(self.APP_NAME)
-        self.setGeometry(50, 50, 800, 600)
         
         self.input_devices = QMediaDevices.audioInputs()
 
@@ -322,7 +324,10 @@ class MainWindow(QMainWindow):
         self.caption_counter = 0
 
         self.undo_stack = QUndoStack(self)
+        self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
         
+        self.updateWindowTitle()
+        self.setGeometry(50, 50, 800, 600)
         self.initUI()
 
         # Keyboard shortcuts
@@ -488,6 +493,17 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 
+    def updateWindowTitle(self):
+        title_parts = []
+        if not self.undo_stack.isClean():
+            title_parts.append("⬤")
+        title_parts.append(self.APP_NAME)
+        if self.filepath:
+            title_parts.append('-')
+            title_parts.append(os.path.split(self.filepath)[1])
+        self.setWindowTitle(' '.join(title_parts))
+
+
     def _saveFile(self, filepath):
         print("Saving file to", os.path.abspath(filepath))
 
@@ -511,6 +527,8 @@ class MainWindow(QMainWindow):
             self._saveFile(self.filepath)
         else:
             self.saveFileAs()
+        self.undo_stack.setClean()
+        self.updateWindowTitle()
 
     def saveFileAs(self):
         dir = settings.value("editor/last_opened_folder", "")
@@ -522,7 +540,6 @@ class MainWindow(QMainWindow):
         
         self.filepath = filepath
         self._saveFile(filepath)
-        self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(self.filepath)[1]}")
                     
 
     def openFile(self, filepath=""):
@@ -555,7 +572,7 @@ class MainWindow(QMainWindow):
             self.loadAudio(filepath)
             print("done")
             self.filepath = ""
-            self.setWindowTitle(self.APP_NAME)
+            self.updateWindowTitle()
             return
         
         if ext == "ali":
@@ -660,7 +677,7 @@ class MainWindow(QMainWindow):
                 
 
         self.filepath = filepath
-        self.setWindowTitle(f"{self.APP_NAME} - {os.path.split(self.filepath)[1]}")
+        self.updateWindowTitle()
 
         # Select the first utterance
         if first_utt_id != None:
@@ -691,9 +708,7 @@ class MainWindow(QMainWindow):
         audio_data = AudioSegment.from_file(filepath)
         
         print("set to mono, 16khz")
-        if audio_data.channels > 1:
-            audio_data = audio_data.set_channels(1)
-        audio_data = audio_data.set_frame_rate(16000)
+        audio_data = prepare_segment_for_decoding(audio_data)
         self.audio_data = audio_data
         self.recognizer_worker.setAudio(audio_data)
 

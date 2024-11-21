@@ -116,7 +116,7 @@ class WaveformWidget(QWidget):
 
     def clear(self):
         """Reset Waveform"""
-        self.ppsec = 30        # pixels per seconds (audio)
+        self.ppsec = 40        # pixels per seconds (audio)
         self.t_left = 0.0      # timecode (s) of left border
         self.scroll_vel = 0.0
         self.playhead = 0.0
@@ -306,7 +306,7 @@ class WaveformWidget(QWidget):
 
     def getSortedSegments(self) -> list:
         if self._to_sort:
-            self._sorted_segments = sorted(self.segments.items())
+            self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
             self._to_sort = False
             print("sorting")
         return self._sorted_segments
