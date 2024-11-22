@@ -41,7 +41,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAction, QMouseEvent,
-    QPalette, QColor, QFont, QIcon,
+    QPalette, QColor, QFont, QIcon, QPixmap,
     QResizeEvent, QWheelEvent, QKeySequence, QShortcut, QKeyEvent,
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
     QUndoStack, QUndoCommand,
@@ -296,6 +296,14 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.waveform.draw()
 
 
+class IconWidget(QLabel):
+    def __init__(self, icon_path, size=32):
+        super().__init__()
+        self.setFixedSize(size, size)
+        # Load icon and convert to pixmap
+        icon = QIcon(icon_path)
+        pixmap = icon.pixmap(QSize(size, size))
+        self.setPixmap(pixmap)
 
 
 ###############################################################################
@@ -375,6 +383,9 @@ class MainWindow(QMainWindow):
         self.icons["back"] = QIcon(resource_path("icons/back.png"))
         self.icons["previous"] = QIcon(resource_path("icons/previous.png"))
         self.icons["next"] = QIcon(resource_path("icons/next.png"))
+        self.icons["zoom_in"] = QIcon(resource_path("icons/zoom_in.png"))
+        self.icons["zoom_out"] = QIcon(resource_path("icons/zoom_out.png"))
+        # self.icons["waveform"] = QIcon(resource_path("icons/waveform.png"))
 
 
     def initUI(self):
@@ -383,15 +394,18 @@ class MainWindow(QMainWindow):
         bottomLayout.setContentsMargins(0, 0, 0, 0)
         bottomLayout.setSizeConstraint(QLayout.SetMaximumSize)
 
+
         buttonsLayout = QHBoxLayout()
         buttonsLayout.setSpacing(3)
         buttonsLayout.setContentsMargins(0, 0, 0, 0)
         buttonsLayout.setAlignment(Qt.AlignHCenter)
         button_size = 28
 
+        # buttonsLayout.addWidget(QLabel("ASR model"))
         modelSelection = QComboBox()
         modelSelection.addItems(["vosk", "whisper"])
         buttonsLayout.addWidget(modelSelection)
+
         buttonsLayout.addSpacing(16)
 
         # Play buttons
@@ -429,7 +443,21 @@ class MainWindow(QMainWindow):
         volumeDial.setValue(100)
         buttonsLayout.addWidget(volumeDial)
 
+        buttonsLayout.addSpacing(16)
+
+        buttonsLayout.addWidget(IconWidget(resource_path("icons/waveform.png"), button_size*0.7))
+        zoomInButton = QPushButton()
+        zoomInButton.setIcon(self.icons["zoom_in"])
+        zoomInButton.setFixedWidth(button_size)
+        buttonsLayout.addWidget(zoomInButton)
+
+        zoomOutButton = QPushButton()
+        zoomOutButton.setIcon(self.icons["zoom_out"])
+        zoomOutButton.setFixedWidth(button_size)
+        buttonsLayout.addWidget(zoomOutButton)
+
         bottomLayout.addLayout(buttonsLayout)
+
 
         utterancesLayout = QVBoxLayout()
         utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
@@ -438,6 +466,8 @@ class MainWindow(QMainWindow):
 
         self.waveform = WaveformWidget(self)
         self.waveform.utterances = self.text_edit
+        zoomInButton.clicked.connect(lambda: self.waveform.zoomIn(1.333))
+        zoomOutButton.clicked.connect(lambda: self.waveform.zoomOut(1.333))
         
         bottomLayout.addWidget(self.text_edit)
         self.bottomWidget = QWidget()

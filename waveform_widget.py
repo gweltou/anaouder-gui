@@ -116,7 +116,7 @@ class WaveformWidget(QWidget):
 
     def clear(self):
         """Reset Waveform"""
-        self.ppsec = 40        # pixels per seconds (audio)
+        self.ppsec = 50        # pixels per seconds (audio)
         self.t_left = 0.0      # timecode (s) of left border
         self.scroll_vel = 0.0
         self.playhead = 0.0
@@ -312,6 +312,29 @@ class WaveformWidget(QWidget):
         return self._sorted_segments
 
 
+    def zoomIn(self, factor=1.333, position=0.5):
+        prev_ppsec = self.ppsec
+        print(f"{ZOOM_MAX=} {factor=} {position=}")
+        self.ppsec = min(ZOOM_MAX, self.ppsec * factor)
+
+        delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
+        self.t_left -= delta_s * position
+        self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
+        self.waveform.ppsec = self.ppsec
+        self.draw()
+    
+    def zoomOut(self, factor=1.333, position=0.5):
+        prev_ppsec = self.ppsec
+        new_ppsec = self.ppsec / factor
+        if new_ppsec * len(self.waveform.samples) / self.waveform.sr >= self.width():
+            self.ppsec = new_ppsec
+
+        delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
+        self.t_left -= delta_s * position
+        self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
+        self.waveform.ppsec = self.ppsec
+        self.draw()
+
 
     ###################################
     ##   KEYBOARD AND MOUSE EVENTS   ##
@@ -506,24 +529,14 @@ class WaveformWidget(QWidget):
     def wheelEvent(self, event: QWheelEvent):
         if event.modifiers() & Qt.ControlModifier:
             zoomFactor = 1.08
-            zoomLoc = event.position().x() / self.width()
-            prev_ppsec = self.ppsec
-            
+            zoomLoc = event.position().x() / self.width()            
             if event.angleDelta().y() > 0:
-                self.ppsec = min(ZOOM_MAX, self.ppsec * zoomFactor)
+                self.zoomIn(zoomFactor, zoomLoc)
             else:
-                # Zoom out boundary
-                new_ppsec = self.ppsec / zoomFactor
-                if new_ppsec * len(self.waveform.samples) / self.waveform.sr >= self.width():
-                    self.ppsec = new_ppsec
-            delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
-            self.t_left -= delta_s * zoomLoc
-            self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
-            self.waveform.ppsec = self.ppsec
+               self.zoomOut(zoomFactor, zoomLoc)
         else:
             # Scroll
             pass
-        self.draw()
     
 
     def contextMenuEvent(self, event):
