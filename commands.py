@@ -87,3 +87,45 @@ class DeleteTextCommand(QUndoCommand):
             self.text += other.text
             return True
         return False
+    
+
+
+class InsertBlockCommand(QUndoCommand):
+    def __init__(self, text_edit, position, after=False):
+        super().__init__()
+        self.text_edit : QTextEdit = text_edit
+        self.position : int = position
+        self.after = after
+    
+    def undo(self):
+        cursor : QTextCursor = self.text_edit.textCursor()
+        cursor.setPosition(self.position)
+        cursor.deleteChar()
+
+    def redo(self):
+        # If a block is inserted at the beginning of an utterance block
+        # the old block user data will be linked to the new empty block
+        # so we need to put it back to the shifted old block
+        cursor : QTextCursor = self.text_edit.textCursor()
+        cursor.setPosition(self.position)
+
+        cursor.insertBlock()
+        block = cursor.block()
+        prev_block = block.previous()
+
+        if self.after:
+            if block.userData():
+                prev_block.setUserData(block.userData().clone())
+                block.setUserData(None)
+        else:
+            if prev_block.userData():
+                block.setUserData(prev_block.userData().clone())
+                prev_block.setUserData(None)
+
+        self.text_edit.highlighter.rehighlightBlock(block)
+    
+    def id(self):
+        return 2
+    
+    def mergeWith(self, other: QUndoCommand) -> bool:
+        return False

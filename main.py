@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter, QProgressBar,
     QPlainTextEdit, QTextEdit, QPushButton, QDial,
-    QLabel,
+    QLabel, QComboBox,
 )
 from PySide6.QtCore import (
     Qt, QSize, QTimer, QRegularExpression, QPointF,
@@ -326,6 +326,7 @@ class MainWindow(QMainWindow):
         self.undo_stack = QUndoStack(self)
         self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
         
+        self.loadIcons()
         self.updateWindowTitle()
         self.setGeometry(50, 50, 800, 600)
         self.initUI()
@@ -366,41 +367,56 @@ class MainWindow(QMainWindow):
             self.openFile(filepath)
 
 
+    def loadIcons(self):
+        self.icons = {}
+        self.icons["play"] = QIcon(resource_path("icons/play-button.png"))
+        self.icons["pause"] = QIcon(resource_path("icons/pause.png"))
+        self.icons["replay"] = QIcon(resource_path("icons/replay.png"))
+        self.icons["back"] = QIcon(resource_path("icons/back.png"))
+        self.icons["previous"] = QIcon(resource_path("icons/previous.png"))
+        self.icons["next"] = QIcon(resource_path("icons/next.png"))
+
+
     def initUI(self):
         bottomLayout = QVBoxLayout()
         bottomLayout.setSpacing(0)
         bottomLayout.setContentsMargins(0, 0, 0, 0)
         bottomLayout.setSizeConstraint(QLayout.SetMaximumSize)
 
-        # Play buttons
         buttonsLayout = QHBoxLayout()
         buttonsLayout.setSpacing(3)
         buttonsLayout.setContentsMargins(0, 0, 0, 0)
         buttonsLayout.setAlignment(Qt.AlignHCenter)
         button_size = 28
 
+        modelSelection = QComboBox()
+        modelSelection.addItems(["vosk", "whisper"])
+        buttonsLayout.addWidget(modelSelection)
+        buttonsLayout.addSpacing(16)
+
+        # Play buttons
         backButton = QPushButton()
-        backButton.setIcon(QIcon(resource_path("icons/back.png")))
+        backButton.setIcon(self.icons["back"])
         backButton.setFixedWidth(button_size)
         backButton.clicked.connect(self.back)
         buttonsLayout.addWidget(backButton)
 
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prevButton = QPushButton()
-        prevButton.setIcon(QIcon(resource_path("icons/previous.png")))
+        prevButton.setIcon(self.icons["previous"])
         prevButton.setFixedWidth(button_size)
         # button.setIcon(QIcon(icon_path))
         prevButton.clicked.connect(self.playPrev)
         buttonsLayout.addWidget(prevButton)
 
-        curButton = QPushButton()
-        curButton.setIcon(QIcon(resource_path("icons/play-button.png")))
-        curButton.setFixedWidth(button_size)
-        curButton.clicked.connect(self.play)
-        buttonsLayout.addWidget(curButton)
+        self.playButton = QPushButton()
+        self.playButton.setIcon(self.icons["play"])
+        self.playButton.setFixedWidth(button_size)
+        self.playButton.clicked.connect(self.play)
+        buttonsLayout.addWidget(self.playButton)
 
         nextButton = QPushButton()
-        nextButton.setIcon(QIcon(resource_path("icons/next.png")))
+        nextButton.setIcon(self.icons["next"])
         nextButton.setFixedWidth(button_size)
         nextButton.clicked.connect(self.playNext)
         buttonsLayout.addWidget(nextButton)
@@ -747,10 +763,12 @@ class MainWindow(QMainWindow):
             segment = self.waveform.segments[self.playing_segment]
             if player_seconds >= segment[1]:
                 self.player.pause()
+                self.playButton.setIcon(self.icons["play"])
                 self.waveform.setHead(segment[1])
         elif self.waveform.selection_is_active:
             if player_seconds >= self.waveform.selection[1]:
                 self.player.pause()
+                self.playButton.setIcon(self.icons["play"])
                 self.waveform.setHead(self.waveform.selection[1])
         
         # Update subtitles
@@ -763,6 +781,7 @@ class MainWindow(QMainWindow):
     def play(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
+            self.playButton.setIcon(self.icons["play"])
             if (self.playing_segment == self.waveform.last_segment_active
                 or self.waveform.last_segment_active == -1):
                 return
@@ -777,18 +796,21 @@ class MainWindow(QMainWindow):
             self.playing_segment = -1
             self.player.setPosition(int(self.waveform.playhead * 1000))
             self.player.play()
+            self.playButton.setIcon(self.icons["pause"])
 
 
     def stop(self):
         """Stop playback"""
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.stop()
+            self.playButton.setIcon(self.icons["play"])
 
 
     def playSegment(self, segment):
         start, _ = segment
         self.player.setPosition(int(start * 1000))
         self.player.play()
+        self.playButton.setIcon(self.icons["pause"])
 
 
     def playNext(self):
@@ -831,12 +853,13 @@ class MainWindow(QMainWindow):
 
     def back(self):
         """Get back to the first segment or to the beginning of the recording"""
+        self.stop()
         if len(self.waveform.segments) > 0:
-            first_seg_id = min(self.waveform.segments.keys(), key=lambda x: self.waveform.segments[x][0])
-            self.waveform.setActive(id)
+            first_seg_id = self.waveform.getSortedSegments()[0][0]
+            self.waveform.setActive(first_seg_id)
             self.text_edit.setActive(first_seg_id, update_waveform=False)
+            self.waveform.setHead(self.waveform.segments[first_seg_id][0])
         else:
-            self.stop()
             self.waveform.t_left = 0.0
             self.waveform.scroll_vel = 0.0
             self.waveform.setHead(0.0)
