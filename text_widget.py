@@ -13,26 +13,13 @@ from PySide6.QtGui import (
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
     QSyntaxHighlighter
 )
-from commands import InsertTextCommand, DeleteTextCommand
 
 from ostilhou.asr import extract_metadata
 from ostilhou.hspell import hs_dict
 
+from commands import InsertTextCommand, DeleteTextCommand, InsertBlockCommand
 
 
-def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
-    pos = cursor.selectionEnd()
-    start_block_number = parent.getBlockNumber(cursor.selectionStart())
-    end_block_number = parent.getBlockNumber(cursor.selectionEnd())
-    if start_block_number == end_block_number:
-        # Deletion in a single utterance
-        size = cursor.selectionEnd() - cursor.selectionStart()
-        parent.undo_stack.push(DeleteTextCommand(parent, pos, size, QTextCursor.Left))
-    else:
-        # Deletion over many blocks
-        pass
-
-    
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -71,7 +58,7 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def split_sentence(self, segments: list, start: int, end: int) -> list:
-        """ Split a sentence in three parts, given a pair of indices """
+        """ Subdivide a list of segments further, given a pair of indices """
         assert start < end
         splitted = []
         for seg_start, seg_end in segments:
@@ -151,7 +138,7 @@ class Highlighter(QSyntaxHighlighter):
                 continue
             if not hs_dict.spell(match.captured().replace('’', "'")):
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.mispellformat)
-        
+
 
 
 
@@ -179,6 +166,21 @@ class BlockType(Enum):
     METADATA_ONLY = 1
     ALIGNED = 2
     NOT_ALIGNED = 3
+
+
+
+
+def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
+    pos = cursor.selectionEnd()
+    start_block_number = parent.getBlockNumber(cursor.selectionStart())
+    end_block_number = parent.getBlockNumber(cursor.selectionEnd())
+    if start_block_number == end_block_number:
+        # Deletion in a single utterance
+        size = cursor.selectionEnd() - cursor.selectionStart()
+        parent.undo_stack.push(DeleteTextCommand(parent, pos, size, QTextCursor.Left))
+    else:
+        # Deletion over many blocks
+        pass
 
 
 
@@ -515,6 +517,7 @@ class TextEdit(QTextEdit):
         else:
             self.deactivateSentence()
             self.parent.waveform.setActive(None)
+            self.parent.status_bar.showMessage("")
 
 
     def contextMenuEvent(self, event):
@@ -619,7 +622,7 @@ class TextEdit(QTextEdit):
             else:
                 self.undo_stack.push(InsertTextCommand(self, char, pos))
             return
-
+        
         pos_in_block = cursor.positionInBlock()
         current_block = cursor.block()
         block_data = current_block.userData()
@@ -637,34 +640,26 @@ class TextEdit(QTextEdit):
                 return
 
             text = current_block.text()
-            text_len = len(text.rstrip())
-            first_letter = 0
-            while first_letter < len(text) and text[first_letter].isspace():
-                first_letter += 1
+            last_letter_idx = len(text.rstrip())
+            first_letter_idx = 0
+            while first_letter_idx < len(text) and text[first_letter_idx].isspace():
+                first_letter_idx += 1
 
             # Cursor at the beginning of sentence
-            if pos_in_block == 0:
+            if pos_in_block <= first_letter_idx:
                 # Create an empty block before
-                print("before", f"{cursor.position()=}")
-                ret = super().keyPressEvent(event)
-                # Fix the shift of userData
-                block = cursor.block()
-                prev_block = block.previous()
-                if prev_block.userData():
-                    block_data = prev_block.userData().clone()
-                    prev_block.setUserData(None)
-                    block.setUserData(block_data)
-                    #self.highlighter.rehighlight() # So slow
-                return ret
+                self.undo_stack.push(InsertBlockCommand(self, pos))
+                return
             
             # Cursor at the end of sentence
-            if pos_in_block >= text_len:
+            if pos_in_block >= last_letter_idx:
                 # Create an empty block after
                 print("after")
-                return super().keyPressEvent(event)
+                self.undo_stack.push(InsertBlockCommand(self, pos, after=True))
+                return
             
             # Cursor in the middle of the sentence
-            if pos_in_block > first_letter and pos_in_block < text_len and not has_selection:
+            if pos_in_block > first_letter_idx and pos_in_block < last_letter_idx and not has_selection:
                 # Check if current block has an associated segment
                 if block_data and "seg_id" in block_data.data:
                     seg_id = block_data.data["seg_id"]

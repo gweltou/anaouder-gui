@@ -496,7 +496,7 @@ class MainWindow(QMainWindow):
     def updateWindowTitle(self):
         title_parts = []
         if not self.undo_stack.isClean():
-            title_parts.append("⬤")
+            title_parts.append("●")
         title_parts.append(self.APP_NAME)
         if self.filepath:
             title_parts.append('-')
