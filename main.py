@@ -22,7 +22,7 @@ from ostilhou.asr import (
     transcribe_segment,
     transcribe_segment_timecoded_callback,
 )
-from ostilhou.asr.models import DEFAULT_MODEL, load_model, is_model_loaded
+from ostilhou.asr.models import load_model, is_model_loaded, get_available_models
 from ostilhou.audio import split_to_segments, convert_to_mp3, prepare_segment_for_decoding
 from ostilhou.asr.dataset import format_timecode
 
@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter, QProgressBar,
     QPlainTextEdit, QTextEdit, QPushButton, QDial,
-    QLabel, QComboBox,
+    QLabel, QComboBox, QCheckBox
 )
 from PySide6.QtCore import (
     Qt, QSize, QTimer, QRegularExpression, QPointF,
@@ -82,10 +82,13 @@ class RecognizerWorker(QThread):
         print(segments)
         self.segments = segments
     
+    def setModel(self, model_name):
+        self.model = model_name
+    
     def run(self):
-        if not is_model_loaded():
-            self.message.emit(f"Loading {DEFAULT_MODEL}")
-            load_model()
+        if not is_model_loaded(self.model):
+            self.message.emit(f"Loading {self.model}")
+            load_model(self.model)
 
         # Stupid hack with locale to avoid commas in json string
         current_locale = locale.getlocale()
@@ -320,6 +323,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.input_devices = QMediaDevices.audioInputs()
+        self.available_models = sorted(get_available_models(), reverse=True)
 
         self.filepath = filepath
         self.video_window = None
@@ -333,6 +337,10 @@ class MainWindow(QMainWindow):
 
         self.undo_stack = QUndoStack(self)
         self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
+
+        self.text_edit = TextEdit(self)
+        self.waveform = WaveformWidget(self)
+        self.waveform.utterances = self.text_edit
         
         self.loadIcons()
         self.updateWindowTitle()
@@ -370,6 +378,7 @@ class MainWindow(QMainWindow):
         self.recognizer_worker.transcribedSegment.connect(self.slotGetTranscription)
         self.recognizer_worker.transcribed.connect(self.createUtterance)
         self.recognizer_worker.finished.connect(self.progress_bar.hide)
+        self.recognizer_worker.setModel(self.available_models[0])
 
         if filepath:
             self.openFile(filepath)
@@ -385,6 +394,7 @@ class MainWindow(QMainWindow):
         self.icons["next"] = QIcon(resource_path("icons/next.png"))
         self.icons["zoom_in"] = QIcon(resource_path("icons/zoom_in.png"))
         self.icons["zoom_out"] = QIcon(resource_path("icons/zoom_out.png"))
+        self.icons["sparkles"] = QIcon(resource_path("icons/sparkles.png"))
         # self.icons["waveform"] = QIcon(resource_path("icons/waveform.png"))
 
 
@@ -395,81 +405,122 @@ class MainWindow(QMainWindow):
         bottomLayout.setSizeConstraint(QLayout.SetMaximumSize)
 
 
+        buttonSize = 28
+        buttonSpacing = 3
         buttonsLayout = QHBoxLayout()
-        buttonsLayout.setSpacing(3)
         buttonsLayout.setContentsMargins(0, 0, 0, 0)
-        buttonsLayout.setAlignment(Qt.AlignHCenter)
-        button_size = 28
+
+        leftButtonsLayout = QHBoxLayout()
+        leftButtonsLayout.setContentsMargins(8, 0, 8, 0)
+        leftButtonsLayout.setSpacing(buttonSpacing)
+        leftButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # buttonsLayout.addWidget(QLabel("ASR model"))
-        modelSelection = QComboBox()
-        modelSelection.addItems(["vosk", "whisper"])
-        buttonsLayout.addWidget(modelSelection)
+        leftButtonsLayout.addWidget(
+            IconWidget(resource_path("icons/head-side-thinking.png"), buttonSize*0.7))
 
-        buttonsLayout.addSpacing(16)
+        modelSelection = QComboBox()
+        modelSelection.addItems(self.available_models)
+        modelSelection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        modelSelection.currentIndexChanged.connect(
+            lambda i: self.recognizer_worker.setModel(self.available_models[i])
+            )
+        leftButtonsLayout.addWidget(modelSelection)
+
+        leftButtonsLayout.addWidget(
+            IconWidget(resource_path("icons/123-numbers.png"), buttonSize*0.7))
+        normalizationCheckbox = QCheckBox()
+        leftButtonsLayout.addWidget(normalizationCheckbox)
+
+        leftButtonsLayout.addSpacing(8)
+
+        transcribeButton = QPushButton()
+        transcribeButton.setIcon(self.icons["sparkles"])
+        transcribeButton.setFixedWidth(buttonSize)
+        leftButtonsLayout.addWidget(transcribeButton)
+
+
 
         # Play buttons
+        centerButtonsLayout = QHBoxLayout()
+        centerButtonsLayout.setContentsMargins(8, 0, 8, 0)
+        centerButtonsLayout.setSpacing(buttonSpacing)
+        centerButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         backButton = QPushButton()
         backButton.setIcon(self.icons["back"])
-        backButton.setFixedWidth(button_size)
+        backButton.setFixedWidth(buttonSize)
         backButton.clicked.connect(self.back)
-        buttonsLayout.addWidget(backButton)
+        centerButtonsLayout.addWidget(backButton)
 
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prevButton = QPushButton()
         prevButton.setIcon(self.icons["previous"])
-        prevButton.setFixedWidth(button_size)
+        prevButton.setFixedWidth(buttonSize)
         # button.setIcon(QIcon(icon_path))
         prevButton.clicked.connect(self.playPrev)
-        buttonsLayout.addWidget(prevButton)
+        centerButtonsLayout.addWidget(prevButton)
 
         self.playButton = QPushButton()
         self.playButton.setIcon(self.icons["play"])
-        self.playButton.setFixedWidth(button_size)
+        self.playButton.setFixedWidth(buttonSize)
         self.playButton.clicked.connect(self.play)
-        buttonsLayout.addWidget(self.playButton)
+        centerButtonsLayout.addWidget(self.playButton)
 
         nextButton = QPushButton()
         nextButton.setIcon(self.icons["next"])
-        nextButton.setFixedWidth(button_size)
+        nextButton.setFixedWidth(buttonSize)
         nextButton.clicked.connect(self.playNext)
-        buttonsLayout.addWidget(nextButton)
+        centerButtonsLayout.addWidget(nextButton)
 
         volumeDial = QDial()
         # volumeDial.setMaximumWidth(button_size*1.5)
-        volumeDial.setMaximumSize(QSize(button_size*1.1, button_size*1.1))
+        volumeDial.setMaximumSize(QSize(buttonSize*1.1, buttonSize*1.1))
         # volumeDial.minimumSizeHint(QSize(button_size, button_size))
         volumeDial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
         volumeDial.setValue(100)
-        buttonsLayout.addWidget(volumeDial)
+        centerButtonsLayout.addWidget(volumeDial)
 
-        buttonsLayout.addSpacing(16)
+        # buttonsLayout.addSpacing(16)
 
-        buttonsLayout.addWidget(IconWidget(resource_path("icons/waveform.png"), button_size*0.7))
-        zoomInButton = QPushButton()
-        zoomInButton.setIcon(self.icons["zoom_in"])
-        zoomInButton.setFixedWidth(button_size)
-        buttonsLayout.addWidget(zoomInButton)
+        rightButtonsLayout = QHBoxLayout()
+        rightButtonsLayout.setContentsMargins(8, 0, 8, 0)
+        rightButtonsLayout.setSpacing(buttonSpacing)
+        rightButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        zoomOutButton = QPushButton()
-        zoomOutButton.setIcon(self.icons["zoom_out"])
-        zoomOutButton.setFixedWidth(button_size)
-        buttonsLayout.addWidget(zoomOutButton)
+        rightButtonsLayout.addWidget(IconWidget(resource_path("icons/waveform.png"), buttonSize*0.7))
+        waveZoomInButton = QPushButton()
+        waveZoomInButton.setIcon(self.icons["zoom_in"])
+        waveZoomInButton.setFixedWidth(buttonSize)
+        waveZoomInButton.clicked.connect(lambda: self.waveform.zoomIn(1.333))
+        rightButtonsLayout.addWidget(waveZoomInButton)
+        waveZoomOutButton = QPushButton()
+        waveZoomOutButton.setIcon(self.icons["zoom_out"])
+        waveZoomOutButton.setFixedWidth(buttonSize)
+        waveZoomOutButton.clicked.connect(lambda: self.waveform.zoomOut(1.333))
+        rightButtonsLayout.addWidget(waveZoomOutButton)
+        
+        rightButtonsLayout.addSpacing(8)
+
+        rightButtonsLayout.addWidget(IconWidget(resource_path("icons/font.png"), buttonSize*0.7))
+        textZoomInButton = QPushButton()
+        textZoomInButton.setIcon(self.icons["zoom_in"])
+        textZoomInButton.setFixedWidth(buttonSize)
+        textZoomInButton.clicked.connect(lambda: self.text_edit.zoomIn(1))
+        rightButtonsLayout.addWidget(textZoomInButton)
+        textZoomOutButton = QPushButton()
+        textZoomOutButton.setIcon(self.icons["zoom_out"])
+        textZoomOutButton.setFixedWidth(buttonSize)
+        textZoomOutButton.clicked.connect(lambda: self.text_edit.zoomOut(1))
+        rightButtonsLayout.addWidget(textZoomOutButton)
+
+        buttonsLayout.addLayout(leftButtonsLayout)
+        buttonsLayout.addLayout(centerButtonsLayout)
+        buttonsLayout.addLayout(rightButtonsLayout)
 
         bottomLayout.addLayout(buttonsLayout)
-
-
-        utterancesLayout = QVBoxLayout()
-        utterancesLayout.setSizeConstraint(QLayout.SetMaximumSize)
-        self.text_edit = TextEdit(self)
-        utterancesLayout.addWidget(self.text_edit)
-
-        self.waveform = WaveformWidget(self)
-        self.waveform.utterances = self.text_edit
-        zoomInButton.clicked.connect(lambda: self.waveform.zoomIn(1.333))
-        zoomOutButton.clicked.connect(lambda: self.waveform.zoomOut(1.333))
-        
         bottomLayout.addWidget(self.text_edit)
+        
         self.bottomWidget = QWidget()
         self.bottomWidget.setLayout(bottomLayout)
         
@@ -510,6 +561,12 @@ class MainWindow(QMainWindow):
         toggleVideo = QAction("Show video", self)
         toggleVideo.triggered.connect(self.toggleVideo)
         displayMenu.addAction(toggleVideo)
+
+        toggleAutocorrection = QAction("Autocorrection", self)
+        toggleAutocorrection.setCheckable(True)
+        toggleAutocorrection.triggered.connect(lambda: print("triggered"))
+        toggleAutocorrection.toggled.connect(lambda: print("toggled"))
+        displayMenu.addAction(toggleAutocorrection)
         
         deviceMenu = menuBar.addMenu("Device")
         for dev in self.input_devices:
@@ -523,9 +580,11 @@ class MainWindow(QMainWindow):
         self.progress_bar.hide()
         self.status_bar.addWidget(self.progress_bar, 1)
 
+
     @Slot(str)
     def slotSetStatusMessage(self, message: str):
         self.status_label.setText(message)
+
 
     @Slot(str, int, int)
     def slotGetTranscription(self, text: str, seg_id: int, i: int):

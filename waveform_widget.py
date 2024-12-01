@@ -367,6 +367,7 @@ class WaveformWidget(QWidget):
             # Delete segment(s)
             print("Deleting", self.active_segments)
             self.parent.deleteSegment(self.active_segments)
+            self._to_sort = True
 
         return super().keyPressEvent(event)
         

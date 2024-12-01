@@ -30,6 +30,7 @@ a = Analysis(
         ("./icons/next.png", "icons/"),
         ("./icons/replay.png", "icons/"),
         ("./icons/waveform.png", "icons/"),
+        ("./icons/font.png", "icons/"),
         ("./icons/zoom_in.png", "icons/"),
         ("./icons/zoom_out.png", "icons/"),
     ],

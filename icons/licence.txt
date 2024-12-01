@@ -2,3 +2,16 @@ Icons by https://www.flaticon.com/authors/abdul-allib
 
 Flaticon license
 Free for personal and commercial use with attribution.
+
+pause.png	<a href="https://www.flaticon.com/free-icons/pause-button" title="pause button icons">Pause button icons created by Icon Hubs - Flaticon</a>	Flaticon license
+magnifier-plus.png	Ayub Irawan	CC Atribution
+magnifier-minus.png	Ayub Irawan	CC Atribution
+microphone.png	<a href="https://www.flaticon.com/free-icons/radio" title="radio icons">Radio icons created by Freepik - Flaticon</a>	Flaticon license
+replay.png	<a href="https://www.flaticon.com/free-icons/replay" title="replay icons">Replay icons created by Pixel perfect - Flaticon</a>	Flaticon license
+waveform.png	<a href="https://www.flaticon.com/free-icons/radio" title="radio icons">Radio icons created by Freepik - Flaticon</a>
+font.png	<a href="https://www.flaticon.com/free-icons/font" title="font icons">Font icons created by Smashicons - Flaticon</a>
+transporter-5.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
+quill-pen-story.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
+pen-field.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
+volume.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
+123-numbers.png	<a href="https://www.flaticon.com/free-icons/count" title="count icons">Count icons created by Freepik - Flaticon</a>
