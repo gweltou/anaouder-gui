@@ -11,7 +11,7 @@ static_ffmpeg.add_paths()
 from pydub import AudioSegment
 # import numpy as np
 import re
-from time import time
+from datetime import timedelta
 import locale
 import srt
 #from scipy.io import wavfile
@@ -23,8 +23,8 @@ from ostilhou.asr import (
     transcribe_segment_timecoded_callback,
 )
 from ostilhou.asr.models import load_model, is_model_loaded, get_available_models
+from ostilhou.asr.dataset import format_timecode, METADATA_PATTERN
 from ostilhou.audio import split_to_segments, convert_to_mp3, prepare_segment_for_decoding
-from ostilhou.asr.dataset import format_timecode
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
@@ -49,7 +49,7 @@ from PySide6.QtGui import (
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
 from waveform_widget import WaveformWidget
-from text_widget import TextEdit, MyTextBlockUserData
+from text_widget import TextEdit, MyTextBlockUserData, BlockType
 from video_widget import VideoWindow
 
 
@@ -549,6 +549,12 @@ class MainWindow(QMainWindow):
         saveAsAction.triggered.connect(self.saveFileAs)
         fileMenu.addAction(saveAsAction)
 
+        ## Export sub-menu
+        exportSubMenu = fileMenu.addMenu("Export as...")
+        exportSrtAction = QAction("SubRip (.srt)", self)
+        exportSrtAction.triggered.connect(self.exportSrt)
+        exportSubMenu.addAction(exportSrtAction)
+
         operationMenu = menuBar.addMenu("Operations")
         findSegmentsAction = QAction("Find segments", self)
         findSegmentsAction.triggered.connect(self.opFindSegments)
@@ -614,6 +620,7 @@ class MainWindow(QMainWindow):
 
         with open(filepath, 'w') as f:
             doc = self.text_edit.document()
+            print(doc.toHtml())
             for blockIndex in range(doc.blockCount()):
                 block = doc.findBlockByNumber(blockIndex)
                 text = block.text().strip()
@@ -637,14 +644,72 @@ class MainWindow(QMainWindow):
 
     def saveFileAs(self):
         dir = settings.value("editor/last_opened_folder", "")
-        filepath, stuff = QFileDialog.getSaveFileName(self, "Save File", dir)
+        filepath, _ = QFileDialog.getSaveFileName(self, "Save File", dir)
         self.waveform.ctrl_pressed = False
-        print(filepath, stuff)
         if not filepath:
             return
         
         self.filepath = filepath
         self._saveFile(filepath)
+    
+
+    def exportSrt(self):
+        dir = os.path.split(self.filepath)[0] if self.filepath else os.path.expanduser('~')
+        filename = os.path.splitext(self.filepath)[0] if self.filepath else "untitled"
+        filename += ".srt"
+        filepath, _ = QFileDialog.getSaveFileName(self, "Save File", os.path.join(dir, filename))
+        rm_special_tokens = True
+
+        doc = self.text_edit.document()
+        subs = []
+
+        block = doc.firstBlock()
+        while block.isValid():
+            skip = False
+            
+            if self.text_edit.getBlockType(block) != BlockType.ALIGNED:
+                skip = True
+            else:
+                # Remove unwanted strings from subtitle output
+                text = block.text()
+                text = re.sub(METADATA_PATTERN, ' ', text)
+                text = re.sub(r"<br>", '\u2028', text, 0, re.IGNORECASE)
+
+                if rm_special_tokens:
+                    remainder = text[:]
+                    text_segments = []
+                    while match := re.search(r"</?([a-zA-Z \']+)>", remainder):
+                        # Accept a few HTML formatting elements
+                        if match[1].lower() in ('i', 'b', 'br'):
+                            text_segments.append(remainder[:match.end()])
+                        else:
+                            text_segments.append(remainder[:match.start()])
+                        remainder = remainder[match.end():]
+                    text_segments.append(remainder)
+                    text = ''.join(text_segments)
+                
+                # Remove extra spaces
+                lines = [' '.join(l.split()) for l in text.split('\u2028')]
+                text = '\n'.join(lines)
+                if not text:
+                    skip = True
+            
+            if not skip:
+                block_id = self.text_edit.getBlockId(block)
+                start, end = self.waveform.segments[block_id]
+                s = srt.Subtitle(
+                        index=len(subs),
+                        content=text,
+                        start=timedelta(seconds=start),
+                        end=timedelta(seconds=end)
+                        )
+                subs.append(s)
+            
+            block = block.next()
+        
+        with open(filepath, 'w') as _f:
+            _f.write(srt.compose(subs))
+        print(f"Subtitles saved to {filepath}")
                     
 
     def openFile(self, filepath=""):

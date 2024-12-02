@@ -414,13 +414,13 @@ class TextEdit(QTextEdit):
             if i_comment >= 0:
                 text = text[:i_comment]
             
-            text, _ = extract_metadata(text)
-            is_utt = len(text.strip()) > 0
+            # text, _ = extract_metadata(text)
+            # is_utt = len(text.strip()) > 0
 
-            if is_utt:
-                block.setUserData(MyTextBlockUserData({"is_utt": True}))
-            else:
-                block.setUserData(MyTextBlockUserData({"is_utt": False}))
+            # if is_utt:
+            #     block.setUserData(MyTextBlockUserData({"is_utt": True}))
+            # else:
+            #     block.setUserData(MyTextBlockUserData({"is_utt": False}))
 
 
     def deactivateSentence(self, id=None):
