@@ -674,6 +674,19 @@ class MainWindow(QMainWindow):
                 text = block.text()
                 text = re.sub(METADATA_PATTERN, ' ', text)
                 text = re.sub(r"<br>", '\u2028', text, 0, re.IGNORECASE)
+                text = re.sub("\*", '', text)
+                text = re.sub("\'", '’', text)
+
+                # Change quotes characters
+                quote_open = False
+                while i:=text.find('"') >= 0:
+                    if quote_open:
+                        text = text.replace('"', '»', 1)
+                    else:
+                        text = text.replace('"', '«', 1)
+                    quote_open = not quote_open
+
+
 
                 if rm_special_tokens:
                     remainder = text[:]
@@ -759,7 +772,9 @@ class MainWindow(QMainWindow):
                         if first_utt_id == None:
                             first_utt_id = seg_id
                         line = line[:match.start()] + line[match.end():]
-                        self.text_edit.addSentence(line.strip(), seg_id)
+                        line = line.strip()
+                        line = re.sub(r"<br>", '\u2028', line, 0, re.IGNORECASE)
+                        self.text_edit.addSentence(line, seg_id)
                     else:
                         # Regular text or comments or metadata only
                         self.text_edit.addText(line)

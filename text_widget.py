@@ -316,11 +316,13 @@ class TextEdit(QTextEdit):
 
     def addSentence(self, text: str, id: int):
         # Insert new utterance at the end
-        self.append(text)
-        doc = self.document()
-        cursor = QTextCursor(doc)
+
+        # When using append, html tags are interpreted as formatting tags
+        # self.append(text)
+        cursor = self.textCursor()
         cursor.movePosition(QTextCursor.End)
-        cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
+        cursor.insertText('\n' + text)
+        cursor.block().setUserData(MyTextBlockUserData({"seg_id": id}))
 
 
     def insertSentence(self, text: str, id: int, with_cursor=False):
