@@ -255,17 +255,6 @@ class JoinUtterancesCommand(QUndoCommand):
         self.waveform.draw()
 
 
-class DeleteSegmentCommand(QUndoCommand):
-    def __init__(self, segment):
-        super().__init__()
-    
-    def undo(self):
-        pass
-
-    def redo(self):
-        pass
-
-
 class AlignWithSelectionCommand(QUndoCommand):
     def __init__(self, text_edit, waveform, block):
         super().__init__()
@@ -297,6 +286,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.text_edit.setBlockId(self.block, self.segment_id)
         self.text_edit.highlighter.rehighlightBlock(self.block)
         self.waveform.draw()
+
 
 
 class IconWidget(QLabel):
@@ -394,7 +384,10 @@ class MainWindow(QMainWindow):
         self.icons["next"] = QIcon(resource_path("icons/next.png"))
         self.icons["zoom_in"] = QIcon(resource_path("icons/zoom_in.png"))
         self.icons["zoom_out"] = QIcon(resource_path("icons/zoom_out.png"))
-        self.icons["sparkles"] = QIcon(resource_path("icons/sparkles.png"))
+        self.icons["sparkles"] = QIcon(resource_path("icons/sparkles-yellow.png"))
+
+        self.icons["italic"] = QIcon(resource_path("icons/italic.png"))
+        self.icons["bold"] = QIcon(resource_path("icons/bold.png"))
         # self.icons["waveform"] = QIcon(resource_path("icons/waveform.png"))
 
 
@@ -407,11 +400,13 @@ class MainWindow(QMainWindow):
 
         buttonSize = 28
         buttonSpacing = 3
+        buttonMargin = 8
         buttonsLayout = QHBoxLayout()
         buttonsLayout.setContentsMargins(0, 0, 0, 0)
+        buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         leftButtonsLayout = QHBoxLayout()
-        leftButtonsLayout.setContentsMargins(8, 0, 8, 0)
+        leftButtonsLayout.setContentsMargins(buttonMargin, 0, buttonMargin, 0)
         leftButtonsLayout.setSpacing(buttonSpacing)
         leftButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
@@ -443,9 +438,10 @@ class MainWindow(QMainWindow):
 
         # Play buttons
         centerButtonsLayout = QHBoxLayout()
-        centerButtonsLayout.setContentsMargins(8, 0, 8, 0)
+        centerButtonsLayout.setContentsMargins(buttonMargin, 0, buttonMargin, 0)
         centerButtonsLayout.setSpacing(buttonSpacing)
-        centerButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # centerButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        centerButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         backButton = QPushButton()
         backButton.setIcon(self.icons["back"])
@@ -482,11 +478,24 @@ class MainWindow(QMainWindow):
         centerButtonsLayout.addWidget(volumeDial)
 
         # buttonsLayout.addSpacing(16)
+        formatButtonsLayout = QHBoxLayout()
+        formatButtonsLayout.setContentsMargins(buttonMargin, 0, buttonMargin, 0)
+        formatButtonsLayout.setSpacing(buttonSpacing)
+        formatButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        italicButton = QPushButton()
+        italicButton.setIcon(self.icons["italic"])
+        italicButton.setFixedWidth(buttonSize)
+        formatButtonsLayout.addWidget(italicButton)
+        boldButton = QPushButton()
+        boldButton.setIcon(self.icons["bold"])
+        boldButton.setFixedWidth(buttonSize)
+        formatButtonsLayout.addWidget(boldButton)
 
         rightButtonsLayout = QHBoxLayout()
-        rightButtonsLayout.setContentsMargins(8, 0, 8, 0)
+        rightButtonsLayout.setContentsMargins(buttonMargin, 0, buttonMargin, 0)
         rightButtonsLayout.setSpacing(buttonSpacing)
-        rightButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignRight)
+        rightButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         rightButtonsLayout.addWidget(IconWidget(resource_path("icons/waveform.png"), buttonSize*0.7))
         waveZoomInButton = QPushButton()
@@ -516,6 +525,7 @@ class MainWindow(QMainWindow):
 
         buttonsLayout.addLayout(leftButtonsLayout)
         buttonsLayout.addLayout(centerButtonsLayout)
+        buttonsLayout.addLayout(formatButtonsLayout)
         buttonsLayout.addLayout(rightButtonsLayout)
 
         bottomLayout.addLayout(buttonsLayout)
@@ -674,8 +684,14 @@ class MainWindow(QMainWindow):
                 text = block.text()
                 text = re.sub(METADATA_PATTERN, ' ', text)
                 text = re.sub(r"<br>", '\u2028', text, 0, re.IGNORECASE)
-                text = re.sub("\*", '', text)
-                text = re.sub("\'", '’', text)
+                text = re.sub(r"\*", '', text)
+                text = re.sub(r"\'", '’', text)
+
+                formats = block.textFormats()
+                if len(formats) > 1:
+                    print(text)
+                    for f in formats:
+                        print(f.start, f.length, f.format)
 
                 # Change quotes characters
                 quote_open = False
@@ -685,8 +701,6 @@ class MainWindow(QMainWindow):
                     else:
                         text = text.replace('"', '«', 1)
                     quote_open = not quote_open
-
-
 
                 if rm_special_tokens:
                     remainder = text[:]

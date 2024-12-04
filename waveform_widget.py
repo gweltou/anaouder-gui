@@ -57,6 +57,17 @@ class ResizeSegmentCommand(QUndoCommand):
 
 
 
+class DeleteSegmentCommand(QUndoCommand):
+    def __init__(self, segment):
+        super().__init__()
+    
+    def undo(self):
+        pass
+
+    def redo(self):
+        pass
+
+
 
 class WaveformWidget(QWidget):
 

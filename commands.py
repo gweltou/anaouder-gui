@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
 )
 from PySide6.QtGui import (
-    QTextCursor, QUndoCommand,
+    QTextCursor, QUndoCommand, QTextDocument
 )
 
 
@@ -129,3 +129,30 @@ class InsertBlockCommand(QUndoCommand):
     
     def mergeWith(self, other: QUndoCommand) -> bool:
         return False
+
+
+
+class ReplaceTextCommand(QUndoCommand):
+    def __init__(self, text_edit, block_number, old_text, new_text):
+        super().__init__()
+        self.text_edit : QTextEdit = text_edit
+        self.block_number : int = block_number
+        self.old_text : str = old_text
+        self.new_text : str = new_text
+    
+    def undo(self):
+        block = self.text_edit.document().findBlockByNumber(self.block_number)
+        cursor = QTextCursor(block)
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        cursor.insertText(self.old_text)
+
+    def redo(self):
+        block = self.text_edit.document().findBlockByNumber(self.block_number)
+        cursor = QTextCursor(block)
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        cursor.insertText(self.new_text)
+    
+    def id(self):
+        return 3

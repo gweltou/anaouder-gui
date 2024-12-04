@@ -17,13 +17,18 @@ from PySide6.QtGui import (
 from ostilhou.asr import extract_metadata
 from ostilhou.hspell import hs_dict
 
-from commands import InsertTextCommand, DeleteTextCommand, InsertBlockCommand
+from commands import (
+    InsertTextCommand,
+    DeleteTextCommand,
+    InsertBlockCommand,
+    ReplaceTextCommand
+)
 
 
 
 
 class Highlighter(QSyntaxHighlighter):
-    utt_block_margin = 4
+    utt_block_margin = 8
     aligned_color = QColor(210, 255, 230)
     unaligned_color = QColor(255, 220, 220)
 
@@ -315,7 +320,7 @@ class TextEdit(QTextEdit):
 
 
     def addSentence(self, text: str, id: int):
-        # Insert new utterance at the end
+        """ Insert new utterance at the end """
 
         # When using append, html tags are interpreted as formatting tags
         # self.append(text)
@@ -415,14 +420,6 @@ class TextEdit(QTextEdit):
             i_comment = text.find('#')
             if i_comment >= 0:
                 text = text[:i_comment]
-            
-            # text, _ = extract_metadata(text)
-            # is_utt = len(text.strip()) > 0
-
-            # if is_utt:
-            #     block.setUserData(MyTextBlockUserData({"is_utt": True}))
-            # else:
-            #     block.setUserData(MyTextBlockUserData({"is_utt": False}))
 
 
     def deactivateSentence(self, id=None):
@@ -626,9 +623,9 @@ class TextEdit(QTextEdit):
             return
         
         pos_in_block = cursor.positionInBlock()
-        current_block = cursor.block()
-        block_data = current_block.userData()
-        block_len = current_block.length()        
+        block = cursor.block()
+        block_data = block.userData()
+        block_len = block.length()        
         
         if event.key() == Qt.Key_Return:
             if event.modifiers() == Qt.ControlModifier:
@@ -641,7 +638,17 @@ class TextEdit(QTextEdit):
                 DeleteSelectedText(self, cursor)
                 return
 
-            text = current_block.text()
+            text = block.text()
+
+            if event.modifiers() == Qt.ShiftModifier:
+                left_part = text[:pos_in_block]
+                right_part = text[pos_in_block:]
+                new_text = left_part.rstrip() + '\u2028' + right_part.lstrip()
+                self.undo_stack.push(
+                    ReplaceTextCommand(self, block.blockNumber(), text, new_text)
+                    )
+                return
+
             last_letter_idx = len(text.rstrip())
             first_letter_idx = 0
             while first_letter_idx < len(text) and text[first_letter_idx].isspace():
@@ -676,11 +683,11 @@ class TextEdit(QTextEdit):
                 DeleteSelectedText(self, cursor)
                 return
             
-            if pos_in_block < block_len-1 or not self.isAligned(current_block):
+            if pos_in_block < block_len-1 or not self.isAligned(block):
                 self.undo_stack.push(DeleteTextCommand(self, pos, 1, QTextCursor.Right))
                 return
 
-            next_block = current_block.next()
+            next_block = block.next()
             if not next_block:
                 return super().keyPressEvent(event)
             
@@ -698,12 +705,12 @@ class TextEdit(QTextEdit):
                 DeleteSelectedText(self, cursor)
                 return
             
-            if pos_in_block > 0 or not self.isAligned(current_block):
+            if pos_in_block > 0 or not self.isAligned(block):
                 self.undo_stack.push(DeleteTextCommand(self, pos, 1, QTextCursor.Left))
                 return
                 # return super().keyPressEvent(event)
 
-            next_block = current_block.previous() # ?
+            next_block = block.previous() # ?
             if not next_block:
                 return super().keyPressEvent(event)
             
