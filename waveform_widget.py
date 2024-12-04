@@ -18,12 +18,45 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
-    QColor, QResizeEvent, QWheelEvent, QKeyEvent,
+    QColor, QResizeEvent, QWheelEvent, QKeyEvent, QUndoCommand
 )
 from PySide6.QtMultimedia import QMediaPlayer
 
 
 Handle = Enum("Handle", ["NONE", "LEFT", "RIGHT"])
+
+
+
+class ResizeSegmentCommand(QUndoCommand):
+    def __init__(self, waveform_widget, segment_id, old_segment, side, time_pos):
+        super().__init__()
+        self.waveform_widget : WaveformWidget = waveform_widget
+        self.segment_id : int = segment_id
+        self.old_segment : tuple = old_segment[:]
+        self.time_pos : float = time_pos
+        self.side : int = side # 0 is Left, 1 is Right
+    
+    def undo(self):
+        self.waveform_widget.segments[self.segment_id] = self.old_segment
+        self.waveform_widget.draw()
+
+    def redo(self):
+        if self.side == 0:
+            self.waveform_widget.segments[self.segment_id][0] = self.time_pos
+        elif self.side == 1:
+            self.waveform_widget.segments[self.segment_id][1] = self.time_pos
+    
+    def id(self):
+        return 20
+    
+    def mergeWith(self, other: QUndoCommand) -> bool:
+        if other.segment_id == self.segment_id and other.side == self.side:
+            self.time_pos = other.time_pos
+            return True
+        return False
+
+
+
 
 class WaveformWidget(QWidget):
 
@@ -72,6 +105,7 @@ class WaveformWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
+        self.undo_stack = self.parent.undo_stack
 
         self.waveform = None
         self.pixmap = None
@@ -517,13 +551,25 @@ class WaveformWidget(QWidget):
                     time_position = max(time_position, left_boundary + 0.01)
                     # Left segment boundary cannot outgrow right boundary
                     time_position = min(time_position, current_segment[1] - 0.01)
-                    current_segment[0] = time_position
+                    # current_segment[0] = time_position
+                    self.undo_stack.push(ResizeSegmentCommand(
+                            self,
+                            self.last_segment_active,
+                            current_segment,
+                            0, time_position
+                        ))
                 elif self.resizing_segment == Handle.RIGHT:
                     # Bound by segment on the right, if any
                     time_position = min(time_position, right_boundary - 0.01)
                     # Right segment boundary cannot be earlier than left boundary
                     time_position = max(time_position, current_segment[0] + 0.01)
-                    current_segment[1] = time_position
+                    # current_segment[1] = time_position
+                    self.undo_stack.push(ResizeSegmentCommand(
+                            self,
+                            self.last_segment_active,
+                            current_segment,
+                            1, time_position
+                        ))
             self.draw()
 
 
