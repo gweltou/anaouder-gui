@@ -6,12 +6,14 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     Qt, QTimer, QRegularExpression,
+    QRect
 )
 from PySide6.QtGui import (
     QAction, QColor, QFont,
     QWheelEvent, QKeyEvent, QKeySequence,
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
-    QSyntaxHighlighter
+    QSyntaxHighlighter,
+    QPainter, QPaintEvent, QFontMetricsF
 )
 
 from ostilhou.asr import extract_metadata
@@ -226,6 +228,9 @@ class TextEdit(QTextEdit):
         self.scroll_goal = 0.0
         self.timer = QTimer()
         self.timer.timeout.connect(self._updateScroll)
+
+        self._text_margin = False
+        self._char_width = -1
     
 
     def clear(self):
@@ -313,6 +318,14 @@ class TextEdit(QTextEdit):
         document = self.document()
         block = document.findBlock(position)
         return block.blockNumber()
+
+
+    def isAligned(self, block):
+        block_data = block.userData()
+        if block_data and "seg_id" in block_data.data:
+            if block_data.data["seg_id"] in self.parent.waveform.segments:
+                return True
+        return False
 
 
     def setSentenceText(self, id: int, text: str):
@@ -572,14 +585,6 @@ class TextEdit(QTextEdit):
     def contentsChange(self, pos, charsRemoved, charsAdded):
         # Update vide subtitle if necessary
         self.parent.updateSubtitle(force=True)
-
-
-    def isAligned(self, block):
-        block_data = block.userData()
-        if block_data and "seg_id" in block_data.data:
-            if block_data.data["seg_id"] in self.parent.waveform.segments:
-                return True
-        return False
         
 
     def inputMethodEvent(self, event):
@@ -733,3 +738,38 @@ class TextEdit(QTextEdit):
                 return
 
         return super().keyPressEvent(event)
+    
+
+    def zoomIn(self, *args):
+        super().zoomIn(*args)
+        self._updateMargin()
+    
+    def zoomOut(self, *args):
+        super().zoomOut(*args)
+        self._updateMargin()
+
+
+    def toggleTextMargin(self, checked: bool):
+        self._text_margin = checked
+        self._updateMargin()
+
+    def _updateMargin(self):
+        print("update margin")
+        if not self._text_margin:
+            return
+        
+        font_metrics = QFontMetricsF(self.font())
+        self._char_width = font_metrics.averageCharWidth()
+        self.viewport().update()
+
+
+    def paintEvent(self, event: QPaintEvent):
+        super().paintEvent(event)
+
+        if self._text_margin:
+            painter = QPainter(self.viewport())
+            gray_start_x = self._char_width * 42
+            painter.fillRect(
+                QRect(gray_start_x, 0, self.width() - gray_start_x, self.height()), 
+                QColor(0, 0, 0, 10)
+            )

@@ -574,16 +574,25 @@ class MainWindow(QMainWindow):
         operationMenu.addAction(recognizeAction)
 
         displayMenu = menuBar.addMenu("Display")
-        toggleVideo = QAction("Show video", self)
-        toggleVideo.setCheckable(True)
-        toggleVideo.triggered.connect(self.toggleVideo)
-        displayMenu.addAction(toggleVideo)
 
         toggleMisspelling = QAction("Misspelling", self)
         toggleMisspelling.setCheckable(True)
         toggleMisspelling.toggled.connect(
             lambda checked: self.text_edit.highlighter.toggleMisspelling(checked))
         displayMenu.addAction(toggleMisspelling)
+
+        toggleTextMargin = QAction("Text margin", self)
+        toggleTextMargin.setCheckable(True)
+        toggleTextMargin.toggled.connect(
+            lambda checked: self.text_edit.toggleTextMargin(checked))
+        displayMenu.addAction(toggleTextMargin)
+
+        displayMenu.addSeparator()
+
+        toggleVideo = QAction("Show video", self)
+        toggleVideo.setCheckable(True)
+        toggleVideo.triggered.connect(self.toggleVideo)
+        displayMenu.addAction(toggleVideo)
         
         deviceMenu = menuBar.addMenu("Device")
         for dev in self.input_devices:
