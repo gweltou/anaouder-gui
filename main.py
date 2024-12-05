@@ -575,14 +575,15 @@ class MainWindow(QMainWindow):
 
         displayMenu = menuBar.addMenu("Display")
         toggleVideo = QAction("Show video", self)
+        toggleVideo.setCheckable(True)
         toggleVideo.triggered.connect(self.toggleVideo)
         displayMenu.addAction(toggleVideo)
 
-        toggleAutocorrection = QAction("Autocorrection", self)
-        toggleAutocorrection.setCheckable(True)
-        toggleAutocorrection.triggered.connect(lambda: print("triggered"))
-        toggleAutocorrection.toggled.connect(lambda: print("toggled"))
-        displayMenu.addAction(toggleAutocorrection)
+        toggleMisspelling = QAction("Misspelling", self)
+        toggleMisspelling.setCheckable(True)
+        toggleMisspelling.toggled.connect(
+            lambda checked: self.text_edit.highlighter.toggleMisspelling(checked))
+        displayMenu.addAction(toggleMisspelling)
         
         deviceMenu = menuBar.addMenu("Device")
         for dev in self.input_devices:

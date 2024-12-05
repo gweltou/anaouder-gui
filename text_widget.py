@@ -15,7 +15,7 @@ from PySide6.QtGui import (
 )
 
 from ostilhou.asr import extract_metadata
-from ostilhou.hspell import hs_dict
+from ostilhou.hspell import get_hunspell_dict
 
 from commands import (
     InsertTextCommand,
@@ -35,6 +35,8 @@ class Highlighter(QSyntaxHighlighter):
     def __init__(self, parent, text_edit):
         super().__init__(parent)
         self.text_edit : TextEdit = text_edit
+        self.hunspell = None
+        self.show_misspelling = False
 
         self.metadataFormat = QTextCharFormat()
         self.metadataFormat.setForeground(Qt.darkMagenta)
@@ -135,15 +137,23 @@ class Highlighter(QSyntaxHighlighter):
                 cursor.setBlockFormat(QTextBlockFormat())
 
         # Check misspelled words
+        if not self.show_misspelling:
+            return
+        
         expression = QRegularExpression(r'\b([\w’\']+)\b', QRegularExpression.UseUnicodePropertiesOption)
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
             if not self.is_subsentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength()):
                 continue
-            if not hs_dict.spell(match.captured().replace('’', "'")):
+            if not self.hunspell.spell(match.captured().replace('’', "'")):
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.mispellformat)
 
+
+    def toggleMisspelling(self, checked):
+        self.hunspell = get_hunspell_dict()
+        self.show_misspelling = checked
+        self.rehighlight()
 
 
 
