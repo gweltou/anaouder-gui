@@ -47,7 +47,7 @@ class ResizeSegmentCommand(QUndoCommand):
             self.waveform_widget.segments[self.segment_id][1] = self.time_pos
     
     def id(self):
-        return 20
+        return 21
     
     def mergeWith(self, other: QUndoCommand) -> bool:
         if other.segment_id == self.segment_id and other.side == self.side:
@@ -66,6 +66,10 @@ class DeleteSegmentCommand(QUndoCommand):
 
     def redo(self):
         pass
+
+    def id(self):
+        return 22
+
 
 
 
@@ -403,7 +407,7 @@ class WaveformWidget(QWidget):
             self.shift_pressed = True
         elif event.key() == Qt.Key_A and self.selection_is_active:
             # Create a new segment from selection
-            self.parent.actionCreateNewSegment()
+            self.parent.createNewUtterance()
         elif event.key() == Qt.Key_J and len(self.active_segments) > 1:
             # Join multiple segments
             segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])
@@ -604,11 +608,11 @@ class WaveformWidget(QWidget):
         clicked_segment_id = self.getSegmentAtPosition(event.globalPos())
         context = QMenu(self)
         if self.selection_is_active:
-            action_create_segment = QAction("Add segment", self)
-            action_create_segment.triggered.connect(self.parent.actionCreateNewSegment)
+            action_create_segment = QAction("Add utterance", self)
+            action_create_segment.triggered.connect(self.parent.createNewUtterance)
             context.addAction(action_create_segment)
         if len(self.active_segments) > 1:
-            action_join = QAction("Join segments", self)
+            action_join = QAction("Join utterances", self)
             action_join.triggered.connect(self.parent.joinUtterances)
             context.addAction(action_join)
         elif clicked_segment_id >= 0:
@@ -616,9 +620,9 @@ class WaveformWidget(QWidget):
             action_split.triggered.connect(self.parent.splitUtterance)
             context.addAction(action_split)
         context.addSeparator()
-        action_recognize = QAction("Recognize", self)
-        action_recognize.triggered.connect(self.parent.recognize)
-        context.addAction(action_recognize)
+        action_transcribe = QAction("Transcribe", self)
+        action_transcribe.triggered.connect(self.parent.transcribe)
+        context.addAction(action_transcribe)
         context.exec(event.globalPos())
 
 

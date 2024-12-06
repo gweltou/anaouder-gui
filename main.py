@@ -4,6 +4,7 @@
 import sys
 import os.path
 from typing import List, Optional
+import platform
 
 import static_ffmpeg
 static_ffmpeg.add_paths()
@@ -93,7 +94,10 @@ class RecognizerWorker(QThread):
         # Stupid hack with locale to avoid commas in json string
         current_locale = locale.getlocale()
         print(f"{current_locale=}")
-        locale.setlocale(locale.LC_ALL, ("C", "UTF-8"))
+        if platform.system() == "Linux":
+            locale.setlocale(locale.LC_ALL, ("C", "UTF-8"))
+        else:
+            locale.setlocale(locale.LC_ALL, ("en_us", "UTF-8")) # locale en_US works on macOS
         print(f"{locale.getlocale()=}")
         
         if self.segments:
@@ -114,6 +118,34 @@ class RecognizerWorker(QThread):
             transcribe_segment_timecoded_callback(self.audio_data, parse_vosk_result)
         locale.setlocale(locale.LC_ALL, current_locale)
 
+
+
+
+class CreateNewUtteranceCommand(QUndoCommand):
+    def __init__(self, parent, segment):
+        super().__init__()
+        self.parent : MainWindow = parent
+        self.segment = segment
+        self.seg_id = None
+    
+    def undo(self):
+        if self.parent.playing_segment == self.seg_id:
+            self.parent.playing_segment = -1
+        self.parent.text_edit.deleteSentence(self.seg_id)
+        del self.parent.waveform.segments[self.seg_id]
+        if self.seg_id in self.parent.waveform.active_segments:
+            self.parent.waveform.active_segments.remove(self.seg_id)
+        self.parent.waveform.draw()
+
+    def redo(self):
+        self.seg_id = self.parent.waveform.addSegment(self.segment, self.seg_id)
+        self.parent.text_edit.insertSentence('*', self.seg_id)
+        # self.parent.waveform.draw()
+        # self.parent.waveform.set
+        self.parent.text_edit.setActive(self.seg_id, update_waveform=True)
+
+    # def id(self):
+    #     return 20
 
 
 class SplitUtteranceCommand(QUndoCommand):
@@ -313,7 +345,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.input_devices = QMediaDevices.audioInputs()
+
+        if len(get_available_models()) == 0:
+            load_model()
         self.available_models = sorted(get_available_models(), reverse=True)
+
 
         self.filepath = filepath
         self.video_window = None
@@ -363,10 +399,14 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
         shortcut.activated.connect(self.selectAll)
 
+        if len(self.available_models) == 0:
+            # Download a model
+            load_model()
+
         self.recognizer_worker = RecognizerWorker()
         self.recognizer_worker.message.connect(self.slotSetStatusMessage)
         self.recognizer_worker.transcribedSegment.connect(self.slotGetTranscription)
-        self.recognizer_worker.transcribed.connect(self.createUtterance)
+        self.recognizer_worker.transcribed.connect(self.addUtterance)
         self.recognizer_worker.finished.connect(self.progress_bar.hide)
         self.recognizer_worker.setModel(self.available_models[0])
 
@@ -569,9 +609,9 @@ class MainWindow(QMainWindow):
         findSegmentsAction = QAction("Find segments", self)
         findSegmentsAction.triggered.connect(self.opFindSegments)
         operationMenu.addAction(findSegmentsAction)
-        recognizeAction = QAction("Auto-transcribe", self)
-        recognizeAction.triggered.connect(self.recognize)
-        operationMenu.addAction(recognizeAction)
+        transcribeAction = QAction("Auto-transcribe", self)
+        transcribeAction.triggered.connect(self.transcribe)
+        operationMenu.addAction(transcribeAction)
 
         displayMenu = menuBar.addMenu("Display")
 
@@ -1090,42 +1130,45 @@ class MainWindow(QMainWindow):
         self.waveform.draw()
 
 
-    def actionCreateNewSegment(self):
+    def createNewUtterance(self):
         """Create a new segment from waveform selection"""
         print("New segment action", self.waveform.selection)
-        assert self.waveform.selection_is_active
-        segment_id = self.waveform.addSegment(self.waveform.selection)
+        self.undo_stack.push(CreateNewUtteranceCommand(self, self.waveform.selection))
         self.waveform.deselect()
-        self.text_edit.insertSentence('*', segment_id)
+        self.waveform.draw()
 
 
     @Slot(str, list)
-    def createUtterance(self, text, segment):
+    def addUtterance(self, text, segment):
         print(text)
         segment_id = self.waveform.addSegment(segment)
         self.text_edit.insertSentence(text, segment_id, with_cursor=False)
         self.waveform.draw()
 
     
-    def recognize(self):
+    def transcribe(self):
         seg_id = -1
         if self.waveform.selection_is_active:
+            # Create segment from selection
+            seg_id = self.waveform.addSegment(self.waveform.selection)
+            self.waveform.deselect()
+            self.waveform.draw()
             # Transcribe selection
-            self.recognizer_worker.setSegments([(seg_id, *self.waveform.selection)])
+            self.recognizer_worker.setSegments([(seg_id, *self.waveform.segments[seg_id])])
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
             self.recognizer_worker.setSegments(
                 [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
                 )
         elif not self.waveform.segments:
-            # Transcribe whole record
+            # Transcribe whole audio file
             self.progress_bar.show()
             self.recognizer_worker.setSegments([])
             self.recognizer_worker.start()
             return
 
         # self.status_bar.clearMessage()
-        self.progress_bar.setRange(0, len(self.waveform.active_segments))
+        self.progress_bar.setRange(0, len(self.recognizer_worker.segments))
         self.status_bar.show()
         self.progress_bar.show()
 
