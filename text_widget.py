@@ -771,5 +771,5 @@ class TextEdit(QTextEdit):
             gray_start_x = self._char_width * 42
             painter.fillRect(
                 QRect(gray_start_x, 0, self.width() - gray_start_x, self.height()), 
-                QColor(0, 0, 0, 10)
+                QColor(0, 0, 0, 12)
             )

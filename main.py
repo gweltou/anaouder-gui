@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter, QProgressBar,
     QPlainTextEdit, QTextEdit, QPushButton, QDial,
-    QLabel, QComboBox, QCheckBox
+    QLabel, QComboBox, QCheckBox, QMessageBox
 )
 from PySide6.QtCore import (
     Qt, QSize, QTimer, QRegularExpression, QPointF,
@@ -1166,6 +1166,28 @@ class MainWindow(QMainWindow):
             self.undo()
         elif event.matches(QKeySequence.Redo):
             self.redo()
+
+
+    def closeEvent(self, event):
+        if self.undo_stack.isClean():
+            return super().closeEvent(event)
+        
+        reply = QMessageBox.warning(
+            self, 
+            "Unsaved work", 
+            "Do you want to save your changes?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Save,
+        )
+        print(reply)
+        # Decide whether to close based on user's response
+        if reply == QMessageBox.Save:
+            self.saveFile()
+            event.accept()
+        elif reply == QMessageBox.Discard:
+            event.accept()
+        else:
+            event.ignore()
 
 
     def undo(self):
