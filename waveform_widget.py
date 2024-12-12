@@ -37,6 +37,7 @@ class ResizeSegmentCommand(QUndoCommand):
         self.side : int = side # 0 is Left, 1 is Right
     
     def undo(self):
+        print("undo resize")
         self.waveform_widget.segments[self.segment_id] = self.old_segment
         self.waveform_widget.draw()
 
@@ -190,7 +191,7 @@ class WaveformWidget(QWidget):
     
 
     def addSegment(self, segment, seg_id=None) -> int:
-        if not seg_id:
+        if seg_id == None:
             seg_id = self.id_counter
             self.id_counter += 1
         self.segments[seg_id] = segment
@@ -405,6 +406,7 @@ class WaveformWidget(QWidget):
             self.draw()
         elif event.key() == Qt.Key_Shift:
             self.shift_pressed = True
+
         elif event.key() == Qt.Key_A and self.selection_is_active:
             # Create a new segment from selection
             self.parent.createNewUtterance()
@@ -414,8 +416,7 @@ class WaveformWidget(QWidget):
             self.parent.joinUtterances(segments_id)
         elif event.key() == Qt.Key_Delete and self.active_segments:
             # Delete segment(s)
-            print("Deleting", self.active_segments)
-            self.parent.deleteSegment(self.active_segments)
+            self.parent.deleteUtterances(self.active_segments)
             self._to_sort = True
 
         return super().keyPressEvent(event)

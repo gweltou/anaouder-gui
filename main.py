@@ -1,6 +1,15 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+    Terminology
+        Segment: A span of audio, with a `start` and an `end`
+        Sentence: A piece of text
+        Utterance: The association of an audio `Segment` and a text `Sentence`
+
+"""
+
+
 import sys
 import os.path
 from typing import List, Optional
@@ -31,18 +40,16 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu,
     QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter, QProgressBar,
-    QPlainTextEdit, QTextEdit, QPushButton, QDial,
+    QPushButton, QDial,
     QLabel, QComboBox, QCheckBox, QMessageBox
 )
 from PySide6.QtCore import (
-    Qt, QSize, QTimer, QRegularExpression, QPointF,
-    QByteArray, QBuffer, QIODevice, QUrl, QEvent,
+    Qt, QSize, QUrl, QEvent,
     QThread, Signal, Slot,
     QSettings,
 )
 from PySide6.QtGui import (
-    QAction, QMouseEvent,
-    QPalette, QColor, QFont, QIcon, QPixmap,
+    QAction, QIcon, QPixmap,
     QResizeEvent, QWheelEvent, QKeySequence, QShortcut, QKeyEvent,
     QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
     QUndoStack, QUndoCommand,
@@ -148,6 +155,30 @@ class CreateNewUtteranceCommand(QUndoCommand):
     #     return 20
 
 
+class DeleteUtterancesCommand(QUndoCommand):
+    def __init__(self, parent, seg_ids):
+        super().__init__()
+        self.text_edit = parent.text_edit
+        self.waveform = parent.waveform
+        self.seg_ids : list = seg_ids
+        self.segments = [self.waveform.segments[seg_id] for seg_id in seg_ids]
+        self.texts = [self.text_edit.getBlockById(seg_id).text() for seg_id in seg_ids]
+    
+    def undo(self):
+        for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
+            self.seg_id = self.waveform.addSegment(segment, seg_id)
+            self.text_edit.insertSentence(text, seg_id)
+        self.waveform.draw()
+
+    def redo(self):
+        for seg_id in self.seg_ids:
+            self.text_edit.deleteSentence(seg_id)
+            del self.waveform.segments[seg_id]
+        self.waveform.active_segments = []
+        self.waveform.last_segment_active = -1
+        self.waveform.draw()
+
+
 class SplitUtteranceCommand(QUndoCommand):
     def __init__(self, text_edit, waveform, seg_id:int, pos:int):
         super().__init__()
@@ -155,7 +186,7 @@ class SplitUtteranceCommand(QUndoCommand):
         self.waveform : WaveformWidget = waveform
         self.seg_id = seg_id
         self.pos = pos
-        self.text = self.text_edit.getBlockBySentenceId(seg_id).text()
+        self.text = self.text_edit.getBlockById(seg_id).text()
     
     def undo(self):
         del self.waveform.segments[self.seg_left_id]
@@ -163,7 +194,7 @@ class SplitUtteranceCommand(QUndoCommand):
         self.waveform.addSegment(self.segment, self.seg_id)
         
         # Delete new sentences
-        right_block = self.text_edit.getBlockBySentenceId(self.seg_right_id)
+        right_block = self.text_edit.getBlockById(self.seg_right_id)
         cursor = self.text_edit.textCursor()
         cursor.setPosition(right_block.position())
         cursor.select(QTextCursor.BlockUnderCursor)
@@ -181,7 +212,7 @@ class SplitUtteranceCommand(QUndoCommand):
         self.text_edit.setTextCursor(cursor)
         self.waveform.setActive(self.seg_id)
 
-    def redo(self):        
+    def redo(self):
         # Split audio segment at pc
         pc = self.pos / len(self.text)
         self.segment = self.waveform.segments[self.seg_id]
@@ -194,8 +225,10 @@ class SplitUtteranceCommand(QUndoCommand):
         self.seg_left_id = self.waveform.addSegment(seg_left)
         self.seg_right_id = self.waveform.addSegment(seg_right)
         
+        self.text_edit.deactivateSentence(self.seg_id)
+
         # Set old sentence id to left id
-        old_block : QTextBlock = self.text_edit.getBlockBySentenceId(self.seg_id)
+        old_block : QTextBlock = self.text_edit.getBlockById(self.seg_id)
         self.user_data : dict = old_block.userData().data
         cursor = QTextCursor(old_block)
         cursor.select(QTextCursor.BlockUnderCursor)
@@ -207,7 +240,7 @@ class SplitUtteranceCommand(QUndoCommand):
         user_data = self.user_data.copy()
         user_data["seg_id"] = self.seg_left_id
         cursor.block().setUserData(MyTextBlockUserData(user_data))
-        self.text_edit.deactivateSentence(self.seg_left_id)
+        # self.text_edit.deactivateSentence(self.seg_left_id)
 
         # Create right text block
         cursor.insertBlock()
@@ -240,7 +273,7 @@ class JoinUtterancesCommand(QUndoCommand):
         self.text_edit.setSentenceText(first_id, self.segments_text[0])
         self.waveform.segments[first_id] = self.segments[0]
         
-        block = self.text_edit.getBlockBySentenceId(first_id)
+        block = self.text_edit.getBlockById(first_id)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.EndOfBlock)
         
@@ -259,11 +292,11 @@ class JoinUtterancesCommand(QUndoCommand):
 
     def redo(self):
         self.segments = [self.waveform.segments[id] for id in self.seg_ids]
-        self.segments_text = [self.text_edit.getBlockBySentenceId(id).text() for id in self.seg_ids]
+        self.segments_text = [self.text_edit.getBlockById(id).text() for id in self.seg_ids]
 
         # Remove all sentences except the first one
         for id in self.seg_ids[1:]:
-            block = self.text_edit.getBlockBySentenceId(id)
+            block = self.text_edit.getBlockById(id)
             cursor = QTextCursor(block)
             cursor.select(QTextCursor.BlockUnderCursor)
             cursor.removeSelectedText()
@@ -321,6 +354,7 @@ class AlignWithSelectionCommand(QUndoCommand):
 
 
 
+
 class IconWidget(QLabel):
     def __init__(self, icon_path, size=32):
         super().__init__()
@@ -329,6 +363,8 @@ class IconWidget(QLabel):
         icon = QIcon(icon_path)
         pixmap = icon.pixmap(QSize(size, size))
         self.setPixmap(pixmap)
+
+
 
 
 ###############################################################################
@@ -838,7 +874,7 @@ class MainWindow(QMainWindow):
                         line = line[:match.start()] + line[match.end():]
                         line = line.strip()
                         line = re.sub(r"<br>", '\u2028', line, 0, re.IGNORECASE)
-                        self.text_edit.addSentence(line, seg_id)
+                        self.text_edit.appendSentence(line, seg_id)
                     else:
                         # Regular text or comments or metadata only
                         self.text_edit.addText(line)
@@ -920,7 +956,7 @@ class MainWindow(QMainWindow):
                 segment = [start, end]
                 seg_id = self.waveform.addSegment(segment)
                 content = subtitle.content.strip().replace('\n', '<BR>')
-                self.text_edit.addSentence(content, seg_id)
+                self.text_edit.appendSentence(content, seg_id)
 
             self.waveform.draw()
                 
@@ -930,7 +966,7 @@ class MainWindow(QMainWindow):
 
         # Select the first utterance
         if first_utt_id != None:
-            block = self.text_edit.getBlockBySentenceId(first_utt_id)
+            block = self.text_edit.getBlockById(first_utt_id)
             self.text_edit.setTextCursor(QTextCursor(block))
         
         # Scroll bar to top
@@ -980,7 +1016,7 @@ class MainWindow(QMainWindow):
         if seg_id == -1:
             self.video_window.setCaption("", -1)
             return
-        utt = self.text_edit.getBlockBySentenceId(seg_id)
+        utt = self.text_edit.getBlockById(seg_id)
         if not utt:
             self.video_window.setCaption("", -1)
             return
@@ -1193,15 +1229,28 @@ class MainWindow(QMainWindow):
         self.undo_stack.push(AlignWithSelectionCommand(self.text_edit, self.waveform, block))
 
 
-    def deleteSegment(self, segments_id:List) -> None:
-        for seg_id in segments_id:
-            # Delete text utterance
-            self.text_edit.deleteSentence(seg_id)
-            # Delete waveform segment
-            del self.waveform.segments[seg_id]
-        self.waveform.active_segments = []
-        self.waveform.last_segment_active = -1
+    def deleteUtterances(self, segments_id:List) -> None:
+        self.undo_stack.push(DeleteUtterancesCommand(self, segments_id))
+
+
+    def selectAll(self):
+        selection = [ id for id, _ in self.waveform.getSortedSegments() ]
+        self.waveform.active_segments = selection
+        self.waveform.last_segment_active = selection[-1] if selection else -1
         self.waveform.draw()
+
+
+    def search(self):
+        print("search tool")
+
+
+    def undo(self):
+        print("undo")
+        self.undo_stack.undo()
+
+    def redo(self):
+        print("redo")
+        self.undo_stack.redo()
 
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
@@ -1233,22 +1282,6 @@ class MainWindow(QMainWindow):
             event.ignore()
 
 
-    def undo(self):
-        print("undo")
-        self.undo_stack.undo()
-
-    def redo(self):
-        print("redo")
-        self.undo_stack.redo()
-
-
-    def selectAll(self):
-        print("select all")
-
-
-    def search(self):
-        print("search tool")
-
 
 
 def main():
@@ -1256,8 +1289,6 @@ def main():
     settings = QSettings("anaouder", MainWindow.APP_NAME)
 
     file_path = ""
-    #file_path = "daoulagad-ar-werchez-gant-veronique_f2492e59-2cc3-466e-ba3e-90d63149c8be.ali"
-    #file_path = "/home/gweltaz/59533_anjela_duval.seg"
     
     if len(sys.argv) > 1:
         file_path = sys.argv[1]

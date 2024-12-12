@@ -33,6 +33,7 @@ class Highlighter(QSyntaxHighlighter):
     utt_block_margin = 8
     aligned_color = QColor(210, 255, 230)
     unaligned_color = QColor(255, 220, 220)
+    active_color = QColor(150, 255, 180)
 
     def __init__(self, parent, text_edit):
         super().__init__(parent)
@@ -65,6 +66,11 @@ class Highlighter(QSyntaxHighlighter):
         self.unaligned_block_format.setTopMargin(self.utt_block_margin)
         self.unaligned_block_format.setBottomMargin(self.utt_block_margin)
 
+        self.active_block_format = QTextBlockFormat()
+        self.active_block_format.setBackground(self.active_color)
+        self.active_block_format.setTopMargin(self.utt_block_margin)
+        self.active_block_format.setBottomMargin(self.utt_block_margin)
+
 
     def split_sentence(self, segments: list, start: int, end: int) -> list:
         """ Subdivide a list of segments further, given a pair of indices """
@@ -94,6 +100,7 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def highlightBlock(self, text):
+        self.text_edit.ignore_cursor_change = True
         block = self.currentBlock()
 
         # Find and crop comments
@@ -106,6 +113,7 @@ class Highlighter(QSyntaxHighlighter):
 
         if not text.strip():
             cursor.setBlockFormat(QTextBlockFormat())
+            self.text_edit.ignore_cursor_change = False
             return
 
         sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
@@ -129,7 +137,10 @@ class Highlighter(QSyntaxHighlighter):
         # Background color
         if self.currentBlockUserData():
             if self.text_edit.isAligned(block):
-                cursor.setBlockFormat(self.aligned_block_format)
+                if self.text_edit.active_sentence_id == self.text_edit.getBlockId(block):
+                    cursor.setBlockFormat(self.active_block_format)
+                else:
+                    cursor.setBlockFormat(self.aligned_block_format)
             else:
                 cursor.setBlockFormat(self.unaligned_block_format)
         else:
@@ -137,6 +148,8 @@ class Highlighter(QSyntaxHighlighter):
                 cursor.setBlockFormat(self.unaligned_block_format)
             else:
                 cursor.setBlockFormat(QTextBlockFormat())
+        
+        self.text_edit.ignore_cursor_change = False
 
         # Check misspelled words
         if not self.show_misspelling:
@@ -223,7 +236,7 @@ class TextEdit(QTextEdit):
         self.activeCharFormat = QTextCharFormat()
         self.activeCharFormat.setFontWeight(QFont.DemiBold)
         self.active_sentence_id = None
-        self.ignoreCursorChange = False
+        self.ignore_cursor_change = False
 
         self.scroll_goal = 0.0
         self.timer = QTimer()
@@ -283,8 +296,9 @@ class TextEdit(QTextEdit):
             user_data["seg_id"] = id
 
 
-    def getBlockBySentenceId(self, id: int) -> QTextBlock:
+    def getBlockById(self, id: int) -> QTextBlock:
         # TODO: rewrite
+        print("getBlockById")
         doc = self.document()
         for blockIndex in range(doc.blockCount()):
             block = doc.findBlockByNumber(blockIndex)
@@ -329,7 +343,7 @@ class TextEdit(QTextEdit):
 
 
     def setSentenceText(self, id: int, text: str):
-        block = self.getBlockBySentenceId(id)
+        block = self.getBlockById(id)
         if not block:
             return
         cursor = QTextCursor(block)
@@ -339,12 +353,13 @@ class TextEdit(QTextEdit):
 
 
     def addText(self, text: str, is_utt=False):
+        print("\naddText")
         self.append(text)
 
 
-    def addSentence(self, text: str, id: int):
-        """ Insert new utterance at the end """
-
+    def appendSentence(self, text: str, id: int):
+        """ Insert new utterance at the end of the document """
+        print("\nappendSentence")
         # When using append, html tags are interpreted as formatting tags
         # self.append(text)
         cursor = self.textCursor()
@@ -354,6 +369,7 @@ class TextEdit(QTextEdit):
 
 
     def insertSentence(self, text: str, id: int, with_cursor=False):
+        print("insertSentence")
         assert id in self.parent.waveform.segments
 
         doc = self.document()
@@ -397,37 +413,29 @@ class TextEdit(QTextEdit):
                     return
 
         # Insert new utterance at the end
-        cursor = QTextCursor(doc)
-        cursor.movePosition(QTextCursor.End)
-        cursor.insertBlock()
-        cursor.insertText(text)
-        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-        cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
+        self.appendSentence(text, id)
         if with_cursor:
             self.setTextCursor(cursor)
     
 
     def deleteSentence(self, utt_id:int) -> None:
         # TODO: fix this (userData aren't deleted)
-        block = self.getBlockBySentenceId(utt_id)
+        block = self.getBlockById(utt_id)
         if not block:
             return
         
-        self.ignoreCursorChange = True
+        self.ignore_cursor_change = True
         cursor = QTextCursor(block)
         cursor.select(QTextCursor.BlockUnderCursor)
         # cursor.movePosition(QTextCursor.StartOfBlock)
         # cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         cursor.removeSelectedText()
 
-        # cursor. deleteChar()
-        # if cursor.position() > 0:
-        #     cursor.deletePreviousChar()
         new_block = cursor.block()
         if not new_block.text():
             new_block.setUserData(None)
         
-        self.ignoreCursorChange = False
+        self.ignore_cursor_change = False
         self.active_sentence_id = None
 
 
@@ -448,13 +456,10 @@ class TextEdit(QTextEdit):
     def deactivateSentence(self, id=None):
         """ Reset format of currently active sentence """
         if id or self.active_sentence_id != None:
-            block = self.getBlockBySentenceId(id or self.active_sentence_id)
-            if block:
-                cursor = QTextCursor(block)
-                cursor.movePosition(QTextCursor.EndOfBlock)
-                cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-                cursor.setCharFormat(self.defaultCharFormat)
+            block = self.getBlockById(id or self.active_sentence_id)
             self.active_sentence_id = None
+            if block:
+                self.highlighter.rehighlightBlock(block)
 
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
@@ -463,20 +468,17 @@ class TextEdit(QTextEdit):
         # Reset previously selected utterance
         self.deactivateSentence()
 
-        block = self.getBlockBySentenceId(id)
+        block = self.getBlockById(id)
         if not block:
             return
 
         self.active_sentence_id = id
 
-        cursor = QTextCursor(block)
-        cursor.movePosition(QTextCursor.EndOfBlock)
-        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-        cursor.setCharFormat(self.activeCharFormat)
-        # We can't set a block format from here, for some reason...
+        self.highlighter.rehighlightBlock(block)
 
         if with_cursor:
-            cursor.clearSelection()
+            cursor = QTextCursor(block)
+            # cursor.clearSelection()
             self.setTextCursor(cursor)
 
             # Scroll to selected utterance
@@ -520,7 +522,7 @@ class TextEdit(QTextEdit):
 
     def cursorChanged(self):
         """Set current utterance active"""
-        if self.ignoreCursorChange:
+        if self.ignore_cursor_change:
             return
         
         cursor = self.textCursor()
@@ -678,7 +680,6 @@ class TextEdit(QTextEdit):
             # Cursor at the end of sentence
             if pos_in_block >= last_letter_idx:
                 # Create an empty block after
-                print("after")
                 self.undo_stack.push(InsertBlockCommand(self, pos, after=True))
                 return
             
@@ -754,7 +755,6 @@ class TextEdit(QTextEdit):
         self._updateMargin()
 
     def _updateMargin(self):
-        print("update margin")
         if not self._text_margin:
             return
         

@@ -1,17 +1,31 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import platform
+import os
+
+
+def get_lib_path(path):
+    if platform.system() in ("Linux", "Darwin"):
+        return os.path.join("./.venv/lib/python3.12/site-packages", path)
+    elif platform.system() == "Windows":
+
+        return os.path.join("./.venv/Lib/site-packages", path)
 
 binaries = []
 if platform.system() == "Linux":
     binaries = [
-        ("./.venv/lib/python3.12/site-packages/vosk/libvosk.so", "vosk"),
-        ("./.venv/lib/python3.12/site-packages/static_ffmpeg/bin/linux/*", "static_ffmpeg/bin/linux"),
+        (get_lib_path("vosk/libvosk.so"), "vosk"),
+        (get_lib_path("static_ffmpeg/bin/linux/*"), "static_ffmpeg/bin/linux"),
     ]
 elif platform.system() == "Darwin":
     binaries = [
-        ("./.venv/lib/python3.12/site-packages/vosk/libvosk.dyld", "vosk"),
-        ("./.venv/lib/python3.12/site-packages/static_ffmpeg/bin/darwin/*", "static_ffmpeg/bin/darwin"),
+        (get_lib_path("vosk/libvosk.dyld"), "vosk"),
+        (get_lib_path("static_ffmpeg/bin/darwin/*"), "static_ffmpeg/bin/darwin"),
+    ]
+elif platform.system() == "Windows":
+    binaries = [
+        (get_lib_path("vosk/libvosk.dll"), "vosk"),
+        (get_lib_path("static_ffmpeg/bin/win32/*"), "static_ffmpeg/bin/win32"),
     ]
 
 a = Analysis(
@@ -19,10 +33,10 @@ a = Analysis(
     pathex=[],
     binaries=binaries,
     datas=[
-        ("./.venv/lib/python3.12/site-packages/ostilhou/asr/*.tsv", "ostilhou/asr"),
-        ("./.venv/lib/python3.12/site-packages/ostilhou/hspell/*.txt", "ostilhou/hspell"),
-        ("./.venv/lib/python3.12/site-packages/ostilhou/hspell/hunspell-dictionary/br_FR.dic", "ostilhou/hspell/hunspell-dictionary/"),
-        ("./.venv/lib/python3.12/site-packages/ostilhou/hspell/hunspell-dictionary/br_FR.aff", "ostilhou/hspell/hunspell-dictionary/"),
+        (get_lib_path("ostilhou/asr/*.tsv"), "ostilhou/asr"),
+        (get_lib_path("ostilhou/hspell/*.txt"), "ostilhou/hspell"),
+        (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.dic"), "ostilhou/hspell/hunspell-dictionary/"),
+        (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.aff"), "ostilhou/hspell/hunspell-dictionary/"),
         ("./icons/back.png", "icons/"),
         ("./icons/previous.png", "icons/"),
         ("./icons/play-button.png", "icons/"),
