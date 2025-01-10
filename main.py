@@ -97,7 +97,7 @@ class RecognizerWorker(QThread):
         if not is_model_loaded(self.model):
             self.message.emit(f"Loading {self.model}")
             load_model(self.model)
-
+        
         # Stupid hack with locale to avoid commas in json string
         current_locale = locale.getlocale()
         print(f"{current_locale=}")
@@ -716,7 +716,6 @@ class MainWindow(QMainWindow):
 
         with open(filepath, 'w') as f:
             doc = self.text_edit.document()
-            print(doc.toHtml())
             for blockIndex in range(doc.blockCount()):
                 block = doc.findBlockByNumber(blockIndex)
                 text = block.text().strip()
@@ -1029,11 +1028,14 @@ class MainWindow(QMainWindow):
 
         # Check if end of current segment is reached
         if self.playing_segment >= 0:
-            segment = self.waveform.segments[self.playing_segment]
-            if player_seconds >= segment[1]:
-                self.player.pause()
-                self.playButton.setIcon(self.icons["play"])
-                self.waveform.setHead(segment[1])
+            if self.playing_segment in self.waveform.segments:
+                segment = self.waveform.segments[self.playing_segment]
+                if player_seconds >= segment[1]:
+                    self.player.pause()
+                    self.playButton.setIcon(self.icons["play"])
+                    self.waveform.setHead(segment[1])
+            else:
+                self.playing_segment = -1
         elif self.waveform.selection_is_active:
             if player_seconds >= self.waveform.selection[1]:
                 self.player.pause()
