@@ -59,6 +59,7 @@ from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAud
 from waveform_widget import WaveformWidget
 from text_widget import TextEdit, MyTextBlockUserData, BlockType
 from video_widget import VideoWindow
+from version import __version__
 
 
 # Config
@@ -375,7 +376,7 @@ class IconWidget(QLabel):
 
 
 class MainWindow(QMainWindow):
-    APP_NAME = "Anaouder-mich"
+    APP_NAME = "Anaouder"
 
     def __init__(self, filepath=""):
         super().__init__()
@@ -705,6 +706,7 @@ class MainWindow(QMainWindow):
         if not self.undo_stack.isClean():
             title_parts.append("●")
         title_parts.append(self.APP_NAME)
+        title_parts.append(__version__)
         if self.filepath:
             title_parts.append('-')
             title_parts.append(os.path.split(self.filepath)[1])
