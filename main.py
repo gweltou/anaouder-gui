@@ -1035,6 +1035,7 @@ class MainWindow(QMainWindow):
                     self.playButton.setIcon(self.icons["play"])
                     self.waveform.setHead(segment[1])
             else:
+                # The segment could have been deleted by the user during playback
                 self.playing_segment = -1
         elif self.waveform.selection_is_active:
             if player_seconds >= self.waveform.selection[1]:

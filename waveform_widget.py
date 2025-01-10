@@ -166,8 +166,8 @@ class WaveformWidget(QWidget):
 
     def clear(self):
         """Reset Waveform"""
-        self.ppsec = 50        # pixels per seconds (audio)
-        self.t_left = 0.0      # timecode (s) of left border
+        self.ppsec = 50        # pixels per second of audio
+        self.t_left = 0.0      # timecode of left border (in seconds)
         self.scroll_vel = 0.0
         self.playhead = 0.0
         self.ctrl_pressed = False
@@ -241,14 +241,19 @@ class WaveformWidget(QWidget):
             self.active_segments = [clicked_id]
             self.selection_is_active = False
             start, end = self.segments[clicked_id]
-            t_right = self.t_left + self.width() / self.ppsec
-            if end < self.t_left or start > t_right:
-                # re-center segment
-                self.scroll_goal = max(0.0, start - 10 / self.ppsec)
+            # re-center segment
+            if start < self.t_left:
+                self.scroll_goal = max(0.0, start - 20 / self.ppsec) # time relative to left of window
                 # dur = end-start
                 # self.scroll_goal = start + 0.5 * dur - 0.5 * self.width() / self.ppsec
                 if not self.timer.isActive():
                     self.timer.start(1000/30)
+            elif end > self._get_time_right():
+                t_right_goal = min(self.audio_len, end + 20 / self.ppsec)
+                self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
+                if not self.timer.isActive():
+                    self.timer.start(1000/30)
+
             #self.parent.status_bar.showMessage(f"{start=} {end=}")
         self.last_segment_active = clicked_id
         self.draw()
@@ -265,6 +270,11 @@ class WaveformWidget(QWidget):
         self.selection = None
     
 
+    def _get_time_right(self):
+        """ Return the timecode at the right border of the window """
+        return self.t_left + self.width() / self.ppsec
+
+
     def _updateScroll(self):
         if self.scroll_goal >= 0.0:
             dist = self.scroll_goal - self.t_left
@@ -274,10 +284,11 @@ class WaveformWidget(QWidget):
         if self.scroll_vel > 0.001 or self.scroll_vel < -0.001:
             self.t_left += self.scroll_vel
             self.scroll_vel *= 0.9
+            # Check for outside of wavefom positions
             if self.t_left < 0.0:
                 self.t_left = 0.0
                 self.scroll_vel = 0
-            if self.t_left + self.width() / self.ppsec >= self.audio_len:
+            if self._get_time_right() >= self.audio_len:
                 self.t_left = self.audio_len - self.width() / self.ppsec
                 self.scroll_vel = 0
         else:
@@ -298,9 +309,9 @@ class WaveformWidget(QWidget):
         elif self.last_segment_active >= 0:
             start, end = self.segments[self.last_segment_active]
             
-        if abs((start-time_position)*self.ppsec) < 8:
+        if abs((start-time_position) * self.ppsec) < 8:
             self.over_left_handle = True
-        if abs((end-time_position)*self.ppsec) < 8:
+        if abs((end-time_position) * self.ppsec) < 8:
             self.over_right_handle = True
         
         # When handles are close together, select handle depending on mouse direction
@@ -364,7 +375,6 @@ class WaveformWidget(QWidget):
 
     def zoomIn(self, factor=1.333, position=0.5):
         prev_ppsec = self.ppsec
-        print(f"{ZOOM_MAX=} {factor=} {position=}")
         self.ppsec = min(ZOOM_MAX, self.ppsec * factor)
 
         delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
