@@ -27,7 +27,7 @@ import srt
 #from scipy.io import wavfile
 
 from ostilhou.asr import (
-    load_segments_data,
+    load_segments_data, load_text_data,
     extract_metadata,
     transcribe_segment,
     transcribe_segment_timecoded_callback,
@@ -37,7 +37,7 @@ from ostilhou.asr.dataset import format_timecode, METADATA_PATTERN
 from ostilhou.audio import split_to_segments, convert_to_mp3, prepare_segment_for_decoding
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QFileDialog, QMenu,
+    QApplication, QMainWindow, QFileDialog, QMenu, QMenuBar,
     QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter, QProgressBar,
     QPushButton, QDial,
@@ -59,6 +59,7 @@ from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAud
 from waveform_widget import WaveformWidget
 from text_widget import TextEdit, MyTextBlockUserData, BlockType
 from video_widget import VideoWindow
+from theme import theme
 from version import __version__
 
 
@@ -127,6 +128,12 @@ class RecognizerWorker(QThread):
         locale.setlocale(locale.LC_ALL, current_locale)
 
 
+
+###############################################################################
+####                                                                       ####
+####                        APPLICATION COMMANDS                           ####
+####                                                                       ####
+###############################################################################
 
 
 class CreateNewUtteranceCommand(QUndoCommand):
@@ -405,6 +412,9 @@ class MainWindow(QMainWindow):
         self.waveform = WaveformWidget(self)
         self.waveform.utterances = self.text_edit
         
+        QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
+        self.updateThemeColors()
+
         self.loadIcons()
         self.updateWindowTitle()
         self.setGeometry(50, 50, 800, 600)
@@ -449,6 +459,12 @@ class MainWindow(QMainWindow):
 
         if filepath:
             self.openFile(filepath)
+
+
+    def updateThemeColors(self):
+         theme.updateThemeColors(QApplication.styleHints().colorScheme())
+         self.text_edit.updateThemeColors()
+         self.waveform.updateThemeColors()
 
 
     def loadIcons(self):
@@ -622,6 +638,10 @@ class MainWindow(QMainWindow):
         
         # Menu
         menuBar = self.menuBar()
+        #menuBar = QMenuBar()
+        # menuBar.setNativeMenuBar(False)
+        #self.setMenuBar(menuBar)
+
         fileMenu = menuBar.addMenu("File")
         ## Open
         openAction = QAction("Open", self)
@@ -714,21 +734,43 @@ class MainWindow(QMainWindow):
 
 
     def _saveFile(self, filepath):
-        print("Saving file to", os.path.abspath(filepath))
+        filepath = os.path.abspath(filepath)
+        print("Saving file to", filepath)
 
-        with open(filepath, 'w') as f:
+        # Get a copy of the old file, if it already exist
+        backup = None
+        if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+            with open(filepath, 'r', encoding="utf-8") as _fin:
+                backup = _fin.read()
+
+        error = False
+        with open(filepath, 'w', encoding="utf-8") as _fout:
             doc = self.text_edit.document()
             for blockIndex in range(doc.blockCount()):
-                block = doc.findBlockByNumber(blockIndex)
-                text = block.text().strip()
-                if block.userData():
-                    userData = block.userData().data
-                    if "seg_id" in userData:
-                        seg_id = userData["seg_id"]
-                        if seg_id in self.waveform.segments:
-                            start, end = self.waveform.segments[seg_id]
-                            text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
-                f.write(text + '\n')
+                try:
+                    block = doc.findBlockByNumber(blockIndex)
+                    text = block.text().strip()
+                    if block.userData():
+                        userData = block.userData().data
+                        if "seg_id" in userData:
+                            seg_id = userData["seg_id"]
+                            if seg_id in self.waveform.segments:
+                                start, end = self.waveform.segments[seg_id]
+                                text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
+                except Exception:
+                    print(f"Error writing file, block {blockIndex}: {text}")
+                    error = True
+                else:
+                    _fout.write(text + '\n')
+        
+        if error and backup:
+            # Create a backup copy of the previous version of the file
+            dir, filename = os.path.split(filepath)
+            basename, ext = os.path.splitext(filename)
+            bck_filepath = os.path.join(dir, f"{basename}_bck{ext}")
+            with open(bck_filepath, 'w', encoding="utf-8") as _fout:
+                _fout.write(backup)
+            print(f"Backup file written to '{bck_filepath}'")
 
 
     def saveFile(self):
@@ -748,7 +790,7 @@ class MainWindow(QMainWindow):
         
         self.filepath = filepath
         self._saveFile(filepath)
-    
+
 
     def exportSrt(self):
         dir = os.path.split(self.filepath)[0] if self.filepath else os.path.expanduser('~')
@@ -860,7 +902,7 @@ class MainWindow(QMainWindow):
             return
         
         if ext == "ali":
-            with open(filepath, 'r') as fr:
+            with open(filepath, 'r', encoding="utf-8") as fr:
                 # Find associated audio file in metadata
                 for line in fr.readlines():
                     line = line.strip()
@@ -874,7 +916,7 @@ class MainWindow(QMainWindow):
                             first_utt_id = seg_id
                         line = line[:match.start()] + line[match.end():]
                         line = line.strip()
-                        line = re.sub(r"<br>", '\u2028', line, 0, re.IGNORECASE)
+                        line = re.sub(r"<br>", '\u2028', line, count=0, flags=re.IGNORECASE)
                         self.text_edit.appendSentence(line, seg_id)
                     else:
                         # Regular text or comments or metadata only
@@ -900,11 +942,9 @@ class MainWindow(QMainWindow):
 
         if ext in ("seg", "split"):
             segments = load_segments_data(filepath)
-            # convert to seconds
-            segments = [ [start/1000, end/1000] for start, end in segments ]
             seg_id_list = []
-            for s in segments:
-                seg_id = self.waveform.addSegment(s)
+            for start, end in segments:
+                seg_id = self.waveform.addSegment([start, end])
                 seg_id_list.append(seg_id)
                 if first_utt_id == None:
                     first_utt_id = seg_id
@@ -913,16 +953,9 @@ class MainWindow(QMainWindow):
             txt_filepath = os.path.extsep.join((basename, "txt"))
             txt_filepath = os.path.join(folder, txt_filepath)
             if os.path.exists(txt_filepath):
-                with open(txt_filepath, 'r') as text_data:
-                    self.text_edit.setText(text_data.read())
-                doc = self.text_edit.document()
-                idx = 0
-                for blockIndex in range(doc.blockCount()):
-                    block = doc.findBlockByNumber(blockIndex)
-                    if block.userData() and block.userData().data["is_utt"]:
-                        userData = block.userData().data
-                        userData["seg_id"] = seg_id_list[idx]
-                        idx += 1
+                sentences = [s for s, _ in load_text_data(txt_filepath)]
+                for i, sentence in enumerate(sentences):
+                    self.text_edit.appendSentence(sentence, seg_id_list[i])
                 
                 self.text_edit.setActive(seg_id_list[0], update_waveform=False)
             else:
@@ -948,7 +981,7 @@ class MainWindow(QMainWindow):
                     break
             
             # Subtitle file
-            with open(filepath, 'r') as f_in:
+            with open(filepath, 'r', encoding="utf-8") as f_in:
                 subtitle_generator = srt.parse(f_in.read())
             subtitles = list(subtitle_generator)
             for subtitle in subtitles:
@@ -960,7 +993,7 @@ class MainWindow(QMainWindow):
                 self.text_edit.appendSentence(content, seg_id)
 
             self.waveform.draw()
-                
+
 
         self.filepath = filepath
         self.updateWindowTitle()

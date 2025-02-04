@@ -2,18 +2,20 @@ from typing import List
 from enum import Enum
 
 from PySide6.QtWidgets import (
-    QMenu, QTextEdit,
+    QApplication, QMenu, QTextEdit,
 )
 from PySide6.QtCore import (
     Qt, QTimer, QRegularExpression,
     QRect
 )
 from PySide6.QtGui import (
-    QAction, QColor, QFont,
+    QAction, QColor, QFont, QIcon,
     QWheelEvent, QKeyEvent, QKeySequence,
-    QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
+    QTextBlock, QTextBlockUserData,
+    QTextCursor, QTextBlockFormat, QTextCharFormat, QFontMetricsF,
     QSyntaxHighlighter,
-    QPainter, QPaintEvent, QFontMetricsF
+    QPainter, QPaintEvent,
+    QClipboard
 )
 
 from ostilhou.asr import extract_metadata
@@ -25,15 +27,13 @@ from commands import (
     InsertBlockCommand,
     ReplaceTextCommand
 )
+from theme import theme
 
 
 
 
 class Highlighter(QSyntaxHighlighter):
     utt_block_margin = 8
-    aligned_color = QColor(210, 255, 230)
-    unaligned_color = QColor(255, 220, 220)
-    active_color = QColor(150, 255, 180)
 
     def __init__(self, parent, text_edit):
         super().__init__(parent)
@@ -57,19 +57,25 @@ class Highlighter(QSyntaxHighlighter):
         self.mispellformat.setUnderlineStyle(QTextCharFormat.SpellCheckUnderline)
 
         self.aligned_block_format = QTextBlockFormat()
-        self.aligned_block_format.setBackground(self.aligned_color)
+        self.aligned_block_format.setBackground(theme.aligned_color_light)
         self.aligned_block_format.setTopMargin(self.utt_block_margin)
         self.aligned_block_format.setBottomMargin(self.utt_block_margin)
 
         self.unaligned_block_format = QTextBlockFormat()
-        self.unaligned_block_format.setBackground(self.unaligned_color)
+        self.unaligned_block_format.setBackground(theme.unaligned_color_light)
         self.unaligned_block_format.setTopMargin(self.utt_block_margin)
         self.unaligned_block_format.setBottomMargin(self.utt_block_margin)
 
         self.active_block_format = QTextBlockFormat()
-        self.active_block_format.setBackground(self.active_color)
+        self.active_block_format.setBackground(theme.active_color_light)
         self.active_block_format.setTopMargin(self.utt_block_margin)
         self.active_block_format.setBottomMargin(self.utt_block_margin)
+
+
+    def updateThemeColors(self):
+        self.aligned_block_format.setBackground(theme.aligned_color)
+        self.unaligned_block_format.setBackground(theme.unaligned_color)
+        self.active_block_format.setBackground(theme.active_color)
 
 
     def split_sentence(self, segments: list, start: int, end: int) -> list:
@@ -176,8 +182,6 @@ class MyTextBlockUserData(QTextBlockUserData):
     """
         Fields:
             - seg_id
-            - is_utt
-            - words_timecoded
     """
     def __init__(self, data):
         super().__init__()
@@ -244,11 +248,18 @@ class TextEdit(QTextEdit):
 
         self._text_margin = False
         self._char_width = -1
-    
+        self.margin_color = theme.margin_color
+
+
+    def updateThemeColors(self):        
+        self.margin_color = theme.margin_color
+        self.highlighter.updateThemeColors()
+        self.highlighter.rehighlight()
+
 
     def clear(self):
         self.document().clear()
-    
+
 
     def getBlockType(self, block : QTextBlock) -> BlockType:
         text = block.text()
@@ -359,7 +370,6 @@ class TextEdit(QTextEdit):
 
     def appendSentence(self, text: str, id: int):
         """ Insert new utterance at the end of the document """
-        print("\nappendSentence")
         # When using append, html tags are interpreted as formatting tags
         # self.append(text)
         cursor = self.textCursor()
@@ -407,7 +417,7 @@ class TextEdit(QTextEdit):
                     cursor.insertBlock()
                     cursor.insertText(text)
                     cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-                    cursor.block().setUserData(MyTextBlockUserData({"is_utt": True, "seg_id": id}))
+                    cursor.block().setUserData(MyTextBlockUserData({"seg_id": id}))
                     if with_cursor:
                         self.setTextCursor(cursor)
                     return
@@ -495,21 +505,6 @@ class TextEdit(QTextEdit):
             self.parent.waveform.setActive(id)
     
 
-
-    # def mousePressEvent(self, event):
-    #     super().mousePressEvent(event)
-    #     if event.buttons() == Qt.LeftButton:
-    #         pass
-    #     elif event.buttons() == Qt.RightButton:
-    #         pass
-    
-
-    def wheelEvent(self, event: QWheelEvent):
-        if self.timer.isActive():
-            self.timer.stop()
-        super().wheelEvent(event)
-
-
     def _updateScroll(self):
         dist = self.scroll_goal - self.verticalScrollBar().value()
         if abs(dist) > 7:
@@ -520,6 +515,72 @@ class TextEdit(QTextEdit):
             self.timer.stop()
     
 
+    def zoomIn(self, *args):
+        super().zoomIn(*args)
+        self._updateMargin()
+    
+    def zoomOut(self, *args):
+        super().zoomOut(*args)
+        self._updateMargin()
+
+
+    def toggleTextMargin(self, checked: bool):
+        self._text_margin = checked
+        self._updateMargin()
+
+    def _updateMargin(self):
+        if not self._text_margin:
+            return
+        
+        font_metrics = QFontMetricsF(self.font())
+        self._char_width = font_metrics.averageCharWidth()
+        self.viewport().update()
+
+
+    def cut(self):
+        print("cut")
+        super().cut()
+    
+
+    def paste(self):
+        """
+        To change the behavior of this function,
+        i.e. to modify what QTextEdit can paste and how it is being pasted,
+        reimplement the virtual canInsertFromMimeData() and insertFromMimeData() functions.
+        """
+        clipboard = QApplication.clipboard()
+        cursor = self.textCursor()
+        has_selection = not cursor.selection().isEmpty()
+        pos = cursor.position()
+        if has_selection:
+            DeleteSelectedText(self, cursor)
+            pos = cursor.selectionStart()
+        self.undo_stack.push(InsertTextCommand(self, clipboard.text(), pos))
+        print(clipboard.text())
+    
+
+    def canInsertFromMimeData(self, source):
+        if source.hasText():
+            print(f"{source=} has text")
+            print(source.text())
+            print(source.urls())
+        else:
+            print(f"{source=}")
+
+        return super().canInsertFromMimeData(source)
+    
+    
+    def contentsChange(self, pos, charsRemoved, charsAdded):
+        # Update video subtitle if necessary
+        self.parent.updateSubtitle(force=True)
+
+
+    def wheelEvent(self, event: QWheelEvent):
+        if self.timer.isActive():
+            self.timer.stop()
+        super().wheelEvent(event)
+
+
     def cursorChanged(self):
         """Set current utterance active"""
         if self.ignore_cursor_change:
@@ -528,14 +589,13 @@ class TextEdit(QTextEdit):
         cursor = self.textCursor()
         current_block = cursor.block()
         if current_block.userData():
+            # Activate current utterance
             data = current_block.userData().data
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
                 if id == self.active_sentence_id:
                     return
                 self.setActive(id, with_cursor=False)
-                # start, end = self.parent.waveform.segments[id]
-                # data.update({'start': start, 'end': end, 'dur': end-start})
                 
             self.parent.status_bar.showMessage(str(data))
         else:
@@ -546,15 +606,37 @@ class TextEdit(QTextEdit):
 
     def contextMenuEvent(self, event):
         cursor = self.cursorForPosition(event.pos())
-        self.setTextCursor(cursor)
+        # self.setTextCursor(cursor)
         block = cursor.block()
         block_type = self.getBlockType(block)
         
         # context = self.createStandardContextMenu(event.pos())
         context = QMenu(self)
-        context.addAction(QAction("Copy", self))
-        context.addAction(QAction("Cut", self))
-        context.addAction(QAction("Paste", self))
+
+        cut_action = QAction(QIcon.fromTheme("edit-cut"), "Cut", self)
+        cut_action.setShortcut(QKeySequence.Cut)
+        cut_action.triggered.connect(self.cut)
+        context.addAction(cut_action)
+
+        # Copy Action
+        copy_action = QAction(QIcon.fromTheme("edit-copy"), "Copy", self)
+        copy_action.setShortcut(QKeySequence.Copy)
+        copy_action.triggered.connect(self.copy)
+        context.addAction(copy_action)
+
+        # Paste Action
+        paste_action = QAction(QIcon.fromTheme("edit-paste"), "Paste", self)
+        paste_action.setShortcut(QKeySequence.Paste)
+        paste_action.triggered.connect(self.paste)
+        context.addAction(paste_action)
+
+        context.addSeparator()
+
+        # Select All Action
+        select_all_action = QAction(QIcon.fromTheme("edit-select-all"), "Select All", self)
+        select_all_action.setShortcut(QKeySequence.SelectAll)
+        select_all_action.triggered.connect(self.selectAll)
+        context.addAction(select_all_action)
 
         if block_type == BlockType.NOT_ALIGNED:
             context.addSeparator()
@@ -583,11 +665,6 @@ class TextEdit(QTextEdit):
                 
         action = context.exec(event.globalPos())
         
-    
-    def contentsChange(self, pos, charsRemoved, charsAdded):
-        # Update vide subtitle if necessary
-        self.parent.updateSubtitle(force=True)
-        
 
     def inputMethodEvent(self, event):
         cursor = self.textCursor()
@@ -612,16 +689,22 @@ class TextEdit(QTextEdit):
 
         if (event.matches(QKeySequence.Undo) or
             event.matches(QKeySequence.Redo)):
-            event.ignore()
-            return
+            return event.ignore()
         
+        if event.matches(QKeySequence.Cut):
+            self.cut()
+            return event.accept()
+        if event.matches(QKeySequence.Paste):
+            self.paste()
+            return event.accept()
+
         if (event.matches(QKeySequence.ZoomIn) or
             (event.modifiers() & Qt.ControlModifier and event.text() == '+')):
             self.zoomIn(1)
-            return
+            return event.accept()
         if event.matches(QKeySequence.ZoomOut):
             self.zoomOut(1)
-            return
+            return event.accept()
 
         cursor = self.textCursor()
         has_selection = not cursor.selection().isEmpty()
@@ -634,9 +717,7 @@ class TextEdit(QTextEdit):
             if has_selection:
                 DeleteSelectedText(self, cursor)
                 pos = cursor.selectionStart()
-                self.undo_stack.push(InsertTextCommand(self, char, pos))
-            else:
-                self.undo_stack.push(InsertTextCommand(self, char, pos))
+            self.undo_stack.push(InsertTextCommand(self, char, pos))
             return
         
         pos_in_block = cursor.positionInBlock()
@@ -741,26 +822,8 @@ class TextEdit(QTextEdit):
         return super().keyPressEvent(event)
     
 
-    def zoomIn(self, *args):
-        super().zoomIn(*args)
-        self._updateMargin()
-    
-    def zoomOut(self, *args):
-        super().zoomOut(*args)
-        self._updateMargin()
-
-
-    def toggleTextMargin(self, checked: bool):
-        self._text_margin = checked
-        self._updateMargin()
-
-    def _updateMargin(self):
-        if not self._text_margin:
-            return
-        
-        font_metrics = QFontMetricsF(self.font())
-        self._char_width = font_metrics.averageCharWidth()
-        self.viewport().update()
+    # def mouseDoubleClickEvent(self, e):
+    #     return super().mouseDoubleClickEvent(e)
 
 
     def paintEvent(self, event: QPaintEvent):
@@ -771,5 +834,5 @@ class TextEdit(QTextEdit):
             gray_start_x = self._char_width * 42
             painter.fillRect(
                 QRect(gray_start_x, 0, self.width() - gray_start_x, self.height()), 
-                QColor(0, 0, 0, 12)
+                self.margin_color
             )

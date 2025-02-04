@@ -15,3 +15,5 @@ quill-pen-story.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon
 pen-field.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
 volume.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
 123-numbers.png	<a href="https://www.flaticon.com/free-icons/count" title="count icons">Count icons created by Freepik - Flaticon</a>
+italic.png	flaticon
+redo.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>

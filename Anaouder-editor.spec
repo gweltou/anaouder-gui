@@ -3,12 +3,15 @@
 import platform
 import os
 
+ARCH = 'x86_64' # Set to 'x86_64' or 'arm64' or 'universal2' for macOS
+
 
 def get_lib_path(path):
     if platform.system() in ("Linux", "Darwin"):
-        return os.path.join("./.venv/lib/python3.12/site-packages", path)
+        python_version = f"python{platform.python_version_tuple()[0]}.{platform.python_version_tuple()[1]}"
+        venv_dir = '.venv-x86' if ARCH=='x86_64' else '.venv'
+        return os.path.join(f"./{venv_dir}/lib/{python_version}/site-packages", path)
     elif platform.system() == "Windows":
-
         return os.path.join("./.venv/Lib/site-packages", path)
 
 binaries = []
@@ -21,6 +24,8 @@ elif platform.system() == "Darwin":
     binaries = [
         (get_lib_path("vosk/libvosk.dyld"), "vosk"),
         (get_lib_path("static_ffmpeg/bin/darwin/*"), "static_ffmpeg/bin/darwin"),
+        (get_lib_path("PySide6/Qt/lib/*.dylib"), "."),
+        (get_lib_path("PySide6/Qt/plugins/*"), "PySide6/Qt/plugins"),
     ]
 elif platform.system() == "Windows":
     binaries = [
@@ -53,7 +58,12 @@ a = Analysis(
         ("./icons/font.png", "icons/"),
         ("./icons/waveform.png", "icons/"),
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        'PySide6.QtCore',
+        'PySide6.QtGui',
+        'PySide6.QtWidgets',
+        'PySide6.QtMultimedia'
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -69,17 +79,37 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Anaouder-editor',
+    name='Anaouder',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=False, # Set to False to deactivate console
     disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
+    argv_emulation=True, # Needed by macOS, apparently
+    target_arch=ARCH,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+app = BUNDLE(
+    exe,
+    name='Anaouder.app',
+    icon=None,
+    bundle_identifier='org.dizale.anaouder',
+    info_plist={
+        'NSPrincipalClass': 'NSApplication',
+        'NSHighResolutionCapable': 'True',
+        'LSMinimumSystemVersion': '10.13.0',
+        'NSRequiresAquaSystemAppearance': 'False',  # Add this for proper menu integration
+	'CFBundleDisplayName': 'Anaouder',
+        'CFBundleName': 'Anaouder',
+        'CFBundleIdentifier': 'com.yourdomain.anaouder',
+        'CFBundleShortVersionString': '1.0.0',
+        'CFBundleVersion': '1.0.0',
+        'NSAppleScriptEnabled': False,
+        'LSApplicationCategoryType': 'public.app-category.utilities',
+    }
 )

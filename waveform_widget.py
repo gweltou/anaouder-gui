@@ -21,6 +21,8 @@ from PySide6.QtGui import (
     QColor, QResizeEvent, QWheelEvent, QKeyEvent, QUndoCommand
 )
 from PySide6.QtMultimedia import QMediaPlayer
+from theme import theme
+
 
 
 Handle = Enum("Handle", ["NONE", "LEFT", "RIGHT"])
@@ -162,6 +164,10 @@ class WaveformWidget(QWidget):
         self._sorted_segments = []
 
         self.timecode_margin = 17
+
+
+    def updateThemeColors(self):
+        self.draw()
 
 
     def clear(self):
@@ -331,7 +337,6 @@ class WaveformWidget(QWidget):
     
 
     def resizeEvent(self, event: QResizeEvent):
-        print("waveform resize")
         super().resizeEvent(event)
         self.pixmap = QPixmap(self.size())
         self.draw()
@@ -644,7 +649,7 @@ class WaveformWidget(QWidget):
         if not self.waveform:
             self.pixmap.fill(QColor(240, 240, 240))
             return
-        self.pixmap.fill(Qt.white)
+        self.pixmap.fill(theme.wf_bg_color)
     
         t_right = self.t_left + self.width() / self.ppsec
         samples = self.waveform.get(self.t_left, t_right)
