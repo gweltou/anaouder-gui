@@ -9,7 +9,7 @@ ARCH = 'x86_64' # Set to 'x86_64' or 'arm64' or 'universal2' for macOS
 def get_lib_path(path):
     if platform.system() in ("Linux", "Darwin"):
         python_version = f"python{platform.python_version_tuple()[0]}.{platform.python_version_tuple()[1]}"
-        venv_dir = '.venv-x86' if ARCH=='x86_64' else '.venv'
+        venv_dir = '.venv-arm64' if ARCH=='arm64' else '.venv'
         return os.path.join(f"./{venv_dir}/lib/{python_version}/site-packages", path)
     elif platform.system() == "Windows":
         return os.path.join("./.venv/Lib/site-packages", path)
@@ -86,7 +86,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False, # Set to False to deactivate console
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=True, # Needed by macOS, apparently
     target_arch=ARCH,

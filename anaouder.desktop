@@ -1,10 +1,10 @@
 [Desktop Entry]
 Encoding=UTF-8
 Type=Application
-Name=Anaouder-editor
-Comment=Anaouder-editor
+Name=Anaouder
+Comment=Anaouder
 Categories=Audio;Video;AudioVideo;AudioVideoEditing;
-Exec="/home/gweltaz/Projets/Informatique/anaouder_editor/dist/Anaouder-editor" %F
+Exec="/home/gweltaz/Projets/Informatique/anaouder_editor/dist/Anaouder" %F
 MimeType=application/x-ali;
 Terminal=false
 StartupNotify=false
