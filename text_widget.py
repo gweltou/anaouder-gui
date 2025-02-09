@@ -30,6 +30,7 @@ from commands import (
 from theme import theme
 
 
+STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t'
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -246,9 +247,14 @@ class TextEdit(QTextEdit):
         self.timer = QTimer()
         self.timer.timeout.connect(self._updateScroll)
 
+        # Subtitles margin
         self._text_margin = False
         self._char_width = -1
         self.margin_color = theme.margin_color
+
+        # Used to handle double and triple-clicks
+        self._click_count = 0
+        self._last_click = None
 
 
     def updateThemeColors(self):        
@@ -385,11 +391,13 @@ class TextEdit(QTextEdit):
         doc = self.document()
         seg_start, seg_end = self.parent.waveform.segments[id]
 
+        # TODO: rewrite that
         for block_idx in range(doc.blockCount()):
             block = doc.findBlockByNumber(block_idx)
             if not block.userData():
                 continue
-
+            
+            # Find corresponding block position
             user_data = block.userData().data
             if "seg_id" in user_data:
                 other_id = user_data["seg_id"]
@@ -418,6 +426,7 @@ class TextEdit(QTextEdit):
                     cursor.insertText(text)
                     cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                     cursor.block().setUserData(MyTextBlockUserData({"seg_id": id}))
+                    self.highlighter.rehighlightBlock(cursor.block())
                     if with_cursor:
                         self.setTextCursor(cursor)
                     return
@@ -429,6 +438,7 @@ class TextEdit(QTextEdit):
     
 
     def deleteSentence(self, utt_id:int) -> None:
+        """Delete the sentence of a utterance, and its metadata"""
         # TODO: fix this (userData aren't deleted)
         block = self.getBlockById(utt_id)
         if not block:
@@ -436,10 +446,16 @@ class TextEdit(QTextEdit):
         
         self.ignore_cursor_change = True
         cursor = QTextCursor(block)
-        cursor.select(QTextCursor.BlockUnderCursor)
+        print(cursor.block().text())
+        print(cursor.selectionStart(), cursor.selectionEnd())
+        # Remove block
+        if block.text() == '':
+            cursor.deletePreviousChar()
+        else:
+            cursor.select(QTextCursor.BlockUnderCursor)
+            cursor.removeSelectedText()
         # cursor.movePosition(QTextCursor.StartOfBlock)
         # cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
-        cursor.removeSelectedText()
 
         new_block = cursor.block()
         if not new_block.text():
@@ -708,7 +724,7 @@ class TextEdit(QTextEdit):
 
         cursor = self.textCursor()
         has_selection = not cursor.selection().isEmpty()
-        pos = cursor.position()
+        cursor_pos = cursor.position()
 
         # Regular character
         char = event.text()
@@ -716,20 +732,19 @@ class TextEdit(QTextEdit):
             print("regular char", char)
             if has_selection:
                 DeleteSelectedText(self, cursor)
-                pos = cursor.selectionStart()
-            self.undo_stack.push(InsertTextCommand(self, char, pos))
+                cursor_pos = cursor.selectionStart()
+            self.undo_stack.push(InsertTextCommand(self, char, cursor_pos))
             return
         
         pos_in_block = cursor.positionInBlock()
         block = cursor.block()
         block_data = block.userData()
-        block_len = block.length()        
+        block_len = block.length()
         
         if event.key() == Qt.Key_Return:
             if event.modifiers() == Qt.ControlModifier:
                 # Prevent Ctrl + ENTER
                 return
-            
             print("ENTER")
 
             if has_selection:
@@ -755,13 +770,13 @@ class TextEdit(QTextEdit):
             # Cursor at the beginning of sentence
             if pos_in_block <= first_letter_idx:
                 # Create an empty block before
-                self.undo_stack.push(InsertBlockCommand(self, pos))
+                self.undo_stack.push(InsertBlockCommand(self, cursor_pos))
                 return
             
             # Cursor at the end of sentence
             if pos_in_block >= last_letter_idx:
                 # Create an empty block after
-                self.undo_stack.push(InsertBlockCommand(self, pos, after=True))
+                self.undo_stack.push(InsertBlockCommand(self, cursor_pos, after=True))
                 return
             
             # Cursor in the middle of the sentence
@@ -777,11 +792,12 @@ class TextEdit(QTextEdit):
             print("Delete")
         
             if has_selection:
+                # Special treatment when a selection is active
                 DeleteSelectedText(self, cursor)
                 return
             
             if pos_in_block < block_len-1 or not self.isAligned(block):
-                self.undo_stack.push(DeleteTextCommand(self, pos, 1, QTextCursor.Right))
+                self.undo_stack.push(DeleteTextCommand(self, cursor_pos, 1, QTextCursor.Right))
                 return
 
             next_block = block.next()
@@ -792,38 +808,89 @@ class TextEdit(QTextEdit):
             if (next_block_data and "seg_id" in next_block_data.data
                     and block_data and "seg_id" in block_data.data):
                 seg_id = block_data.data["seg_id"]
-                next_seg_id = next_block_data.data["seg_id"]
-                self.parent.joinUtterances([seg_id, next_seg_id], pos)
+                prev_seg_id = next_block_data.data["seg_id"]
+                self.parent.joinUtterances([seg_id, prev_seg_id], cursor_pos)
                 return
 
         elif event.key() == Qt.Key_Backspace:
             print("Backspace")
             if has_selection:
+                # Special treatment when a selection is active
                 DeleteSelectedText(self, cursor)
                 return
             
             if pos_in_block > 0 or not self.isAligned(block):
-                self.undo_stack.push(DeleteTextCommand(self, pos, 1, QTextCursor.Left))
+                self.undo_stack.push(DeleteTextCommand(self, cursor_pos, 1, QTextCursor.Left))
                 return
-                # return super().keyPressEvent(event)
-
-            next_block = block.previous() # ?
-            if not next_block:
-                return super().keyPressEvent(event)
             
-            next_block_data = next_block.userData()
-            if (next_block_data and "seg_id" in next_block_data.data
-                    and block_data and "seg_id" in block_data.data):
+            if (
+                pos_in_block == 0
+                and self.isAligned(block)
+                and len(block.text().strip()) == 0
+            ):
+                # Empty aligned block, remove it
                 seg_id = block_data.data["seg_id"]
-                next_seg_id = next_block_data.data["seg_id"]
-                self.parent.joinUtterances([next_seg_id, seg_id], pos)
+                self.parent.deleteUtterances([seg_id])
+                return
+
+            if (
+                self.isAligned(block)
+                and block_len > 1
+                and block.previous().isValid()
+                and self.isAligned(block.previous())
+            ):
+                print("join")
+                seg_id = block_data.data["seg_id"]
+                prev_seg_id = block.previous().userData().data["seg_id"]
+                self.parent.joinUtterances([prev_seg_id, seg_id], cursor_pos)
                 return
 
         return super().keyPressEvent(event)
     
 
-    # def mouseDoubleClickEvent(self, e):
-    #     return super().mouseDoubleClickEvent(e)
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            if self._last_click is not None:
+                time_since_last = event.timestamp() - self._last_click
+                if time_since_last < QApplication.doubleClickInterval():
+                    self._click_count = (self._click_count + 1) % 4
+                else:
+                    self._click_count = 1
+            else:
+                self._click_count = 1
+            self._last_click = event.timestamp()
+            
+            if self._click_count == 2:
+                # Double-click (selects word under cursor)
+                event.accept()
+                cursor = self.cursorForPosition(event.position().toPoint())
+                block_text = cursor.block().text()
+                pos_in_block = cursor.positionInBlock()
+                # Find selected word's boundaries
+                left_pos = pos_in_block
+                right_pos = pos_in_block
+                while left_pos > 0 and block_text[left_pos-1] not in STOP_CHARS:
+                    left_pos -= 1
+                while right_pos < len(block_text) and block_text[right_pos] not in STOP_CHARS:
+                    right_pos += 1
+                cursor.movePosition(QTextCursor.Left, QTextCursor.MoveAnchor, pos_in_block - left_pos)
+                cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, right_pos - left_pos)
+                self.setTextCursor(cursor)
+                return
+            if self._click_count == 3:
+                # Triple-click (selects block under cursor)
+                event.accept()
+                cursor = self.cursorForPosition(event.position().toPoint())
+                cursor.movePosition(QTextCursor.StartOfBlock)
+                cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+                self.setTextCursor(cursor)
+                return
+                
+        super().mousePressEvent(event)
+    
+
+    def mouseDoubleClickEvent(self, event):
+        event.ignore()
 
 
     def paintEvent(self, event: QPaintEvent):

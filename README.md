@@ -1,4 +1,4 @@
-# Anaouder-mich
+# Anaouder
 
 ## Staliañ
 
@@ -19,14 +19,14 @@ python3 main.py
 ## Packaging gant PyInstaller
 
 ```bash
-pyinstaller Anaouder-editor.spec
+pyinstaller anaouder.spec
 ```
 
 Lakaet e vo restr ar meziant en doser `dist`
 
 ## Staliañ dindan Linux
 
-Ret e vo cheñch al linenn `exec=` er restr `anaouder-editor.desktop` da gentañ.
+Ret e vo cheñch al linenn `exec=` er restr `anaouder.desktop` da gentañ.
 
 ```bash
 chmod +x install.sh
