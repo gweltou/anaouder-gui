@@ -150,13 +150,12 @@ class CreateNewUtteranceCommand(QUndoCommand):
         del self.parent.waveform.segments[self.seg_id]
         if self.seg_id in self.parent.waveform.active_segments:
             self.parent.waveform.active_segments.remove(self.seg_id)
+        self.parent.waveform._to_sort = True
         self.parent.waveform.draw()
 
     def redo(self):
         self.seg_id = self.parent.waveform.addSegment(self.segment, self.seg_id)
         self.parent.text_edit.insertSentence('*', self.seg_id)
-        # self.parent.waveform.draw()
-        # self.parent.waveform.set
         self.parent.text_edit.setActive(self.seg_id, update_waveform=True)
 
     # def id(self):
@@ -184,6 +183,7 @@ class DeleteUtterancesCommand(QUndoCommand):
             del self.waveform.segments[seg_id]
         self.waveform.active_segments = []
         self.waveform.last_segment_active = -1
+        self.waveform._to_sort = True
         self.waveform.draw()
 
 
@@ -296,6 +296,7 @@ class JoinUtterancesCommand(QUndoCommand):
         
         cursor.setPosition(self.pos)
         self.text_edit.setTextCursor(cursor)
+        self.waveform._to_sort = True
         self.waveform.draw()
 
     def redo(self):
@@ -325,6 +326,7 @@ class JoinUtterancesCommand(QUndoCommand):
         self.text_edit.setTextCursor(cursor)
 
         self.waveform.active_segments = [first_id]
+        self.waveform._to_sort = True
         self.waveform.draw()
 
 
@@ -1054,7 +1056,10 @@ class MainWindow(QMainWindow):
         if not utt:
             self.video_window.setCaption("", -1)
             return
-        self.video_window.setCaption(utt.text(), seg_id)
+        # Remove metadata from subtitle text
+        text = utt.text()
+        text, _ = extract_metadata(text)
+        self.video_window.setCaption(text, seg_id)
 
 
     def updatePlayer(self, position):

@@ -370,7 +370,6 @@ class TextEdit(QTextEdit):
 
 
     def addText(self, text: str, is_utt=False):
-        print("\naddText")
         self.append(text)
 
 

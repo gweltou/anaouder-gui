@@ -41,6 +41,7 @@ class ResizeSegmentCommand(QUndoCommand):
     def undo(self):
         print("undo resize")
         self.waveform_widget.segments[self.segment_id] = self.old_segment
+        self.waveform_widget._to_sort = True
         self.waveform_widget.draw()
 
     def redo(self):
