@@ -693,7 +693,7 @@ class TextEdit(QTextEdit):
         print("inputMethodEvent", f"{char=}")
 
         if not len(char):
-            return super().inputMethodEvent(event)
+            return #super().inputMethodEvent(event)
 
         has_selection = not cursor.selection().isEmpty()
         if has_selection:
@@ -758,11 +758,11 @@ class TextEdit(QTextEdit):
             text = block.text()
 
             if event.modifiers() == Qt.ShiftModifier:
-                left_part = text[:pos_in_block]
-                right_part = text[pos_in_block:]
-                new_text = left_part.rstrip() + '\u2028' + right_part.lstrip()
+                left_part = text[:pos_in_block].rstrip()
+                right_part = text[pos_in_block:].lstrip()
+                new_text = left_part + '\u2028' + right_part
                 self.undo_stack.push(
-                    ReplaceTextCommand(self, block.blockNumber(), text, new_text)
+                    ReplaceTextCommand(self, block.blockNumber(), text, new_text, pos_in_block, len(left_part)+1)
                     )
                 return
 

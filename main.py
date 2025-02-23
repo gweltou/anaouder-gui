@@ -60,6 +60,7 @@ from waveform_widget import WaveformWidget
 from text_widget import TextEdit, MyTextBlockUserData, BlockType
 from video_widget import VideoWindow
 from theme import theme
+from shortcuts import shortcuts
 from version import __version__
 
 
@@ -250,7 +251,6 @@ class SplitUtteranceCommand(QUndoCommand):
         user_data = self.user_data.copy()
         user_data["seg_id"] = self.seg_left_id
         cursor.block().setUserData(MyTextBlockUserData(user_data))
-        # self.text_edit.deactivateSentence(self.seg_left_id)
 
         # Create right text block
         cursor.insertBlock()
@@ -261,8 +261,7 @@ class SplitUtteranceCommand(QUndoCommand):
 
         cursor.movePosition(QTextCursor.StartOfBlock)
         self.text_edit.setTextCursor(cursor)
-
-        # self.text_edit.setActive(self.seg_right_id, with_cursor=False, update_waveform=True)
+        self.waveform.refreshSegmentInfo()
 
 
 class JoinUtterancesCommand(QUndoCommand):
@@ -300,6 +299,7 @@ class JoinUtterancesCommand(QUndoCommand):
         self.text_edit.setTextCursor(cursor)
         self.waveform._to_sort = True
         self.waveform.draw()
+        self.waveform.refreshSegmentInfo()
 
     def redo(self):
         self.segments = [self.waveform.segments[id] for id in self.seg_ids]
@@ -330,6 +330,7 @@ class JoinUtterancesCommand(QUndoCommand):
         self.waveform.active_segments = [first_id]
         self.waveform._to_sort = True
         self.waveform.draw()
+        self.waveform.refreshSegmentInfo()
 
 
 class AlignWithSelectionCommand(QUndoCommand):
@@ -426,24 +427,23 @@ class MainWindow(QMainWindow):
 
         # Keyboard shortcuts
         ## Open
-        shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
+        shortcut = QShortcut(QKeySequence.Open, self)
         shortcut.activated.connect(self.openFile)
         ## Save
-        shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        shortcut = QShortcut(QKeySequence.Save, self)
         shortcut.activated.connect(self.saveFile)
         ## Search
-        shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        shortcut = QShortcut(QKeySequence.Find, self)
         shortcut.activated.connect(self.search)
         ## Play
-        shortcut = QShortcut(QKeySequence("Ctrl+Space"), self)
-        shortcut.activated.connect(self.play)
-        shortcut = QShortcut(QKeySequence("Meta+Space"), self) # Temporary fix
+        shortcut = QShortcut(shortcuts["play_stop"], self)
         shortcut.activated.connect(self.play)
         # Next
-        shortcut = QShortcut(QKeySequence("Ctrl+Right"), self)
+        shortcut = QShortcut(shortcuts["play_next"], self)
+        print(shortcuts["play_next"])
         shortcut.activated.connect(self.playNext)
         # Prev
-        shortcut = QShortcut(QKeySequence("Ctrl+Left"), self)
+        shortcut = QShortcut(shortcuts["play_prev"], self)
         shortcut.activated.connect(self.playPrev)
 
         # shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
@@ -1135,6 +1135,7 @@ class MainWindow(QMainWindow):
         id = self.waveform.findNextSegment()
         if id < 0:
             id = self.waveform.last_segment_active
+            return
         self.waveform.setActive(id)
         self.text_edit.setActive(id, update_waveform=False)
         self.playing_segment = id

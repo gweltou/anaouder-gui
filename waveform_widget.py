@@ -22,6 +22,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtMultimedia import QMediaPlayer
 from theme import theme
+from shortcuts import shortcuts
 
 
 
@@ -231,6 +232,7 @@ class WaveformWidget(QWidget):
 
     def setActive(self, clicked_id: int, multi=False) -> None:
         if clicked_id not in self.segments:
+            # Clicked outside of any segment, deselect current active segment
             self.active_segments = []
             self.last_segment_active = -1
             self.draw()
@@ -252,18 +254,19 @@ class WaveformWidget(QWidget):
             self.active_segments = [clicked_id]
             self.selection_is_active = False
             start, end = self.segments[clicked_id]
-            # re-center segment
-            if start < self.t_left:
-                self.scroll_goal = max(0.0, start - 20 / self.ppsec) # time relative to left of window
-                # dur = end-start
-                # self.scroll_goal = start + 0.5 * dur - 0.5 * self.width() / self.ppsec
-                if not self.timer.isActive():
-                    self.timer.start(1000/30)
-            elif end > self._get_time_right():
-                t_right_goal = min(self.audio_len, end + 20 / self.ppsec)
-                self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
-                if not self.timer.isActive():
-                    self.timer.start(1000/30)
+            segment_dur = end - start
+            window_dur = self.width() / self.ppsec
+            # re-center segment, if necessary
+            if segment_dur < window_dur * 0.8:
+                if start < self.t_left:
+                    self.scroll_goal = max(0.0, start - 20 / self.ppsec) # time relative to left of window
+                    if not self.timer.isActive():
+                        self.timer.start(1000/30)
+                elif end > self._get_time_right():
+                    t_right_goal = min(self.audio_len, end + 20 / self.ppsec)
+                    self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
+                    if not self.timer.isActive():
+                        self.timer.start(1000/30)
 
         self.last_segment_active = clicked_id
         self.draw()
@@ -276,8 +279,11 @@ class WaveformWidget(QWidget):
         Slide the waveform window following the playhead
         """
         self.playhead = t
-        if not self.active_segments and (
-            t < self.t_left or t > self._get_time_right()):
+        if (
+                not self.active_segments
+                and not self.timer.isActive()
+                and (t < self.t_left or t > self._get_time_right())
+            ):
             # Slide waveform window
             self.t_left = t
         self.draw()
@@ -423,7 +429,7 @@ class WaveformWidget(QWidget):
             event.ignore()
             return
         
-        if event.key() == Qt.Key_Control:
+        if event.key() == shortcuts["show_handles"]:
             self.ctrl_pressed = True
             self.scroll_vel = 0.0
             if self.mouse_pos:
@@ -450,7 +456,7 @@ class WaveformWidget(QWidget):
     
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
-        if event.key() == Qt.Key_Control:
+        if event.key() == shortcuts["show_handles"]:
             self.ctrl_pressed = False
             self.over_left_handle = False
             self.over_right_handle = False
