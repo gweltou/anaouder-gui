@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Install the desktop menu entry
-xdg-desktop-menu install anaouder.desktop
+xdg-desktop-menu install anaouder.desktop --novendor
 
 # Install the mime file type
 xdg-mime install anaouder-ali_filetype.xml

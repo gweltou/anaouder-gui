@@ -43,12 +43,15 @@ class ResizeSegmentCommand(QUndoCommand):
         self.waveform_widget.segments[self.segment_id] = self.old_segment
         self.waveform_widget._to_sort = True
         self.waveform_widget.draw()
+        self.waveform_widget.refreshSegmentInfo()
 
     def redo(self):
         if self.side == 0:
             self.waveform_widget.segments[self.segment_id][0] = self.time_pos
         elif self.side == 1:
             self.waveform_widget.segments[self.segment_id][1] = self.time_pos
+        self.waveform_widget.draw()
+        self.waveform_widget.refreshSegmentInfo()
     
     def id(self):
         return 21
@@ -134,16 +137,16 @@ class WaveformWidget(QWidget):
         self.segbrush = QBrush(QColor(180, 170, 50, 50))
         self.handlepen = QPen(QColor(240, 220, 60, 160), 6)
         self.handlepen.setCapStyle(Qt.RoundCap)
-        self.handleActivePen = QPen(QColor(255, 250, 80, 220), 4)
-        self.handleActivePen.setCapStyle(Qt.RoundCap)
+        self.handle_active_pen = QPen(QColor(255, 250, 80, 220), 4)
+        self.handle_active_pen.setCapStyle(Qt.RoundCap)
 
-        self.handleLeftPen = QPen(QColor(255, 80, 80, 220), 4)
-        self.handleLeftPen.setCapStyle(Qt.RoundCap)
-        self.handleRightPen = QPen(QColor(80, 255, 80, 220), 4)
-        self.handleRightPen.setCapStyle(Qt.RoundCap)
+        self.handle_left_pen = QPen(QColor(255, 80, 80, 220), 4)
+        self.handle_left_pen.setCapStyle(Qt.RoundCap)
+        self.handle_right_pen = QPen(QColor(80, 255, 80, 220), 4)
+        self.handle_right_pen.setCapStyle(Qt.RoundCap)
 
-        self.handleActivePenShadow = QPen(QColor(100, 100, 20, 40), 8)
-        self.handleActivePenShadow.setCapStyle(Qt.RoundCap)
+        self.handle_active_pen_shadow = QPen(QColor(100, 100, 20, 40), 8)
+        self.handle_active_pen_shadow.setCapStyle(Qt.RoundCap)
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._updateScroll)
@@ -231,6 +234,7 @@ class WaveformWidget(QWidget):
             self.active_segments = []
             self.last_segment_active = -1
             self.draw()
+            self.refreshSegmentInfo()
             return
         
         if multi:
@@ -261,14 +265,21 @@ class WaveformWidget(QWidget):
                 if not self.timer.isActive():
                     self.timer.start(1000/30)
 
-            #self.parent.status_bar.showMessage(f"{start=} {end=}")
         self.last_segment_active = clicked_id
         self.draw()
+        self.refreshSegmentInfo()
 
 
     def setHead(self, t):
-        """Set the playing head"""
+        """
+        Set the playing head
+        Slide the waveform window following the playhead
+        """
         self.playhead = t
+        if not self.active_segments and (
+            t < self.t_left or t > self._get_time_right()):
+            # Slide waveform window
+            self.t_left = t
         self.draw()
     
 
@@ -436,7 +447,7 @@ class WaveformWidget(QWidget):
             self._to_sort = True
 
         return super().keyPressEvent(event)
-        
+    
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
         if event.key() == Qt.Key_Control:
@@ -497,7 +508,7 @@ class WaveformWidget(QWidget):
                 if clicked_id < 0:
                     # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
-                
+        
         self.draw()
         return super().mouseReleaseEvent(event)
 
@@ -744,14 +755,14 @@ class WaveformWidget(QWidget):
                     self.painter.drawRect(x, inactive_top_y, w, inactive_down_y)
                 if self.ctrl_pressed:
                     if self.over_left_handle:
-                        self.painter.setPen(self.handleActivePenShadow)
+                        self.painter.setPen(self.handle_active_pen_shadow)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
-                        self.painter.setPen(self.handleLeftPen)
+                        self.painter.setPen(self.handle_left_pen)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
                     elif self.over_right_handle:
-                        self.painter.setPen(self.handleActivePenShadow)
+                        self.painter.setPen(self.handle_active_pen_shadow)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
-                        self.painter.setPen(self.handleRightPen)
+                        self.painter.setPen(self.handle_right_pen)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
                     else:
                         self.painter.setPen(self.handlepen)
@@ -776,14 +787,14 @@ class WaveformWidget(QWidget):
                     continue
                 if self.ctrl_pressed:
                     if self.over_left_handle:
-                        self.painter.setPen(self.handleActivePenShadow)
+                        self.painter.setPen(self.handle_active_pen_shadow)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
-                        self.painter.setPen(self.handleLeftPen)
+                        self.painter.setPen(self.handle_left_pen)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
                     elif self.over_right_handle:
-                        self.painter.setPen(self.handleActivePenShadow)
+                        self.painter.setPen(self.handle_active_pen_shadow)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
-                        self.painter.setPen(self.handleRightPen)
+                        self.painter.setPen(self.handle_right_pen)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
                     else:
                         self.painter.setPen(self.handlepen)
@@ -792,3 +803,12 @@ class WaveformWidget(QWidget):
         
         self.painter.end()
         self.update()
+
+
+    def refreshSegmentInfo(self):
+        print("Refresh", self.active_segments)
+        if len(self.active_segments) == 1:
+            self.parent.showSegmentInfo(self.active_segments[0])
+        else:
+            print("refsh None")
+            self.parent.showSegmentInfo(None)

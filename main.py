@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-    Terminology
-        Segment: A span of audio, with a `start` and an `end`
-        Sentence: A piece of text
-        Utterance: The association of an audio `Segment` and a text `Sentence`
-
+Terminology
+    Segment: A span of audio, with a `start` and an `end`
+    Sentence: A piece of text
+    Utterance: The association of an audio `Segment` and a text `Sentence`
 """
 
 
@@ -35,6 +34,7 @@ from ostilhou.asr import (
 from ostilhou.asr.models import load_model, is_model_loaded, get_available_models
 from ostilhou.asr.dataset import format_timecode, METADATA_PATTERN
 from ostilhou.audio import split_to_segments, convert_to_mp3, prepare_segment_for_decoding
+from ostilhou.utils import sec2hms
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMenu, QMenuBar,
@@ -175,6 +175,7 @@ class DeleteUtterancesCommand(QUndoCommand):
         for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
             self.seg_id = self.waveform.addSegment(segment, seg_id)
             self.text_edit.insertSentence(text, seg_id)
+        self.waveform.refreshSegmentInfo()
         self.waveform.draw()
 
     def redo(self):
@@ -184,6 +185,7 @@ class DeleteUtterancesCommand(QUndoCommand):
         self.waveform.active_segments = []
         self.waveform.last_segment_active = -1
         self.waveform._to_sort = True
+        self.waveform.refreshSegmentInfo()
         self.waveform.draw()
 
 
@@ -434,6 +436,8 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.search)
         ## Play
         shortcut = QShortcut(QKeySequence("Ctrl+Space"), self)
+        shortcut.activated.connect(self.play)
+        shortcut = QShortcut(QKeySequence("Meta+Space"), self) # Temporary fix
         shortcut.activated.connect(self.play)
         # Next
         shortcut = QShortcut(QKeySequence("Ctrl+Right"), self)
@@ -1323,6 +1327,17 @@ class MainWindow(QMainWindow):
             event.accept()
         else:
             event.ignore()
+    
+    
+    def showSegmentInfo(self, id):
+        if id not in self.waveform.segments:
+            self.status_bar.showMessage("")
+            return
+        start, end = self.waveform.segments[id]
+        dur = end-start
+        start = sec2hms(start, sep='', precision=2, m_unit='m', s_unit='s')
+        end = sec2hms(end, sep='', precision=2, m_unit='m', s_unit='s')
+        self.status_bar.showMessage(f"ID: {id}\t\tstart: {start:8}\tend: {end:8}\tdur: {dur:.2f}s")
 
 
 

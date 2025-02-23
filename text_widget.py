@@ -518,6 +518,12 @@ class TextEdit(QTextEdit):
         
         if update_waveform:
             self.parent.waveform.setActive(id)
+        
+        if self.getBlockType(block) == BlockType.ALIGNED:
+            data = block.userData().data
+            if "seg_id" in data:
+                seg_id = data["seg_id"]
+                self.parent.showSegmentInfo(seg_id)
     
 
     def _updateScroll(self):
@@ -612,7 +618,6 @@ class TextEdit(QTextEdit):
                     return
                 self.setActive(id, with_cursor=False)
                 
-            self.parent.status_bar.showMessage(str(data))
         else:
             self.deactivateSentence()
             self.parent.waveform.setActive(None)
