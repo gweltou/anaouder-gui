@@ -20,12 +20,13 @@ class CenteredTextItem(QGraphicsTextItem):
 
         font = QFont()
         # font.setBold(True)
-        font.setPointSize(24)
+        font.setPointSize(48)
         self.setFont(font)
         self.setDefaultTextColor(QColor(255, 255, 0))
     
     def setText(self, text):
-        html_text = f"<div style='text-align: center;'>{text.replace('\n', '<br>')}</div>"
+        text = text.replace('\n', "<br>").replace('\u2028', "<br>").replace('*', '')
+        html_text = f"<div style='text-align: center;'>{text}</div>"
         self.setHtml(html_text)    
 
 
@@ -92,17 +93,6 @@ class VideoWindow(QMainWindow):
 
 
     def setCaption(self, caption_text:str, seg_id:int):
-        if len(caption_text) > 32:
-            # Multi-line caption
-            lines = []
-            words = caption_text.split()
-            n_word = 0
-            while n_word < len(words):
-                next = min(n_word + 7, len(words))
-                lines.append(' '.join(words[n_word:next]))
-                n_word = next
-            caption_text = '\n'.join(lines)
-
         self.text_item.setText(caption_text)
         vid_rect = self.video_item.boundingRect()
         caption_rect = self.text_item.boundingRect()

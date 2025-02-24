@@ -803,6 +803,8 @@ class MainWindow(QMainWindow):
         filename = os.path.splitext(self.filepath)[0] if self.filepath else "untitled"
         filename += ".srt"
         filepath, _ = QFileDialog.getSaveFileName(self, "Save File", os.path.join(dir, filename))
+        if not filepath:
+            return
         rm_special_tokens = True
 
         doc = self.text_edit.document()
@@ -818,7 +820,7 @@ class MainWindow(QMainWindow):
                 # Remove unwanted strings from subtitle output
                 text = block.text()
                 text = re.sub(METADATA_PATTERN, ' ', text)
-                text = re.sub(r"<br>", '\u2028', text, 0, re.IGNORECASE)
+                text = re.sub(r"<br>", '\u2028', text, count=0, flags=re.IGNORECASE)
                 text = re.sub(r"\*", '', text)
                 text = re.sub(r"\'", '’', text)
 

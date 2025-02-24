@@ -745,6 +745,13 @@ class TextEdit(QTextEdit):
         block_data = block.userData()
         block_len = block.length()
         
+        # Dialog hyphen for subtitles (U+2013)
+        if event.matches(QKeySequence.AddTab):
+            text = block.text()
+            suffix = ' ' if pos_in_block < block_len-1 and not text[pos_in_block].isspace() else ''
+            self.undo_stack.push(InsertTextCommand(self, f"–{suffix}", cursor_pos))
+            return
+        
         if event.key() == Qt.Key_Return:
             if event.modifiers() == Qt.ControlModifier:
                 # Prevent Ctrl + ENTER

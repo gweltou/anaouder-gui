@@ -812,9 +812,7 @@ class WaveformWidget(QWidget):
 
 
     def refreshSegmentInfo(self):
-        print("Refresh", self.active_segments)
         if len(self.active_segments) == 1:
             self.parent.showSegmentInfo(self.active_segments[0])
         else:
-            print("refsh None")
             self.parent.showSegmentInfo(None)

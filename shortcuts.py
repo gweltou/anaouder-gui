@@ -9,5 +9,5 @@ shortcuts = {
     "play_stop" : QKeySequence("Alt+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
     "play_next" : QKeySequence("Alt+Right") if _is_darwin else QKeySequence("Ctrl+Right"),
     "play_prev" : QKeySequence("Alt+Left") if _is_darwin else QKeySequence("Ctrl+Left"),
-    "show_handles" : Qt.Key_Alt if _is_darwin else Qt.Key_Control
+    "show_handles" : Qt.Key_Control if _is_darwin else Qt.Key_Control
 }
