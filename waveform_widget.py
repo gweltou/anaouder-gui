@@ -178,6 +178,7 @@ class WaveformWidget(QWidget):
     def clear(self):
         """Reset Waveform"""
         self.ppsec = 50        # pixels per second of audio
+        self.ppsec_goal = self.ppsec
         self.t_left = 0.0      # timecode of left border (in seconds)
         self.scroll_vel = 0.0
         self.playhead = 0.0
@@ -259,13 +260,22 @@ class WaveformWidget(QWidget):
             # re-center segment, if necessary
             if segment_dur < window_dur * 0.8:
                 if start < self.t_left:
-                    self.scroll_goal = max(0.0, start - 20 / self.ppsec) # time relative to left of window
+                    self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
                     if not self.timer.isActive():
                         self.timer.start(1000/30)
                 elif end > self._get_time_right():
-                    t_right_goal = min(self.audio_len, end + 20 / self.ppsec)
+                    t_right_goal = min(self.audio_len, end + 0.1 * window_dur)
                     self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
                     if not self.timer.isActive():
+                        self.timer.start(1000/30)
+            else:
+                # Choose a zoom level that will fit this segment in 80% of the window width
+                adapted_window_dur = segment_dur / 0.8
+                adapted_ppsec = self.width() / adapted_window_dur
+                self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
+                self.ppsec_goal = adapted_ppsec
+                print(self.ppsec, adapted_ppsec)
+                if not self.timer.isActive():
                         self.timer.start(1000/30)
 
         self.last_segment_active = clicked_id
@@ -300,14 +310,16 @@ class WaveformWidget(QWidget):
 
 
     def _updateScroll(self):
+        if self.ppsec_goal != self.ppsec:
+            self.ppsec += (self.ppsec_goal - self.ppsec) * 0.2
+            self.waveform.ppsec = self.ppsec
+
         if self.scroll_goal >= 0.0:
             dist = self.scroll_goal - self.t_left
             self.scroll_vel += 0.2 * dist
-            self.scroll_vel *= 0.6
+            self.scroll_vel *= 0.5
 
-        if self.scroll_vel > 0.001 or self.scroll_vel < -0.001:
             self.t_left += self.scroll_vel
-            self.scroll_vel *= 0.9
             # Check for outside of wavefom positions
             if self.t_left < 0.0:
                 self.t_left = 0.0
@@ -315,8 +327,11 @@ class WaveformWidget(QWidget):
             if self._get_time_right() >= self.audio_len:
                 self.t_left = self.audio_len - self.width() / self.ppsec
                 self.scroll_vel = 0
-        else:
+        
+        if abs(self.scroll_vel) < 0.001 and abs(self.ppsec_goal - self.ppsec) < 0.1:
             self.scroll_goal = -1
+            self.ppsec = self.ppsec_goal
+            self.waveform.ppsec = self.ppsec
             self.timer.stop()
         self.draw()
     
@@ -347,7 +362,8 @@ class WaveformWidget(QWidget):
 
 
     def paintEvent(self, event: QPaintEvent):
-        """Override method from QWidget
+        """
+        Override method from QWidget
         Paint the Pixmap into the widget
         """
         p = QPainter(self)
@@ -404,6 +420,7 @@ class WaveformWidget(QWidget):
         self.t_left -= delta_s * position
         self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
         self.waveform.ppsec = self.ppsec
+        self.ppsec_goal = self.ppsec
         self.draw()
     
     def zoomOut(self, factor=1.333, position=0.5):
@@ -416,6 +433,7 @@ class WaveformWidget(QWidget):
         self.t_left -= delta_s * position
         self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
         self.waveform.ppsec = self.ppsec
+        self.ppsec_goal = self.ppsec
         self.draw()
 
 

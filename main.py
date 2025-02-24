@@ -274,7 +274,7 @@ class JoinUtterancesCommand(QUndoCommand):
         self.segments_text : list
         
         # If no pos is given, take pos of first block
-        self.pos : int = pos or self.text_edit.getBlockBySentenceId(self.seg_ids[0]).position()
+        self.pos : int = pos or self.text_edit.getBlockById(self.seg_ids[0]).position()
 
     def undo(self):
         # Restore first utterance
