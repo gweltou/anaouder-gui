@@ -3,7 +3,7 @@
 import platform
 import os
 
-ARCH = 'x86_64' # Set to 'x86_64' or 'arm64' or 'universal2' for macOS
+ARCH = os.getenv("ARCH") # Set to 'x86_64' or 'arm64' or 'universal2' for macOS
 
 
 def get_lib_path(path):

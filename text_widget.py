@@ -19,7 +19,7 @@ from PySide6.QtGui import (
 )
 
 from ostilhou.asr import extract_metadata
-from ostilhou.hspell import get_hunspell_dict
+from ostilhou.hspell import get_hunspell_spylls
 
 from commands import (
     InsertTextCommand,
@@ -168,12 +168,13 @@ class Highlighter(QSyntaxHighlighter):
             match = matches.next()
             if not self.is_subsentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength()):
                 continue
-            if not self.hunspell.spell(match.captured().replace('’', "'")):
+            word = match.captured().replace('’', "'")
+            if not self.hunspell.lookup(word):
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.mispellformat)
 
 
     def toggleMisspelling(self, checked):
-        self.hunspell = get_hunspell_dict()
+        self.hunspell = get_hunspell_spylls()
         self.show_misspelling = checked
         self.rehighlight()
 

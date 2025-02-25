@@ -684,7 +684,7 @@ class MainWindow(QMainWindow):
             lambda checked: self.text_edit.highlighter.toggleMisspelling(checked))
         displayMenu.addAction(toggleMisspelling)
 
-        toggleTextMargin = QAction("Text margin", self)
+        toggleTextMargin = QAction("Subtitle margin", self)
         toggleTextMargin.setCheckable(True)
         toggleTextMargin.toggled.connect(
             lambda checked: self.text_edit.toggleTextMargin(checked))

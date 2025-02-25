@@ -315,18 +315,21 @@ class WaveformWidget(QWidget):
             self.waveform.ppsec = self.ppsec
 
         if self.scroll_goal >= 0.0:
+            # Automatic scrolling
             dist = self.scroll_goal - self.t_left
             self.scroll_vel += 0.2 * dist
             self.scroll_vel *= 0.5
+        
+        self.scroll_vel *= 0.9
 
-            self.t_left += self.scroll_vel
-            # Check for outside of wavefom positions
-            if self.t_left < 0.0:
-                self.t_left = 0.0
-                self.scroll_vel = 0
-            if self._get_time_right() >= self.audio_len:
-                self.t_left = self.audio_len - self.width() / self.ppsec
-                self.scroll_vel = 0
+        self.t_left += self.scroll_vel
+        # Check for outside of wavefom positions
+        if self.t_left < 0.0:
+            self.t_left = 0.0
+            self.scroll_vel = 0
+        if self._get_time_right() >= self.audio_len:
+            self.t_left = self.audio_len - self.width() / self.ppsec
+            self.scroll_vel = 0
         
         if abs(self.scroll_vel) < 0.001 and abs(self.ppsec_goal - self.ppsec) < 0.1:
             self.scroll_goal = -1
@@ -648,10 +651,11 @@ class WaveformWidget(QWidget):
                 self.zoomIn(zoomFactor, zoomLoc)
             else:
                self.zoomOut(zoomFactor, zoomLoc)
-        else:
-            # Scroll
-            pass
-    
+            # Cancel automatic motion
+            self.scroll_goal = -1
+            self.scroll_vel = 0.0
+            self.ppsec_goal = self.ppsec
+
 
     def contextMenuEvent(self, event):
         if not self.active_segments and not self.selection_is_active:
