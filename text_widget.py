@@ -30,7 +30,7 @@ from commands import (
 from theme import theme
 
 
-STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t'
+STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t\u2028'
 
 
 class Highlighter(QSyntaxHighlighter):

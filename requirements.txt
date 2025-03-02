@@ -1,7 +1,7 @@
 pyside6
 static-ffmpeg
 pydub
-audioop-lts
+audioop-lts; python_version>='3.13'
 vosk
 srt
 pyinstaller

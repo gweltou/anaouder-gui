@@ -4,7 +4,7 @@
 """
 Terminology
     Segment: A span of audio, with a `start` and an `end`
-    Sentence: A piece of text
+    Sentence: The textual component of an utterance
     Utterance: The association of an audio `Segment` and a text `Sentence`
 """
 
@@ -28,12 +28,15 @@ import srt
 from ostilhou.asr import (
     load_segments_data, load_text_data,
     extract_metadata,
-    transcribe_segment,
     transcribe_segment_timecoded_callback,
+    transcribe_segment_ffmpeg,
 )
 from ostilhou.asr.models import load_model, is_model_loaded, get_available_models
 from ostilhou.asr.dataset import format_timecode, METADATA_PATTERN
-from ostilhou.audio import split_to_segments, convert_to_mp3, prepare_segment_for_decoding
+from ostilhou.audio import (
+    split_to_segments, convert_to_mp3,
+    get_audio_samples,
+)
 from ostilhou.utils import sec2hms
 
 from PySide6.QtWidgets import (
@@ -85,16 +88,13 @@ class RecognizerWorker(QThread):
     message = Signal(str)
     transcribedSegment = Signal(str, int, int) # Transcribe a pre-defined segment
     transcribed = Signal(str, list) # Create a segment with transcription
-
-    def setAudio(self, audio: AudioSegment):
-        self.audio_data: AudioSegment = audio
-
-    def setSegments(self, segments):
-        print(segments)
-        self.segments = segments
     
     def setModel(self, model_name):
         self.model = model_name
+    
+    def setArgs(self, audio_path: str, segments: list):
+        self.audio_path = audio_path
+        self.segments = segments
     
     def run(self):
         if not is_model_loaded(self.model):
@@ -113,8 +113,10 @@ class RecognizerWorker(QThread):
         if self.segments:
             for i, (seg_id, start, end) in enumerate(self.segments):
                 self.message.emit(f"{i+1}/{len(self.segments)}")
-                text = transcribe_segment(self.audio_data[start*1000:end*1000])
+                # text = transcribe_segment(self.audio_data[start*1000:end*1000])
+                text = transcribe_segment_ffmpeg(self.audio_path, start, end-start, model=None)
                 text = ' '.join(text)
+                print(f"STT: {text}")
                 self.transcribedSegment.emit(text, seg_id, i)
         else:
             # Transcribe whole file
@@ -402,7 +404,7 @@ class MainWindow(QMainWindow):
 
         self.filepath = filepath
         self.video_window = None
-        self.audio_data = None
+        # self.audio_data = None
         self.audio_output = QAudioOutput()
         self.player = QMediaPlayer()
         self.player.positionChanged.connect(self.updatePlayer)
@@ -415,7 +417,7 @@ class MainWindow(QMainWindow):
 
         self.text_edit = TextEdit(self)
         self.waveform = WaveformWidget(self)
-        self.waveform.utterances = self.text_edit
+        self.waveform.text_edit = self.text_edit
         
         QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
         self.updateThemeColors()
@@ -532,7 +534,6 @@ class MainWindow(QMainWindow):
         transcribeButton.setIcon(self.icons["sparkles"])
         transcribeButton.setFixedWidth(buttonSize)
         leftButtonsLayout.addWidget(transcribeButton)
-
 
 
         # Play buttons
@@ -670,7 +671,7 @@ class MainWindow(QMainWindow):
 
         operationMenu = menuBar.addMenu("Operations")
         findSegmentsAction = QAction("Find segments", self)
-        findSegmentsAction.triggered.connect(self.opFindSegments)
+        # findSegmentsAction.triggered.connect(self.opFindSegments)
         operationMenu.addAction(findSegmentsAction)
         transcribeAction = QAction("Auto-transcribe", self)
         transcribeAction.triggered.connect(self.transcribe)
@@ -1015,12 +1016,13 @@ class MainWindow(QMainWindow):
         # scroll_bar = self.text_edit.verticalScrollBar()
         # print(scroll_bar.value())
         # scroll_bar.setValue(scroll_bar.minimum())
-    
+
 
     def loadAudio(self, filepath):
         ## XXX: Use QAudioDecoder instead maybe ?
         self.stop()
         self.player.setSource(QUrl.fromLocalFile(filepath))
+        self.audio_path = filepath
 
         # Convert to MP3 in case of MKV file
         # (problems with PyDub it seems)
@@ -1031,20 +1033,10 @@ class MainWindow(QMainWindow):
                 convert_to_mp3(filepath, mp3_file)
                 filepath = mp3_file
 
-        print("creating audio segment")
-        audio_data = AudioSegment.from_file(filepath)
-        
-        print("set to mono, 16khz")
-        audio_data = prepare_segment_for_decoding(audio_data)
-        self.audio_data = audio_data
-        self.recognizer_worker.setAudio(audio_data)
-
-        samples = audio_data.get_array_of_samples() # Slow
-        # Normalize
-        sample_max = 2**(audio_data.sample_width*8)
-        samples = [ s/sample_max for s in samples ]
-
-        self.waveform.setSamples(samples, audio_data.frame_rate)
+        print("Rendering waveform...")
+        samples = get_audio_samples(self.audio_path, 4000)
+        print(f"{len(samples)} samples")
+        self.waveform.setSamples(samples, 4000)
         self.waveform.draw()
 
 
@@ -1240,18 +1232,18 @@ class MainWindow(QMainWindow):
             self.waveform.deselect()
             self.waveform.draw()
             # Transcribe selection
-            self.recognizer_worker.setSegments([(seg_id, *self.waveform.segments[seg_id])])
+            segments = [(seg_id, *self.waveform.segments[seg_id])]
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
-            self.recognizer_worker.setSegments(
-                [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
-                )
+            segments = [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
         elif not self.waveform.segments:
             # Transcribe whole audio file
             self.progress_bar.show()
-            self.recognizer_worker.setSegments([])
+            self.recognizer_worker.setArgs(self.audio_path, [])
             self.recognizer_worker.start()
             return
+
+        self.recognizer_worker.setArgs(self.audio_path, segments)
 
         # self.status_bar.clearMessage()
         self.progress_bar.setRange(0, len(self.recognizer_worker.segments))
@@ -1268,8 +1260,8 @@ class MainWindow(QMainWindow):
 
     def joinUtterances(self, seg_ids, pos=None):
         """
-            Join many segments in one.
-            Keep the segment ID of the earliest segment among the selected ones.
+        Join many segments in one.
+        Keep the segment ID of the earliest segment among the selected ones.
         """
         print("join action")
         self.undo_stack.push(JoinUtterancesCommand(self.text_edit, self.waveform, seg_ids, pos))
@@ -1340,7 +1332,7 @@ class MainWindow(QMainWindow):
         dur = end-start
         start = sec2hms(start, sep='', precision=2, m_unit='m', s_unit='s')
         end = sec2hms(end, sep='', precision=2, m_unit='m', s_unit='s')
-        self.status_bar.showMessage(f"ID: {id}\t\tstart: {start:8}\tend: {end:8}\tdur: {dur:.2f}s")
+        self.status_bar.showMessage(f"ID: {id}\t\tstart: {start:10}\tend: {end:10}\tdur: {dur:.3f}s")
 
 
 

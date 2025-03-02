@@ -2,13 +2,15 @@
 # -*- coding: utf-8 -*-
 
 
-ZOOM_Y = 3.5
-ZOOM_MAX = 1500
+ZOOM_Y = 3.5    # In pixels per second
+ZOOM_MIN = 0.2  # In pixels per second
+ZOOM_MAX = 512  # In pixels per second
 
 
 
 from math import ceil
 from enum import Enum
+import numpy as np
 
 from PySide6.QtWidgets import (
     QMenu, QWidget
@@ -20,9 +22,10 @@ from PySide6.QtGui import (
     QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
     QColor, QResizeEvent, QWheelEvent, QKeyEvent, QUndoCommand
 )
-from PySide6.QtMultimedia import QMediaPlayer
 from theme import theme
 from shortcuts import shortcuts
+
+from ostilhou.utils import sec2hms
 
 
 
@@ -84,33 +87,49 @@ class DeleteSegmentCommand(QUndoCommand):
 class WaveformWidget(QWidget):
 
     class ScaledWaveform():
-        """
+        def __init__(self, samples, sr: int):
+            """
             Manage the loading/unloading of samples chunks dynamically
-        """
-        def __init__(self, samples, sr):
+
+            Parameters:
+            - samples
+            - sr: sampling rate
+            """
             self.samples = samples
             self.sr = sr
             self.ppsec = 150    # pixels per seconds (audio)
-            self.chunks = []
-            
 
-        def get(self, t_left, t_right):
-            samples_per_bin = int(self.sr / self.ppsec)
-            num_bins = ceil(len(self.samples) / samples_per_bin)
+            # Buffer for the chart values
+            # The size of the buffer is double the size of the sample bins
+            # Values at even indexes are the negative value of each sample bin
+            # Values at odd indexes are the positive value of each sample bin
+            self.buffer = np.zeros(512, dtype=np.float16)
+        
+
+        def get(self, t_left: float, t_right: float, size: int):
+            """
+            Return an array of tupples, representing highest and lowest mean value
+            for every given pixel between two timecodes
+            """
+            while len(self.buffer) < 2 * size:
+                # Double the size of the buffer
+                print("buffer resize")
+                self.buffer = np.resize(self.buffer, 2 * len(self.buffer))
+
+            samples_per_pix = self.sr / self.ppsec
+            samples_per_pix_floor = int(samples_per_pix)
+
+            si_left = round(t_left * self.sr)
+            bi_left = int(si_left / samples_per_pix)
+            bi_right = bi_left + size
             
-            si_left = int(t_left * self.sr)
-            bi_left = si_left // samples_per_bin
-            si_right = ceil(t_right * self.sr)
-            bi_right = si_right // samples_per_bin
-            
-            chart = []
-            s_step = 1 if samples_per_bin <= 16 else samples_per_bin // 16
-            mul = samples_per_bin / s_step
-            for i in range(bi_left, bi_right):
-                s0 = i * samples_per_bin
+            s_step = 1 if samples_per_pix <= 16 else int(samples_per_pix / 16)
+            mul = samples_per_pix_floor / s_step
+            for i in range(size):
+                s0 = int((bi_left + i) * samples_per_pix)
                 ymin = 0.0
                 ymax = 0.0
-                for si in range(s0, s0 + samples_per_bin, s_step):
+                for si in range(s0, s0 + samples_per_pix_floor, s_step):
                     if si >= len(self.samples):
                        # End of audio data
                        break
@@ -119,11 +138,14 @@ class WaveformWidget(QWidget):
                         ymax += sample
                     else:
                         ymin += sample
-                chart.append((ymin / mul, ymax / mul))
+                self.buffer[2*i] = ymin / mul
+                self.buffer[2*i + 1] = ymax / mul
+                # chart.append((ymin / mul, ymax / mul))
                 
             # print(f"bins: {bi_right - bi_left}")
-            return chart
+            return self.buffer[:size*2]
     
+
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -194,12 +216,14 @@ class WaveformWidget(QWidget):
         self.selection_is_active = False
         self.id_counter = 0    
         self._to_sort = True
+        self.audio_len = 0
 
 
     def setSamples(self, samples, sr) -> None:
         self.waveform = self.ScaledWaveform(samples, sr)
         self.waveform.ppsec = self.ppsec
         self.audio_len = len(samples) / sr
+        print(sec2hms(self.audio_len))
     
 
     def addSegment(self, segment, seg_id=None) -> int:
@@ -310,6 +334,9 @@ class WaveformWidget(QWidget):
 
 
     def _updateScroll(self):
+        if self.audio_len <= 0:
+            return
+
         if self.ppsec_goal != self.ppsec:
             self.ppsec += (self.ppsec_goal - self.ppsec) * 0.2
             self.waveform.ppsec = self.ppsec
@@ -430,7 +457,7 @@ class WaveformWidget(QWidget):
         prev_ppsec = self.ppsec
         new_ppsec = self.ppsec / factor
         if new_ppsec * len(self.waveform.samples) / self.waveform.sr >= self.width():
-            self.ppsec = new_ppsec
+            self.ppsec = max(new_ppsec, ZOOM_MIN)
 
         delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
         self.t_left -= delta_s * position
@@ -530,7 +557,7 @@ class WaveformWidget(QWidget):
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPosition(event.position())
                 # self.utterances is set from main
-                self.utterances.setActive(clicked_id, with_cursor=not self.shift_pressed, update_waveform=False)
+                self.text_edit.setActive(clicked_id, with_cursor=not self.shift_pressed, update_waveform=False)
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
                     # Check is the selection was clicked
@@ -682,7 +709,6 @@ class WaveformWidget(QWidget):
         context.exec(event.globalPos())
 
 
-
     def draw(self):
         if not self.pixmap:
             return
@@ -691,11 +717,11 @@ class WaveformWidget(QWidget):
             return
         self.pixmap.fill(theme.wf_bg_color)
     
-        t_right = self.t_left + self.width() / self.ppsec
-        samples = self.waveform.get(self.t_left, t_right)
+        t_right = self._get_time_right()
+        chart = self.waveform.get(self.t_left, t_right, self.width())
         
-        if not samples:
-            return
+        # if not chart:
+        #     return
         
         wf_max_height = self.height() - self.timecode_margin
                 
@@ -703,18 +729,18 @@ class WaveformWidget(QWidget):
 
         # Paint timecode lines and text
         if self.ppsec > 60:
-            step = 1
+            time_step = 1
         elif self.ppsec > 6:
-            step = 10
+            time_step = 10
         elif self.ppsec > 1.8:
-            step = 30
+            time_step = 30
         elif self.ppsec > 0.5:
-            step = 60
+            time_step = 60
         else:
-            step = 300 # Every 5 min
-        ti = ceil(self.t_left / step) * step
+            time_step = 300 # Every 5 min
+        ti = ceil(self.t_left / time_step) * time_step
         self.painter.setPen(QPen(QColor(200, 200, 200)))
-        for t in range(ti, int(t_right)+1, step):
+        for t in range(ti, int(t_right)+1, time_step):
             t_x = (t - self.t_left) * self.ppsec
             self.painter.drawLine(t_x, self.timecode_margin, t_x, self.height()-4)
             minutes, secs = divmod(t, 60)
@@ -739,11 +765,13 @@ class WaveformWidget(QWidget):
         self.painter.setPen(self.wavepen)
         pix_per_sample = self.waveform.ppsec / self.waveform.sr
         if pix_per_sample <= 1.0:
-            for x, (ymin, ymax) in enumerate(samples):
-                self.painter.drawLine(x,
-                                      self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*ymin),
-                                      x,
-                                      self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*ymax))
+            # for x, (ymin, ymax) in enumerate(samples):
+            ymin, ymax = 0, 0
+            for x in range(self.width()):
+                i = x * 2
+                ymin = round(self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*chart[i]))
+                ymax = round(self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*chart[i+1]))
+                self.painter.drawLine(x, ymin, x, ymax)
         else:
             pass
 
@@ -762,6 +790,9 @@ class WaveformWidget(QWidget):
                 continue
             if start >= t_right:
                 continue
+            if (end - start) * self.ppsec < 1:
+                continue
+            
             x = (start - self.t_left) * self.ppsec
             w = (end - start) * self.ppsec
             self.painter.setPen(self.segpen)
