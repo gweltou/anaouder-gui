@@ -68,21 +68,6 @@ class ResizeSegmentCommand(QUndoCommand):
 
 
 
-class DeleteSegmentCommand(QUndoCommand):
-    def __init__(self, segment):
-        super().__init__()
-    
-    def undo(self):
-        pass
-
-    def redo(self):
-        pass
-
-    def id(self):
-        return 22
-
-
-
 
 class WaveformWidget(QWidget):
 
@@ -690,22 +675,33 @@ class WaveformWidget(QWidget):
         
         clicked_segment_id = self.getSegmentAtPosition(event.globalPos())
         context = QMenu(self)
+
+        # context.addSeparator()
+        action_transcribe = QAction("Auto transcribe", self)
+        action_transcribe.triggered.connect(self.parent.transcribe)
+        context.addAction(action_transcribe)
+
         if self.selection_is_active:
+            # Context menu for selection segment
             action_create_segment = QAction("Add utterance", self)
             action_create_segment.triggered.connect(self.parent.createNewUtterance)
             context.addAction(action_create_segment)
-        if len(self.active_segments) > 1:
-            action_join = QAction("Join utterances", self)
-            action_join.triggered.connect(self.parent.joinUtterances)
+        else:
+            # Context menu for regular segment(s)
+            multi = False
+            if len(self.active_segments) > 1:
+                multi = True
+            
+            if multi:
+                action_join = QAction("Join utterances", self)
+                action_join.triggered.connect(lambda: self.parent.joinUtterances(self.active_segments))
+                context.addAction(action_join)
+            
+            context.addSeparator()
+            action_join = QAction(f"Delete segment{'s' if multi else ''}", self)
+            action_join.triggered.connect(lambda : self.parent.deleteSegments(self.active_segments))
             context.addAction(action_join)
-        elif clicked_segment_id >= 0:
-            action_split = QAction("Split here", self)
-            action_split.triggered.connect(self.parent.splitUtterance)
-            context.addAction(action_split)
-        context.addSeparator()
-        action_transcribe = QAction("Transcribe", self)
-        action_transcribe.triggered.connect(self.parent.transcribe)
-        context.addAction(action_transcribe)
+
         context.exec(event.globalPos())
 
 

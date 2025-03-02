@@ -165,6 +165,7 @@ class CreateNewUtteranceCommand(QUndoCommand):
     #     return 20
 
 
+
 class DeleteUtterancesCommand(QUndoCommand):
     def __init__(self, parent, seg_ids):
         super().__init__()
@@ -190,6 +191,7 @@ class DeleteUtterancesCommand(QUndoCommand):
         self.waveform._to_sort = True
         self.waveform.refreshSegmentInfo()
         self.waveform.draw()
+
 
 
 class SplitUtteranceCommand(QUndoCommand):
@@ -266,6 +268,7 @@ class SplitUtteranceCommand(QUndoCommand):
         self.waveform.refreshSegmentInfo()
 
 
+
 class JoinUtterancesCommand(QUndoCommand):
     def __init__(self, text_edit, waveform, seg_ids, pos):
         super().__init__()
@@ -335,6 +338,7 @@ class JoinUtterancesCommand(QUndoCommand):
         self.waveform.refreshSegmentInfo()
 
 
+
 class AlignWithSelectionCommand(QUndoCommand):
     def __init__(self, text_edit, waveform, block):
         super().__init__()
@@ -365,6 +369,36 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.waveform.deselect()
         self.text_edit.setBlockId(self.block, self.segment_id)
         self.text_edit.highlighter.rehighlightBlock(self.block)
+        self.waveform.draw()
+
+
+
+class DeleteSegmentsCommand(QUndoCommand):
+    def __init__(self, text_edit, waveform, seg_ids):
+        super().__init__()
+        self.text_edit : TextEdit = text_edit
+        self.waveform : WaveformWidget = waveform
+        self.seg_ids = seg_ids
+        self.segments = { id: waveform.segments[id] for id in seg_ids if id in waveform.segments }
+    
+    def undo(self):
+        for seg_id, segment in self.segments.items():
+            self.waveform.segments[seg_id] = segment
+            block = self.text_edit.getBlockById(seg_id)
+            self.text_edit.highlighter.rehighlightBlock(block)
+
+        self.waveform.active_segments = list(self.segments.keys())
+        self.waveform.draw()
+
+    def redo(self):
+        for seg_id in self.segments:
+            if seg_id in self.waveform.segments:
+                del self.waveform.segments[seg_id]
+            block = self.text_edit.getBlockById(seg_id)
+            self.text_edit.highlighter.rehighlightBlock(block)
+        
+        self.waveform.last_segment_active = -1
+        self.waveform.active_segments = []
         self.waveform.draw()
 
 
@@ -1254,17 +1288,15 @@ class MainWindow(QMainWindow):
     
 
     def splitUtterance(self, seg_id:int, pc:float):
-        print("split utterance", seg_id)
         self.undo_stack.push(SplitUtteranceCommand(self.text_edit, self.waveform, seg_id, pc))
 
 
-    def joinUtterances(self, seg_ids, pos=None):
+    def joinUtterances(self, segments_id, pos=None):
         """
         Join many segments in one.
         Keep the segment ID of the earliest segment among the selected ones.
         """
-        print("join action")
-        self.undo_stack.push(JoinUtterancesCommand(self.text_edit, self.waveform, seg_ids, pos))
+        self.undo_stack.push(JoinUtterancesCommand(self.text_edit, self.waveform, segments_id, pos))
 
 
     def alignUtterance(self, block:QTextBlock):
@@ -1273,6 +1305,11 @@ class MainWindow(QMainWindow):
 
     def deleteUtterances(self, segments_id:List) -> None:
         self.undo_stack.push(DeleteUtterancesCommand(self, segments_id))
+
+
+    def deleteSegments(self, segments_id:List) -> None:
+        print(segments_id)
+        self.undo_stack.push(DeleteSegmentsCommand(self.text_edit, self.waveform, segments_id))
 
 
     def selectAll(self):
