@@ -3,7 +3,7 @@
 import platform
 import os
 
-ARCH = os.getenv("ARCH") # Set to 'x86_64' or 'arm64' or 'universal2' for macOS
+ARCH = os.getenv("ARCH") or 'x86_64' # Set to 'x86_64', or 'arm64' or 'universal2' for macOS
 
 
 def get_lib_path(path):
@@ -14,29 +14,33 @@ def get_lib_path(path):
     elif platform.system() == "Windows":
         return os.path.join("./.venv/Lib/site-packages", path)
 
-binaries = []
-if platform.system() == "Linux":
-    binaries = [
-        (get_lib_path("vosk/libvosk.so"), "vosk"),
-        (get_lib_path("static_ffmpeg/bin/linux/*"), "static_ffmpeg/bin/linux"),
-    ]
-elif platform.system() == "Darwin":
-    binaries = [
-        (get_lib_path("vosk/libvosk.dyld"), "vosk"),
-        (get_lib_path("static_ffmpeg/bin/darwin/*"), "static_ffmpeg/bin/darwin"),
-        (get_lib_path("PySide6/Qt/lib/*.dylib"), "."),
-        (get_lib_path("PySide6/Qt/plugins/*"), "PySide6/Qt/plugins"),
-    ]
-elif platform.system() == "Windows":
-    binaries = [
-        (get_lib_path("vosk/libvosk.dll"), "vosk"),
-        (get_lib_path("static_ffmpeg/bin/win32/*"), "static_ffmpeg/bin/win32"),
-    ]
+
+def get_binaries():
+    binaries = []
+    if platform.system() == "Linux":
+        binaries = [
+            (get_lib_path("vosk/libvosk.so"), "vosk"),
+            (get_lib_path("static_ffmpeg/bin/linux/*"), "static_ffmpeg/bin/linux"),
+        ]
+    elif platform.system() == "Darwin":
+        binaries = [
+            (get_lib_path("vosk/libvosk.dyld"), "vosk"),
+            (get_lib_path("static_ffmpeg/bin/darwin/*"), "static_ffmpeg/bin/darwin"),
+            (get_lib_path("PySide6/Qt/lib/*.dylib"), "."),
+            (get_lib_path("PySide6/Qt/plugins/*"), "PySide6/Qt/plugins"),
+        ]
+    elif platform.system() == "Windows":
+        binaries = [
+            (get_lib_path("vosk/libvosk.dll"), "vosk"),
+            (get_lib_path("static_ffmpeg/bin/win32/*"), "static_ffmpeg/bin/win32"),
+        ]
+    return binaries
+
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=binaries,
+    binaries=get_binaries(),
     datas=[
         (get_lib_path("ostilhou/asr/*.tsv"), "ostilhou/asr"),
         (get_lib_path("ostilhou/hspell/*.txt"), "ostilhou/hspell"),
@@ -71,7 +75,21 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
 pyz = PYZ(a.pure)
+
+
+"""
+splash = Splash(
+    "image.png",
+    binaries=a.binaries,
+    datas=a.datas,
+    text_pos=(10, 50),
+    text_size=12,
+    text_color='black'
+)
+"""
+
 
 exe = EXE(
     pyz,
@@ -83,7 +101,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=True,	# Some kind of compression, lighter but slower
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
@@ -94,17 +112,19 @@ exe = EXE(
     entitlements_file=None,
 )
 
+# macOS specific configurations
 app = BUNDLE(
     exe,
     name='Anaouder.app',
     icon=None,
-    bundle_identifier='org.dizale.anaouder',
+    bundle_identifier='org.otilde.anaouder',
     info_plist={
         'NSPrincipalClass': 'NSApplication',
+        'NSAppleScriptEnabled': False,
         'NSHighResolutionCapable': 'True',
         'LSMinimumSystemVersion': '10.13.0',
         'NSRequiresAquaSystemAppearance': 'False',  # Add this for proper menu integration
-	'CFBundleDisplayName': 'Anaouder',
+	    'CFBundleDisplayName': 'Anaouder',
         'CFBundleName': 'Anaouder',
         'CFBundleIdentifier': 'com.yourdomain.anaouder',
         'CFBundleShortVersionString': '1.0.0',

@@ -12,26 +12,21 @@ Terminology
 import sys
 import os.path
 from typing import List, Optional
-import platform
 
 import static_ffmpeg
 static_ffmpeg.add_paths()
 
-from pydub import AudioSegment
 # import numpy as np
 import re
 from datetime import timedelta
-import locale
 import srt
 #from scipy.io import wavfile
 
 from ostilhou.asr import (
     load_segments_data, load_text_data,
     extract_metadata,
-    transcribe_segment_timecoded_callback,
-    transcribe_segment_ffmpeg,
 )
-from ostilhou.asr.models import load_model, is_model_loaded, get_available_models
+from ostilhou.asr.models import load_model, get_available_models
 from ostilhou.asr.dataset import format_timecode, METADATA_PATTERN
 from ostilhou.audio import (
     split_to_segments, convert_to_mp3,
@@ -62,6 +57,8 @@ from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAud
 from waveform_widget import WaveformWidget
 from text_widget import TextEdit, MyTextBlockUserData, BlockType
 from video_widget import VideoWindow
+from recognizer_worker import RecognizerWorker
+from commands import ReplaceTextCommand
 from theme import theme
 from shortcuts import shortcuts
 from version import __version__
@@ -84,53 +81,6 @@ def resource_path(relative_path):
 
 
 
-class RecognizerWorker(QThread):
-    message = Signal(str)
-    transcribedSegment = Signal(str, int, int) # Transcribe a pre-defined segment
-    transcribed = Signal(str, list) # Create a segment with transcription
-    
-    def setModel(self, model_name):
-        self.model = model_name
-    
-    def setArgs(self, audio_path: str, segments: list):
-        self.audio_path = audio_path
-        self.segments = segments
-    
-    def run(self):
-        if not is_model_loaded(self.model):
-            self.message.emit(f"Loading {self.model}")
-            load_model(self.model)
-        
-        # Stupid hack with locale to avoid commas in json string
-        current_locale = locale.getlocale()
-        print(f"{current_locale=}")
-        if platform.system() == "Linux":
-            locale.setlocale(locale.LC_ALL, ("C", "UTF-8"))
-        else:
-            locale.setlocale(locale.LC_ALL, ("en_us", "UTF-8")) # locale en_US works on macOS
-        print(f"{locale.getlocale()=}")
-        
-        if self.segments:
-            for i, (seg_id, start, end) in enumerate(self.segments):
-                self.message.emit(f"{i+1}/{len(self.segments)}")
-                # text = transcribe_segment(self.audio_data[start*1000:end*1000])
-                text = transcribe_segment_ffmpeg(self.audio_path, start, end-start, model=None)
-                text = ' '.join(text)
-                print(f"STT: {text}")
-                self.transcribedSegment.emit(text, seg_id, i)
-        else:
-            # Transcribe whole file
-            def parse_vosk_result(result):
-                text = []
-                for vosk_token in result:
-                    text.append(vosk_token['word'])
-                segment = [result[0]['start'], result[-1]['end']]
-                self.transcribed.emit(' '.join(text), segment)
-            self.message.emit(f"Transcribing...")
-            transcribe_segment_timecoded_callback(self.audio_data, parse_vosk_result)
-        locale.setlocale(locale.LC_ALL, current_locale)
-
-
 
 ###############################################################################
 ####                                                                       ####
@@ -140,6 +90,7 @@ class RecognizerWorker(QThread):
 
 
 class CreateNewUtteranceCommand(QUndoCommand):
+    """Create a new utterance with empty text"""
     def __init__(self, parent, segment):
         super().__init__()
         self.parent : MainWindow = parent
@@ -158,7 +109,7 @@ class CreateNewUtteranceCommand(QUndoCommand):
 
     def redo(self):
         self.seg_id = self.parent.waveform.addSegment(self.segment, self.seg_id)
-        self.parent.text_edit.insertSentence('*', self.seg_id)
+        self.parent.text_edit.insertSentenceWithId('*', self.seg_id)
         self.parent.text_edit.setActive(self.seg_id, update_waveform=True)
 
     # def id(self):
@@ -178,7 +129,7 @@ class DeleteUtterancesCommand(QUndoCommand):
     def undo(self):
         for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
             self.seg_id = self.waveform.addSegment(segment, seg_id)
-            self.text_edit.insertSentence(text, seg_id)
+            self.text_edit.insertSentenceWithId(text, seg_id)
         self.waveform.refreshSegmentInfo()
         self.waveform.draw()
 
@@ -388,6 +339,7 @@ class DeleteSegmentsCommand(QUndoCommand):
             self.text_edit.highlighter.rehighlightBlock(block)
 
         self.waveform.active_segments = list(self.segments.keys())
+        self.waveform._to_sort = True
         self.waveform.draw()
 
     def redo(self):
@@ -399,6 +351,7 @@ class DeleteSegmentsCommand(QUndoCommand):
         
         self.waveform.last_segment_active = -1
         self.waveform.active_segments = []
+        self.waveform._to_sort = True
         self.waveform.draw()
 
 
@@ -435,7 +388,6 @@ class MainWindow(QMainWindow):
             load_model()
         self.available_models = sorted(get_available_models(), reverse=True)
 
-
         self.filepath = filepath
         self.video_window = None
         # self.audio_data = None
@@ -460,6 +412,13 @@ class MainWindow(QMainWindow):
         self.updateWindowTitle()
         self.setGeometry(50, 50, 800, 600)
         self.initUI()
+
+        self.recognizer_worker = RecognizerWorker()
+        self.recognizer_worker.message.connect(self.slotSetStatusMessage)
+        self.recognizer_worker.transcribedSegment.connect(self.slotTranscribedSegment)
+        self.recognizer_worker.transcribed.connect(self.addUtterance)
+        self.recognizer_worker.finished.connect(self.progress_bar.hide)
+        self.recognizer_worker.setModel(self.available_models[0])
 
         # Keyboard shortcuts
         ## Open
@@ -491,13 +450,6 @@ class MainWindow(QMainWindow):
         if len(self.available_models) == 0:
             # Download a model
             load_model()
-
-        self.recognizer_worker = RecognizerWorker()
-        self.recognizer_worker.message.connect(self.slotSetStatusMessage)
-        self.recognizer_worker.transcribedSegment.connect(self.slotGetTranscription)
-        self.recognizer_worker.transcribed.connect(self.addUtterance)
-        self.recognizer_worker.finished.connect(self.progress_bar.hide)
-        self.recognizer_worker.setModel(self.available_models[0])
 
         if filepath:
             self.openFile(filepath)
@@ -704,10 +656,10 @@ class MainWindow(QMainWindow):
         exportSubMenu.addAction(exportSrtAction)
 
         operationMenu = menuBar.addMenu("Operations")
-        findSegmentsAction = QAction("Find segments", self)
-        # findSegmentsAction.triggered.connect(self.opFindSegments)
-        operationMenu.addAction(findSegmentsAction)
-        transcribeAction = QAction("Auto-transcribe", self)
+        autoSegmentAction = QAction("Auto segment", self)
+        # findSegmentsAction.triggered.connect(self.autoSegment)
+        operationMenu.addAction(autoSegmentAction)
+        transcribeAction = QAction("Auto transcribe", self)
         transcribeAction.triggered.connect(self.transcribe)
         operationMenu.addAction(transcribeAction)
 
@@ -751,9 +703,10 @@ class MainWindow(QMainWindow):
 
 
     @Slot(str, int, int)
-    def slotGetTranscription(self, text: str, seg_id: int, i: int):
+    def slotTranscribedSegment(self, text: str, seg_id: int, i: int):
         self.progress_bar.setValue(i+1)
-        self.text_edit.insertSentence(text, seg_id)
+        block = self.text_edit.getBlockById(seg_id)
+        self.undo_stack.push(ReplaceTextCommand(self.text_edit, block, text, 0, 0))
 
 
     def closeEvent(self, event):
@@ -866,13 +819,13 @@ class MainWindow(QMainWindow):
                         print(f.start, f.length, f.format)
 
                 # Change quotes characters
-                quote_open = False
-                while i:=text.find('"') >= 0:
-                    if quote_open:
-                        text = text.replace('"', '»', 1)
-                    else:
-                        text = text.replace('"', '«', 1)
-                    quote_open = not quote_open
+                # quote_open = False
+                # while i:=text.find('"') >= 0:
+                #     if quote_open:
+                #         text = text.replace('"', '»', 1)
+                #     else:
+                #         text = text.replace('"', '«', 1)
+                #     quote_open = not quote_open
 
                 if rm_special_tokens:
                     remainder = text[:]
@@ -896,19 +849,29 @@ class MainWindow(QMainWindow):
             if not skip:
                 block_id = self.text_edit.getBlockId(block)
                 start, end = self.waveform.segments[block_id]
-                s = srt.Subtitle(
-                        index=len(subs),
-                        content=text,
-                        start=timedelta(seconds=start),
-                        end=timedelta(seconds=end)
-                        )
-                subs.append(s)
+                subs.append( (text, (start, end)) )
             
             block = block.next()
+
+        # Adjust minimal duration between two subtitles (>= 0.08s)
+        for i in range(len(subs) - 1):
+            text, (current_start, current_end) = subs[i]
+            _, (next_start, _) = subs[i+1]
+            if next_start - current_end < 0.08:
+                new_sub = (text, (current_start, next_start - 0.08))
+                subs[i] = new_sub
         
         with open(filepath, 'w') as _f:
+            subs = [
+                srt.Subtitle(
+                    index=i,
+                    content=text,
+                    start=timedelta(seconds=start),
+                    end=timedelta(seconds=end)
+                ) for i, (text, (start, end)) in enumerate(subs)
+            ]
             _f.write(srt.compose(subs))
-        print(f"Subtitles saved to {filepath}")
+            print(f"Subtitles saved to {filepath}")
                     
 
     def openFile(self, filepath=""):
@@ -1231,14 +1194,14 @@ class MainWindow(QMainWindow):
             self.video_window = None
 
 
-    def opFindSegments(self):
+    def autoSegment(self):
         print("Finding segments")
         segments = split_to_segments(self.audio_data, 10, 0.05)
         self.status_bar.showMessage(f"{len(segments)} segments found")
         self.waveform.clear()
         for start, end in segments:
             segment_id = self.waveform.addSegment([start/1000, end/1000])
-            self.text_edit.insertSentence('*', segment_id)
+            self.text_edit.insertSentenceWithId('*', segment_id)
         self.waveform.draw()
 
 
@@ -1252,9 +1215,9 @@ class MainWindow(QMainWindow):
 
     @Slot(str, list)
     def addUtterance(self, text, segment):
-        print(text)
+        # This modification should not be added to the undo stack
         segment_id = self.waveform.addSegment(segment)
-        self.text_edit.insertSentence(text, segment_id, with_cursor=False)
+        self.text_edit.insertSentenceWithId(text, segment_id, with_cursor=False)
         self.waveform.draw()
 
     

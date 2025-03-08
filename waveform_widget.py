@@ -16,11 +16,11 @@ from PySide6.QtWidgets import (
     QMenu, QWidget
 )
 from PySide6.QtCore import (
-    Qt, QTimer, QPointF, QEvent,
+    Qt, QTimer, QPointF, QEvent, QRect
 )
 from PySide6.QtGui import (
     QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
-    QColor, QResizeEvent, QWheelEvent, QKeyEvent, QUndoCommand
+    QColor, QResizeEvent, QWheelEvent, QKeyEvent, QUndoCommand,
 )
 from theme import theme
 from shortcuts import shortcuts
@@ -143,18 +143,23 @@ class WaveformWidget(QWidget):
         self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
         self.segpen = QPen(QColor(180, 150, 50, 180), 1)
         self.segbrush = QBrush(QColor(180, 170, 50, 50))
-        self.handlepen = QPen(QColor(240, 220, 60, 160), 6)
+
+        self.handlepen = QPen(QColor(240, 220, 60, 160), 2)
         self.handlepen.setCapStyle(Qt.RoundCap)
-        self.handle_active_pen = QPen(QColor(255, 250, 80, 220), 4)
+        self.handle_active_pen = QPen(QColor(255, 250, 80, 150), 2)
         self.handle_active_pen.setCapStyle(Qt.RoundCap)
-
-        self.handle_left_pen = QPen(QColor(255, 80, 80, 220), 4)
-        self.handle_left_pen.setCapStyle(Qt.RoundCap)
-        self.handle_right_pen = QPen(QColor(80, 255, 80, 220), 4)
-        self.handle_right_pen.setCapStyle(Qt.RoundCap)
-
-        self.handle_active_pen_shadow = QPen(QColor(100, 100, 20, 40), 8)
+        self.handle_active_pen_shadow = QPen(QColor(255, 250, 80, 50), 4)
         self.handle_active_pen_shadow.setCapStyle(Qt.RoundCap)
+
+        self.handle_left_pen = QPen(QColor(255, 80, 80, 150), 3)
+        self.handle_left_pen.setCapStyle(Qt.RoundCap)
+        self.handle_left_pen_shadow = QPen(QColor(255, 80, 100, 50), 5)
+        self.handle_left_pen_shadow.setCapStyle(Qt.RoundCap)
+
+        self.handle_right_pen = QPen(QColor(80, 255, 80, 150), 3)
+        self.handle_right_pen.setCapStyle(Qt.RoundCap)
+        self.handle_right_pen_shadow = QPen(QColor(80, 255, 100, 50), 5)
+        self.handle_right_pen_shadow.setCapStyle(Qt.RoundCap)
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._updateScroll)
@@ -506,7 +511,7 @@ class WaveformWidget(QWidget):
         if event.button() == Qt.RightButton:
             segment_under = self.getSegmentAtPosition(self.click_pos)
             # Show contextMenu only if right clicking on active segment
-            if segment_under != self.last_segment_active:
+            if segment_under not in self.active_segments:
                 # Deactivate currently active segment
                 self.active_segments = []
                 self.last_segment_active = -1
@@ -670,6 +675,8 @@ class WaveformWidget(QWidget):
 
 
     def contextMenuEvent(self, event):
+        print("context")
+        print(self.active_segments)
         if not self.active_segments and not self.selection_is_active:
             return
         
@@ -771,8 +778,8 @@ class WaveformWidget(QWidget):
         else:
             pass
 
-        top_y = self.timecode_margin + 0.15 * wf_max_height
-        down_y = self.timecode_margin + 0.85 * wf_max_height - top_y
+        top_y = self.timecode_margin + 0.16 * wf_max_height
+        down_y = self.timecode_margin + 0.84 * wf_max_height - top_y
         handle_top_y = self.timecode_margin + 0.14 * wf_max_height
         handle_down_y = self.timecode_margin + 0.86 * wf_max_height
         inactive_top_y = self.timecode_margin + 0.2 * wf_max_height
@@ -801,24 +808,30 @@ class WaveformWidget(QWidget):
             if end > self.t_left and start < t_right:
                 x = (start - self.t_left) * self.ppsec
                 w = (end - start) * self.ppsec
-                self.painter.setBrush(QBrush(QColor(100, 150, 220, 50)))
+                
                 if self.selection_is_active:
-                    self.painter.setPen(QPen(QColor(100, 150, 220), 2))
-                    self.painter.drawRect(x, top_y, w, down_y)
+                    self.painter.setPen(QPen(QColor(110, 180, 240, 40), 3))
+                    self.painter.setBrush(QBrush(QColor(110, 180, 230, 40)))
+                    self.painter.drawRoundedRect(QRect(x, top_y, w, down_y), 8, 8)
+                    self.painter.setPen(QPen(QColor(110, 180, 230), 1))
+                    self.painter.setBrush(QBrush())
+                    self.painter.drawRoundedRect(QRect(x, top_y, w, down_y), 8, 8)
                 else:
+                    self.painter.setBrush(QBrush(QColor(100, 150, 220, 50)))
                     self.painter.setPen(QPen(QColor(100, 150, 220), 1))
                     self.painter.drawRect(x, inactive_top_y, w, inactive_down_y)
+                
                 if self.ctrl_pressed:
                     if self.over_left_handle:
-                        self.painter.setPen(self.handle_active_pen_shadow)
+                        self.painter.setPen(self.handle_left_pen_shadow)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
                         self.painter.setPen(self.handle_left_pen)
-                        self.painter.drawLine(x, handle_top_y, x, handle_down_y)
+                        self.painter.drawLine(x, handle_top_y+2, x, handle_down_y-2)
                     elif self.over_right_handle:
-                        self.painter.setPen(self.handle_active_pen_shadow)
+                        self.painter.setPen(self.handle_right_pen_shadow)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
                         self.painter.setPen(self.handle_right_pen)
-                        self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
+                        self.painter.drawLine(x+w, handle_top_y+2, x+w, handle_down_y-2)
                     else:
                         self.painter.setPen(self.handlepen)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
@@ -830,24 +843,24 @@ class WaveformWidget(QWidget):
             if end > self.t_left or start < t_right:
                 x = (start - self.t_left) * self.ppsec
                 w = (end - start) * self.ppsec
-                if self.ctrl_pressed:
-                    self.painter.setPen(QPen(QColor(220, 180, 60), 2))
-                else:
-                    self.painter.setPen(QPen(QColor(220, 180, 60), 3))
-                self.painter.setBrush(QBrush(QColor(220, 180, 60, 50)))
-                self.painter.drawRect(x, top_y, w, down_y)
+                self.painter.setPen(QPen(QColor(230, 190, 70, 40), 3))
+                self.painter.setBrush(QBrush(QColor(230, 190, 70, 40)))
+                self.painter.drawRoundedRect(QRect(x, top_y, w, down_y), 8, 8)
+                self.painter.setPen(QPen(QColor(230, 190, 70), 1))
+                self.painter.setBrush(QBrush())
+                self.painter.drawRoundedRect(QRect(x, top_y, w, down_y), 8, 8)
 
                 # Draw handles
                 if len(self.active_segments) != 1:
                     continue
                 if self.ctrl_pressed:
                     if self.over_left_handle:
-                        self.painter.setPen(self.handle_active_pen_shadow)
+                        self.painter.setPen(self.handle_left_pen_shadow)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
                         self.painter.setPen(self.handle_left_pen)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
                     elif self.over_right_handle:
-                        self.painter.setPen(self.handle_active_pen_shadow)
+                        self.painter.setPen(self.handle_right_pen_shadow)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
                         self.painter.setPen(self.handle_right_pen)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)

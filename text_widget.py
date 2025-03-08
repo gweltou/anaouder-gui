@@ -43,7 +43,7 @@ class Highlighter(QSyntaxHighlighter):
         self.show_misspelling = False
 
         self.metadataFormat = QTextCharFormat()
-        self.metadataFormat.setForeground(Qt.darkMagenta)
+        self.metadataFormat.setForeground(QColor(165, 0, 165)) # semi-dark magenta
         self.metadataFormat.setFontWeight(QFont.DemiBold)
 
         self.commentFormat = QTextCharFormat()
@@ -382,19 +382,46 @@ class TextEdit(QTextEdit):
         cursor.movePosition(QTextCursor.End)
         cursor.insertText('\n' + text)
         cursor.block().setUserData(MyTextBlockUserData({"seg_id": id}))
+        self.highlighter.rehighlightBlock(cursor.block())
+
+    """
+    def insertSentenceWithId(self, text: str, utt_id: int, with_cursor=False):
+        
+        assert utt_id in self.parent.waveform.segments
+        seg_start, seg_end = self.parent.waveform.segments[utt_id]
+
+        doc = self.document()
+        block = doc.firstBlock()
+        while block.isValid():
+            block_id = self.getBlockId(block)
+            if block_id == utt_id:
+                self.undo_stack.push(
+                    ReplaceTextCommand(
+                        self,
+                        block,
+                        text,
+                        block.position()
+                    )
+                )
+            if block_id >= 0:
+                pass
+            block = block.next()
+    """
 
 
-    def insertSentence(self, text: str, id: int, with_cursor=False):
-        print("insertSentence")
+    def insertSentenceWithId(self, text: str, id: int, with_cursor=False):
+        """
+        Create a new utterance from an existing segment id
+        """
         assert id in self.parent.waveform.segments
 
         doc = self.document()
         seg_start, seg_end = self.parent.waveform.segments[id]
 
-        # TODO: rewrite that
-        for block_idx in range(doc.blockCount()):
-            block = doc.findBlockByNumber(block_idx)
+        block = doc.firstBlock()
+        while block.isValid():
             if not block.userData():
+                block = block.next()
                 continue
             
             # Find corresponding block position
@@ -404,18 +431,6 @@ class TextEdit(QTextEdit):
                 if other_id not in self.parent.waveform.segments:
                     continue
                 
-                if other_id == id:
-                    # Replace text content
-                    cursor = QTextCursor(block)
-                    cursor.movePosition(QTextCursor.StartOfBlock)
-                    cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
-                    cursor.insertText(text)
-                    # Re-select text
-                    cursor.movePosition(QTextCursor.EndOfBlock)
-                    cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
-                    if with_cursor:
-                        self.setTextCursor(cursor)
-                    return
                 other_start, _ = self.parent.waveform.segments[other_id]
                 if other_start > seg_end:
                     # Insert new utterance right before this one
@@ -430,6 +445,8 @@ class TextEdit(QTextEdit):
                     if with_cursor:
                         self.setTextCursor(cursor)
                     return
+            
+            block = block.next()
 
         # Insert new utterance at the end
         self.appendSentence(text, id)
@@ -606,6 +623,7 @@ class TextEdit(QTextEdit):
     def cursorChanged(self):
         """Set current utterance active"""
         if self.ignore_cursor_change:
+            print("cursor changed event ignored")
             return
         
         cursor = self.textCursor()
@@ -659,7 +677,12 @@ class TextEdit(QTextEdit):
         select_all_action.triggered.connect(self.selectAll)
         context.addAction(select_all_action)
 
-        if block_type == BlockType.NOT_ALIGNED:
+        if block_type == BlockType.ALIGNED:
+            context.addSeparator()
+            auto_transcribe = context.addAction("Auto transcribe")
+            auto_transcribe.triggered.connect(self.parent.transcribe)
+
+        elif block_type == BlockType.NOT_ALIGNED:
             context.addSeparator()
             align_action = context.addAction("Align with selection")
             align_action.setEnabled(False)
@@ -748,9 +771,31 @@ class TextEdit(QTextEdit):
         
         # Dialog hyphen for subtitles (U+2013)
         if event.matches(QKeySequence.AddTab):
-            text = block.text()
-            suffix = ' ' if pos_in_block < block_len-1 and not text[pos_in_block].isspace() else ''
-            self.undo_stack.push(InsertTextCommand(self, f"–{suffix}", cursor_pos))
+            text = block.text()            
+            
+            cursor_line_n = text[:pos_in_block].count('\u2028')
+            cursor_offset = 0
+            lines = []
+            for i, l in enumerate(text.split('\u2028')):
+                if not l.strip().startswith('–'):
+                    lines.append("– " + l.strip())
+                else:
+                    lines.append(l)
+                if i <= cursor_line_n:
+                    cursor_offset += len(lines[-1]) - len(l)
+            new_text = '\u2028'.join(lines)
+
+            if new_text == text:
+                return
+
+            self.undo_stack.push(
+                ReplaceTextCommand(
+                    self,
+                    block,
+                    new_text,
+                    pos_in_block, pos_in_block+cursor_offset
+                )
+            )
             return
         
         if event.key() == Qt.Key_Return:
@@ -770,7 +815,11 @@ class TextEdit(QTextEdit):
                 right_part = text[pos_in_block:].lstrip()
                 new_text = left_part + '\u2028' + right_part
                 self.undo_stack.push(
-                    ReplaceTextCommand(self, block.blockNumber(), text, new_text, pos_in_block, len(left_part)+1)
+                    ReplaceTextCommand(
+                        self,
+                        block,
+                        new_text,
+                        pos_in_block, len(left_part)+1)
                     )
                 return
 

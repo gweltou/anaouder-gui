@@ -1,13 +1,17 @@
+from typing import Optional
+
 from PySide6.QtWidgets import (
     QTextEdit,
 )
 from PySide6.QtGui import (
-    QTextCursor, QUndoCommand, QTextDocument
+    QTextCursor, QUndoCommand, QTextDocument,
+    QTextBlock,
 )
 
 
 
 class InsertTextCommand(QUndoCommand):
+    """Add characters at a given position in the document"""
     def __init__(self, text_edit, text, position):
         super().__init__()
         self.text_edit : QTextEdit = text_edit
@@ -39,11 +43,13 @@ class InsertTextCommand(QUndoCommand):
 
 
 class DeleteTextCommand(QUndoCommand):
+    """Delete characters at a given position in the document"""
     def __init__(self,
                  text_edit : QTextEdit,
                  position : int,
                  size : int,
-                 direction : QTextCursor.MoveOperation):
+                 direction : QTextCursor.MoveOperation
+        ):
         super().__init__()
         self.text_edit : QTextEdit = text_edit
         self.position : int = position
@@ -90,6 +96,7 @@ class DeleteTextCommand(QUndoCommand):
 
 
 class InsertBlockCommand(QUndoCommand):
+    """Create a new text block in the document"""
     def __init__(self, text_edit, position, after=False):
         super().__init__()
         self.text_edit : QTextEdit = text_edit
@@ -132,31 +139,47 @@ class InsertBlockCommand(QUndoCommand):
 
 
 class ReplaceTextCommand(QUndoCommand):
-    def __init__(self, text_edit, block_number, old_text, new_text, cursor_pos_old, cursor_pos_new):
+    """
+    Replace the content of a text block
+
+    Args:
+        cursor_pos_old:
+            position of cursor (relative to start of block) before modification
+        cursor_pos_new:
+            position of cursor (relative to start of block) after modification
+    """
+    def __init__(
+            self,
+            text_edit: QTextEdit,
+            block: QTextBlock,
+            new_text: str,
+            cursor_pos_old: int,
+            cursor_pos_new: Optional[int] = None
+        ):
         super().__init__()
-        self.text_edit : QTextEdit = text_edit
-        self.block_number : int = block_number
-        self.old_text : str = old_text
-        self.new_text : str = new_text
+        self.text_edit = text_edit
+        self.block = block
+        self.old_text = block.text()
+        self.new_text = new_text
         self.cursor_pos_old = cursor_pos_old
-        self.cursor_pos_new = cursor_pos_new
+        self.cursor_pos_new = cursor_pos_new or cursor_pos_old
     
     def undo(self):
-        block = self.text_edit.document().findBlockByNumber(self.block_number)
-        cursor = QTextCursor(block)
+        # block = self.text_edit.document().findBlockByNumber(self.block_number)
+        cursor = QTextCursor(self.block)
         cursor.movePosition(QTextCursor.StartOfBlock)
         cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         cursor.insertText(self.old_text)
-        cursor.setPosition(block.position() + self.cursor_pos_old)
+        cursor.setPosition(self.block.position() + self.cursor_pos_old)
         self.text_edit.setTextCursor(cursor)
 
     def redo(self):
-        block = self.text_edit.document().findBlockByNumber(self.block_number)
-        cursor = QTextCursor(block)
+        # block = self.text_edit.document().findBlockByNumber(self.block_number)
+        cursor = QTextCursor(self.block)
         cursor.movePosition(QTextCursor.StartOfBlock)
         cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         cursor.insertText(self.new_text)
-        cursor.setPosition(block.position() + self.cursor_pos_new)
+        cursor.setPosition(self.block.position() + self.cursor_pos_new)
         self.text_edit.setTextCursor(cursor)
     
     def id(self):
