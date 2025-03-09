@@ -761,7 +761,7 @@ class WaveformWidget(QWidget):
             t_x = (self.playhead - self.t_left) * self.ppsec
             self.painter.setPen(QPen(QColor(255, 20, 20, 40), 3))
             self.painter.drawLine(t_x, 0, t_x, self.height())
-            self.painter.setPen(QPen(QColor(255, 20, 20)))
+            self.painter.setPen(QPen(QColor(255, 20, 20, 100)))
             self.painter.drawLine(t_x, 0, t_x, self.height())
         
         # Paint waveform

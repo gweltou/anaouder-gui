@@ -1,0 +1,50 @@
+import sys
+import os.path
+
+from PySide6.QtGui import QIcon
+from PySide6.QtCore import QSize
+from PySide6.QtWidgets import QLabel
+
+
+
+def resourcePath(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+icons = dict()
+
+def loadIcons():
+    icons["play"] = QIcon(resourcePath("icons/play-button.png"))
+    icons["pause"] = QIcon(resourcePath("icons/pause.png"))
+    icons["replay"] = QIcon(resourcePath("icons/replay.png"))
+    icons["back"] = QIcon(resourcePath("icons/back.png"))
+    icons["previous"] = QIcon(resourcePath("icons/previous.png"))
+    icons["next"] = QIcon(resourcePath("icons/next.png"))
+    icons["zoom_in"] = QIcon(resourcePath("icons/zoom_in.png"))
+    icons["zoom_out"] = QIcon(resourcePath("icons/zoom_out.png"))
+    icons["sparkles"] = QIcon(resourcePath("icons/sparkles-yellow.png"))
+
+    icons["italic"] = QIcon(resourcePath("icons/italic.png"))
+    icons["bold"] = QIcon(resourcePath("icons/bold.png"))
+
+    icons["head"] = QIcon(resourcePath("icons/head-side-thinking.png"))
+    icons["numbers"] = QIcon(resourcePath("icons/123-numbers.png"))
+    icons["font"] = QIcon(resourcePath("icons/font.png"))
+    icons["waveform"] = QIcon(resourcePath("icons/waveform.png"))
+
+    icons["folder"] = QIcon(resourcePath("icons/folder.png"))
+
+
+class IconWidget(QLabel):
+    def __init__(self, icon:QIcon, size=32):
+        super().__init__()
+        self.setFixedSize(size, size)
+        # Load icon and convert to pixmap
+        # icon = QIcon(icon_path)
+        pixmap = icon.pixmap(QSize(size, size))
+        self.setPixmap(pixmap)

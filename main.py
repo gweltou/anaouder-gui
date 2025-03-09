@@ -35,7 +35,7 @@ from ostilhou.audio import (
 from ostilhou.utils import sec2hms
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QFileDialog, QMenu, QMenuBar,
+    QApplication, QMainWindow, QFileDialog, QDialog,
     QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QScrollBar, QSizeGrip, QSplitter, QProgressBar,
     QPushButton, QDial,
@@ -47,9 +47,9 @@ from PySide6.QtCore import (
     QSettings,
 )
 from PySide6.QtGui import (
-    QAction, QIcon, QPixmap,
+    QAction, QPixmap, QIcon,
     QResizeEvent, QWheelEvent, QKeySequence, QShortcut, QKeyEvent,
-    QTextBlock, QTextBlockFormat, QTextBlockUserData, QTextCursor, QTextCharFormat,
+    QTextBlock, QTextCursor,
     QUndoStack, QUndoCommand,
 )
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
@@ -59,9 +59,11 @@ from text_widget import TextEdit, MyTextBlockUserData, BlockType
 from video_widget import VideoWindow
 from recognizer_worker import RecognizerWorker
 from commands import ReplaceTextCommand
+from export_srt import ExportSRTDialog
 from theme import theme
 from shortcuts import shortcuts
 from version import __version__
+from icons import icons, loadIcons, IconWidget
 
 
 # Config
@@ -69,15 +71,6 @@ HEADER = """
 """
 AUTOSEG_MAX_LENGTH = 15
 AUTOSEG_MIN_LENGTH = 3
-
-
-def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
 
 
 
@@ -356,19 +349,6 @@ class DeleteSegmentsCommand(QUndoCommand):
 
 
 
-
-class IconWidget(QLabel):
-    def __init__(self, icon_path, size=32):
-        super().__init__()
-        self.setFixedSize(size, size)
-        # Load icon and convert to pixmap
-        icon = QIcon(icon_path)
-        pixmap = icon.pixmap(QSize(size, size))
-        self.setPixmap(pixmap)
-
-
-
-
 ###############################################################################
 ####                                                                       ####
 ####                             MAIN WINDOW                               ####
@@ -408,7 +388,6 @@ class MainWindow(QMainWindow):
         QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
         self.updateThemeColors()
 
-        self.loadIcons()
         self.updateWindowTitle()
         self.setGeometry(50, 50, 800, 600)
         self.initUI()
@@ -421,12 +400,6 @@ class MainWindow(QMainWindow):
         self.recognizer_worker.setModel(self.available_models[0])
 
         # Keyboard shortcuts
-        ## Open
-        shortcut = QShortcut(QKeySequence.Open, self)
-        shortcut.activated.connect(self.openFile)
-        ## Save
-        shortcut = QShortcut(QKeySequence.Save, self)
-        shortcut.activated.connect(self.saveFile)
         ## Search
         shortcut = QShortcut(QKeySequence.Find, self)
         shortcut.activated.connect(self.search)
@@ -461,45 +434,27 @@ class MainWindow(QMainWindow):
          self.waveform.updateThemeColors()
 
 
-    def loadIcons(self):
-        self.icons = {}
-        self.icons["play"] = QIcon(resource_path("icons/play-button.png"))
-        self.icons["pause"] = QIcon(resource_path("icons/pause.png"))
-        self.icons["replay"] = QIcon(resource_path("icons/replay.png"))
-        self.icons["back"] = QIcon(resource_path("icons/back.png"))
-        self.icons["previous"] = QIcon(resource_path("icons/previous.png"))
-        self.icons["next"] = QIcon(resource_path("icons/next.png"))
-        self.icons["zoom_in"] = QIcon(resource_path("icons/zoom_in.png"))
-        self.icons["zoom_out"] = QIcon(resource_path("icons/zoom_out.png"))
-        self.icons["sparkles"] = QIcon(resource_path("icons/sparkles-yellow.png"))
-
-        self.icons["italic"] = QIcon(resource_path("icons/italic.png"))
-        self.icons["bold"] = QIcon(resource_path("icons/bold.png"))
-        # self.icons["waveform"] = QIcon(resource_path("icons/waveform.png"))
-
-
     def initUI(self):
-        bottomLayout = QVBoxLayout()
-        bottomLayout.setSpacing(0)
-        bottomLayout.setContentsMargins(0, 0, 0, 0)
-        bottomLayout.setSizeConstraint(QLayout.SetMaximumSize)
+        bottom_layout = QVBoxLayout()
+        bottom_layout.setSpacing(0)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setSizeConstraint(QLayout.SetMaximumSize)
 
+        button_size = 28
+        button_spacing = 3
+        button_margin = 8
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        buttonSize = 28
-        buttonSpacing = 3
-        buttonMargin = 8
-        buttonsLayout = QHBoxLayout()
-        buttonsLayout.setContentsMargins(0, 0, 0, 0)
-        buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        leftButtonsLayout = QHBoxLayout()
-        leftButtonsLayout.setContentsMargins(buttonMargin, 0, buttonMargin, 0)
-        leftButtonsLayout.setSpacing(buttonSpacing)
-        leftButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        left_buttons_layout = QHBoxLayout()
+        left_buttons_layout.setContentsMargins(button_margin, 0, button_margin, 0)
+        left_buttons_layout.setSpacing(button_spacing)
+        left_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # buttonsLayout.addWidget(QLabel("ASR model"))
-        leftButtonsLayout.addWidget(
-            IconWidget(resource_path("icons/head-side-thinking.png"), buttonSize*0.7))
+        left_buttons_layout.addWidget(
+            IconWidget(icons["head"], button_size*0.7))
 
         modelSelection = QComboBox()
         modelSelection.addItems(self.available_models)
@@ -507,184 +462,195 @@ class MainWindow(QMainWindow):
         modelSelection.currentIndexChanged.connect(
             lambda i: self.recognizer_worker.setModel(self.available_models[i])
             )
-        leftButtonsLayout.addWidget(modelSelection)
+        left_buttons_layout.addWidget(modelSelection)
 
-        leftButtonsLayout.addWidget(
-            IconWidget(resource_path("icons/123-numbers.png"), buttonSize*0.7))
+        left_buttons_layout.addWidget(
+            IconWidget(icons["numbers"], button_size*0.7))
         normalizationCheckbox = QCheckBox()
-        leftButtonsLayout.addWidget(normalizationCheckbox)
+        left_buttons_layout.addWidget(normalizationCheckbox)
 
-        leftButtonsLayout.addSpacing(8)
+        left_buttons_layout.addSpacing(8)
 
-        transcribeButton = QPushButton()
-        transcribeButton.setIcon(self.icons["sparkles"])
-        transcribeButton.setFixedWidth(buttonSize)
-        leftButtonsLayout.addWidget(transcribeButton)
+        transcribe_button = QPushButton()
+        transcribe_button.setIcon(icons["sparkles"])
+        transcribe_button.setFixedWidth(button_size)
+        left_buttons_layout.addWidget(transcribe_button)
 
 
         # Play buttons
-        centerButtonsLayout = QHBoxLayout()
-        centerButtonsLayout.setContentsMargins(buttonMargin, 0, buttonMargin, 0)
-        centerButtonsLayout.setSpacing(buttonSpacing)
+        center_buttons_layout = QHBoxLayout()
+        center_buttons_layout.setContentsMargins(button_margin, 0, button_margin, 0)
+        center_buttons_layout.setSpacing(button_spacing)
         # centerButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        centerButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        center_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        backButton = QPushButton()
-        backButton.setIcon(self.icons["back"])
-        backButton.setFixedWidth(buttonSize)
-        backButton.clicked.connect(self.back)
-        centerButtonsLayout.addWidget(backButton)
+        back_button = QPushButton()
+        back_button.setIcon(icons["back"])
+        back_button.setFixedWidth(button_size)
+        back_button.clicked.connect(self.back)
+        center_buttons_layout.addWidget(back_button)
 
         #buttonsLayout.addSpacerItem(QSpacerItem())
-        prevButton = QPushButton()
-        prevButton.setIcon(self.icons["previous"])
-        prevButton.setFixedWidth(buttonSize)
+        prev_button = QPushButton()
+        prev_button.setIcon(icons["previous"])
+        prev_button.setFixedWidth(button_size)
         # button.setIcon(QIcon(icon_path))
-        prevButton.clicked.connect(self.playPrev)
-        centerButtonsLayout.addWidget(prevButton)
+        prev_button.clicked.connect(self.playPrev)
+        center_buttons_layout.addWidget(prev_button)
 
-        self.playButton = QPushButton()
-        self.playButton.setIcon(self.icons["play"])
-        self.playButton.setFixedWidth(buttonSize)
-        self.playButton.clicked.connect(self.play)
-        centerButtonsLayout.addWidget(self.playButton)
+        self.play_button = QPushButton()
+        self.play_button.setIcon(icons["play"])
+        self.play_button.setFixedWidth(button_size)
+        self.play_button.clicked.connect(self.play)
+        center_buttons_layout.addWidget(self.play_button)
 
-        nextButton = QPushButton()
-        nextButton.setIcon(self.icons["next"])
-        nextButton.setFixedWidth(buttonSize)
-        nextButton.clicked.connect(self.playNext)
-        centerButtonsLayout.addWidget(nextButton)
+        next_button = QPushButton()
+        next_button.setIcon(icons["next"])
+        next_button.setFixedWidth(button_size)
+        next_button.clicked.connect(self.playNext)
+        center_buttons_layout.addWidget(next_button)
 
-        volumeDial = QDial()
+        volume_dial = QDial()
         # volumeDial.setMaximumWidth(button_size*1.5)
-        volumeDial.setMaximumSize(QSize(buttonSize*1.1, buttonSize*1.1))
+        volume_dial.setMaximumSize(QSize(button_size*1.1, button_size*1.1))
         # volumeDial.minimumSizeHint(QSize(button_size, button_size))
-        volumeDial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
-        volumeDial.setValue(100)
-        centerButtonsLayout.addWidget(volumeDial)
+        volume_dial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
+        volume_dial.setValue(100)
+        center_buttons_layout.addWidget(volume_dial)
 
         # buttonsLayout.addSpacing(16)
-        formatButtonsLayout = QHBoxLayout()
-        formatButtonsLayout.setContentsMargins(buttonMargin, 0, buttonMargin, 0)
-        formatButtonsLayout.setSpacing(buttonSpacing)
-        formatButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        format_buttons_layout = QHBoxLayout()
+        format_buttons_layout.setContentsMargins(button_margin, 0, button_margin, 0)
+        format_buttons_layout.setSpacing(button_spacing)
+        format_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        italicButton = QPushButton()
-        italicButton.setIcon(self.icons["italic"])
-        italicButton.setFixedWidth(buttonSize)
-        formatButtonsLayout.addWidget(italicButton)
-        boldButton = QPushButton()
-        boldButton.setIcon(self.icons["bold"])
-        boldButton.setFixedWidth(buttonSize)
-        formatButtonsLayout.addWidget(boldButton)
+        italic_button = QPushButton()
+        italic_button.setIcon(icons["italic"])
+        italic_button.setFixedWidth(button_size)
+        format_buttons_layout.addWidget(italic_button)
+        bold_button = QPushButton()
+        bold_button.setIcon(icons["bold"])
+        bold_button.setFixedWidth(button_size)
+        format_buttons_layout.addWidget(bold_button)
 
-        rightButtonsLayout = QHBoxLayout()
-        rightButtonsLayout.setContentsMargins(buttonMargin, 0, buttonMargin, 0)
-        rightButtonsLayout.setSpacing(buttonSpacing)
-        rightButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        right_buttons_layout = QHBoxLayout()
+        right_buttons_layout.setContentsMargins(button_margin, 0, button_margin, 0)
+        right_buttons_layout.setSpacing(button_spacing)
+        right_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        rightButtonsLayout.addWidget(IconWidget(resource_path("icons/waveform.png"), buttonSize*0.7))
-        waveZoomInButton = QPushButton()
-        waveZoomInButton.setIcon(self.icons["zoom_in"])
-        waveZoomInButton.setFixedWidth(buttonSize)
-        waveZoomInButton.clicked.connect(lambda: self.waveform.zoomIn(1.333))
-        rightButtonsLayout.addWidget(waveZoomInButton)
-        waveZoomOutButton = QPushButton()
-        waveZoomOutButton.setIcon(self.icons["zoom_out"])
-        waveZoomOutButton.setFixedWidth(buttonSize)
-        waveZoomOutButton.clicked.connect(lambda: self.waveform.zoomOut(1.333))
-        rightButtonsLayout.addWidget(waveZoomOutButton)
+        right_buttons_layout.addWidget(IconWidget(icons["waveform"], button_size*0.7))
+        wave_zoom_in_button = QPushButton()
+        wave_zoom_in_button.setIcon(icons["zoom_in"])
+        wave_zoom_in_button.setFixedWidth(button_size)
+        wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
+        right_buttons_layout.addWidget(wave_zoom_in_button)
+        wave_zoom_out_button = QPushButton()
+        wave_zoom_out_button.setIcon(icons["zoom_out"])
+        wave_zoom_out_button.setFixedWidth(button_size)
+        wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
+        right_buttons_layout.addWidget(wave_zoom_out_button)
         
-        rightButtonsLayout.addSpacing(8)
+        right_buttons_layout.addSpacing(8)
 
-        rightButtonsLayout.addWidget(IconWidget(resource_path("icons/font.png"), buttonSize*0.7))
-        textZoomInButton = QPushButton()
-        textZoomInButton.setIcon(self.icons["zoom_in"])
-        textZoomInButton.setFixedWidth(buttonSize)
-        textZoomInButton.clicked.connect(lambda: self.text_edit.zoomIn(1))
-        rightButtonsLayout.addWidget(textZoomInButton)
-        textZoomOutButton = QPushButton()
-        textZoomOutButton.setIcon(self.icons["zoom_out"])
-        textZoomOutButton.setFixedWidth(buttonSize)
-        textZoomOutButton.clicked.connect(lambda: self.text_edit.zoomOut(1))
-        rightButtonsLayout.addWidget(textZoomOutButton)
+        right_buttons_layout.addWidget(IconWidget(icons["font"], button_size*0.7))
+        text_zoom_in_button = QPushButton()
+        text_zoom_in_button.setIcon(icons["zoom_in"])
+        text_zoom_in_button.setFixedWidth(button_size)
+        text_zoom_in_button.clicked.connect(lambda: self.text_edit.zoomIn(1))
+        right_buttons_layout.addWidget(text_zoom_in_button)
+        text_zoom_out_button = QPushButton()
+        text_zoom_out_button.setIcon(icons["zoom_out"])
+        text_zoom_out_button.setFixedWidth(button_size)
+        text_zoom_out_button.clicked.connect(lambda: self.text_edit.zoomOut(1))
+        right_buttons_layout.addWidget(text_zoom_out_button)
 
-        buttonsLayout.addLayout(leftButtonsLayout)
-        buttonsLayout.addLayout(centerButtonsLayout)
-        buttonsLayout.addLayout(formatButtonsLayout)
-        buttonsLayout.addLayout(rightButtonsLayout)
+        buttons_layout.addLayout(left_buttons_layout)
+        buttons_layout.addLayout(center_buttons_layout)
+        buttons_layout.addLayout(format_buttons_layout)
+        buttons_layout.addLayout(right_buttons_layout)
 
-        bottomLayout.addLayout(buttonsLayout)
-        bottomLayout.addWidget(self.text_edit)
+        bottom_layout.addLayout(buttons_layout)
+        bottom_layout.addWidget(self.text_edit)
         
-        self.bottomWidget = QWidget()
-        self.bottomWidget.setLayout(bottomLayout)
+        self.bottom_widget = QWidget()
+        self.bottom_widget.setLayout(bottom_layout)
         
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(5)
         splitter.addWidget(self.waveform)
-        splitter.addWidget(self.bottomWidget)        
+        splitter.addWidget(self.bottom_widget)        
         splitter.setSizes([200, 400])
         
         #self.setCentralWidget(self.mainWidget)
         self.setCentralWidget(splitter)
         
         # Menu
-        menuBar = self.menuBar()
+        menu_bar = self.menuBar()
         #menuBar = QMenuBar()
         # menuBar.setNativeMenuBar(False)
         #self.setMenuBar(menuBar)
 
-        fileMenu = menuBar.addMenu("File")
+        file_menu = menu_bar.addMenu("&File")
         ## Open
-        openAction = QAction("Open", self)
-        openAction.triggered.connect(self.openFile)
-        fileMenu.addAction(openAction)
+        open_action = QAction("&Open", self)
+        open_action.setShortcut(QKeySequence.Open)
+        open_action.triggered.connect(self.openFile)
+        file_menu.addAction(open_action)
         ## Save
-        saveAction = QAction("Save", self)
-        saveAction.triggered.connect(self.saveFile)
-        fileMenu.addAction(saveAction)
+        save_action = QAction("&Save", self)
+        save_action.setShortcut(QKeySequence.Save)
+        save_action.triggered.connect(self.saveFile)
+        file_menu.addAction(save_action)
         ## Save as
-        saveAsAction = QAction("Save as", self)
-        saveAsAction.triggered.connect(self.saveFileAs)
-        fileMenu.addAction(saveAsAction)
+        saveAs_action = QAction("Save as", self)
+        saveAs_action.setShortcut(QKeySequence.SaveAs)
+        saveAs_action.triggered.connect(self.saveFileAs)
+        file_menu.addAction(saveAs_action)
 
         ## Export sub-menu
-        exportSubMenu = fileMenu.addMenu("Export as...")
-        exportSrtAction = QAction("SubRip (.srt)", self)
-        exportSrtAction.triggered.connect(self.exportSrt)
-        exportSubMenu.addAction(exportSrtAction)
+        export_subMenu = file_menu.addMenu("&Export as...")
+        exportSrt_action = QAction("SubRip (.srt)", self)
+        # exportSrt_action.setShortcut(QKeySequence.SaveAs)
+        exportSrt_action.triggered.connect(self.exportSrt)
+        export_subMenu.addAction(exportSrt_action)
 
-        operationMenu = menuBar.addMenu("Operations")
+        # Exit
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut(QKeySequence.Quit)
+        exit_action.triggered.connect(self.close)
+        file_menu.addSeparator()
+        file_menu.addAction(exit_action)
+
+        operation_menu = menu_bar.addMenu("&Operations")
         autoSegmentAction = QAction("Auto segment", self)
         # findSegmentsAction.triggered.connect(self.autoSegment)
-        operationMenu.addAction(autoSegmentAction)
+        operation_menu.addAction(autoSegmentAction)
         transcribeAction = QAction("Auto transcribe", self)
         transcribeAction.triggered.connect(self.transcribe)
-        operationMenu.addAction(transcribeAction)
+        operation_menu.addAction(transcribeAction)
 
-        displayMenu = menuBar.addMenu("Display")
+        display_menu = menu_bar.addMenu("&Display")
 
         toggleMisspelling = QAction("Misspelling", self)
         toggleMisspelling.setCheckable(True)
         toggleMisspelling.toggled.connect(
             lambda checked: self.text_edit.highlighter.toggleMisspelling(checked))
-        displayMenu.addAction(toggleMisspelling)
+        display_menu.addAction(toggleMisspelling)
 
         toggleTextMargin = QAction("Subtitle margin", self)
         toggleTextMargin.setCheckable(True)
         toggleTextMargin.toggled.connect(
             lambda checked: self.text_edit.toggleTextMargin(checked))
-        displayMenu.addAction(toggleTextMargin)
+        display_menu.addAction(toggleTextMargin)
 
-        displayMenu.addSeparator()
+        display_menu.addSeparator()
 
         toggleVideo = QAction("Show video", self)
         toggleVideo.setCheckable(True)
         toggleVideo.triggered.connect(self.toggleVideo)
-        displayMenu.addAction(toggleVideo)
+        display_menu.addAction(toggleVideo)
         
-        deviceMenu = menuBar.addMenu("Device")
+        deviceMenu = menu_bar.addMenu("Device")
         for dev in self.input_devices:
             deviceMenu.addAction(QAction(dev.description(), self))
         
@@ -785,14 +751,20 @@ class MainWindow(QMainWindow):
         self.filepath = filepath
         self._saveFile(filepath)
 
-
     def exportSrt(self):
         dir = os.path.split(self.filepath)[0] if self.filepath else os.path.expanduser('~')
         filename = os.path.splitext(self.filepath)[0] if self.filepath else "untitled"
         filename += ".srt"
-        filepath, _ = QFileDialog.getSaveFileName(self, "Save File", os.path.join(dir, filename))
-        if not filepath:
+
+        dialog = ExportSRTDialog(self, os.path.join(dir, filename))
+        result = dialog.exec()
+        
+        if result == QDialog.Rejected:
             return
+        
+        # Here you would implement the actual export functionality
+        file_path = dialog.file_path.text()
+        
         rm_special_tokens = True
 
         doc = self.text_edit.document()
@@ -810,7 +782,12 @@ class MainWindow(QMainWindow):
                 text = re.sub(METADATA_PATTERN, ' ', text)
                 text = re.sub(r"<br>", '\u2028', text, count=0, flags=re.IGNORECASE)
                 text = re.sub(r"\*", '', text)
-                text = re.sub(r"\'", '’', text)
+
+                if dialog.apostrophe_norm_check_1.isChecked():
+                    text = text.replace("'", '’')
+                
+                if dialog.apostrophe_norm_check_2.isChecked():
+                    text = text.replace('’', "'")
 
                 formats = block.textFormats()
                 if len(formats) > 1:
@@ -854,14 +831,15 @@ class MainWindow(QMainWindow):
             block = block.next()
 
         # Adjust minimal duration between two subtitles (>= 0.08s)
+        min_time = dialog.time_seconds
         for i in range(len(subs) - 1):
             text, (current_start, current_end) = subs[i]
             _, (next_start, _) = subs[i+1]
             if next_start - current_end < 0.08:
-                new_sub = (text, (current_start, next_start - 0.08))
+                new_sub = (text, (current_start, next_start - min_time))
                 subs[i] = new_sub
         
-        with open(filepath, 'w') as _f:
+        with open(file_path, 'w') as _f:
             subs = [
                 srt.Subtitle(
                     index=i,
@@ -871,44 +849,46 @@ class MainWindow(QMainWindow):
                 ) for i, (text, (start, end)) in enumerate(subs)
             ]
             _f.write(srt.compose(subs))
-            print(f"Subtitles saved to {filepath}")
+            print(f"Subtitles saved to {file_path}")
+
+            self.status_bar.showMessage(f"Export to {file_path} completed", 3000)
                     
 
-    def openFile(self, filepath=""):
+    def openFile(self, file_path=""):
         audio_formats = ("mp3", "wav", "m4a", "ogg", "mp4", "mkv", "webm")
         all_formats = audio_formats + ("ali", "seg", "split", "srt")
         supported_filter = f"Supported files ({' '.join(['*.'+fmt for fmt in all_formats])})"
         audio_filter = f"Audio files ({' '.join(['*.'+fmt for fmt in audio_formats])})"
 
-        if not filepath:
+        if not file_path:
             dir = settings.value("editor/last_opened_folder", "")
-            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", dir, ";;".join([supported_filter, audio_filter]))
-            if not filepath:
+            file_path, _ = QFileDialog.getOpenFileName(self, "Open File", dir, ";;".join([supported_filter, audio_filter]))
+            if not file_path:
                 return
-            settings.setValue("editor/last_opened_folder", os.path.split(filepath)[0])
+            settings.setValue("editor/last_opened_folder", os.path.split(file_path)[0])
             # settings.setValue("editor/last_opened_file", filepath)
         
         self.waveform.clear()
         self.text_edit.clear()
 
-        folder, filename = os.path.split(filepath)
+        folder, filename = os.path.split(file_path)
         basename, ext = os.path.splitext(filename)
-        print(f"{filepath=}\n{filename=}\n{basename=}")
+        print(f"{file_path=}\n{filename=}\n{basename=}")
         ext = ext[1:].lower()
         audio_path = None
         first_utt_id = None
 
         if ext in audio_formats:
             # Selected file is an audio file, only load audio
-            print("Loading audio:", filepath)
-            self.loadAudio(filepath)
+            print("Loading audio:", file_path)
+            self.loadAudio(file_path)
             print("done")
             self.filepath = ""
             self.updateWindowTitle()
             return
         
         if ext == "ali":
-            with open(filepath, 'r', encoding="utf-8") as fr:
+            with open(file_path, 'r', encoding="utf-8") as fr:
                 # Find associated audio file in metadata
                 for line in fr.readlines():
                     line = line.strip()
@@ -930,7 +910,7 @@ class MainWindow(QMainWindow):
 
                     # Check for an "audio_path" metadata in current line
                     if not audio_path and "audio-path" in metadata:
-                        dir = os.path.split(filepath)[0]
+                        dir = os.path.split(file_path)[0]
                         audio_path = os.path.join(dir, metadata["audio-path"])
                         audio_path = os.path.normpath(audio_path)
 
@@ -947,7 +927,7 @@ class MainWindow(QMainWindow):
                 self.loadAudio(audio_path)
 
         if ext in ("seg", "split"):
-            segments = load_segments_data(filepath)
+            segments = load_segments_data(file_path)
             seg_id_list = []
             for start, end in segments:
                 seg_id = self.waveform.addSegment([start, end])
@@ -987,7 +967,7 @@ class MainWindow(QMainWindow):
                     break
             
             # Subtitle file
-            with open(filepath, 'r', encoding="utf-8") as f_in:
+            with open(file_path, 'r', encoding="utf-8") as f_in:
                 subtitle_generator = srt.parse(f_in.read())
             subtitles = list(subtitle_generator)
             for subtitle in subtitles:
@@ -1001,7 +981,7 @@ class MainWindow(QMainWindow):
             self.waveform.draw()
 
 
-        self.filepath = filepath
+        self.filepath = file_path
         self.updateWindowTitle()
 
         # Select the first utterance
@@ -1067,7 +1047,7 @@ class MainWindow(QMainWindow):
                 segment = self.waveform.segments[self.playing_segment]
                 if player_seconds >= segment[1]:
                     self.player.pause()
-                    self.playButton.setIcon(self.icons["play"])
+                    self.play_button.setIcon(icons["play"])
                     self.waveform.setHead(segment[1])
             else:
                 # The segment could have been deleted by the user during playback
@@ -1075,7 +1055,7 @@ class MainWindow(QMainWindow):
         elif self.waveform.selection_is_active:
             if player_seconds >= self.waveform.selection[1]:
                 self.player.pause()
-                self.playButton.setIcon(self.icons["play"])
+                self.play_button.setIcon(icons["play"])
                 self.waveform.setHead(self.waveform.selection[1])
         
         # Update subtitles
@@ -1088,7 +1068,7 @@ class MainWindow(QMainWindow):
     def play(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
-            self.playButton.setIcon(self.icons["play"])
+            self.play_button.setIcon(icons["play"])
             if (self.playing_segment == self.waveform.last_segment_active
                 or self.waveform.last_segment_active == -1):
                 return
@@ -1103,21 +1083,21 @@ class MainWindow(QMainWindow):
             self.playing_segment = -1
             self.player.setPosition(int(self.waveform.playhead * 1000))
             self.player.play()
-            self.playButton.setIcon(self.icons["pause"])
+            self.play_button.setIcon(icons["pause"])
 
 
     def stop(self):
         """Stop playback"""
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.stop()
-            self.playButton.setIcon(self.icons["play"])
+            self.play_button.setIcon(icons["play"])
 
 
     def playSegment(self, segment):
         start, _ = segment
         self.player.setPosition(int(start * 1000))
         self.player.play()
-        self.playButton.setIcon(self.icons["pause"])
+        self.play_button.setIcon(icons["pause"])
 
 
     def playNext(self):
@@ -1336,7 +1316,6 @@ class MainWindow(QMainWindow):
 
 
 
-
 def main():
     global settings
     settings = QSettings("anaouder", MainWindow.APP_NAME)
@@ -1347,6 +1326,7 @@ def main():
         file_path = sys.argv[1]
     
     app = QApplication(sys.argv)
+    loadIcons()
     window = MainWindow(file_path)
     window.show()
     sys.exit(app.exec())

@@ -61,6 +61,7 @@ a = Analysis(
         ("./icons/123-numbers.png", "icons/"),
         ("./icons/font.png", "icons/"),
         ("./icons/waveform.png", "icons/"),
+        ("./icons/folder.png", "icons/"),
     ],
     hiddenimports=[
         'PySide6.QtCore',
