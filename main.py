@@ -16,7 +16,6 @@ from typing import List, Optional
 import static_ffmpeg
 static_ffmpeg.add_paths()
 
-# import numpy as np
 import re
 from datetime import timedelta
 import srt
@@ -28,10 +27,8 @@ from ostilhou.asr import (
 )
 from ostilhou.asr.models import load_model, get_available_models
 from ostilhou.asr.dataset import format_timecode, METADATA_PATTERN
-from ostilhou.audio import (
-    split_to_segments, convert_to_mp3,
-    get_audio_samples,
-)
+from ostilhou.audio import (convert_to_mp3, get_audio_samples)
+from ostilhou.audio.audio_numpy import split_to_segments, get_samples
 from ostilhou.utils import sec2hms
 
 from PySide6.QtWidgets import (
@@ -54,7 +51,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
-from waveform_widget import WaveformWidget
+from waveform_widget import WaveformWidget, AddSegmentCommand
 from text_widget import TextEdit, MyTextBlockUserData, BlockType
 from video_widget import VideoWindow
 from recognizer_worker import RecognizerWorker
@@ -84,11 +81,11 @@ AUTOSEG_MIN_LENGTH = 3
 
 class CreateNewUtteranceCommand(QUndoCommand):
     """Create a new utterance with empty text"""
-    def __init__(self, parent, segment):
+    def __init__(self, parent, segment, seg_id=None):
         super().__init__()
         self.parent : MainWindow = parent
         self.segment = segment
-        self.seg_id = None
+        self.seg_id = seg_id
     
     def undo(self):
         if self.parent.playing_segment == self.seg_id:
@@ -362,6 +359,8 @@ class MainWindow(QMainWindow):
     def __init__(self, filepath=""):
         super().__init__()
         
+        self.audio_samples = None
+        
         self.input_devices = QMediaDevices.audioInputs()
 
         if len(get_available_models()) == 0:
@@ -394,7 +393,7 @@ class MainWindow(QMainWindow):
 
         self.recognizer_worker = RecognizerWorker()
         self.recognizer_worker.message.connect(self.slotSetStatusMessage)
-        self.recognizer_worker.transcribedSegment.connect(self.slotTranscribedSegment)
+        self.recognizer_worker.transcribedSegment.connect(self.updateSegmentTranscription)
         self.recognizer_worker.transcribed.connect(self.addUtterance)
         self.recognizer_worker.finished.connect(self.progress_bar.hide)
         self.recognizer_worker.setModel(self.available_models[0])
@@ -474,6 +473,7 @@ class MainWindow(QMainWindow):
         transcribe_button = QPushButton()
         transcribe_button.setIcon(icons["sparkles"])
         transcribe_button.setFixedWidth(button_size)
+        transcribe_button.clicked.connect(self.transcribe)
         left_buttons_layout.addWidget(transcribe_button)
 
 
@@ -623,7 +623,7 @@ class MainWindow(QMainWindow):
 
         operation_menu = menu_bar.addMenu("&Operations")
         autoSegmentAction = QAction("Auto segment", self)
-        # findSegmentsAction.triggered.connect(self.autoSegment)
+        autoSegmentAction.triggered.connect(self.autoSegment)
         operation_menu.addAction(autoSegmentAction)
         transcribeAction = QAction("Auto transcribe", self)
         transcribeAction.triggered.connect(self.transcribe)
@@ -666,13 +666,6 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def slotSetStatusMessage(self, message: str):
         self.status_label.setText(message)
-
-
-    @Slot(str, int, int)
-    def slotTranscribedSegment(self, text: str, seg_id: int, i: int):
-        self.progress_bar.setValue(i+1)
-        block = self.text_edit.getBlockById(seg_id)
-        self.undo_stack.push(ReplaceTextCommand(self.text_edit, block, text, 0, 0))
 
 
     def closeEvent(self, event):
@@ -1011,9 +1004,12 @@ class MainWindow(QMainWindow):
                 filepath = mp3_file
 
         print("Rendering waveform...")
-        samples = get_audio_samples(self.audio_path, 4000)
-        print(f"{len(samples)} samples")
-        self.waveform.setSamples(samples, 4000)
+        import numpy as np
+        # self.audio_samples = get_samples(self.audio_path, 4000)
+        self.audio_samples = get_samples(self.audio_path, 4000)
+
+        print(f"{len(self.audio_samples)} samples")
+        self.waveform.setSamples(self.audio_samples, 4000)
         self.waveform.draw()
 
 
@@ -1176,11 +1172,12 @@ class MainWindow(QMainWindow):
 
     def autoSegment(self):
         print("Finding segments")
-        segments = split_to_segments(self.audio_data, 10, 0.05)
-        self.status_bar.showMessage(f"{len(segments)} segments found")
-        self.waveform.clear()
+        segments = split_to_segments(self.audio_samples, 4000, 10, 0.05)
+        print(segments)
+        self.status_bar.showMessage(f"{len(segments)} segments found", 3000)
+        # self.waveform.clear()
         for start, end in segments:
-            segment_id = self.waveform.addSegment([start/1000, end/1000])
+            segment_id = self.waveform.addSegment([start, end])
             self.text_edit.insertSentenceWithId('*', segment_id)
         self.waveform.draw()
 
@@ -1191,6 +1188,24 @@ class MainWindow(QMainWindow):
         self.undo_stack.push(CreateNewUtteranceCommand(self, self.waveform.selection))
         self.waveform.deselect()
         self.waveform.draw()
+
+
+    @Slot(str, float, float, int, int)
+    def updateSegmentTranscription(
+        self,
+        text: str,
+        start: float,
+        end: float,
+        seg_id: int,
+        i: int
+    ):
+        if seg_id not in self.waveform.segments:
+            # Create segment
+            self.undo_stack.push(CreateNewUtteranceCommand(self, [start, end], seg_id))
+            
+        block = self.text_edit.getBlockById(seg_id)
+        self.undo_stack.push(ReplaceTextCommand(self.text_edit, block, text, 0, 0))
+        self.progress_bar.setValue(i+1)
 
 
     @Slot(str, list)
@@ -1204,12 +1219,11 @@ class MainWindow(QMainWindow):
     def transcribe(self):
         seg_id = -1
         if self.waveform.selection_is_active:
-            # Create segment from selection
-            seg_id = self.waveform.addSegment(self.waveform.selection)
+            # Transcribe selection
+            seg_id = self.waveform.getNewId()
+            segments = [(seg_id, *self.waveform.selection)]
             self.waveform.deselect()
             self.waveform.draw()
-            # Transcribe selection
-            segments = [(seg_id, *self.waveform.segments[seg_id])]
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
             segments = [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]

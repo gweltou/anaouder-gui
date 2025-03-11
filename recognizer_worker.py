@@ -16,7 +16,7 @@ from ostilhou.asr import (
 
 class RecognizerWorker(QThread):
     message = Signal(str)
-    transcribedSegment = Signal(str, int, int) # Transcribe a pre-defined segment
+    transcribedSegment = Signal(str, float, float, int, int) # Transcribe a pre-defined segment
     transcribed = Signal(str, list) # Create a segment with transcription
     
     def setModel(self, model_name):
@@ -48,7 +48,7 @@ class RecognizerWorker(QThread):
                 text = transcribe_segment_ffmpeg(self.audio_path, start, end-start, model=None)
                 text = ' '.join(text)
                 print(f"STT: {text}")
-                self.transcribedSegment.emit(text, seg_id, i)
+                self.transcribedSegment.emit(text, start, end, seg_id, i)
         else:
             # Transcribe whole file
             def parse_vosk_result(result):

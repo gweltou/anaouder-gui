@@ -159,6 +159,7 @@ class ReplaceTextCommand(QUndoCommand):
         super().__init__()
         self.text_edit = text_edit
         self.block = block
+        self.block_number = text_edit.getBlockNumber(block.position())
         self.old_text = block.text()
         self.new_text = new_text
         self.cursor_pos_old = cursor_pos_old
@@ -166,7 +167,8 @@ class ReplaceTextCommand(QUndoCommand):
     
     def undo(self):
         # block = self.text_edit.document().findBlockByNumber(self.block_number)
-        cursor = QTextCursor(self.block)
+        block = self.text_edit.document().findBlockByNumber(self.block_number)
+        cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.StartOfBlock)
         cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         cursor.insertText(self.old_text)
@@ -175,7 +177,8 @@ class ReplaceTextCommand(QUndoCommand):
 
     def redo(self):
         # block = self.text_edit.document().findBlockByNumber(self.block_number)
-        cursor = QTextCursor(self.block)
+        block = self.text_edit.document().findBlockByNumber(self.block_number)
+        cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.StartOfBlock)
         cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         cursor.insertText(self.new_text)

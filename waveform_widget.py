@@ -7,7 +7,7 @@ ZOOM_MIN = 0.2  # In pixels per second
 ZOOM_MAX = 512  # In pixels per second
 
 
-
+from typing import Optional
 from math import ceil
 from enum import Enum
 import numpy as np
@@ -33,6 +33,30 @@ Handle = Enum("Handle", ["NONE", "LEFT", "RIGHT"])
 
 
 
+class AddSegmentCommand(QUndoCommand):
+    def __init__(
+            self,
+            waveform_widget,
+            segment: list,
+            segment_id: Optional[int]=None
+        ):
+        super().__init__()
+        self.waveform_widget : WaveformWidget = waveform_widget
+        self.segment = segment
+        self.segment_id : int = segment_id
+    
+    def undo(self):
+        self.waveform_widget.segments[self.segment_id] = self.old_segment
+        self.waveform_widget._to_sort = True
+        self.waveform_widget.draw()
+        self.waveform_widget.refreshSegmentInfo()
+
+    def redo(self):
+        self.waveform_widget.addSegment()
+        self.waveform_widget.draw()
+        self.waveform_widget.refreshSegmentInfo()
+
+
 class ResizeSegmentCommand(QUndoCommand):
     def __init__(self, waveform_widget, segment_id, old_segment, side, time_pos):
         super().__init__()
@@ -43,7 +67,6 @@ class ResizeSegmentCommand(QUndoCommand):
         self.side : int = side # 0 is Left, 1 is Right
     
     def undo(self):
-        print("undo resize")
         self.waveform_widget.segments[self.segment_id] = self.old_segment
         self.waveform_widget._to_sort = True
         self.waveform_widget.draw()
@@ -77,10 +100,11 @@ class WaveformWidget(QWidget):
             Manage the loading/unloading of samples chunks dynamically
 
             Parameters:
-            - samples
+            - samples (ndarray, dtype=np.float16)
             - sr: sampling rate
             """
             self.samples = samples
+            # self.samples = samples
             self.sr = sr
             self.ppsec = 150    # pixels per seconds (audio)
 
@@ -215,11 +239,17 @@ class WaveformWidget(QWidget):
         self.audio_len = len(samples) / sr
         print(sec2hms(self.audio_len))
     
+    
+    def getNewId(self):
+        """Returns the next free segment ID"""
+        seg_id = self.id_counter
+        self.id_counter += 1
+        return seg_id
+    
 
     def addSegment(self, segment, seg_id=None) -> int:
-        if seg_id == None:
-            seg_id = self.id_counter
-            self.id_counter += 1
+        print(f"{segment=}")
+        seg_id = seg_id or self.getNewId()
         self.segments[seg_id] = segment
         self._to_sort = True
         return seg_id
