@@ -1,1 +1,1 @@
-__version__ = "Alfa 2.1"
+__version__ = "Alfa 2.2"

@@ -1172,7 +1172,20 @@ class MainWindow(QMainWindow):
 
     def autoSegment(self):
         print("Finding segments")
-        segments = split_to_segments(self.audio_samples, 4000, 10, 0.05)
+        # Check if there is an active selection
+        start_frame = 0
+        end_frame = len(self.audio_samples)
+        if self.waveform.selection_is_active:
+            selection_start, selection_end = self.waveform.selection
+            start_frame = int(selection_start * 4000)
+            end_frame = int(selection_end * 4000)
+            self.waveform.deselect()
+
+        segments = split_to_segments(self.audio_samples[start_frame:end_frame], 4000, 10, 0.05)
+        segments = [
+            (start+start_frame/4000, end+start_frame/4000)
+            for start, end in segments
+        ]
         print(segments)
         self.status_bar.showMessage(f"{len(segments)} segments found", 3000)
         # self.waveform.clear()
