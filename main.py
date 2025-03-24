@@ -42,9 +42,10 @@ from PySide6.QtCore import (
     Qt, QSize, QUrl, QEvent,
     QThread, Signal, Slot,
     QSettings,
+    QRegularExpression,
 )
 from PySide6.QtGui import (
-    QAction, QPixmap, QIcon,
+    QAction, QActionGroup, QPixmap, QIcon,
     QResizeEvent, QWheelEvent, QKeySequence, QShortcut, QKeyEvent,
     QTextBlock, QTextCursor,
     QUndoStack, QUndoCommand,
@@ -52,7 +53,7 @@ from PySide6.QtGui import (
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
 from waveform_widget import WaveformWidget, AddSegmentCommand
-from text_widget import TextEdit, MyTextBlockUserData, BlockType
+from text_widget import TextEdit, MyTextBlockUserData, BlockType, Highlighter
 from video_widget import VideoWindow
 from recognizer_worker import RecognizerWorker
 from commands import ReplaceTextCommand
@@ -643,6 +644,24 @@ class MainWindow(QMainWindow):
             lambda checked: self.text_edit.toggleTextMargin(checked))
         display_menu.addAction(toggleTextMargin)
 
+        ## Coloring sub-menu
+        coloring_subMenu = display_menu.addMenu("Coloring...")
+        coloring_action_group = QActionGroup(self)
+        coloring_action_group.setExclusive(True)
+
+        color_alignment_action = QAction("Unaligned sentences", self)
+        color_alignment_action.setCheckable(True)
+        color_alignment_action.setChecked(True)
+        color_alignment_action.triggered.connect(self.toggleAlignmentColoring)
+        coloring_subMenu.addAction(color_alignment_action)
+        coloring_action_group.addAction(color_alignment_action)
+
+        color_density_action = QAction("Speech density", self)
+        color_density_action.setCheckable(True)
+        color_density_action.triggered.connect(self.toggleDensityColoring)
+        coloring_subMenu.addAction(color_density_action)
+        coloring_action_group.addAction(color_density_action)
+
         display_menu.addSeparator()
 
         toggleVideo = QAction("Show video", self)
@@ -666,12 +685,6 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def slotSetStatusMessage(self, message: str):
         self.status_label.setText(message)
-
-
-    def closeEvent(self, event):
-        if self.video_window:
-            self.video_window.close()
-        super().closeEvent(event)
 
 
     def updateWindowTitle(self):
@@ -743,6 +756,7 @@ class MainWindow(QMainWindow):
         
         self.filepath = filepath
         self._saveFile(filepath)
+
 
     def exportSrt(self):
         dir = os.path.split(self.filepath)[0] if self.filepath else os.path.expanduser('~')
@@ -1170,6 +1184,14 @@ class MainWindow(QMainWindow):
             self.video_window = None
 
 
+    def toggleAlignmentColoring(self, checked):
+        self.text_edit.highlighter.setMode(Highlighter.ColorMode.ALIGNMENT)
+    
+
+    def toggleDensityColoring(self, checked):
+        self.text_edit.highlighter.setMode(Highlighter.ColorMode.DENSITY)
+
+
     def autoSegment(self):
         print("Finding segments")
         # Check if there is an active selection
@@ -1310,36 +1332,102 @@ class MainWindow(QMainWindow):
 
 
     def closeEvent(self, event):
-        if self.undo_stack.isClean():
-            return super().closeEvent(event)
+        if not self.undo_stack.isClean():
+            reply = QMessageBox.warning(
+                self, 
+                "Unsaved work", 
+                "Do you want to save your changes?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                QMessageBox.Save,
+            )
+            # Decide whether to close based on user's response
+            if reply == QMessageBox.Save:
+                self.saveFile()
+                event.accept()
+            elif reply == QMessageBox.Discard:
+                event.accept()
+            else:
+                event.ignore()
+                return
         
-        reply = QMessageBox.warning(
-            self, 
-            "Unsaved work", 
-            "Do you want to save your changes?",
-            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-            QMessageBox.Save,
-        )
-        print(reply)
-        # Decide whether to close based on user's response
-        if reply == QMessageBox.Save:
-            self.saveFile()
-            event.accept()
-        elif reply == QMessageBox.Discard:
-            event.accept()
-        else:
-            event.ignore()
+        if self.video_window:
+            self.video_window.close()
+        return super().closeEvent(event)
     
     
-    def showSegmentInfo(self, id):
+    def updateSegmentInfo(self, id):
         if id not in self.waveform.segments:
             self.status_bar.showMessage("")
             return
+        
+        # Refresh block color
+        if self.text_edit.highlighter.mode == Highlighter.ColorMode.DENSITY:
+            block = self.text_edit.getBlockById(id)
+            self.text_edit.highlighter.rehighlightBlock(block)
+
+        # Show info in status bar
         start, end = self.waveform.segments[id]
         dur = end-start
         start = sec2hms(start, sep='', precision=2, m_unit='m', s_unit='s')
         end = sec2hms(end, sep='', precision=2, m_unit='m', s_unit='s')
-        self.status_bar.showMessage(f"ID: {id}\t\tstart: {start:10}\tend: {end:10}\tdur: {dur:.3f}s")
+        density = self.getUtteranceDensity(id)
+        string_parts = [
+            f"ID: {id}",
+            f"start: {start:10}",
+            f"end: {end:10}",
+            f"dur: {dur:.3f}s",
+        ]
+        if density >= 0.0:
+            string_parts.append(f"{density:.1f}c/s")
+        self.status_bar.showMessage('\t\t\t\t'.join(string_parts))
+
+
+    def getSentenceSplits(self, text: str) -> list:
+        sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
+
+        # Metadata  
+        expression = QRegularExpression(r"{\s*(.+?)\s*}")
+        matches = expression.globalMatch(text)
+        while matches.hasNext():
+            match = matches.next()
+            sentence_splits = self.cutSentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength())
+        
+        # Special tokens
+        expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
+        matches = expression.globalMatch(text)
+        while matches.hasNext():
+            match = matches.next()
+            sentence_splits = self.cutSentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength())
+        return sentence_splits
+
+
+    def cutSentence(self, segments: list, start: int, end: int) -> list:
+        """ Subdivide a list of segments further, given a pair of indices """
+        assert start < end
+        splitted = []
+        for seg_start, seg_end in segments:
+            if start >= seg_start and end <= seg_end:
+                # Split this segment
+                if start > seg_start:
+                    pre_segment = (seg_start, start)
+                    splitted.append(pre_segment)
+                if end < seg_end:
+                    post_segment = (end, seg_end)
+                    splitted.append(post_segment)
+            else:
+                splitted.append((seg_start, seg_end))
+        return splitted
+
+
+    def getUtteranceDensity(self, id) -> float:
+        # Count the number of characters in sentence
+        block = self.text_edit.getBlockById(id)
+        sentence_splits = self.getSentenceSplits(block.text())
+        num_chars = sum([ e-s for s, e in sentence_splits ], 0)
+        start, end = self.text_edit.parent.waveform.segments[id]
+        dur = end - start
+        density = num_chars / dur
+        return density
 
 
 

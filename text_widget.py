@@ -34,11 +34,16 @@ STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t\u2028'
 
 
 class Highlighter(QSyntaxHighlighter):
+    class ColorMode(Enum):
+        ALIGNMENT = 0
+        DENSITY = 1
+
     utt_block_margin = 8
 
     def __init__(self, parent, text_edit):
         super().__init__(parent)
         self.text_edit : TextEdit = text_edit
+        self.mode = self.ColorMode.ALIGNMENT
         self.hunspell = None
         self.show_misspelling = False
 
@@ -58,46 +63,44 @@ class Highlighter(QSyntaxHighlighter):
         self.mispellformat.setUnderlineStyle(QTextCharFormat.SpellCheckUnderline)
 
         self.aligned_block_format = QTextBlockFormat()
-        self.aligned_block_format.setBackground(theme.aligned_color_light)
         self.aligned_block_format.setTopMargin(self.utt_block_margin)
         self.aligned_block_format.setBottomMargin(self.utt_block_margin)
 
-        self.unaligned_block_format = QTextBlockFormat()
-        self.unaligned_block_format.setBackground(theme.unaligned_color_light)
-        self.unaligned_block_format.setTopMargin(self.utt_block_margin)
-        self.unaligned_block_format.setBottomMargin(self.utt_block_margin)
+        self.green_block_format = QTextBlockFormat()
+        self.green_block_format.setBackground(theme.green_light)
+        self.green_block_format.setTopMargin(self.utt_block_margin)
+        self.green_block_format.setBottomMargin(self.utt_block_margin)
 
-        self.active_block_format = QTextBlockFormat()
-        self.active_block_format.setBackground(theme.active_color_light)
-        self.active_block_format.setTopMargin(self.utt_block_margin)
-        self.active_block_format.setBottomMargin(self.utt_block_margin)
+        self.red_block_format = QTextBlockFormat()
+        self.red_block_format.setBackground(theme.red_light)
+        self.red_block_format.setTopMargin(self.utt_block_margin)
+        self.red_block_format.setBottomMargin(self.utt_block_margin)
+
+        self.active_green_block_format = QTextBlockFormat()
+        self.active_green_block_format.setBackground(theme.active_green_light)
+        self.active_green_block_format.setTopMargin(self.utt_block_margin)
+        self.active_green_block_format.setBottomMargin(self.utt_block_margin)
+
+        self.active_red_block_format = QTextBlockFormat()
+        self.active_red_block_format.setBackground(theme.active_green_light)
+        self.active_red_block_format.setTopMargin(self.utt_block_margin)
+        self.active_red_block_format.setBottomMargin(self.utt_block_margin)
+
+
+    def setMode(self, mode: ColorMode):
+        print(f"Set highligher to {mode}")
+        self.mode = mode
+        self.rehighlight()
 
 
     def updateThemeColors(self):
-        self.aligned_block_format.setBackground(theme.aligned_color)
-        self.unaligned_block_format.setBackground(theme.unaligned_color)
-        self.active_block_format.setBackground(theme.active_color)
+        self.green_block_format.setBackground(theme.green)
+        self.red_block_format.setBackground(theme.red)
+        self.active_green_block_format.setBackground(theme.active_green)
+        self.active_red_block_format.setBackground(theme.active_red)
 
 
-    def split_sentence(self, segments: list, start: int, end: int) -> list:
-        """ Subdivide a list of segments further, given a pair of indices """
-        assert start < end
-        splitted = []
-        for seg_start, seg_end in segments:
-            if start >= seg_start and end <= seg_end:
-                # Split this segment
-                if start > seg_start:
-                    pre_segment = (seg_start, start)
-                    splitted.append(pre_segment)
-                if end < seg_end:
-                    post_segment = (end, seg_end)
-                    splitted.append(post_segment)
-            else:
-                splitted.append((seg_start, seg_end))
-        return splitted
-
-
-    def is_subsentence(self, segments: list, start: int, end: int) -> bool:
+    def isSubsentence(self, segments: list, start: int, end: int) -> bool:
         assert start < end
         for seg_start, seg_end in segments:
             if start >= seg_start and end <= seg_end:
@@ -106,9 +109,51 @@ class Highlighter(QSyntaxHighlighter):
                 return False
 
 
+    def highlightAlignment(self, sentence_splits):
+        block = self.currentBlock()
+        cursor = QTextCursor(block)
+
+        if self.currentBlockUserData():
+            if self.text_edit.isAligned(block):
+                if self.text_edit.active_sentence_id == self.text_edit.getBlockId(block):
+                    cursor.setBlockFormat(self.active_green_block_format)
+                else:
+                    cursor.setBlockFormat(self.green_block_format)
+            else:
+                cursor.setBlockFormat(self.red_block_format)
+        else:
+            if sentence_splits:
+                cursor.setBlockFormat(self.red_block_format)
+            else:
+                cursor.setBlockFormat(QTextBlockFormat())
+
+
+    def highlightDensity(self):
+        block = self.currentBlock()
+        cursor = QTextCursor(block)
+
+        if self.currentBlockUserData():
+            if self.text_edit.isAligned(block):
+                utt_id = self.text_edit.getBlockId(block)
+                density = self.text_edit.parent.getUtteranceDensity(utt_id)
+                if density < 17.0:
+                    if self.text_edit.active_sentence_id == self.text_edit.getBlockId(block):
+                        cursor.setBlockFormat(self.active_green_block_format)
+                    else:
+                        cursor.setBlockFormat(self.green_block_format)
+                else:
+                    if self.text_edit.active_sentence_id == self.text_edit.getBlockId(block):
+                        cursor.setBlockFormat(self.active_red_block_format)
+                    else:
+                        cursor.setBlockFormat(self.red_block_format)
+            else:
+                cursor.setBlockFormat(self.aligned_block_format)
+        else:
+            cursor.setBlockFormat(QTextBlockFormat())
+
+
     def highlightBlock(self, text):
         self.text_edit.ignore_cursor_change = True
-        block = self.currentBlock()
 
         # Find and crop comments
         i = text.find('#')
@@ -116,14 +161,12 @@ class Highlighter(QSyntaxHighlighter):
             self.setFormat(i, len(text)-i, self.commentFormat)
             text = text[:i]
         
-        cursor = QTextCursor(block)
-
         if not text.strip():
+            block = self.currentBlock()
+            cursor = QTextCursor(block)
             cursor.setBlockFormat(QTextBlockFormat())
             self.text_edit.ignore_cursor_change = False
             return
-
-        sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
 
         # Metadata  
         expression = QRegularExpression(r"{\s*(.+?)\s*}")
@@ -131,7 +174,6 @@ class Highlighter(QSyntaxHighlighter):
         while matches.hasNext():
             match = matches.next()
             self.setFormat(match.capturedStart(), match.capturedLength(), self.metadataFormat)
-            sentence_splits = self.split_sentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength())
         
         # Special tokens
         expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
@@ -139,22 +181,14 @@ class Highlighter(QSyntaxHighlighter):
         while matches.hasNext():
             match = matches.next()
             self.setFormat(match.capturedStart(), match.capturedLength(), self.sp_tokenFormat)
-            sentence_splits = self.split_sentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength())
-        
+
+        sentence_splits = self.text_edit.parent.getSentenceSplits(text)
+
         # Background color
-        if self.currentBlockUserData():
-            if self.text_edit.isAligned(block):
-                if self.text_edit.active_sentence_id == self.text_edit.getBlockId(block):
-                    cursor.setBlockFormat(self.active_block_format)
-                else:
-                    cursor.setBlockFormat(self.aligned_block_format)
-            else:
-                cursor.setBlockFormat(self.unaligned_block_format)
-        else:
-            if sentence_splits:
-                cursor.setBlockFormat(self.unaligned_block_format)
-            else:
-                cursor.setBlockFormat(QTextBlockFormat())
+        if self.mode == self.ColorMode.ALIGNMENT:
+            self.highlightAlignment(sentence_splits)
+        elif self.mode == self.ColorMode.DENSITY:
+            self.highlightDensity()
         
         self.text_edit.ignore_cursor_change = False
 
@@ -166,7 +200,7 @@ class Highlighter(QSyntaxHighlighter):
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
-            if not self.is_subsentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength()):
+            if not self.isSubsentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength()):
                 continue
             word = match.captured().replace('’', "'")
             if not self.hunspell.lookup(word):
@@ -251,7 +285,7 @@ class TextEdit(QTextEdit):
         # Subtitles margin
         self._text_margin = False
         self._char_width = -1
-        self.margin_color = theme.margin_color
+        self.margin_color = theme.margin
 
         # Used to handle double and triple-clicks
         self._click_count = 0
@@ -259,7 +293,7 @@ class TextEdit(QTextEdit):
 
 
     def updateThemeColors(self):        
-        self.margin_color = theme.margin_color
+        self.margin_color = theme.margin
         self.highlighter.updateThemeColors()
         self.highlighter.rehighlight()
 
@@ -316,7 +350,6 @@ class TextEdit(QTextEdit):
 
     def getBlockById(self, id: int) -> QTextBlock:
         # TODO: rewrite
-        print("getBlockById")
         doc = self.document()
         for blockIndex in range(doc.blockCount()):
             block = doc.findBlockByNumber(blockIndex)
@@ -541,7 +574,7 @@ class TextEdit(QTextEdit):
             data = block.userData().data
             if "seg_id" in data:
                 seg_id = data["seg_id"]
-                self.parent.showSegmentInfo(seg_id)
+                self.parent.updateSegmentInfo(seg_id)
     
 
     def _updateScroll(self):
@@ -577,6 +610,7 @@ class TextEdit(QTextEdit):
 
 
     def cut(self):
+        return
         print("cut")
         super().cut()
     
@@ -587,6 +621,7 @@ class TextEdit(QTextEdit):
         i.e. to modify what QTextEdit can paste and how it is being pasted,
         reimplement the virtual canInsertFromMimeData() and insertFromMimeData() functions.
         """
+        return
         clipboard = QApplication.clipboard()
         cursor = self.textCursor()
         has_selection = not cursor.selection().isEmpty()

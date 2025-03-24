@@ -170,9 +170,11 @@ class WaveformWidget(QWidget):
 
         self.handlepen = QPen(QColor(240, 220, 60, 160), 2)
         self.handlepen.setCapStyle(Qt.RoundCap)
+        self.handlepen_shadow = QPen(QColor(240, 220, 60, 50), 5)
+        self.handlepen_shadow.setCapStyle(Qt.RoundCap)
         self.handle_active_pen = QPen(QColor(255, 250, 80, 150), 2)
         self.handle_active_pen.setCapStyle(Qt.RoundCap)
-        self.handle_active_pen_shadow = QPen(QColor(255, 250, 80, 50), 4)
+        self.handle_active_pen_shadow = QPen(QColor(255, 250, 80, 50), 5)
         self.handle_active_pen_shadow.setCapStyle(Qt.RoundCap)
 
         self.handle_left_pen = QPen(QColor(255, 80, 80, 150), 3)
@@ -248,7 +250,6 @@ class WaveformWidget(QWidget):
     
 
     def addSegment(self, segment, seg_id=None) -> int:
-        print(f"{segment=}")
         seg_id = seg_id or self.getNewId()
         self.segments[seg_id] = segment
         self._to_sort = True
@@ -533,7 +534,7 @@ class WaveformWidget(QWidget):
         elif event.key() == Qt.Key_Shift:
             self.shift_pressed = False
         return super().keyReleaseEvent(event)
-
+    
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.click_pos = event.position()
@@ -830,7 +831,8 @@ class WaveformWidget(QWidget):
             w = (end - start) * self.ppsec
             self.painter.setPen(self.segpen)
             self.painter.setBrush(self.segbrush)
-            self.painter.drawRect(x, inactive_top_y, w, inactive_down_y)
+            # self.painter.drawRect(x, inactive_top_y, w, inactive_down_y)
+            self.painter.drawRoundedRect(QRect(x, inactive_top_y, w, inactive_down_y), 6, 6)
 
         # Draw selection
         if self.selection:
@@ -895,6 +897,9 @@ class WaveformWidget(QWidget):
                         self.painter.setPen(self.handle_right_pen)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
                     else:
+                        self.painter.setPen(self.handlepen_shadow)
+                        self.painter.drawLine(x, handle_top_y, x, handle_down_y)
+                        self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
                         self.painter.setPen(self.handlepen)
                         self.painter.drawLine(x, handle_top_y, x, handle_down_y)
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
@@ -905,6 +910,6 @@ class WaveformWidget(QWidget):
 
     def refreshSegmentInfo(self):
         if len(self.active_segments) == 1:
-            self.parent.showSegmentInfo(self.active_segments[0])
+            self.parent.updateSegmentInfo(self.active_segments[0])
         else:
-            self.parent.showSegmentInfo(None)
+            self.parent.updateSegmentInfo(None)
