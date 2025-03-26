@@ -147,6 +147,8 @@ class ReplaceTextCommand(QUndoCommand):
             position of cursor (relative to start of block) before modification
         cursor_pos_new:
             position of cursor (relative to start of block) after modification
+    
+    TODO: replace cursor pos parameters with global a document state
     """
     def __init__(
             self,

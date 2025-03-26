@@ -42,7 +42,6 @@ from PySide6.QtCore import (
     Qt, QSize, QUrl, QEvent,
     QThread, Signal, Slot,
     QSettings,
-    QRegularExpression,
 )
 from PySide6.QtGui import (
     QAction, QActionGroup, QPixmap, QIcon,
@@ -53,7 +52,10 @@ from PySide6.QtGui import (
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
 from waveform_widget import WaveformWidget, AddSegmentCommand
-from text_widget import TextEdit, MyTextBlockUserData, BlockType, Highlighter
+from text_widget import (
+    TextEdit, MyTextBlockUserData, BlockType, Highlighter,
+    DIALOG_CHAR, LINE_BREAK
+)
 from video_widget import VideoWindow
 from recognizer_worker import RecognizerWorker
 from commands import ReplaceTextCommand
@@ -62,6 +64,7 @@ from theme import theme
 from shortcuts import shortcuts
 from version import __version__
 from icons import icons, loadIcons, IconWidget
+from utils import getSentenceSplits, splitForSubtitle
 
 
 # Config
@@ -435,6 +438,104 @@ class MainWindow(QMainWindow):
 
 
     def initUI(self):
+
+        # Menu
+        menu_bar = self.menuBar()
+        #menuBar = QMenuBar()
+        # menuBar.setNativeMenuBar(False)
+        #self.setMenuBar(menuBar)
+
+        file_menu = menu_bar.addMenu("&File")
+        ## Open
+        open_action = QAction("&Open", self)
+        open_action.setShortcut(QKeySequence.Open)
+        open_action.triggered.connect(self.openFile)
+        file_menu.addAction(open_action)
+        ## Save
+        save_action = QAction("&Save", self)
+        save_action.setShortcut(QKeySequence.Save)
+        save_action.triggered.connect(self.saveFile)
+        file_menu.addAction(save_action)
+        ## Save as
+        saveAs_action = QAction("Save as", self)
+        saveAs_action.setShortcut(QKeySequence.SaveAs)
+        saveAs_action.triggered.connect(self.saveFileAs)
+        file_menu.addAction(saveAs_action)
+
+        ## Export sub-menu
+        export_subMenu = file_menu.addMenu("&Export as...")
+        exportSrt_action = QAction("SubRip (.srt)", self)
+        # exportSrt_action.setShortcut(QKeySequence.SaveAs)
+        exportSrt_action.triggered.connect(self.exportSrt)
+        export_subMenu.addAction(exportSrt_action)
+
+        ## Exit
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut(QKeySequence.Quit)
+        exit_action.triggered.connect(self.close)
+        file_menu.addSeparator()
+        file_menu.addAction(exit_action)
+
+        # Operation Menu
+        operation_menu = menu_bar.addMenu("&Operations")
+        ## Auto Segment
+        autoSegmentAction = QAction("Auto segment", self)
+        autoSegmentAction.triggered.connect(self.autoSegment)
+        operation_menu.addAction(autoSegmentAction)
+        ## Auto Transcribe
+        transcribeAction = QAction("Auto transcribe", self)
+        transcribeAction.triggered.connect(self.transcribe)
+        operation_menu.addAction(transcribeAction)
+        ## Adapt to subtitle
+        adaptSubtitleAction = QAction("Adapt to subtitle", self)
+        adaptSubtitleAction.triggered.connect(self.adaptToSubtitle)
+        operation_menu.addAction(adaptSubtitleAction)
+
+
+        # Display Menu
+        display_menu = menu_bar.addMenu("&Display")
+        toggleMisspelling = QAction("Misspelling", self)
+        toggleMisspelling.setCheckable(True)
+        toggleMisspelling.toggled.connect(
+            lambda checked: self.text_edit.highlighter.toggleMisspelling(checked))
+        display_menu.addAction(toggleMisspelling)
+
+        toggleTextMargin = QAction("Subtitle margin", self)
+        toggleTextMargin.setCheckable(True)
+        toggleTextMargin.toggled.connect(
+            lambda checked: self.text_edit.toggleTextMargin(checked))
+        display_menu.addAction(toggleTextMargin)
+
+        ## Coloring sub-menu
+        coloring_subMenu = display_menu.addMenu("Coloring...")
+        coloring_action_group = QActionGroup(self)
+        coloring_action_group.setExclusive(True)
+
+        color_alignment_action = QAction("Unaligned sentences", self)
+        color_alignment_action.setCheckable(True)
+        color_alignment_action.setChecked(True)
+        color_alignment_action.triggered.connect(self.toggleAlignmentColoring)
+        coloring_subMenu.addAction(color_alignment_action)
+        coloring_action_group.addAction(color_alignment_action)
+
+        color_density_action = QAction("Speech density", self)
+        color_density_action.setCheckable(True)
+        color_density_action.triggered.connect(self.toggleDensityColoring)
+        coloring_subMenu.addAction(color_density_action)
+        coloring_action_group.addAction(color_density_action)
+
+        display_menu.addSeparator()
+
+        toggleVideo = QAction("Show video", self)
+        toggleVideo.setCheckable(True)
+        toggleVideo.triggered.connect(self.toggleVideo)
+        display_menu.addAction(toggleVideo)
+        
+        deviceMenu = menu_bar.addMenu("Device")
+        for dev in self.input_devices:
+            deviceMenu.addAction(QAction(dev.description(), self))
+
+
         bottom_layout = QVBoxLayout()
         bottom_layout.setSpacing(0)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
@@ -585,93 +686,7 @@ class MainWindow(QMainWindow):
         #self.setCentralWidget(self.mainWidget)
         self.setCentralWidget(splitter)
         
-        # Menu
-        menu_bar = self.menuBar()
-        #menuBar = QMenuBar()
-        # menuBar.setNativeMenuBar(False)
-        #self.setMenuBar(menuBar)
-
-        file_menu = menu_bar.addMenu("&File")
-        ## Open
-        open_action = QAction("&Open", self)
-        open_action.setShortcut(QKeySequence.Open)
-        open_action.triggered.connect(self.openFile)
-        file_menu.addAction(open_action)
-        ## Save
-        save_action = QAction("&Save", self)
-        save_action.setShortcut(QKeySequence.Save)
-        save_action.triggered.connect(self.saveFile)
-        file_menu.addAction(save_action)
-        ## Save as
-        saveAs_action = QAction("Save as", self)
-        saveAs_action.setShortcut(QKeySequence.SaveAs)
-        saveAs_action.triggered.connect(self.saveFileAs)
-        file_menu.addAction(saveAs_action)
-
-        ## Export sub-menu
-        export_subMenu = file_menu.addMenu("&Export as...")
-        exportSrt_action = QAction("SubRip (.srt)", self)
-        # exportSrt_action.setShortcut(QKeySequence.SaveAs)
-        exportSrt_action.triggered.connect(self.exportSrt)
-        export_subMenu.addAction(exportSrt_action)
-
-        # Exit
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut(QKeySequence.Quit)
-        exit_action.triggered.connect(self.close)
-        file_menu.addSeparator()
-        file_menu.addAction(exit_action)
-
-        operation_menu = menu_bar.addMenu("&Operations")
-        autoSegmentAction = QAction("Auto segment", self)
-        autoSegmentAction.triggered.connect(self.autoSegment)
-        operation_menu.addAction(autoSegmentAction)
-        transcribeAction = QAction("Auto transcribe", self)
-        transcribeAction.triggered.connect(self.transcribe)
-        operation_menu.addAction(transcribeAction)
-
-        display_menu = menu_bar.addMenu("&Display")
-
-        toggleMisspelling = QAction("Misspelling", self)
-        toggleMisspelling.setCheckable(True)
-        toggleMisspelling.toggled.connect(
-            lambda checked: self.text_edit.highlighter.toggleMisspelling(checked))
-        display_menu.addAction(toggleMisspelling)
-
-        toggleTextMargin = QAction("Subtitle margin", self)
-        toggleTextMargin.setCheckable(True)
-        toggleTextMargin.toggled.connect(
-            lambda checked: self.text_edit.toggleTextMargin(checked))
-        display_menu.addAction(toggleTextMargin)
-
-        ## Coloring sub-menu
-        coloring_subMenu = display_menu.addMenu("Coloring...")
-        coloring_action_group = QActionGroup(self)
-        coloring_action_group.setExclusive(True)
-
-        color_alignment_action = QAction("Unaligned sentences", self)
-        color_alignment_action.setCheckable(True)
-        color_alignment_action.setChecked(True)
-        color_alignment_action.triggered.connect(self.toggleAlignmentColoring)
-        coloring_subMenu.addAction(color_alignment_action)
-        coloring_action_group.addAction(color_alignment_action)
-
-        color_density_action = QAction("Speech density", self)
-        color_density_action.setCheckable(True)
-        color_density_action.triggered.connect(self.toggleDensityColoring)
-        coloring_subMenu.addAction(color_density_action)
-        coloring_action_group.addAction(color_density_action)
-
-        display_menu.addSeparator()
-
-        toggleVideo = QAction("Show video", self)
-        toggleVideo.setCheckable(True)
-        toggleVideo.triggered.connect(self.toggleVideo)
-        display_menu.addAction(toggleVideo)
         
-        deviceMenu = menu_bar.addMenu("Device")
-        for dev in self.input_devices:
-            deviceMenu.addAction(QAction(dev.description(), self))
         
         self.status_bar = self.statusBar()
         self.status_label = QLabel("Ready")
@@ -1215,6 +1230,27 @@ class MainWindow(QMainWindow):
             segment_id = self.waveform.addSegment([start, end])
             self.text_edit.insertSentenceWithId('*', segment_id)
         self.waveform.draw()
+    
+
+    def adaptToSubtitle(self):
+        # Get selected blocks
+        cursor = self.text_edit.textCursor()
+        block = self.text_edit.document().findBlock(cursor.selectionStart())
+        end_block = self.text_edit.document().findBlock(cursor.selectionEnd())
+        self.undo_stack.beginMacro("adapt to subtitles")
+        while True:
+            id = self.text_edit.getBlockId(block)
+            if id >= 0:
+                text = block.text()
+                splits = splitForSubtitle(text, 42)
+                if len(splits) > 1:
+                    text = LINE_BREAK.join([ s.strip() for s in splits ])
+                    self.undo_stack.push(ReplaceTextCommand(self.text_edit, block, text, 0, 0))
+                
+            if block == end_block:
+                break
+            block = block.next()
+        self.undo_stack.endMacro()
 
 
     def createNewUtterance(self):
@@ -1382,47 +1418,10 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage('\t\t\t\t'.join(string_parts))
 
 
-    def getSentenceSplits(self, text: str) -> list:
-        sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
-
-        # Metadata  
-        expression = QRegularExpression(r"{\s*(.+?)\s*}")
-        matches = expression.globalMatch(text)
-        while matches.hasNext():
-            match = matches.next()
-            sentence_splits = self.cutSentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength())
-        
-        # Special tokens
-        expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
-        matches = expression.globalMatch(text)
-        while matches.hasNext():
-            match = matches.next()
-            sentence_splits = self.cutSentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength())
-        return sentence_splits
-
-
-    def cutSentence(self, segments: list, start: int, end: int) -> list:
-        """ Subdivide a list of segments further, given a pair of indices """
-        assert start < end
-        splitted = []
-        for seg_start, seg_end in segments:
-            if start >= seg_start and end <= seg_end:
-                # Split this segment
-                if start > seg_start:
-                    pre_segment = (seg_start, start)
-                    splitted.append(pre_segment)
-                if end < seg_end:
-                    post_segment = (end, seg_end)
-                    splitted.append(post_segment)
-            else:
-                splitted.append((seg_start, seg_end))
-        return splitted
-
-
     def getUtteranceDensity(self, id) -> float:
         # Count the number of characters in sentence
         block = self.text_edit.getBlockById(id)
-        sentence_splits = self.getSentenceSplits(block.text())
+        sentence_splits = getSentenceSplits(block.text())
         num_chars = sum([ e-s for s, e in sentence_splits ], 0)
         start, end = self.text_edit.parent.waveform.segments[id]
         dur = end - start

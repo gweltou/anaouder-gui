@@ -28,9 +28,11 @@ from commands import (
     ReplaceTextCommand
 )
 from theme import theme
+from utils import getSentenceSplits, LINE_BREAK, DIALOG_CHAR
 
 
 STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t\u2028'
+
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -182,7 +184,7 @@ class Highlighter(QSyntaxHighlighter):
             match = matches.next()
             self.setFormat(match.capturedStart(), match.capturedLength(), self.sp_tokenFormat)
 
-        sentence_splits = self.text_edit.parent.getSentenceSplits(text)
+        sentence_splits = getSentenceSplits(text)
 
         # Background color
         if self.mode == self.ColorMode.ALIGNMENT:
@@ -332,6 +334,7 @@ class TextEdit(QTextEdit):
     
 
     def getBlockId(self, block: QTextBlock) -> int:
+        """Return utterance id associated to block or -1"""
         if not block.userData():
             return -1
         user_data = block.userData().data
@@ -808,17 +811,17 @@ class TextEdit(QTextEdit):
         if event.matches(QKeySequence.AddTab):
             text = block.text()            
             
-            cursor_line_n = text[:pos_in_block].count('\u2028')
+            cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
             cursor_offset = 0
             lines = []
-            for i, l in enumerate(text.split('\u2028')):
-                if not l.strip().startswith('–'):
-                    lines.append("– " + l.strip())
+            for i, l in enumerate(text.split(LINE_BREAK)):
+                if not l.strip().startswith(DIALOG_CHAR):
+                    lines.append(DIALOG_CHAR + ' ' + l.strip())
                 else:
                     lines.append(l)
                 if i <= cursor_line_n:
                     cursor_offset += len(lines[-1]) - len(l)
-            new_text = '\u2028'.join(lines)
+            new_text = LINE_BREAK.join(lines)
 
             if new_text == text:
                 return
@@ -848,7 +851,7 @@ class TextEdit(QTextEdit):
             if event.modifiers() == Qt.ShiftModifier:
                 left_part = text[:pos_in_block].rstrip()
                 right_part = text[pos_in_block:].lstrip()
-                new_text = left_part + '\u2028' + right_part
+                new_text = left_part + LINE_BREAK + right_part
                 self.undo_stack.push(
                     ReplaceTextCommand(
                         self,
