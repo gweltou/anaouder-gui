@@ -96,11 +96,24 @@ class DeleteTextCommand(QUndoCommand):
 
 
 class InsertBlockCommand(QUndoCommand):
-    """Create a new text block in the document"""
+    """
+    Create a new text block in the document
+    
+    Arguments:
+        after (bool):
+            must be set to True if new block was inserted
+            at the end of parent block
+    """
     def __init__(self, text_edit, position, after=False):
         super().__init__()
         self.text_edit : QTextEdit = text_edit
-        self.position : int = position
+        cursor = self.text_edit.textCursor()
+        cursor.setPosition(position)
+        if after:
+            cursor.movePosition(QTextCursor.EndOfBlock)
+        else:
+            cursor.movePosition(QTextCursor.StartOfBlock)
+        self.position = cursor.position()
         self.after = after
     
     def undo(self):
@@ -112,23 +125,30 @@ class InsertBlockCommand(QUndoCommand):
         # If a block is inserted at the beginning of an utterance block
         # the old block user data will be linked to the new empty block
         # so we need to put it back to the shifted old block
-        cursor : QTextCursor = self.text_edit.textCursor()
+        cursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
 
+        print(f"{cursor.position()=}")
+        if self.after:
+            cursor.movePosition(QTextCursor.EndOfBlock)
+        else:
+            cursor.movePosition(QTextCursor.StartOfBlock)
+        print(f"{cursor.position()=}")
         cursor.insertBlock()
-        block = cursor.block()
-        prev_block = block.previous()
+        print(f"{cursor.position()=}")
+        next_block = cursor.block()
+        prev_block = next_block.previous()
 
         if self.after:
-            if block.userData():
-                prev_block.setUserData(block.userData().clone())
-                block.setUserData(None)
+            if next_block.userData():
+                prev_block.setUserData(next_block.userData().clone())
+                next_block.setUserData(None)
         else:
             if prev_block.userData():
-                block.setUserData(prev_block.userData().clone())
+                next_block.setUserData(prev_block.userData().clone())
                 prev_block.setUserData(None)
 
-        self.text_edit.highlighter.rehighlightBlock(block)
+        self.text_edit.highlighter.rehighlightBlock(next_block)
     
     def id(self):
         return 2

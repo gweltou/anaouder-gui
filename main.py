@@ -1421,6 +1421,8 @@ class MainWindow(QMainWindow):
     def getUtteranceDensity(self, id) -> float:
         # Count the number of characters in sentence
         block = self.text_edit.getBlockById(id)
+        if not block:
+            return 0.0
         sentence_splits = getSentenceSplits(block.text())
         num_chars = sum([ e-s for s, e in sentence_splits ], 0)
         start, end = self.text_edit.parent.waveform.segments[id]

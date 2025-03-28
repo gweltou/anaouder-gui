@@ -65,14 +65,16 @@ def splitForSubtitle(text: str, size: int):
         tuple (str,)
             No split. Same as original string
     """
+
+    # Slit at dialog character
+    if text.count(DIALOG_CHAR) >= 2:
+        idx = text.find(DIALOG_CHAR)    # Ignore first one
+        idx = text.find(DIALOG_CHAR, idx+1)
+        return (text[:idx], text[idx:])
+
     text_segs = getSentenceSplits(text)
     text_len = sum([e-s for s, e in text_segs])
     if text_len > size:
-        # Slit at dialog character
-        if text.count(DIALOG_CHAR) >= 2:
-            idx = text.find(DIALOG_CHAR)    # Ignore first one
-            idx = text.find(DIALOG_CHAR, idx+1)
-            return (text[:idx], text[idx:])
         
         # Split at first dot
         dot_i = -1
@@ -80,7 +82,8 @@ def splitForSubtitle(text: str, size: int):
         l = 0
         for start, end in text_segs:
             t = text[start:end]
-            if (i := t.find('.')) >= 0:
+            i = t.find('.')
+            if i >= 0 and t.find('...') != i:
                 dot_i = i
                 dot_rel_i = l + i
                 break

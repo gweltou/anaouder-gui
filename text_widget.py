@@ -15,7 +15,8 @@ from PySide6.QtGui import (
     QTextCursor, QTextBlockFormat, QTextCharFormat, QFontMetricsF,
     QSyntaxHighlighter,
     QPainter, QPaintEvent,
-    QClipboard
+    QClipboard,
+    QUndoStack
 )
 
 from ostilhou.asr import extract_metadata
@@ -264,7 +265,7 @@ class TextEdit(QTextEdit):
 
         # Disable default undo stack to use our own instead
         self.setUndoRedoEnabled(False)
-        self.undo_stack = self.parent.undo_stack
+        self.undo_stack : QUndoStack = self.parent.undo_stack
                 
         # Signals
         self.cursorPositionChanged.connect(self.cursorChanged)
@@ -519,6 +520,9 @@ class TextEdit(QTextEdit):
 
 
     def setText(self, text: str):
+        """
+        TODO: What is this ?
+        """
         super().setText(text)
 
         # Add utterances metadata
@@ -624,7 +628,7 @@ class TextEdit(QTextEdit):
         i.e. to modify what QTextEdit can paste and how it is being pasted,
         reimplement the virtual canInsertFromMimeData() and insertFromMimeData() functions.
         """
-        return
+        print("paste")
         clipboard = QApplication.clipboard()
         cursor = self.textCursor()
         has_selection = not cursor.selection().isEmpty()
@@ -632,8 +636,11 @@ class TextEdit(QTextEdit):
         if has_selection:
             DeleteSelectedText(self, cursor)
             pos = cursor.selectionStart()
-        self.undo_stack.push(InsertTextCommand(self, clipboard.text(), pos))
         print(clipboard.text())
+        paragraphs = clipboard.text().split('\n')
+        for text in paragraphs:
+            self.undo_stack.push(InsertTextCommand(self, text, pos))
+        return
     
 
     def canInsertFromMimeData(self, source):
@@ -865,7 +872,7 @@ class TextEdit(QTextEdit):
             first_letter_idx = 0
             while first_letter_idx < len(text) and text[first_letter_idx].isspace():
                 first_letter_idx += 1
-
+            
             # Cursor at the beginning of sentence
             if pos_in_block <= first_letter_idx:
                 # Create an empty block before
@@ -881,11 +888,41 @@ class TextEdit(QTextEdit):
             # Cursor in the middle of the sentence
             if pos_in_block > first_letter_idx and pos_in_block < last_letter_idx and not has_selection:
                 # Check if current block has an associated segment
-                if block_data and "seg_id" in block_data.data:
+                if self.isAligned(block):
                     seg_id = block_data.data["seg_id"]
-                    if seg_id in self.parent.waveform.segments:
-                        self.parent.splitUtterance(seg_id, pos_in_block)
-                        return
+                    self.parent.splitUtterance(seg_id, pos_in_block)
+                    return
+                else:
+                    # Unaligned block
+                    left_part = text[:pos_in_block].rstrip()
+                    right_part = text[pos_in_block:].lstrip()
+                    self.undo_stack.beginMacro("split non aligned")
+                    self.undo_stack.push(
+                        InsertBlockCommand(
+                            self,
+                            cursor_pos,
+                            after=True
+                        )
+                    )
+                    cursor.movePosition(QTextCursor.NextBlock)
+                    self.undo_stack.push(
+                        InsertTextCommand(
+                            self,
+                            right_part,
+                            cursor.position()
+                        )
+                    )
+                    self.undo_stack.push(
+                        ReplaceTextCommand(
+                            self,
+                            block,
+                            left_part,
+                            pos_in_block,
+                            len(left_part)+1
+                        )
+                    )
+                    self.undo_stack.endMacro()
+                    return
 
         elif event.key() == Qt.Key_Delete:
             print("Delete")
