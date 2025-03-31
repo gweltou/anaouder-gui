@@ -104,6 +104,9 @@ class WaveformWidget(QWidget):
             # Values at even indexes are the negative value of each sample bin
             # Values at odd indexes are the positive value of each sample bin
             self.buffer = np.zeros(512, dtype=np.float16)
+
+            # Low-pass filter kernel (simple moving average)
+            self.kernel = np.array([1/3, 1/3, 1/3], dtype=np.float16)
         
 
         def get(self, t_left: float, t_right: float, size: int):
@@ -137,12 +140,12 @@ class WaveformWidget(QWidget):
                         ymax += sample
                     else:
                         ymin += sample
-                self.buffer[2*i] = ymin / mul
-                self.buffer[2*i + 1] = ymax / mul
-                # chart.append((ymin / mul, ymax / mul))
+                self.buffer[i] = ymin / mul
+                self.buffer[i + size] = ymax / mul
                 
-            # print(f"bins: {bi_right - bi_left}")
-            return self.buffer[:size*2]
+            # return self.buffer[:size*2]
+            filtered_audio = np.convolve(self.buffer[:size*2], self.kernel, mode='same')
+            return filtered_audio
     
 
 
@@ -905,9 +908,11 @@ class WaveformWidget(QWidget):
             self.pixmap.fill(QColor(240, 240, 240))
             return
         self.pixmap.fill(theme.wf_bg_color)
+
+        width = self.width()
     
         t_right = self._get_time_right()
-        chart = self.waveform.get(self.t_left, t_right, self.width())
+        chart = self.waveform.get(self.t_left, t_right, width)
         
         # if not chart:
         #     return
@@ -954,12 +959,10 @@ class WaveformWidget(QWidget):
         self.painter.setPen(self.wavepen)
         pix_per_sample = self.waveform.ppsec / self.waveform.sr
         if pix_per_sample <= 1.0:
-            # for x, (ymin, ymax) in enumerate(samples):
             ymin, ymax = 0, 0
-            for x in range(self.width()):
-                i = x * 2
-                ymin = round(self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*chart[i]))
-                ymax = round(self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*chart[i+1]))
+            for x in range(width):
+                ymin = round(self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*chart[x]))
+                ymax = round(self.timecode_margin + wf_max_height * (0.5 + ZOOM_Y*chart[x+width]))
                 self.painter.drawLine(x, ymin, x, ymax)
         else:
             pass
