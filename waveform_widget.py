@@ -95,7 +95,6 @@ class WaveformWidget(QWidget):
             - sr: sampling rate
             """
             self.samples = samples
-            # self.samples = samples
             self.sr = sr
             self.ppsec = 150    # pixels per seconds (audio)
 
@@ -116,7 +115,7 @@ class WaveformWidget(QWidget):
             Return an array of tupples, representing highest and lowest mean value
             for every given pixel between two timecodes
             """
-            # Memoisation
+            # Memoization
             if (t_left, t_right, size) == self.last_request:
                 return self.filtered_audio
             self.last_request = (t_left, t_right, size)

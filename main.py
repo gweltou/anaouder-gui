@@ -64,7 +64,7 @@ from theme import theme
 from shortcuts import shortcuts
 from version import __version__
 from icons import icons, loadIcons, IconWidget
-from utils import splitForSubtitle
+from utils import splitForSubtitle, ALL_COMPATIBLE_FORMATS, AUDIO_FORMATS
 
 
 # Config
@@ -441,6 +441,10 @@ class MainWindow(QMainWindow):
 
         self.updateWindowTitle()
         self.setGeometry(50, 50, 800, 600)
+
+        # For file drag&drops
+        self.setAcceptDrops(True)
+
         self.initUI()
 
         self.recognizer_worker = RecognizerWorker()
@@ -925,10 +929,8 @@ class MainWindow(QMainWindow):
                     
 
     def openFile(self, file_path=""):
-        audio_formats = ("mp3", "wav", "m4a", "ogg", "mp4", "mkv", "webm")
-        all_formats = audio_formats + ("ali", "seg", "split", "srt")
-        supported_filter = f"Supported files ({' '.join(['*.'+fmt for fmt in all_formats])})"
-        audio_filter = f"Audio files ({' '.join(['*.'+fmt for fmt in audio_formats])})"
+        supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
+        audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in AUDIO_FORMATS])})"
 
         if not file_path:
             dir = settings.value("editor/last_opened_folder", "")
@@ -948,7 +950,7 @@ class MainWindow(QMainWindow):
         audio_path = None
         first_utt_id = None
 
-        if ext in audio_formats:
+        if ext in AUDIO_FORMATS:
             # Selected file is an audio file, only load audio
             print("Loading audio:", file_path)
             self.loadAudio(file_path)
@@ -957,6 +959,8 @@ class MainWindow(QMainWindow):
             self.updateWindowTitle()
             return
         
+        # self.text_edit.document().blockSignals(True)
+
         if ext == "ali":
             with open(file_path, 'r', encoding="utf-8") as fr:
                 # Find associated audio file in metadata
@@ -986,7 +990,7 @@ class MainWindow(QMainWindow):
 
             if not audio_path:
                 # Check for an audio file with the same basename
-                for audio_ext in audio_formats:
+                for audio_ext in AUDIO_FORMATS:
                     audio_path = os.path.extsep.join((basename, audio_ext))
                     audio_path = os.path.join(folder, audio_path)
                     if os.path.exists(audio_path):
@@ -1018,7 +1022,7 @@ class MainWindow(QMainWindow):
                 print(f"Couldn't find text file {txt_filepath}")
             
             # Check for an associated audio file
-            for audio_ext in audio_formats:
+            for audio_ext in AUDIO_FORMATS:
                 audio_path = os.path.extsep.join((basename, audio_ext))
                 audio_path = os.path.join(folder, audio_path)
                 if os.path.exists(audio_path):
@@ -1028,7 +1032,7 @@ class MainWindow(QMainWindow):
         
         if ext == "srt":
             # Check for an associated audio file
-            for audio_ext in audio_formats:
+            for audio_ext in AUDIO_FORMATS:
                 audio_path = os.path.extsep.join((basename, audio_ext))
                 audio_path = os.path.join(folder, audio_path)
                 if os.path.exists(audio_path):
@@ -1058,6 +1062,8 @@ class MainWindow(QMainWindow):
         if first_utt_id != None:
             block = self.text_edit.getBlockById(first_utt_id)
             self.text_edit.setTextCursor(QTextCursor(block))
+        
+        # self.text_edit.document().blockSignals(False)
         
         # Scroll bar to top
         # scroll_bar = self.text_edit.verticalScrollBar()
@@ -1459,6 +1465,38 @@ class MainWindow(QMainWindow):
             self.undo()
         elif event.matches(QKeySequence.Redo):
             self.redo()
+
+
+    # Drag and drop event handlers
+    def dragEnterEvent(self, event):
+        mime_data = event.mimeData()
+        
+        # Accept the event only if it contains a URL pointing to a text file
+        if mime_data.hasUrls():
+            for url in mime_data.urls():
+                file_path = url.toLocalFile()
+                if file_path.endswith(ALL_COMPATIBLE_FORMATS):
+                    event.acceptProposedAction()
+                    self.status_bar.showMessage(f"Drop to open: {file_path}")
+                    return
+        
+        self.status_bar.showMessage("Cannot open this file type")
+
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+
+    def dropEvent(self, event):
+        mime_data = event.mimeData()
+        
+        if mime_data.hasUrls():
+            for url in mime_data.urls():
+                file_path = url.toLocalFile()
+                self.openFile(file_path)
+                event.acceptProposedAction()
+                break  # Only load the first file
 
 
     def closeEvent(self, event):

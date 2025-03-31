@@ -8,6 +8,9 @@ DIALOG_CHAR = '–'
 LINE_BREAK = '\u2028'
 STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t\u2028'
 
+AUDIO_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm")
+ALL_COMPATIBLE_FORMATS = AUDIO_FORMATS + (".ali", ".seg", ".split", ".srt")
+
 
 
 class MyTextBlockUserData(QTextBlockUserData):

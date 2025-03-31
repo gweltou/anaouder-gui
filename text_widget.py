@@ -33,6 +33,7 @@ from utils import (
     getSentenceSplits,
     MyTextBlockUserData,
     LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
+    AUDIO_FORMATS, ALL_COMPATIBLE_FORMATS
 )
 
 
@@ -157,7 +158,7 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def highlightBlock(self, text):
-        self.text_edit.ignore_events = True
+        self.text_edit.blockSignals(True)
 
         # Find and crop comments
         i = text.find('#')
@@ -169,7 +170,7 @@ class Highlighter(QSyntaxHighlighter):
             block = self.currentBlock()
             cursor = QTextCursor(block)
             cursor.setBlockFormat(QTextBlockFormat())
-            self.text_edit.ignore_events = False
+            self.text_edit.blockSignals(False)
             return
 
         # Metadata  
@@ -194,7 +195,7 @@ class Highlighter(QSyntaxHighlighter):
         elif self.mode == self.ColorMode.DENSITY:
             self.highlightDensity()
         
-        self.text_edit.ignore_events = False
+        self.text_edit.blockSignals(False)
 
         # Check misspelled words
         if not self.show_misspelling:
@@ -492,7 +493,8 @@ class TextEdit(QTextEdit):
         if not block:
             return
         
-        self.ignore_events = True
+        self.blockSignals(True)
+
         cursor = QTextCursor(block)
         print(cursor.block().text())
         print(cursor.selectionStart(), cursor.selectionEnd())
@@ -509,7 +511,7 @@ class TextEdit(QTextEdit):
         if not new_block.text():
             new_block.setUserData(None)
         
-        self.ignore_events = False
+        self.blockSignals(False)
         self.active_sentence_id = None
 
 
