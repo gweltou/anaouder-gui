@@ -29,10 +29,11 @@ from commands import (
     ReplaceTextCommand
 )
 from theme import theme
-from utils import getSentenceSplits, LINE_BREAK, DIALOG_CHAR
-
-
-STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t\u2028'
+from utils import (
+    getSentenceSplits,
+    MyTextBlockUserData,
+    LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
+)
 
 
 
@@ -156,7 +157,7 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def highlightBlock(self, text):
-        self.text_edit.ignore_cursor_change = True
+        self.text_edit.ignore_events = True
 
         # Find and crop comments
         i = text.find('#')
@@ -168,7 +169,7 @@ class Highlighter(QSyntaxHighlighter):
             block = self.currentBlock()
             cursor = QTextCursor(block)
             cursor.setBlockFormat(QTextBlockFormat())
-            self.text_edit.ignore_cursor_change = False
+            self.text_edit.ignore_events = False
             return
 
         # Metadata  
@@ -193,7 +194,7 @@ class Highlighter(QSyntaxHighlighter):
         elif self.mode == self.ColorMode.DENSITY:
             self.highlightDensity()
         
-        self.text_edit.ignore_cursor_change = False
+        self.text_edit.ignore_events = False
 
         # Check misspelled words
         if not self.show_misspelling:
@@ -214,22 +215,6 @@ class Highlighter(QSyntaxHighlighter):
         self.hunspell = get_hunspell_spylls()
         self.show_misspelling = checked
         self.rehighlight()
-
-
-
-class MyTextBlockUserData(QTextBlockUserData):
-    """
-        Fields:
-            - seg_id
-    """
-    def __init__(self, data):
-        super().__init__()
-        self.data = data
-
-    def clone(self):
-        # This method is required by QTextBlockUserData.
-        # It should return a copy of the user data object.
-        return MyTextBlockUserData(self.data)
 
 
 
@@ -279,7 +264,7 @@ class TextEdit(QTextEdit):
         self.activeCharFormat = QTextCharFormat()
         self.activeCharFormat.setFontWeight(QFont.DemiBold)
         self.active_sentence_id = None
-        self.ignore_cursor_change = False
+        self.ignore_events = False
 
         self.scroll_goal = 0.0
         self.timer = QTimer()
@@ -353,15 +338,12 @@ class TextEdit(QTextEdit):
 
 
     def getBlockById(self, id: int) -> QTextBlock:
-        # TODO: rewrite
         doc = self.document()
-        for blockIndex in range(doc.blockCount()):
-            block = doc.findBlockByNumber(blockIndex)
-            if not block.userData():
-                continue
-            userData = block.userData().data
-            if "seg_id" in userData and userData["seg_id"] == id:
+        block = doc.firstBlock()
+        while block.isValid():
+            if self.isAligned(block) and block.userData().data["seg_id"] == id:
                 return block
+            block = block.next()
         return None
     
 
@@ -389,7 +371,15 @@ class TextEdit(QTextEdit):
         return block.blockNumber()
 
 
-    def isAligned(self, block):
+    def getSentenceLength(self, block: QTextBlock) -> int:
+        """Returns length of sentence, stripped of metadata and comments"""
+        if not block:
+            return 0.0
+        sentence_splits = getSentenceSplits(block.text())
+        return sum([ e-s for s, e in sentence_splits ], 0)
+
+
+    def isAligned(self, block: QTextBlock) -> bool:
         block_data = block.userData()
         if block_data and "seg_id" in block_data.data:
             if block_data.data["seg_id"] in self.parent.waveform.segments:
@@ -398,6 +388,10 @@ class TextEdit(QTextEdit):
 
 
     def setSentenceText(self, id: int, text: str):
+        """
+        TODO: move this to a private method of JoinUtterancesCommand ?
+        It is not used anywhere else
+        """
         block = self.getBlockById(id)
         if not block:
             return
@@ -498,7 +492,7 @@ class TextEdit(QTextEdit):
         if not block:
             return
         
-        self.ignore_cursor_change = True
+        self.ignore_events = True
         cursor = QTextCursor(block)
         print(cursor.block().text())
         print(cursor.selectionStart(), cursor.selectionEnd())
@@ -515,7 +509,7 @@ class TextEdit(QTextEdit):
         if not new_block.text():
             new_block.setUserData(None)
         
-        self.ignore_cursor_change = False
+        self.ignore_events = False
         self.active_sentence_id = None
 
 
@@ -654,20 +648,30 @@ class TextEdit(QTextEdit):
         return super().canInsertFromMimeData(source)
     
     
-    def contentsChange(self, pos, charsRemoved, charsAdded):
+    def contentsChange(self, position, charsRemoved, charsAdded):
+        """
+        TODO: get rid of ignore_events
+        """
+        if self.ignore_events:
+            return
+        
         # Update video subtitle if necessary
         self.parent.updateSubtitle(force=True)
 
-
-    def wheelEvent(self, event: QWheelEvent):
-        if self.timer.isActive():
-            self.timer.stop()
-        super().wheelEvent(event)
+        # Update the utterance density field
+        cursor = self.textCursor()
+        cursor.setPosition(position)
+        block = cursor.block()
+        if self.isAligned(block):
+            id = self.getBlockId(block)
+            self.parent.updateUtteranceDensity(id)
+            self.parent.updateSegmentInfo(id)
+            self.parent.waveform.draw()
 
 
     def cursorChanged(self):
         """Set current utterance active"""
-        if self.ignore_cursor_change:
+        if self.ignore_events:
             print("cursor changed event ignored")
             return
         
@@ -679,6 +683,7 @@ class TextEdit(QTextEdit):
             if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
                 id = data["seg_id"]
                 if id == self.active_sentence_id:
+                    self.parent.updateSegmentInfo(id)
                     return
                 self.setActive(id, with_cursor=False)
                 
@@ -686,6 +691,12 @@ class TextEdit(QTextEdit):
             self.deactivateSentence()
             self.parent.waveform.setActive(None)
             self.parent.status_bar.showMessage("")
+
+
+    def wheelEvent(self, event: QWheelEvent):
+        if self.timer.isActive():
+            self.timer.stop()
+        super().wheelEvent(event)
 
 
     def contextMenuEvent(self, event):

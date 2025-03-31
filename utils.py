@@ -1,10 +1,28 @@
 from typing import List
 
 from PySide6.QtCore import QRegularExpression
+from PySide6.QtGui import QColor, QTextBlockUserData
 
 
 DIALOG_CHAR = '–'
 LINE_BREAK = '\u2028'
+STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t\u2028'
+
+
+
+class MyTextBlockUserData(QTextBlockUserData):
+    """
+        Fields:
+            - seg_id
+    """
+    def __init__(self, data):
+        super().__init__()
+        self.data = data
+
+    def clone(self):
+        # This method is required by QTextBlockUserData.
+        # It should return a copy of the user data object.
+        return MyTextBlockUserData(self.data)
 
 
 
@@ -94,3 +112,24 @@ def splitForSubtitle(text: str, size: int):
              return (text[:dot_i+1], text[dot_i+1:])
     
     return (text,)
+
+
+def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
+    """Linear interpolation between two QColors"""
+    t = min(max(t, 0.0), 1.0)
+    red = col1.redF() * (1.0 - t) + col2.redF() * t
+    green = col1.greenF() * (1.0 - t) + col2.greenF() * t
+    blue = col1.blueF() * (1.0 - t) + col2.blueF() * t
+    return QColor(int(red*255), int(green*255), int(blue*255))
+
+
+def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) -> float:
+    """Map a number from a range to another"""
+    #  if n <= min_n:
+    #       return min_m
+    #  elif n >= max_n:
+    #       return max_m
+    dm = (max_m - min_m)
+    dn = (max_n - min_n)
+    d = dm / dn
+    return min_m + (n - min_n) * d
