@@ -104,6 +104,8 @@ class WaveformWidget(QWidget):
             # Values at even indexes are the negative value of each sample bin
             # Values at odd indexes are the positive value of each sample bin
             self.buffer = np.zeros(512, dtype=np.float16)
+            self.filtered_audio = np.zeros(512, dtype=np.float16)
+            self.last_request = (0, 0, 0)
 
             # Low-pass filter kernel (simple moving average)
             self.kernel = np.array([1/3, 1/3, 1/3], dtype=np.float16)
@@ -114,6 +116,11 @@ class WaveformWidget(QWidget):
             Return an array of tupples, representing highest and lowest mean value
             for every given pixel between two timecodes
             """
+            # Memoisation
+            if (t_left, t_right, size) == self.last_request:
+                return self.filtered_audio
+            self.last_request = (t_left, t_right, size)
+
             while len(self.buffer) < 2 * size:
                 # Double the size of the buffer
                 self.buffer = np.resize(self.buffer, 2 * len(self.buffer))
@@ -143,9 +150,8 @@ class WaveformWidget(QWidget):
                 self.buffer[i] = ymin / mul
                 self.buffer[i + size] = ymax / mul
                 
-            # return self.buffer[:size*2]
-            filtered_audio = np.convolve(self.buffer[:size*2], self.kernel, mode='same')
-            return filtered_audio
+            self.filtered_audio = np.convolve(self.buffer[:size*2], self.kernel, mode='same')
+            return self.filtered_audio
     
 
 
