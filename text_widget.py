@@ -230,6 +230,7 @@ class BlockType(Enum):
 
 
 def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
+    """Delete a selected portion of text, using an undoable command"""
     pos = cursor.selectionEnd()
     start_block_number = parent.getBlockNumber(cursor.selectionStart())
     end_block_number = parent.getBlockNumber(cursor.selectionEnd())
@@ -239,7 +240,7 @@ def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
         parent.undo_stack.push(DeleteTextCommand(parent, pos, size, QTextCursor.Left))
     else:
         # Deletion over many blocks
-        pass
+        raise NotImplementedError("Deleting text over many blocks is not permitted")
 
 
 
@@ -612,9 +613,13 @@ class TextEdit(QTextEdit):
 
 
     def cut(self):
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            clipboard = QApplication.clipboard()
+            clipboard.setText(selected_text)
+            DeleteSelectedText(self, cursor)
         return
-        print("cut")
-        super().cut()
     
 
     def paste(self):
@@ -623,15 +628,12 @@ class TextEdit(QTextEdit):
         i.e. to modify what QTextEdit can paste and how it is being pasted,
         reimplement the virtual canInsertFromMimeData() and insertFromMimeData() functions.
         """
-        print("paste")
         clipboard = QApplication.clipboard()
         cursor = self.textCursor()
-        has_selection = not cursor.selection().isEmpty()
         pos = cursor.position()
-        if has_selection:
+        if cursor.hasSelection():
             DeleteSelectedText(self, cursor)
             pos = cursor.selectionStart()
-        print(clipboard.text())
         paragraphs = clipboard.text().split('\n')
         for text in paragraphs:
             self.undo_stack.push(InsertTextCommand(self, text, pos))
@@ -766,8 +768,7 @@ class TextEdit(QTextEdit):
         if not len(char):
             return #super().inputMethodEvent(event)
 
-        has_selection = not cursor.selection().isEmpty()
-        if has_selection:
+        if cursor.hasSelection():
             DeleteSelectedText(self, cursor)
             pos = cursor.selectionStart()
             self.undo_stack.push(InsertTextCommand(self, char, pos))
@@ -798,14 +799,13 @@ class TextEdit(QTextEdit):
             return event.accept()
 
         cursor = self.textCursor()
-        has_selection = not cursor.selection().isEmpty()
         cursor_pos = cursor.position()
 
         # Regular character
         char = event.text()
         if char and char.isprintable():
             print("regular char", char)
-            if has_selection:
+            if cursor.hasSelection():
                 DeleteSelectedText(self, cursor)
                 cursor_pos = cursor.selectionStart()
             self.undo_stack.push(InsertTextCommand(self, char, cursor_pos))
@@ -851,7 +851,7 @@ class TextEdit(QTextEdit):
                 return
             print("ENTER")
 
-            if has_selection:
+            if cursor.hasSelection():
                 DeleteSelectedText(self, cursor)
                 return
 
@@ -888,7 +888,11 @@ class TextEdit(QTextEdit):
                 return
             
             # Cursor in the middle of the sentence
-            if pos_in_block > first_letter_idx and pos_in_block < last_letter_idx and not has_selection:
+            if (
+                pos_in_block > first_letter_idx
+                and pos_in_block < last_letter_idx
+                and not cursor.hasSelection()
+            ):
                 # Check if current block has an associated segment
                 if self.isAligned(block):
                     seg_id = block_data.data["seg_id"]
@@ -929,7 +933,7 @@ class TextEdit(QTextEdit):
         elif event.key() == Qt.Key_Delete:
             print("Delete")
         
-            if has_selection:
+            if cursor.hasSelection():
                 # Special treatment when a selection is active
                 DeleteSelectedText(self, cursor)
                 return
