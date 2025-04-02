@@ -146,7 +146,7 @@ class DeleteUtterancesCommand(QUndoCommand):
     
     def undo(self):
         for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
-            self.seg_id = self.waveform.addSegment(segment, seg_id)
+            seg_id = self.waveform.addSegment(segment, seg_id)
             self.text_edit.insertSentenceWithId(text, seg_id)
         self.waveform.refreshSegmentInfo()
         self.waveform.draw()
@@ -578,14 +578,19 @@ class MainWindow(QMainWindow):
 
         display_menu.addSeparator()
 
-        toggleVideo = QAction("Show video", self)
-        toggleVideo.setCheckable(True)
-        toggleVideo.triggered.connect(self.toggleVideo)
-        display_menu.addAction(toggleVideo)
+        toggle_video = QAction("Show video", self)
+        toggle_video.setCheckable(True)
+        toggle_video.triggered.connect(self.toggleVideo)
+        display_menu.addAction(toggle_video)
         
-        deviceMenu = menu_bar.addMenu("Device")
-        for dev in self.input_devices:
-            deviceMenu.addAction(QAction(dev.description(), self))
+        # deviceMenu = menu_bar.addMenu("Device")
+        # for dev in self.input_devices:
+        #     deviceMenu.addAction(QAction(dev.description(), self))
+        
+        help_menu = menu_bar.addMenu("&Help")
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(self.showAbout)
+        help_menu.addAction(about_action)
 
 
         bottom_layout = QVBoxLayout()
@@ -1094,6 +1099,14 @@ class MainWindow(QMainWindow):
         print(f"{len(self.audio_samples)} samples")
         self.waveform.setSamples(self.audio_samples, 4000)
         self.waveform.draw()
+
+
+    def showAbout(self):
+        QMessageBox.about(
+            self,
+            "About",
+            "Treuzskrivañ emgefreek ha lec'hel e brezhoneg. Eya !"
+        )
 
 
     def updateSubtitle(self, force=False):

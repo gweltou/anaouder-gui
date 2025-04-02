@@ -265,7 +265,6 @@ class TextEdit(QTextEdit):
         self.activeCharFormat = QTextCharFormat()
         self.activeCharFormat.setFontWeight(QFont.DemiBold)
         self.active_sentence_id = None
-        self.ignore_events = False
 
         self.scroll_goal = 0.0
         self.timer = QTimer()
@@ -651,12 +650,6 @@ class TextEdit(QTextEdit):
     
     
     def contentsChange(self, position, charsRemoved, charsAdded):
-        """
-        TODO: get rid of ignore_events
-        """
-        if self.ignore_events:
-            return
-        
         # Update video subtitle if necessary
         self.parent.updateSubtitle(force=True)
 
@@ -673,10 +666,6 @@ class TextEdit(QTextEdit):
 
     def cursorChanged(self):
         """Set current utterance active"""
-        if self.ignore_events:
-            print("cursor changed event ignored")
-            return
-        
         cursor = self.textCursor()
         current_block = cursor.block()
         if current_block.userData():

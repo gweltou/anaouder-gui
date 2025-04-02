@@ -254,7 +254,8 @@ class WaveformWidget(QWidget):
     
 
     def addSegment(self, segment, seg_id=None) -> int:
-        seg_id = seg_id or self.getNewId()
+        if seg_id == None:
+            seg_id = self.getNewId()
         self.segments[seg_id] = segment
         self._to_sort = True
         return seg_id
