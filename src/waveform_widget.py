@@ -25,9 +25,9 @@ from PySide6.QtGui import (
     QColor, QResizeEvent, QWheelEvent, QKeyEvent, QUndoCommand,
 )
 
-from theme import theme
-from shortcuts import shortcuts
-from utils import lerpColor, mapNumber
+from src.theme import theme
+from src.shortcuts import shortcuts
+from src.utils import lerpColor, mapNumber
 
 
 
@@ -777,7 +777,7 @@ class WaveformWidget(QWidget):
                 context.addAction(action_join)
             
             context.addSeparator()
-            action_join = QAction(f"Delete segment{'s' if multi else ''}", self)
+            action_join = QAction(f"Delete segment{'s' if multi else ''} (keep sentence{'s' if multi else ''})", self)
             action_join.triggered.connect(lambda : self.parent.deleteSegments(self.active_segments))
             context.addAction(action_join)
 

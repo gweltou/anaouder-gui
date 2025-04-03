@@ -1,5 +1,6 @@
 import locale
 import platform
+from pathlib import Path
 
 from PySide6.QtCore import (
     QThread, Signal,
@@ -12,6 +13,13 @@ from ostilhou.asr import (
     transcribe_file_timecoded_callback_ffmpeg,
 )
 
+from src.utils import _get_cache_directory
+from src.lang import postProcessText
+
+
+_loaded_model = None
+_loaded_model_path = None
+
 
 
 class RecognizerWorker(QThread):
@@ -19,17 +27,22 @@ class RecognizerWorker(QThread):
     transcribedSegment = Signal(str, float, float, int, int) # Transcribe a pre-defined segment
     transcribed = Signal(str, list) # Create a segment with transcription
     
-    def setModel(self, model_name):
-        self.model = model_name
+    def setModelPath(self, model_path):
+        print("Recognizer model path set to", model_path)
+        self.model_path = model_path
     
     def setArgs(self, audio_path: str, segments: list):
         self.audio_path = audio_path
         self.segments = segments
     
     def run(self):
-        if not is_model_loaded(self.model):
-            self.message.emit(f"Loading {self.model}")
-            load_model(self.model)
+        global _loaded_model, _loaded_model_path
+
+        if self.model_path != _loaded_model_path:
+            self.message.emit(f"Loading {self.model_path}")
+            model_path : Path = _get_cache_directory("models") / self.model_path
+            _loaded_model = load_model(model_path.as_posix())
+            _loaded_model_path = self.model_path
         
         # Stupid hack with locale to avoid commas in json string
         current_locale = locale.getlocale()
@@ -45,8 +58,9 @@ class RecognizerWorker(QThread):
             for i, (seg_id, start, end) in enumerate(self.segments):
                 self.message.emit(f"{i+1}/{len(self.segments)}")
                 # text = transcribe_segment(self.audio_data[start*1000:end*1000])
-                text = transcribe_segment_ffmpeg(self.audio_path, start, end-start, model=None)
+                text = transcribe_segment_ffmpeg(self.audio_path, start, end-start, model=_loaded_model)
                 text = ' '.join(text)
+                text = postProcessText(text)
                 print(f"STT: {text}")
                 self.transcribedSegment.emit(text, start, end, seg_id, i)
         else:
@@ -55,8 +69,9 @@ class RecognizerWorker(QThread):
                 text = []
                 for vosk_token in result:
                     text.append(vosk_token['word'])
+                text = postProcessText(' '.join(text))
                 segment = [result[0]['start'], result[-1]['end']]
-                self.transcribed.emit(' '.join(text), segment)
+                self.transcribed.emit(text, segment)
             
             self.message.emit(f"Transcribing...")
             transcribe_file_timecoded_callback_ffmpeg(self.audio_path, parse_vosk_result)

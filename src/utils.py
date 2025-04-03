@@ -1,4 +1,7 @@
 from typing import List
+import os
+import platform
+from pathlib import Path
 
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtGui import QColor, QTextBlockUserData
@@ -29,6 +32,28 @@ class MyTextBlockUserData(QTextBlockUserData):
 
 
 
+def _get_cache_directory(name: str = None) -> Path:
+    # Use XDG_CACHE_HOME if available, otherwise use default
+    if platform.system() in ("Linux", "Darwin"):
+        default = Path.home() / ".cache"
+    elif platform.system() == "Windows":
+        default = Path(os.getenv("LOCALAPPDATA"))
+    else:
+        raise OSError("Unsupported operating system")
+    cache_base = Path(os.getenv("XDG_CACHE_HOME", default))
+    
+    if name:
+        cache_dir = cache_base / "anaouder" / name
+    else:
+        cache_dir = cache_base / "anaouder"
+    
+    # Create directory if it doesn't exist
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    return cache_dir
+
+
+
 def getSentenceSplits(text: str) -> List[tuple]:
         sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
 
@@ -55,6 +80,7 @@ def getSentenceSplits(text: str) -> List[tuple]:
         return sentence_splits
 
 
+
 def _cutSentence(segments: list, start: int, end: int) -> list:
         """Subdivide a list of segments further, given a pair of indices"""
         assert start < end
@@ -71,6 +97,7 @@ def _cutSentence(segments: list, start: int, end: int) -> list:
             else:
                 splitted.append((seg_start, seg_end))
         return splitted
+
 
 
 def splitForSubtitle(text: str, size: int):
@@ -117,6 +144,7 @@ def splitForSubtitle(text: str, size: int):
     return (text,)
 
 
+
 def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
     """Linear interpolation between two QColors"""
     t = min(max(t, 0.0), 1.0)
@@ -124,6 +152,7 @@ def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
     green = col1.greenF() * (1.0 - t) + col2.greenF() * t
     blue = col1.blueF() * (1.0 - t) + col2.blueF() * t
     return QColor(int(red*255), int(green*255), int(blue*255))
+
 
 
 def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) -> float:
