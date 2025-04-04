@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import os
 from importlib import import_module
 import pkgutil
+import shutil
 
 from ostilhou.asr.models import _is_valid_vosk_model
 
@@ -11,13 +12,6 @@ from src.utils import _get_cache_directory
 
 LANG_MODULES = ['br', 'cy']
 
-from . import br
-
-
-print(f"{__package__=}")
-
-_languages = {}
-_current_language = None #_languages["br"]
 
 
 @dataclass
@@ -29,7 +23,8 @@ class Language:
     pre_process_density:    Callable[[str], str] | None = None
 
     def __post_init__(self):
-        pass
+        self.model_dir = _get_cache_directory(os.path.join("models", self.short_name))
+        self.model_dict = self.get_model_dict()
 
     def load(self):
         pass
@@ -42,12 +37,28 @@ class Language:
     
     def getCachedModelList(self) -> List[str]:
         """Return a list of cached models"""
-        model_cache_dir = _get_cache_directory(os.path.join("models", self.short_name))
-        model_dirs = [subdir.name for subdir in model_cache_dir.iterdir() if _is_valid_vosk_model(subdir)]
-        return model_dirs
+        model_dirs = [subdir.name for subdir in self.model_dir.iterdir() if _is_valid_vosk_model(subdir)]
+        return sorted(model_dirs, reverse=True)
+
+    def getDownloadableModelList(self) -> List[str]:
+        """
+        Return a list of models available for download
+        without the models already downloaded
+        """
+        all_models = [ model for model in self.model_dict ]
+        online_models = set(all_models).difference(set(getCachedModelList()))
+        return sorted(online_models, reverse=True)
 
     def getModelList(self) -> List[str]:
-        return sorted(self.get_model_dict().keys())
+        return sorted(self.get_model_dict().keys(), reverse=True)
+
+    def deleteModel(self, model_name):
+        if model_name in self.getCachedModelList():
+            shutil.rmtree((self.model_dir / model_name).as_posix())
+
+
+_languages = {}
+_current_language : Language = None
 
 
 for lang in LANG_MODULES:
@@ -66,67 +77,32 @@ for lang in LANG_MODULES:
     except:
         print("Wrong Language Type")
 
-# print(_current_language.getCachedModelList())
+
+def getModelCachePath(subdir: str = None) -> str:
+    return _current_language.model_dir
 
 
-
-# def _download(model_name: str, root: str) -> str:
-#     """
-#     Get the requested model path on disk or download it if not present
-#     """
-#     os.makedirs(root, exist_ok=True)
-    
-#     model_path = os.path.join(root, model_name)
-
-#     for model in _model_list:
-#         if model["name"] == model_name:
-#             url = model["url"]
-#             break
-#     else:
-#         raise RuntimeError("Couldn't find requested model url")
-    
-#     download_target = os.path.join(root, os.path.basename(url))
-
-#     print(f"Downloading model from {url}", file=sys.stderr)
-#     with urllib.request.urlopen(url, context=_certifi_context) as source, open(download_target, "wb") as output:
-#         with tqdm(
-#             total=int(source.info().get("Content-Length")),
-#             ncols=80,
-#             unit="iB",
-#             unit_scale=True,
-#             unit_divisor=1024,
-#         ) as loop:
-#             while True:
-#                 buffer = source.read(8192)
-#                 if not buffer:
-#                     break
-
-#                 output.write(buffer)
-#                 loop.update(len(buffer))
-    
-#     with zipfile.ZipFile(download_target, 'r') as zip_ref:
-#         zip_ref.extractall(root)
-
-#     os.remove(download_target)
-
-#     return model_path
+def getModelPath(model_name: str) -> str:
+    """Return the path to a cached model"""
+    if model_name in _current_language.getCachedModelList():
+        return os.path.join(_current_language.model_dir, model_name)
 
 
-def getModel(model_name: str):
-    """
-    Load a Vosk model from the current language
-    If the model is not is not present locally, the model will be downloaded
-    """
-    pass
-    
+def getModelUrl(model_name: str) -> str:
+    if model_name in _current_language.model_dict:
+        return _current_language.model_dict[model_name]["url"]
+
 
 def postProcessText(text: str) -> str:
     return _current_language.postProcessText(text)
 
 
-
 def getLanguages():
     return sorted(_languages.keys())
+
+
+def getCurrentLanguage() -> str:
+    return _current_language.short_name
 
 
 def loadLanguage(lang: str) -> None:
@@ -137,7 +113,19 @@ def loadLanguage(lang: str) -> None:
 
     if lang in _languages:
         _current_language = _languages[lang]
+    
+    print("Language switched to", lang)
 
 
 def getCachedModelList() -> list:
+    """Return the list of models available locally"""
     return _current_language.getCachedModelList()
+
+
+def getDownloadableModelList() -> list:
+    """Return the list of downloadable models"""
+    return _current_language.getDownloadableModelList()
+
+
+def deleteModel(model_name: str):
+    _current_language.deleteModel(model_name)

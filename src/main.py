@@ -61,6 +61,7 @@ from src.text_widget import (
 from src.video_widget import VideoWindow
 from src.recognizer_worker import RecognizerWorker
 from src.commands import ReplaceTextCommand, InsertBlockCommand
+from src.parameters_dialog import ParametersDialog
 from src.export_srt import ExportSRTDialog
 from src.theme import theme
 from src.shortcuts import shortcuts
@@ -526,6 +527,12 @@ class MainWindow(QMainWindow):
         # exportSrt_action.setShortcut(QKeySequence.SaveAs)
         exportSrt_action.triggered.connect(self.exportSrt)
         export_subMenu.addAction(exportSrt_action)
+
+        ## Parameters
+        file_menu.addSeparator()
+        parameters_action = QAction("&Parameters", self)
+        parameters_action.triggered.connect(self.showParameters)
+        file_menu.addAction(parameters_action)
 
         ## Exit
         exit_action = QAction("E&xit", self)
@@ -1038,7 +1045,7 @@ class MainWindow(QMainWindow):
             if not audio_path:
                 # Check for an audio file with the same basename
                 for audio_ext in AUDIO_FORMATS:
-                    audio_path = os.path.extsep.join((basename, audio_ext))
+                    audio_path = basename + audio_ext
                     audio_path = os.path.join(folder, audio_path)
                     if os.path.exists(audio_path):
                         print("Found audio file:", audio_path)
@@ -1070,7 +1077,7 @@ class MainWindow(QMainWindow):
             
             # Check for an associated audio file
             for audio_ext in AUDIO_FORMATS:
-                audio_path = os.path.extsep.join((basename, audio_ext))
+                audio_path = basename + audio_ext
                 audio_path = os.path.join(folder, audio_path)
                 if os.path.exists(audio_path):
                     print("Found audio file:", audio_path)
@@ -1080,7 +1087,7 @@ class MainWindow(QMainWindow):
         if ext == ".srt":
             # Check for an associated audio file
             for audio_ext in AUDIO_FORMATS:
-                audio_path = os.path.extsep.join((basename, audio_ext))
+                audio_path = basename + audio_ext
                 audio_path = os.path.join(folder, audio_path)
                 if os.path.exists(audio_path):
                     print("Found audio file:", audio_path)
@@ -1151,11 +1158,19 @@ class MainWindow(QMainWindow):
         self.waveform.draw()
 
 
+    def showParameters(self):
+        dialog = ParametersDialog(self)
+        result = dialog.exec()
+        if result == QDialog.Accepted:
+            # Here you would process and save the parameters
+            print("Parameters saved")
+
+
     def showAbout(self):
         QMessageBox.about(
             self,
             "About",
-            "Anaouder\nTreuzskrivañ emgefreek ha lec'hel e brezhoneg. Eya !"
+            "Anaouder\nTreuzskrivañ emgefreek ha lec'hel e brezhoneg."
         )
 
 
