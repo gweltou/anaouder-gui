@@ -18,6 +18,7 @@ def get_model_dictionary() -> dict:
             "type": "vosk",
             "description-en": "",
             "url": "https://huggingface.co/techiaith/kaldi-cy/resolve/main/model_cy.tar.gz",
+            "md5": "f2a568e18c6e77b336db5b5e8e22c1b5"
         }
     }
     return models

@@ -2,15 +2,15 @@ from typing import List, Callable
 from dataclasses import dataclass
 import os
 from importlib import import_module
-import pkgutil
 import shutil
+import hashlib
 
 from ostilhou.asr.models import _is_valid_vosk_model
 
 from src.utils import _get_cache_directory
 
 
-LANG_MODULES = ['br', 'cy']
+LANG_MODULES = ['br', 'cy', 'fr']
 
 
 
@@ -97,11 +97,15 @@ def postProcessText(text: str) -> str:
     return _current_language.postProcessText(text)
 
 
-def getLanguages():
+def getLanguages(long_name=False) -> List[str]:
+    if long_name:
+        return sorted([l.name.capitalize() for l in _languages.values()])
     return sorted(_languages.keys())
 
 
-def getCurrentLanguage() -> str:
+def getCurrentLanguage(long_name=False) -> str:
+    if long_name:
+        return _current_language.name
     return _current_language.short_name
 
 
@@ -110,6 +114,14 @@ def loadLanguage(lang: str) -> None:
     Keep Hunspell dictionary in memory for all previously loaded languages
     """
     global _current_language
+
+    lang = lang.lower()
+    if len(lang) > 2:
+        # Long name
+        for l in _languages.values():
+            if lang == l.name:
+                lang = l.short_name
+                break
 
     if lang in _languages:
         _current_language = _languages[lang]
@@ -129,3 +141,8 @@ def getDownloadableModelList() -> list:
 
 def deleteModel(model_name: str):
     _current_language.deleteModel(model_name)
+
+
+def getMd5Sum(model_name: str) -> str:
+    if model_name in _current_language.model_dict:
+        return _current_language.model_dict[model_name].get("md5", "")

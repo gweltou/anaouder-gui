@@ -68,7 +68,7 @@ from src.shortcuts import shortcuts
 from src.version import __version__
 from src.icons import icons, loadIcons, IconWidget
 from src.utils import splitForSubtitle, ALL_COMPATIBLE_FORMATS, AUDIO_FORMATS
-from src.lang import getLanguages, loadLanguage, getCachedModelList
+import src.lang as lang
 
 
 # Config
@@ -419,7 +419,7 @@ class MainWindow(QMainWindow):
         
         self.input_devices = QMediaDevices.audioInputs()
 
-        self.languages = getLanguages()
+        self.languages = lang.getLanguages()
         self.available_models = []
 
         # Current opened file info
@@ -613,10 +613,10 @@ class MainWindow(QMainWindow):
         top_bar_layout.setSpacing(BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        language_selection = QComboBox()
-        language_selection.addItems(self.languages)
-        language_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        language_selection.currentIndexChanged.connect(
+        self.language_selection = QComboBox()
+        self.language_selection.addItems(self.languages)
+        self.language_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.language_selection.currentIndexChanged.connect(
             lambda i: self.changeLanguage(self.languages[i])
         )
         # top_bar_layout.addWidget(language_selection)
@@ -632,7 +632,7 @@ class MainWindow(QMainWindow):
         left_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         left_buttons_layout.addWidget(QLabel("Lang"))
-        left_buttons_layout.addWidget(language_selection)
+        left_buttons_layout.addWidget(self.language_selection)
 
         left_buttons_layout.addWidget(
             IconWidget(icons["head"], BUTTON_SIZE*0.7))
@@ -642,7 +642,7 @@ class MainWindow(QMainWindow):
         self.model_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.model_selection.currentIndexChanged.connect(
             lambda i: self.recognizer_worker.setModelPath(
-                os.path.join(language_selection.currentText(), self.available_models[i])
+                os.path.join(self.language_selection.currentText(), self.available_models[i])
             )
         )
         left_buttons_layout.addWidget(self.model_selection)
@@ -811,11 +811,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(' '.join(title_parts))
 
 
-    def changeLanguage(self, lang: str):
+    def changeLanguage(self, language: str):
         # This shouldn't be callable when a recognizer worker is running
-        print("Loading language", lang)
-        loadLanguage(lang)
-        self.available_models = getCachedModelList()
+        lang.loadLanguage(language)
+        if self.language_selection.currentText() != language:
+            self.language_selection.setItemText(language)
+        self.available_models = lang.getCachedModelList()
         self.model_selection.clear()
         self.model_selection.addItems(self.available_models)
 
@@ -1159,11 +1160,14 @@ class MainWindow(QMainWindow):
 
 
     def showParameters(self):
+        old_language = lang.getCurrentLanguage()
         dialog = ParametersDialog(self)
         result = dialog.exec()
         if result == QDialog.Accepted:
             # Here you would process and save the parameters
             print("Parameters saved")
+        self.changeLanguage(old_language)
+
 
 
     def showAbout(self):

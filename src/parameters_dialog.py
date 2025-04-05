@@ -1,10 +1,12 @@
 import os
-import ssl
 import threading
+
+import ssl
 import certifi
 import urllib.request
 import zipfile
 import tarfile
+import hashlib
 from time import sleep
 
 from PySide6.QtWidgets import (
@@ -61,6 +63,7 @@ class DownloadProgressDialog(QDialog):
         layout.addWidget(self.bytes_label)
         
         self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setFixedWidth(80)
         self.cancel_button.clicked.connect(self.cancel_download)
         layout.addWidget(self.cancel_button)
         
@@ -95,11 +98,12 @@ class DownloadProgressDialog(QDialog):
             certifi_context = ssl.create_default_context(cafile=certifi.where())
             
             # Get file size
-            with urllib.request.urlopen(self.url, context=certifi_context) as source:
+            with urllib.request.urlopen(self.url, timeout=5.0, context=certifi_context) as source:
                 self.file_size = int(source.info().get("Content-Length", 0))
+            print(f"{self.file_size=}")
                 
             req = urllib.request.Request(self.url)
-            with urllib.request.urlopen(req, context=certifi_context) as source, open(self.download_target, "wb") as output:
+            with urllib.request.urlopen(req, timeout=5.0, context=certifi_context) as source, open(self.download_target, "wb") as output:
                 self.n_bytes = 0
                 self.last_percent = 0
                 block_size = 8192
@@ -120,13 +124,23 @@ class DownloadProgressDialog(QDialog):
                         self.signals.progress.emit(percent)
                         self.last_percent = percent
             
+            # Checking MD5 sum
+            if not self.cancelled:
+                self.status_label.setText("Verifying checksum...")
+                md5sum = hashlib.file_digest(open(self.download_target, 'rb'), "md5").hexdigest()
+                if md5sum != lang.getMd5Sum(self.model_name):
+                    print(f"Mismatch in md5 sum:\n\tExpected: {lang.getMd5Sum(self.model_name)}\n\tCalculated: {md5sum}")
+                    # Remove corrupted archive
+                    os.remove(self.download_target)
+                    raise Exception("Wrong MD5 sum !")
+
             # Extract the archive
             if not self.cancelled:
                 self.status_label.setText("Extracting files...")
 
                 if zipfile.is_zipfile(self.download_target):
                     with zipfile.ZipFile(self.download_target, 'r') as zip_ref:
-                        print(zip_ref.filelist)
+                        print([zipinfo.filename for zipinfo in zip_ref.filelist])
                         zip_ref.extractall(self.root)
                 elif tarfile.is_tarfile(self.download_target):
                     tar = tarfile.open(self.download_target)
@@ -283,9 +297,9 @@ class ParametersDialog(QDialog):
         lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         # lang_label = QLabel("Lang")
         self.lang_selection = QComboBox()
-        self.lang_selection.addItems(lang.getLanguages())
+        self.lang_selection.addItems(lang.getLanguages(long_name=True))
         # self.lang_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        self.lang_selection.setCurrentText(lang.getCurrentLanguage())
+        self.lang_selection.setCurrentText(lang.getCurrentLanguage(long_name=True))
         self.lang_selection.currentIndexChanged.connect(self.updateLanguage)
         # lang_layout.addWidget(lang_label)
         lang_layout.addWidget(self.lang_selection)
