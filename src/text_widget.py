@@ -22,14 +22,14 @@ from PySide6.QtGui import (
 from ostilhou.asr import extract_metadata
 from ostilhou.hspell import get_hunspell_spylls
 
-from commands import (
+from src.commands import (
     InsertTextCommand,
     DeleteTextCommand,
     InsertBlockCommand,
     ReplaceTextCommand
 )
-from theme import theme
-from utils import (
+from src.theme import theme
+from src.utils import (
     getSentenceSplits,
     MyTextBlockUserData,
     LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
@@ -956,7 +956,7 @@ class TextEdit(QTextEdit):
 
         elif event.key() == Qt.Key_Backspace:
             print("Backspace")
-            if has_selection:
+            if cursor.hasSelection():
                 # Special treatment when a selection is active
                 DeleteSelectedText(self, cursor)
                 return

@@ -1,4 +1,14 @@
 from typing import List
+import sys
+import os
+import platform
+from pathlib import Path
+
+import ssl
+import certifi
+import urllib
+import zipfile
+from tqdm import tqdm
 
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtGui import QColor, QTextBlockUserData
@@ -29,6 +39,61 @@ class MyTextBlockUserData(QTextBlockUserData):
 
 
 
+def _get_cache_directory(name: str = None) -> Path:
+    # Use XDG_CACHE_HOME if available, otherwise use default
+    if platform.system() in ("Linux", "Darwin"):
+        default = Path.home() / ".cache"
+    elif platform.system() == "Windows":
+        default = Path(os.getenv("LOCALAPPDATA"))
+    else:
+        raise OSError("Unsupported operating system")
+    cache_base = Path(os.getenv("XDG_CACHE_HOME", default))
+    
+    if name:
+        cache_dir = cache_base / "anaouder" / name
+    else:
+        cache_dir = cache_base / "anaouder"
+    
+    # Create directory if it doesn't exist
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    return cache_dir
+
+
+def download(url: str, root: str) -> str:
+    """Download an archive from the web and decompress it"""
+
+    os.makedirs(root, exist_ok=True)
+
+    certifi_context = ssl.create_default_context(cafile=certifi.where())
+
+    download_target = os.path.join(root, os.path.basename(url))
+
+    print(f"Downloading model from {url}", file=sys.stderr)
+    with urllib.request.urlopen(url, context=certifi_context) as source, open(download_target, "wb") as output:
+        with tqdm(
+            total=int(source.info().get("Content-Length")),
+            ncols=80,
+            unit="iB",
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as loop:
+            while True:
+                buffer = source.read(8192)
+                if not buffer:
+                    break
+
+                output.write(buffer)
+                loop.update(len(buffer))
+    
+    with zipfile.ZipFile(download_target, 'r') as zip_ref:
+        zip_ref.extractall(root)
+
+    os.remove(download_target)
+
+    return download_target
+
+
 def getSentenceSplits(text: str) -> List[tuple]:
         sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
 
@@ -55,6 +120,7 @@ def getSentenceSplits(text: str) -> List[tuple]:
         return sentence_splits
 
 
+
 def _cutSentence(segments: list, start: int, end: int) -> list:
         """Subdivide a list of segments further, given a pair of indices"""
         assert start < end
@@ -71,6 +137,7 @@ def _cutSentence(segments: list, start: int, end: int) -> list:
             else:
                 splitted.append((seg_start, seg_end))
         return splitted
+
 
 
 def splitForSubtitle(text: str, size: int):
@@ -117,6 +184,7 @@ def splitForSubtitle(text: str, size: int):
     return (text,)
 
 
+
 def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
     """Linear interpolation between two QColors"""
     t = min(max(t, 0.0), 1.0)
@@ -124,6 +192,7 @@ def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
     green = col1.greenF() * (1.0 - t) + col2.greenF() * t
     blue = col1.blueF() * (1.0 - t) + col2.blueF() * t
     return QColor(int(red*255), int(green*255), int(blue*255))
+
 
 
 def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) -> float:
@@ -136,3 +205,32 @@ def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) 
     dn = (max_n - min_n)
     d = dm / dn
     return min_m + (n - min_n) * d
+
+
+def yuv_to_rgb(y: int, u: int, v: int, color_range='full') -> tuple:
+    # https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/
+    if color_range == 'tv':
+        y = mapNumber(y, 16, 235, 0.0, 1.0)
+        u = mapNumber(u, 128, 235, 0.0, 1.0)
+        v = mapNumber(v, 128, 235, 0.0, 1.0)
+    r = y + 1.5748 * v
+    g = y - 0.187324 * u - 0.468124 * v
+    b = y + 1.8556 * u
+    r = min(max(int(r*256), 0), 255)
+    g = min(max(int(g*256), 0), 255)
+    b = min(max(int(b*256), 0), 255)
+    return (r, g, b)
+
+
+def bt709_to_rgb(g: int, b: int, r: int, color_range='tv') -> tuple:
+    # It's BRG
+    print(color_range)
+    if color_range == 'tv':
+        r = mapNumber(r, 16, 235, 0, 256)
+        g = mapNumber(g, 16, 235, 0, 256)
+        b = mapNumber(b, 16, 235, 0, 256)
+        print(r, g, b)
+    r = min(max(int(r), 0), 255)
+    g = min(max(int(g), 0), 255)
+    b = min(max(int(b), 0), 255)
+    return (r, g, b)

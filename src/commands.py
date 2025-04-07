@@ -8,7 +8,7 @@ from PySide6.QtGui import (
     QTextBlock,
 )
 
-from utils import MyTextBlockUserData
+from src.utils import MyTextBlockUserData
 
 
 

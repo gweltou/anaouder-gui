@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
-from icons import icons
+from src.icons import icons
 
 
 class ExportSRTDialog(QDialog):

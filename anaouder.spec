@@ -1,10 +1,11 @@
-# -*- mode: python ; coding: utf-8 -*-
+# -*- mode: python; coding: utf-8 -*-
 
 import platform
 import os
 
 ARCH = os.getenv("ARCH") or 'x86_64' # Set to 'x86_64', or 'arm64' or 'universal2' for macOS
 
+print("Architecture set to", ARCH)
 
 def get_lib_path(path):
     if platform.system() in ("Linux", "Darwin"):
@@ -64,6 +65,9 @@ a = Analysis(
         ("./icons/folder.png", "icons/"),
     ],
     hiddenimports=[
+        'src.lang.br',
+        'src.lang.cy',
+        'src.lang.fr',
         'PySide6.QtCore',
         'PySide6.QtGui',
         'PySide6.QtWidgets',
