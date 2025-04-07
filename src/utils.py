@@ -205,3 +205,32 @@ def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) 
     dn = (max_n - min_n)
     d = dm / dn
     return min_m + (n - min_n) * d
+
+
+def yuv_to_rgb(y: int, u: int, v: int, color_range='full') -> tuple:
+    # https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/
+    if color_range == 'tv':
+        y = mapNumber(y, 16, 235, 0.0, 1.0)
+        u = mapNumber(u, 128, 235, 0.0, 1.0)
+        v = mapNumber(v, 128, 235, 0.0, 1.0)
+    r = y + 1.5748 * v
+    g = y - 0.187324 * u - 0.468124 * v
+    b = y + 1.8556 * u
+    r = min(max(int(r*256), 0), 255)
+    g = min(max(int(g*256), 0), 255)
+    b = min(max(int(b*256), 0), 255)
+    return (r, g, b)
+
+
+def bt709_to_rgb(g: int, b: int, r: int, color_range='tv') -> tuple:
+    # It's BRG
+    print(color_range)
+    if color_range == 'tv':
+        r = mapNumber(r, 16, 235, 0, 256)
+        g = mapNumber(g, 16, 235, 0, 256)
+        b = mapNumber(b, 16, 235, 0, 256)
+        print(r, g, b)
+    r = min(max(int(r), 0), 255)
+    g = min(max(int(g), 0), 255)
+    b = min(max(int(b), 0), 255)
+    return (r, g, b)

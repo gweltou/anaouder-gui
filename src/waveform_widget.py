@@ -162,6 +162,7 @@ class WaveformWidget(QWidget):
         self.waveform = None
         self.pixmap = None
         self.painter = QPainter()
+
         self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
         self.segpen = QPen(QColor(180, 150, 50, 180), 1)
         self.segbrush = QBrush(QColor(180, 170, 50, 50))
@@ -206,6 +207,8 @@ class WaveformWidget(QWidget):
 
         self.timecode_margin = 17
 
+        self.display_scene_change = False
+
 
     def updateThemeColors(self):
         self.draw()
@@ -225,6 +228,7 @@ class WaveformWidget(QWidget):
         self.segments = dict()
         self.active_segments = []
         self.last_segment_active = -1
+        self.scenes = [] # Scene transition timecodes and colors
 
         self.resizing_handle = None
         self.resizing_id = -1
@@ -747,8 +751,6 @@ class WaveformWidget(QWidget):
 
 
     def contextMenuEvent(self, event):
-        print("context")
-        print(self.active_segments)
         if not self.active_segments and not self.selection_is_active:
             return
         
@@ -906,6 +908,31 @@ class WaveformWidget(QWidget):
                         self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
 
 
+    def _drawSceneChanges(self, t_right: float):
+        height = 12
+        y_pos = self.height()-height
+        opacity = 200
+        for i, (tc, color) in enumerate(self.scenes):
+            if t_right < tc:
+                break
+            if self.t_left < tc:
+                x = (tc - self.t_left) * self.ppsec
+                if i > 0 and self.scenes[i-1][0] <= self.t_left:
+                    prev_color = self.scenes[i-1][1]
+                    w = (tc - self.t_left) * self.ppsec
+                    prev_color = self.scenes[i-1][1]
+                    self.painter.setBrush(QBrush(QColor(prev_color[0], prev_color[1], prev_color[2], opacity)))
+                    self.painter.drawRect(QRect(0, y_pos, w, height))
+                next_tc = self.scenes[i+1][0] if i < len(self.scenes)-1 else self.audio_len
+                w = (next_tc - tc) * self.ppsec
+                self.painter.setBrush(QBrush(QColor(color[0], color[1], color[2], opacity)))
+                self.painter.drawRect(QRect(x, y_pos, w, height))
+            elif tc < self.t_left and i < len(self.scenes)-1 and self.scenes[i+1][0] > t_right:
+                self.painter.setBrush(QBrush(QColor(color[0], color[1], color[2], opacity)))
+                self.painter.drawRect(QRect(0, y_pos, self.width(), height))
+
+
+
     def draw(self):
         if not self.pixmap:
             return
@@ -952,7 +979,11 @@ class WaveformWidget(QWidget):
             else:
                 t_string = f"{minutes}m{secs:02}s"
             self.painter.drawText(t_x-8 * len(t_string) // 2, 12, t_string)
-                
+        
+        # Draw scene transitions
+        if self.display_scene_change and self.scenes:
+            self._drawSceneChanges(t_right)
+
         # Draw head
         if self.t_left <= self.playhead <= t_right:
             t_x = (self.playhead - self.t_left) * self.ppsec

@@ -60,6 +60,7 @@ from src.text_widget import (
 )
 from src.video_widget import VideoWindow
 from src.recognizer_worker import RecognizerWorker
+from src.scene_detector import SceneDetectWorker
 from src.commands import ReplaceTextCommand, InsertBlockCommand
 from src.parameters_dialog import ParametersDialog
 from src.export_srt import ExportSRTDialog
@@ -332,36 +333,36 @@ class JoinUtterancesCommand(QUndoCommand):
 
 
 class AlignWithSelectionCommand(QUndoCommand):
-    def __init__(self, text_edit, waveform, block):
+    def __init__(self, parent, block):
         super().__init__()
-        self.text_edit : TextEdit = text_edit
-        self.waveform : WaveformWidget = waveform
+        self.parent = parent
         self.block : QTextBlock = block
         self.old_block_data = None
         if self.block.userData():
             self.old_block_data = self.block.userData().data.copy()
-        self.selection = self.waveform.selection[:]
-        self.prev_active_segments = self.waveform.active_segments[:]
-        self.prev_last_segment_active = self.waveform.last_segment_active
+        self.selection = self.parent.waveform.selection[:]
+        self.prev_active_segments = self.parent.waveform.active_segments[:]
+        self.prev_last_segment_active = self.parent.waveform.last_segment_active
         self.segment_id = None
     
     def undo(self):
-        self.text_edit.setActive(self.prev_last_segment_active, update_waveform=False)
+        self.parent.text_edit.setActive(self.prev_last_segment_active, update_waveform=False)
         self.block.setUserData(self.old_block_data)
-        self.text_edit.highlighter.rehighlightBlock(self.block)
+        self.parent.text_edit.highlighter.rehighlightBlock(self.block)
 
-        self.waveform.selection = self.selection
-        self.waveform.active_segments = self.prev_active_segments[:]
-        self.waveform.last_segment_active = self.prev_last_segment_active
-        del self.waveform.segments[self.segment_id]
-        self.waveform.draw()
+        self.parent.waveform.selection = self.selection
+        self.parent.waveform.active_segments = self.prev_active_segments[:]
+        self.parent.waveform.last_segment_active = self.prev_last_segment_active
+        del self.parent.waveform.segments[self.segment_id]
+        self.parent.waveform.draw()
 
     def redo(self):
-        self.segment_id = self.waveform.addSegment(self.waveform.selection, self.segment_id)
-        self.waveform.deselect()
-        self.text_edit.setBlockId(self.block, self.segment_id)
-        self.text_edit.highlighter.rehighlightBlock(self.block)
-        self.waveform.draw()
+        self.segment_id = self.parent.waveform.addSegment(self.parent.waveform.selection, self.segment_id)
+        self.parent.waveform.deselect()
+        self.parent.text_edit.setBlockId(self.block, self.segment_id)
+        self.parent.updateUtteranceDensity(self.segment_id)
+        self.parent.text_edit.highlighter.rehighlightBlock(self.block)
+        self.parent.waveform.draw()
 
 
 
@@ -544,13 +545,13 @@ class MainWindow(QMainWindow):
         # Operation Menu
         operation_menu = menu_bar.addMenu("&Operations")
         ## Auto Segment
-        autoSegmentAction = QAction("Auto segment", self)
-        autoSegmentAction.triggered.connect(self.autoSegment)
-        operation_menu.addAction(autoSegmentAction)
+        autoSegment_action = QAction("Auto segment", self)
+        autoSegment_action.triggered.connect(self.autoSegment)
+        operation_menu.addAction(autoSegment_action)
         ## Auto Transcribe
-        transcribeAction = QAction("Auto transcribe", self)
-        transcribeAction.triggered.connect(self.transcribe)
-        operation_menu.addAction(transcribeAction)
+        transcribe_action = QAction("Auto transcribe", self)
+        transcribe_action.triggered.connect(self.transcribe)
+        operation_menu.addAction(transcribe_action)
         ## Adapt to subtitle
         adaptSubtitleAction = QAction("Adapt to subtitle", self)
         adaptSubtitleAction.triggered.connect(self.adaptToSubtitle)
@@ -570,6 +571,13 @@ class MainWindow(QMainWindow):
         toggleTextMargin.toggled.connect(
             lambda checked: self.text_edit.toggleTextMargin(checked))
         display_menu.addAction(toggleTextMargin)
+
+        self.scene_detect_action = QAction("Scene transitions", self)
+        self.scene_detect_action.setCheckable(True)
+        self.scene_detect_action.toggled.connect(
+            lambda checked: self.toggleSceneDetect(checked))
+        display_menu.addAction(self.scene_detect_action)
+
 
         ## Coloring sub-menu
         coloring_subMenu = display_menu.addMenu("Coloring...")
@@ -1150,7 +1158,7 @@ class MainWindow(QMainWindow):
                 file_path = mp3_file
 
         print("Rendering waveform...")
-        import numpy as np
+        # import numpy as np
         # self.audio_samples = get_samples(self.audio_path, 4000)
         self.audio_samples = get_samples(self.audio_path, 4000)
 
@@ -1343,6 +1351,28 @@ class MainWindow(QMainWindow):
         self.text_edit.highlighter.setMode(Highlighter.ColorMode.DENSITY)
 
 
+    @Slot(float, list)
+    def newSceneChange(self, time, color):
+        self.waveform.scenes.append((time, color))
+        self.waveform.draw()
+        print("scene change", time, color)
+
+
+    def toggleSceneDetect(self, checked):
+        if checked and self.audio_samples.any():
+            print("Detect scene changes")
+            self.waveform.display_scene_change = True
+            self.waveform.scenes.clear()
+            self.scene_detector = SceneDetectWorker()
+            self.scene_detector.setFilePath(self.audio_path)
+            self.scene_detector.new_scene.connect(self.newSceneChange)
+            self.scene_detector.start()
+        else:
+            self.waveform.display_scene_change = False
+            self.waveform.draw()
+            self.scene_detect_action.setChecked(False)
+
+
     def autoSegment(self):
         print("Finding segments")
         # Check if there is an active selection
@@ -1511,7 +1541,7 @@ class MainWindow(QMainWindow):
 
 
     def alignUtterance(self, block:QTextBlock):
-        self.undo_stack.push(AlignWithSelectionCommand(self.text_edit, self.waveform, block))
+        self.undo_stack.push(AlignWithSelectionCommand(self, block))
 
 
     def deleteUtterances(self, segments_id:List) -> None:
