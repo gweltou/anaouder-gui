@@ -19,6 +19,7 @@ def resourcePath(relative_path):
 icons = dict()
 
 def loadIcons():
+    """This function must be called AFTER creating a QGuiApplication"""
     icons["play"] = QIcon(resourcePath("icons/play-button.png"))
     icons["pause"] = QIcon(resourcePath("icons/pause.png"))
     icons["replay"] = QIcon(resourcePath("icons/replay.png"))

@@ -342,8 +342,11 @@ class TextEdit(QTextEdit):
         doc = self.document()
         block = doc.firstBlock()
         while block.isValid():
-            if self.isAligned(block) and block.userData().data["seg_id"] == id:
-                return block
+            # if self.isAligned(block) and block.userData().data["seg_id"] == id:
+            if block.userData():
+                # print(f"{block.userData().data=}")
+                if block.userData().data["seg_id"] == id:
+                    return block
             block = block.next()
         return None
     

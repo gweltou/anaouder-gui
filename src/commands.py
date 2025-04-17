@@ -212,17 +212,15 @@ class ReplaceTextCommand(QUndoCommand):
         self.cursor_pos_new = cursor_pos_new or cursor_pos_old
     
     def undo(self):
-        # block = self.text_edit.document().findBlockByNumber(self.block_number)
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.StartOfBlock)
         cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         cursor.insertText(self.old_text)
-        cursor.setPosition(self.block.position() + self.cursor_pos_old)
-        self.text_edit.setTextCursor(cursor)
+        self.text_edit.setTextCursor(self.cursor)
 
     def redo(self):
-        # block = self.text_edit.document().findBlockByNumber(self.block_number)
+        self.cursor = self.text_edit.textCursor()
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.StartOfBlock)

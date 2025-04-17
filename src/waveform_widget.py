@@ -38,22 +38,20 @@ Handle = Enum("Handle", ["LEFT", "RIGHT"])
 
 class ResizeSegmentCommand(QUndoCommand):
     """
-    TODO: Rewrite, parameters are dumb. Should be (id, new_seg)
     """
     def __init__(
             self,
             waveform_widget,
             segment_id,
-            old_segment,
-            side,
+            handle,
             time_pos
         ):
         super().__init__()
         self.waveform_widget : WaveformWidget = waveform_widget
         self.segment_id : int = segment_id
-        self.old_segment : list = old_segment[:]
+        self.old_segment : list = waveform_widget.segments[segment_id][:]
         self.time_pos : float = time_pos
-        self.side : Handle = side
+        self.side : Handle = handle
     
     def undo(self):
         self.waveform_widget.segments[self.segment_id] = self.old_segment[:]
@@ -66,8 +64,6 @@ class ResizeSegmentCommand(QUndoCommand):
             self.waveform_widget.segments[self.segment_id][0] = self.time_pos
         elif self.side == Handle.RIGHT:
             self.waveform_widget.segments[self.segment_id][1] = self.time_pos
-        print(f"{self.old_segment=}")
-        print(f"{self.time_pos=}")
         self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
         self.waveform_widget.draw()
         
@@ -115,6 +111,7 @@ class WaveformWidget(QWidget):
             Return an array of tupples, representing highest and lowest mean value
             for every given pixel between two timecodes
             """
+            assert t_left >= 0.0
             # Memoization
             if (t_left, t_right, size) == self.last_request:
                 return self.filtered_audio
@@ -328,7 +325,6 @@ class WaveformWidget(QWidget):
                 adapted_ppsec = self.width() / adapted_window_dur
                 self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
                 self.ppsec_goal = adapted_ppsec
-                print(self.ppsec, adapted_ppsec)
                 if not self.timer.isActive():
                         self.timer.start(1000/30)
 
@@ -381,11 +377,11 @@ class WaveformWidget(QWidget):
 
         self.t_left += self.scroll_vel
         # Check for outside of wavefom positions
-        if self.t_left < 0.0:
-            self.t_left = 0.0
-            self.scroll_vel = 0
         if self._get_time_right() >= self.audio_len:
             self.t_left = self.audio_len - self.width() / self.ppsec
+            self.scroll_vel = 0
+        if self.t_left < 0.0:
+            self.t_left = 0.0
             self.scroll_vel = 0
         
         if abs(self.scroll_vel) < 0.001 and abs(self.ppsec_goal - self.ppsec) < 0.1:
@@ -474,7 +470,7 @@ class WaveformWidget(QWidget):
 
     def zoomIn(self, factor=1.333, position=0.5):
         prev_ppsec = self.ppsec
-        self.ppsec = min(ZOOM_MAX, self.ppsec * factor)
+        self.ppsec = min(self.ppsec * factor, ZOOM_MAX)
 
         delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
         self.t_left -= delta_s * position
@@ -486,8 +482,8 @@ class WaveformWidget(QWidget):
     def zoomOut(self, factor=1.333, position=0.5):
         prev_ppsec = self.ppsec
         new_ppsec = self.ppsec / factor
-        if new_ppsec * len(self.waveform.samples) / self.waveform.sr >= self.width():
-            self.ppsec = max(new_ppsec, ZOOM_MIN)
+        min_ppsec = self.width() / self.audio_len
+        self.ppsec = max(new_ppsec, min_ppsec, ZOOM_MIN)
 
         delta_s = (self.width() / self.ppsec) - (self.width() / prev_ppsec)
         self.t_left -= delta_s * position
@@ -510,7 +506,6 @@ class WaveformWidget(QWidget):
                 ResizeSegmentCommand(
                     self,
                     self.last_segment_active,
-                    current_segment,
                     self.resizing_handle,
                     time_pos
                 )
