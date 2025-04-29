@@ -499,8 +499,7 @@ class TextEdit(QTextEdit):
         self.blockSignals(True)
 
         cursor = QTextCursor(block)
-        print(cursor.block().text())
-        print(cursor.selectionStart(), cursor.selectionEnd())
+        
         # Remove block
         if block.text() == '':
             cursor.deletePreviousChar()

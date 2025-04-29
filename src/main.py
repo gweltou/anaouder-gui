@@ -25,10 +25,9 @@ from ostilhou.asr import (
     load_segments_data, load_text_data,
     extract_metadata,
 )
-from ostilhou.asr.models import load_model, get_available_models
 from ostilhou.asr.dataset import format_timecode, METADATA_PATTERN
 from ostilhou.audio import (
-    convert_to_mp3, get_audio_samples, get_audiofile_info
+    convert_to_mp3, get_audiofile_info
 )
 from ostilhou.audio.audio_numpy import split_to_segments, get_samples
 from ostilhou.utils import sec2hms
@@ -130,7 +129,11 @@ class CreateNewUtteranceCommand(QUndoCommand):
         self.parent.waveform._to_sort = True
         self.parent.waveform.draw()
 
+        self.parent.text_edit.setTextCursor(self.cursor)
+
     def redo(self):
+        self.cursor = self.parent.text_edit.textCursor()
+
         self.seg_id = self.parent.waveform.addSegment(self.segment, self.seg_id)
         self.parent.text_edit.insertSentenceWithId('*', self.seg_id)
         self.parent.text_edit.setActive(self.seg_id, update_waveform=True)
@@ -141,11 +144,11 @@ class CreateNewUtteranceCommand(QUndoCommand):
 
 
 class DeleteUtterancesCommand(QUndoCommand):
-    def __init__(self, parent, seg_ids):
+    def __init__(self, parent, seg_ids: list):
         super().__init__()
         self.text_edit = parent.text_edit
         self.waveform = parent.waveform
-        self.seg_ids : list = seg_ids
+        self.seg_ids = seg_ids
         self.segments = [self.waveform.segments[seg_id] for seg_id in seg_ids]
         self.texts = [self.text_edit.getBlockById(seg_id).text() for seg_id in seg_ids]
     
@@ -171,14 +174,13 @@ class DeleteUtterancesCommand(QUndoCommand):
 class SplitUtteranceCommand(QUndoCommand):
     def __init__(
             self,
-            text_edit: TextEdit,
-            waveform: WaveformWidget,
+            parent,
             seg_id:int,
             pos:int
         ):
         super().__init__()
-        self.text_edit = text_edit
-        self.waveform = waveform
+        self.text_edit : TextEdit = parent.text_edit
+        self.waveform : WaveformWidget = parent.waveform
         self.pos = pos
         self.text = self.text_edit.getBlockById(seg_id).text()
 
@@ -263,11 +265,11 @@ class SplitUtteranceCommand(QUndoCommand):
 
 
 class JoinUtterancesCommand(QUndoCommand):
-    def __init__(self, text_edit, waveform, seg_ids, pos):
+    def __init__(self, parent, seg_ids, pos=None):
         super().__init__()
-        self.text_edit : TextEdit = text_edit
-        self.waveform : WaveformWidget = waveform
-        self.seg_ids = sorted(seg_ids, key=lambda x: waveform.segments[x][0])
+        self.text_edit : TextEdit = parent.text_edit
+        self.waveform : WaveformWidget = parent.waveform
+        self.seg_ids = sorted(seg_ids, key=lambda x: self.waveform.segments[x][0])
         self.segments : list
         self.segments_text : list
         
@@ -288,18 +290,23 @@ class JoinUtterancesCommand(QUndoCommand):
         for i, id in enumerate(self.seg_ids[1:]):
             cursor.insertBlock()
             cursor.insertText(self.segments_text[i+1])
-            user_data = {"is_utt": True, "seg_id": id}
+            user_data = {"seg_id": id}
             cursor.block().setUserData(MyTextBlockUserData(user_data))
             self.waveform.segments[id] = self.segments[i+1]
             self.text_edit.deactivateSentence(id)
         
         cursor.setPosition(self.pos)
-        self.text_edit.setTextCursor(cursor)
+        
+        self.text_edit.setTextCursor(cursor) # TODO: clean that
+        self.text_edit.setTextCursor(self.cursor_backup)
+
         self.waveform._to_sort = True
         self.waveform.draw()
         self.waveform.refreshSegmentInfo()
 
     def redo(self):
+        self.cursor_backup = self.text_edit.textCursor()
+
         self.segments = [self.waveform.segments[id] for id in self.seg_ids]
         self.segments_text = [self.text_edit.getBlockById(id).text() for id in self.seg_ids]
 
@@ -335,21 +342,18 @@ class JoinUtterancesCommand(QUndoCommand):
 class AlignWithSelectionCommand(QUndoCommand):
     def __init__(self, parent, block):
         super().__init__()
-        self.parent = parent
+        self.parent : MainWindow = parent
         self.block : QTextBlock = block
         self.old_block_data = None
-        if self.block.userData():
-            self.old_block_data = self.block.userData().data.copy()
         self.selection = self.parent.waveform.selection[:]
         self.prev_active_segments = self.parent.waveform.active_segments[:]
         self.prev_last_segment_active = self.parent.waveform.last_segment_active
-        self.segment_id = None
+        self.segment_id = self.parent.waveform.getNewId()
     
     def undo(self):
         self.parent.text_edit.setActive(self.prev_last_segment_active, update_waveform=False)
-        self.block.setUserData(self.old_block_data)
+        self.block.setUserData(MyTextBlockUserData(self.old_block_data))
         self.parent.text_edit.highlighter.rehighlightBlock(self.block)
-
         self.parent.waveform.selection = self.selection
         self.parent.waveform.active_segments = self.prev_active_segments[:]
         self.parent.waveform.last_segment_active = self.prev_last_segment_active
@@ -357,7 +361,9 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.parent.waveform.draw()
 
     def redo(self):
-        self.segment_id = self.parent.waveform.addSegment(self.parent.waveform.selection, self.segment_id)
+        if self.block.userData():
+            self.old_block_data = self.block.userData().data.copy()
+        self.parent.waveform.addSegment(self.selection, self.segment_id)
         self.parent.waveform.deselect()
         self.parent.text_edit.setBlockId(self.block, self.segment_id)
         self.parent.updateUtteranceDensity(self.segment_id)
@@ -367,22 +373,27 @@ class AlignWithSelectionCommand(QUndoCommand):
 
 
 class DeleteSegmentsCommand(QUndoCommand):
-    def __init__(
-            self,
-            text_edit: TextEdit,
-            waveform: WaveformWidget,
-            seg_ids: list
-        ):
+    # def __init__(
+    #         self,
+    #         text_edit: TextEdit,
+    #         waveform: WaveformWidget,
+    #         seg_ids: list
+    #     ):
+    def __init__(self, parent, seg_ids):
         super().__init__()
-        self.text_edit = text_edit
-        self.waveform = waveform
+        self.text_edit : TextEdit = parent.text_edit
+        self.waveform : WaveformWidget = parent.waveform
         self.seg_ids = seg_ids
-        self.segments = { id: waveform.segments[id] for id in seg_ids if id in waveform.segments }
+        self.segments = {
+            id: self.waveform.segments[id]
+            for id in seg_ids if id in self.waveform.segments
+        }
     
     def undo(self):
         for seg_id, segment in self.segments.items():
             self.waveform.segments[seg_id] = segment
             block = self.text_edit.getBlockById(seg_id)
+            print(f"{block=}")
             self.text_edit.highlighter.rehighlightBlock(block)
 
         self.waveform.active_segments = list(self.segments.keys())
@@ -1029,7 +1040,7 @@ class MainWindow(QMainWindow):
                 # Find associated audio file in metadata
                 for line in fr.readlines():
                     line = line.strip()
-                    text, metadata = extract_metadata(line)
+                    _, metadata = extract_metadata(line)
                     match = re.search(r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line)
                     if match:
                         # An utterance sentence
@@ -1122,9 +1133,9 @@ class MainWindow(QMainWindow):
         self.updateWindowTitle()
 
         # Select the first utterance
-        if first_utt_id != None:
-            block = self.text_edit.getBlockById(first_utt_id)
-            self.text_edit.setTextCursor(QTextCursor(block))
+        # if first_utt_id != None:
+        #     block = self.text_edit.getBlockById(first_utt_id)
+        #     self.text_edit.setTextCursor(QTextCursor(block))
         
         # self.text_edit.document().blockSignals(False)
         
@@ -1421,7 +1432,6 @@ class MainWindow(QMainWindow):
 
     def createNewUtterance(self):
         """Create a new segment from waveform selection"""
-        print("New segment action", self.waveform.selection)
         self.undo_stack.push(CreateNewUtteranceCommand(self, self.waveform.selection))
         self.waveform.deselect()
         self.waveform.draw()
@@ -1485,7 +1495,7 @@ class MainWindow(QMainWindow):
     #     self.undo_stack.push(SplitUtteranceCommand(self.text_edit, self.waveform, seg_id, pc))
 
     def splitUtterance(self, id:int, position:int):
-        """Split audio segment at pc [0.0-1.0] of total duration"""
+        """Split audio segment, given a char position in sentence"""
         block = self.text_edit.getBlockById(id)
         text = block.text()
         start, end = self.waveform.segments[id]
@@ -1505,7 +1515,6 @@ class MainWindow(QMainWindow):
             ResizeSegmentCommand(
                 self.waveform,
                 id,
-                [start, end],
                 Handle.RIGHT,
                 left_seg[1]
             )
@@ -1537,7 +1546,7 @@ class MainWindow(QMainWindow):
         Join many segments in one.
         Keep the segment ID of the earliest segment among the selected ones.
         """
-        self.undo_stack.push(JoinUtterancesCommand(self.text_edit, self.waveform, segments_id, pos))
+        self.undo_stack.push(JoinUtterancesCommand(self, segments_id, pos))
 
 
     def alignUtterance(self, block:QTextBlock):
@@ -1549,7 +1558,7 @@ class MainWindow(QMainWindow):
 
 
     def deleteSegments(self, segments_id:List) -> None:
-        self.undo_stack.push(DeleteSegmentsCommand(self.text_edit, self.waveform, segments_id))
+        self.undo_stack.push(DeleteSegmentsCommand(self, segments_id))
 
 
     def selectAll(self):
@@ -1564,11 +1573,9 @@ class MainWindow(QMainWindow):
 
 
     def undo(self):
-        print("undo")
         self.undo_stack.undo()
 
     def redo(self):
-        print("redo")
         self.undo_stack.redo()
 
 

@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QUndoCommand
+from PySide6.QtGui import QUndoCommand, QTextCursor
 
 from src.main import (
     MainWindow,
@@ -51,8 +51,8 @@ def getDocumentState() -> dict:
     state["blocks"] = []
     block = main_window.text_edit.document().firstBlock()
     while block.isValid():
-        text = block.text()
-        data = block.userData().data if block.userData() else {}
+        text = block.text()[:]
+        data = deepcopy(block.userData().data) if block.userData() else {}
         state["blocks"].append((text, data))
         block = block.next()
     state["segments"] = deepcopy(main_window.waveform.segments)
@@ -111,14 +111,9 @@ def test_join_utterances():
     undo_redo_command(JoinUtterancesCommand(main_window, [2, 3, 4], 40))
 
 
-# def test_align_with_selection():
-#     loadDocument()
-#     undo_redo_function()
-
-
-# def test_delete_segments():
-#     loadDocument()
-#     undo_redo_function()
+def test_delete_segments():
+    loadDocument()
+    undo_redo_command(DeleteSegmentsCommand(main_window, [2, 3, 4]))
 
 
 def test_resize_segment():
@@ -129,3 +124,20 @@ def test_resize_segment():
                     Handle.LEFT,
                     17
                 ))
+
+
+def test_align_with_selection():
+    loadDocument()
+    block = main_window.text_edit.document().findBlockByNumber(3)
+    # cursor = main_window.text_edit.textCursor()
+    # cursor.movePosition(QTextCursor.Start)
+    # print(cursor.position())
+    # cursor.movePosition(QTextCursor.NextBlock, QTextCursor.MoveAnchor, 2)
+    # print(cursor.position())
+
+    block_id = main_window.text_edit.getBlockId(block)
+    segment = main_window.waveform.segments[block_id][:]
+    print(f"\n{block_id=} {segment=}")
+    main_window.undo_stack.push(DeleteSegmentsCommand(main_window, [block_id]))
+    main_window.waveform.selection = segment
+    undo_redo_command(AlignWithSelectionCommand(main_window, block))
