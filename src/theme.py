@@ -23,6 +23,9 @@ class Theme():
     wf_bg_color_light = Qt.white
     wf_bg_color_dark = QColor(30, 30, 30)
     wf_bg_color = wf_bg_color_light
+    wf_timeline_light = QColor(210, 210, 210)
+    wf_timeline_dark = QColor(180, 180, 180)
+    wf_timeline = wf_timeline_light
 
 
     def updateThemeColors(self, mode: Qt.ColorScheme):
@@ -36,6 +39,7 @@ class Theme():
             self.margin = self.margin_dark
 
             self.wf_bg_color = self.wf_bg_color_dark
+            self.wf_timeline = self.wf_timeline_dark
         else:
             self.green = self.green_light
             self.red = self.red_light
@@ -44,6 +48,7 @@ class Theme():
             self.margin = self.margin_light
 
             self.wf_bg_color = self.wf_bg_color_light
+            self.wf_timeline = self.wf_timeline_light
 
 
 theme = Theme()

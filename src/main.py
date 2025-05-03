@@ -436,7 +436,7 @@ class MainWindow(QMainWindow):
 
         # Current opened file info
         self.file_path = file_path
-        self.file_fps = None
+        self.media_fps : int = None
 
         self.video_window = None
         self.audio_output = QAudioOutput()
@@ -1021,13 +1021,13 @@ class MainWindow(QMainWindow):
         basename, ext = os.path.splitext(filename)
         print(f"{file_path=}\n{filename=}\n{basename=}")
         ext = ext.lower()
-        audio_path = None
+        media_path = None
         first_utt_id = None
 
         if ext in AUDIO_FORMATS:
             # Selected file is an audio file, only load audio
             print("Loading audio:", file_path)
-            self.loadAudio(file_path)
+            self.loadMediaFile(file_path)
             print("done")
             # self.file_path = ""
             self.updateWindowTitle()
@@ -1057,22 +1057,22 @@ class MainWindow(QMainWindow):
                         self.text_edit.addText(line)
 
                     # Check for an "audio_path" metadata in current line
-                    if not audio_path and "audio-path" in metadata:
+                    if not media_path and "audio-path" in metadata:
                         dir = os.path.split(file_path)[0]
-                        audio_path = os.path.join(dir, metadata["audio-path"])
-                        audio_path = os.path.normpath(audio_path)
+                        media_path = os.path.join(dir, metadata["audio-path"])
+                        media_path = os.path.normpath(media_path)
 
-            if not audio_path:
+            if not media_path:
                 # Check for an audio file with the same basename
                 for audio_ext in AUDIO_FORMATS:
-                    audio_path = basename + audio_ext
-                    audio_path = os.path.join(folder, audio_path)
-                    if os.path.exists(audio_path):
-                        print("Found audio file:", audio_path)
+                    media_path = basename + audio_ext
+                    media_path = os.path.join(folder, media_path)
+                    if os.path.exists(media_path):
+                        print("Found audio file:", media_path)
                         break
             
-            if audio_path and os.path.exists(audio_path):
-                self.loadAudio(audio_path)
+            if media_path and os.path.exists(media_path):
+                self.loadMediaFile(media_path)
 
         if ext in (".seg", ".split"):
             segments = load_segments_data(file_path)
@@ -1097,21 +1097,21 @@ class MainWindow(QMainWindow):
             
             # Check for an associated audio file
             for audio_ext in AUDIO_FORMATS:
-                audio_path = basename + audio_ext
-                audio_path = os.path.join(folder, audio_path)
-                if os.path.exists(audio_path):
-                    print("Found audio file:", audio_path)
-                    self.loadAudio(audio_path)
+                file_path = basename + audio_ext
+                file_path = os.path.join(folder, file_path)
+                if os.path.exists(file_path):
+                    print("Found audio file:", file_path)
+                    self.loadMediaFile(file_path)
                     break
         
         if ext == ".srt":
             # Check for an associated audio file
             for audio_ext in AUDIO_FORMATS:
-                audio_path = basename + audio_ext
-                audio_path = os.path.join(folder, audio_path)
-                if os.path.exists(audio_path):
-                    print("Found audio file:", audio_path)
-                    self.loadAudio(audio_path)
+                file_path = basename + audio_ext
+                file_path = os.path.join(folder, file_path)
+                if os.path.exists(file_path):
+                    print("Found audio file:", file_path)
+                    self.loadMediaFile(file_path)
                     break
             
             # Subtitle file
@@ -1145,15 +1145,18 @@ class MainWindow(QMainWindow):
         # scroll_bar.setValue(scroll_bar.minimum())
 
 
-    def loadAudio(self, file_path):
+    def loadMediaFile(self, file_path):
         ## XXX: Use QAudioDecoder instead maybe ?
 
         metadata = get_audiofile_info(file_path)
         if "r_frame_rate" in metadata:
             print(f"Stream {metadata["r_frame_rate"]=}")
-            self.file_fps = metadata["r_frame_rate"]
-        if "avg_frame_rate" in metadata:
-            print(f"Stream {metadata["avg_frame_rate"]=}")
+            if match := re.match(r"(\d+)/1", metadata["r_frame_rate"]):
+                self.media_fps = 1 / int(match[1])
+            else:
+                print(f"Unrecognized FPS: {metadata["r_frame_rate"]}")
+        # if "avg_frame_rate" in metadata:
+        #     print(f"Stream {metadata["avg_frame_rate"]=}")
 
         self.stop()
         self.player.setSource(QUrl.fromLocalFile(file_path))
@@ -1370,12 +1373,13 @@ class MainWindow(QMainWindow):
 
 
     def toggleSceneDetect(self, checked):
-        if checked and self.audio_samples.any():
+        if checked and self.media_fps:
             print("Detect scene changes")
             self.waveform.display_scene_change = True
             self.waveform.scenes.clear()
             self.scene_detector = SceneDetectWorker()
             self.scene_detector.setFilePath(self.audio_path)
+            self.scene_detector.setThreshold(0.2)
             self.scene_detector.new_scene.connect(self.newSceneChange)
             self.scene_detector.start()
         else:
@@ -1613,7 +1617,7 @@ class MainWindow(QMainWindow):
         if mime_data.hasUrls():
             for url in mime_data.urls():
                 file_path = url.toLocalFile()
-                self.openFile(file_path)
+                self.loadMediaFile(file_path)
                 event.acceptProposedAction()
                 break  # Only load the first file
 
@@ -1639,6 +1643,9 @@ class MainWindow(QMainWindow):
         
         if self.video_window:
             self.video_window.close()
+        if self.scene_detector.isRunning():
+            self.scene_detector.end()
+            self.scene_detector.wait()
         return super().closeEvent(event)
     
     
