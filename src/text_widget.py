@@ -33,7 +33,7 @@ from src.utils import (
     getSentenceSplits,
     MyTextBlockUserData,
     LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
-    AUDIO_FORMATS, ALL_COMPATIBLE_FORMATS
+    MEDIA_FORMATS, ALL_COMPATIBLE_FORMATS
 )
 
 

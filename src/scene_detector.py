@@ -114,7 +114,7 @@ class SceneDetectWorker(QThread):
                 if match_time and match_color:
                     # print(line.strip())
                     # print(f"Time (s): {match_time[1]}, color: {match_color.groups()}")
-                    color = [int(c) for c in match_color.groups()]
+                    color = ( int(c) for c in match_color.groups() )
                     color = yuv_to_rgb(*color, color_range='tv')
                     self.new_scene.emit(float(match_time[1]), color)
         except Exception as e:

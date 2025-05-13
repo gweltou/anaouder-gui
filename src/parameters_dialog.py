@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, QObject, Slot, Qt
 
 import src.lang as lang
-from src.utils import download, _get_cache_directory
+from src.utils import download, get_cache_directory
+from src.config import FUTURE
 
 
 class DownloadSignals(QObject):
@@ -94,6 +95,7 @@ class DownloadProgressDialog(QDialog):
     def download_worker(self):
         """Worker function that runs in a separate thread to download the file"""
         try:
+            print(f"Downloading {self.url}")
             os.makedirs(self.root, exist_ok=True)
             certifi_context = ssl.create_default_context(cafile=certifi.where())
             
@@ -292,18 +294,19 @@ class ParametersDialog(QDialog):
         tab = QWidget()
         main_layout = QVBoxLayout()
 
-        lang_group = QGroupBox("Language")
-        lang_layout = QHBoxLayout()
-        lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        # lang_label = QLabel("Lang")
-        self.lang_selection = QComboBox()
-        self.lang_selection.addItems(lang.getLanguages(long_name=True))
-        # self.lang_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        self.lang_selection.setCurrentText(lang.getCurrentLanguage(long_name=True))
-        self.lang_selection.currentIndexChanged.connect(self.updateLanguage)
-        # lang_layout.addWidget(lang_label)
-        lang_layout.addWidget(self.lang_selection)
-        lang_group.setLayout(lang_layout)
+        if FUTURE:
+            lang_group = QGroupBox("Language")
+            lang_layout = QHBoxLayout()
+            lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            # lang_label = QLabel("Lang")
+            self.lang_selection = QComboBox()
+            self.lang_selection.addItems(lang.getLanguages(long_name=True))
+            # self.lang_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+            self.lang_selection.setCurrentText(lang.getCurrentLanguage(long_name=True))
+            self.lang_selection.currentIndexChanged.connect(self.updateLanguage)
+            # lang_layout.addWidget(lang_label)
+            lang_layout.addWidget(self.lang_selection)
+            lang_group.setLayout(lang_layout)
         
         # Model lists section
         models_layout = QHBoxLayout()
@@ -389,7 +392,8 @@ class ParametersDialog(QDialog):
         
         # Add all components to main layout
         # main_layout.addLayout(lang_layout)
-        main_layout.addWidget(lang_group)
+        if FUTURE:
+            main_layout.addWidget(lang_group)
         main_layout.addLayout(models_layout)
         # main_layout.addWidget(settings_group)
         # main_layout.addWidget(cache_group)

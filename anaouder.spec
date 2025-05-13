@@ -4,6 +4,7 @@ import platform
 import os
 
 ARCH = os.getenv("ARCH") or 'x86_64' # Set to 'x86_64', or 'arm64' or 'universal2' for macOS
+DEBUG = True
 
 print("Architecture set to", ARCH)
 
@@ -103,13 +104,13 @@ exe = EXE(
     a.datas,
     [],
     name='Anaouder',
-    debug=False,
+    debug=DEBUG,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,	# Some kind of compression, lighter but slower
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=DEBUG,
     disable_windowed_traceback=False,
     argv_emulation=True, # Needed by macOS, apparently
     target_arch=ARCH,
@@ -131,7 +132,7 @@ app = BUNDLE(
         'NSRequiresAquaSystemAppearance': 'False',  # Add this for proper menu integration
 	    'CFBundleDisplayName': 'Anaouder',
         'CFBundleName': 'Anaouder',
-        'CFBundleIdentifier': 'com.yourdomain.anaouder',
+        'CFBundleIdentifier': 'com.otilde.anaouder',
         'CFBundleShortVersionString': '1.0.0',
         'CFBundleVersion': '1.0.0',
         'NSAppleScriptEnabled': False,

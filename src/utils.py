@@ -18,8 +18,8 @@ DIALOG_CHAR = '–'
 LINE_BREAK = '\u2028'
 STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t\u2028'
 
-AUDIO_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm")
-ALL_COMPATIBLE_FORMATS = AUDIO_FORMATS + (".ali", ".seg", ".split", ".srt")
+MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm")
+ALL_COMPATIBLE_FORMATS = MEDIA_FORMATS + (".ali", ".seg", ".split", ".srt")
 
 
 
@@ -39,7 +39,7 @@ class MyTextBlockUserData(QTextBlockUserData):
 
 
 
-def _get_cache_directory(name: str = None) -> Path:
+def get_cache_directory(name: str = None) -> Path:
     # Use XDG_CACHE_HOME if available, otherwise use default
     if platform.system() in ("Linux", "Darwin"):
         default = Path.home() / ".cache"

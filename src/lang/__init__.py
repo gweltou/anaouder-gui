@@ -7,7 +7,7 @@ import hashlib
 
 from ostilhou.asr.models import _is_valid_vosk_model
 
-from src.utils import _get_cache_directory
+from src.utils import get_cache_directory
 
 
 LANG_MODULES = ['br', 'cy', 'fr']
@@ -23,7 +23,7 @@ class Language:
     pre_process_density:    Callable[[str], str] | None = None
 
     def __post_init__(self):
-        self.model_dir = _get_cache_directory(os.path.join("models", self.short_name))
+        self.model_dir = get_cache_directory(os.path.join("models", self.short_name))
         self.model_dict = self.get_model_dict()
 
     def load(self):

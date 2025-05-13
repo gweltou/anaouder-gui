@@ -13,7 +13,7 @@ from ostilhou.asr import (
     transcribe_file_timecoded_callback_ffmpeg,
 )
 
-from src.utils import _get_cache_directory
+from src.utils import get_cache_directory
 from src.lang import postProcessText
 
 
@@ -40,7 +40,7 @@ class RecognizerWorker(QThread):
 
         if self.model_path != _loaded_model_path:
             self.message.emit(f"Loading {self.model_path}")
-            model_path : Path = _get_cache_directory("models") / self.model_path
+            model_path : Path = get_cache_directory("models") / self.model_path
             _loaded_model = load_model(model_path.as_posix())
             _loaded_model_path = self.model_path
         

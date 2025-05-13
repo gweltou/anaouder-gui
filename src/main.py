@@ -8,7 +8,6 @@ Terminology
     Utterance: The association of an audio `Segment` and a text `Sentence`
 """
 
-
 import sys
 import os.path
 from typing import List, Optional
@@ -19,6 +18,7 @@ static_ffmpeg.add_paths()
 import re
 from datetime import timedelta
 import srt
+import numpy as np
 #from scipy.io import wavfile
 
 from ostilhou.asr import (
@@ -52,6 +52,14 @@ from PySide6.QtGui import (
 )
 from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
 
+from src.config import DEFAULT_LANGUAGE, FUTURE
+from src.utils import splitForSubtitle, ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS
+from src.cache_system import CacheSystem
+from src.version import __version__
+
+from src.theme import theme
+from src.icons import icons, loadIcons, IconWidget
+from src.shortcuts import shortcuts
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand, Handle
 from src.text_widget import (
     TextEdit, MyTextBlockUserData, BlockType, Highlighter,
@@ -63,20 +71,13 @@ from src.scene_detector import SceneDetectWorker
 from src.commands import ReplaceTextCommand, InsertBlockCommand
 from src.parameters_dialog import ParametersDialog
 from src.export_srt import ExportSRTDialog
-from src.theme import theme
-from src.shortcuts import shortcuts
-from src.version import __version__
-from src.icons import icons, loadIcons, IconWidget
-from src.utils import splitForSubtitle, ALL_COMPATIBLE_FORMATS, AUDIO_FORMATS
 import src.lang as lang
 
 
 # Config
-HEADER = """
-"""
+WAVEFORM_SAMPLERATE = 1500
 AUTOSEG_MAX_LENGTH = 15
 AUTOSEG_MIN_LENGTH = 3
-
 
 
 
@@ -259,7 +260,6 @@ class SplitUtteranceCommand(QUndoCommand):
         self.text_edit.setTextCursor(cursor)
         # self.waveform.refreshSegmentInfo()
 
-        print("end redo split")
         self.text_edit.document().blockSignals(False)
 
 
@@ -393,7 +393,6 @@ class DeleteSegmentsCommand(QUndoCommand):
         for seg_id, segment in self.segments.items():
             self.waveform.segments[seg_id] = segment
             block = self.text_edit.getBlockById(seg_id)
-            print(f"{block=}")
             self.text_edit.highlighter.rehighlightBlock(block)
 
         self.waveform.active_segments = list(self.segments.keys())
@@ -426,6 +425,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self, file_path=""):
         super().__init__()
+        
+        self.cache = CacheSystem()
         
         self.audio_samples = None
         
@@ -469,7 +470,8 @@ class MainWindow(QMainWindow):
         self.recognizer_worker.transcribedSegment.connect(self.updateSegmentTranscription)
         self.recognizer_worker.transcribed.connect(self.addUtterance)
         self.recognizer_worker.finished.connect(self.progress_bar.hide)
-        # self.recognizer_worker.setModel(self.available_models[0])
+        
+        self.scene_detector = None
 
         # Keyboard shortcuts
         ## Search
@@ -492,7 +494,7 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
         shortcut.activated.connect(self.selectAll)
 
-        self.changeLanguage('br')
+        self.changeLanguage(DEFAULT_LANGUAGE)
 
         # if len(self.available_models) == 0:
         #     # Download a model
@@ -632,14 +634,6 @@ class MainWindow(QMainWindow):
         top_bar_layout.setSpacing(BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.language_selection = QComboBox()
-        self.language_selection.addItems(self.languages)
-        self.language_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        self.language_selection.currentIndexChanged.connect(
-            lambda i: self.changeLanguage(self.languages[i])
-        )
-        # top_bar_layout.addWidget(language_selection)
-
 
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(0, 0, 0, 0)
@@ -650,8 +644,15 @@ class MainWindow(QMainWindow):
         left_buttons_layout.setSpacing(BUTTON_SPACING)
         left_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        left_buttons_layout.addWidget(QLabel("Lang"))
-        left_buttons_layout.addWidget(self.language_selection)
+        self.language_selection = QComboBox()
+        self.language_selection.addItems(self.languages)
+        self.language_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.language_selection.currentIndexChanged.connect(
+            lambda i: self.changeLanguage(self.languages[i])
+        )
+        if FUTURE:
+            left_buttons_layout.addWidget(QLabel("Lang"))
+            left_buttons_layout.addWidget(self.language_selection)
 
         left_buttons_layout.addWidget(
             IconWidget(icons["head"], BUTTON_SIZE*0.7))
@@ -841,6 +842,7 @@ class MainWindow(QMainWindow):
 
 
     def _saveFile(self, filepath):
+        """Save file to disk"""
         filepath = os.path.abspath(filepath)
         print("Saving file to", filepath)
 
@@ -889,8 +891,15 @@ class MainWindow(QMainWindow):
         self.updateWindowTitle()
 
     def saveFileAs(self):
+        print(f"fn saveFileAs {self.file_path=}")
+        basename = os.path.basename(self.file_path)
+        basename, ext = os.path.splitext(basename)
+        if os.path.splitext(basename)[1].lower() == ".ali":
+            basename += ext
+        else:
+            basename += ".ali"
         dir = settings.value("editor/last_opened_folder", "")
-        filepath, _ = QFileDialog.getSaveFileName(self, "Save File", dir)
+        filepath, _ = QFileDialog.getSaveFileName(self, "Save File", os.path.join(dir, basename))
         self.waveform.ctrl_pressed = False
         if not filepath:
             return
@@ -1004,7 +1013,7 @@ class MainWindow(QMainWindow):
 
     def openFile(self, file_path=""):
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
-        audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in AUDIO_FORMATS])})"
+        audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
 
         if not file_path:
             dir = settings.value("editor/last_opened_folder", "")
@@ -1012,11 +1021,11 @@ class MainWindow(QMainWindow):
             if not file_path:
                 return
             settings.setValue("editor/last_opened_folder", os.path.split(file_path)[0])
-            # settings.setValue("editor/last_opened_file", filepath)
         
         self.waveform.clear()
         self.text_edit.clear()
 
+        self.file_path = file_path
         folder, filename = os.path.split(file_path)
         basename, ext = os.path.splitext(filename)
         print(f"{file_path=}\n{filename=}\n{basename=}")
@@ -1024,17 +1033,15 @@ class MainWindow(QMainWindow):
         media_path = None
         first_utt_id = None
 
-        if ext in AUDIO_FORMATS:
-            # Selected file is an audio file, only load audio
-            print("Loading audio:", file_path)
+        if ext in MEDIA_FORMATS:
+            # Selected file is an audio of video file
+            print("Loading media:", file_path)
             self.loadMediaFile(file_path)
             print("done")
-            # self.file_path = ""
             self.updateWindowTitle()
             return
         
         # self.text_edit.document().blockSignals(True)
-
         if ext == ".ali":
             with open(file_path, 'r', encoding="utf-8") as fr:
                 # Find associated audio file in metadata
@@ -1064,7 +1071,7 @@ class MainWindow(QMainWindow):
 
             if not media_path:
                 # Check for an audio file with the same basename
-                for audio_ext in AUDIO_FORMATS:
+                for audio_ext in MEDIA_FORMATS:
                     media_path = basename + audio_ext
                     media_path = os.path.join(folder, media_path)
                     if os.path.exists(media_path):
@@ -1096,7 +1103,7 @@ class MainWindow(QMainWindow):
                 print(f"Couldn't find text file {txt_filepath}")
             
             # Check for an associated audio file
-            for audio_ext in AUDIO_FORMATS:
+            for audio_ext in MEDIA_FORMATS:
                 file_path = basename + audio_ext
                 file_path = os.path.join(folder, file_path)
                 if os.path.exists(file_path):
@@ -1106,7 +1113,7 @@ class MainWindow(QMainWindow):
         
         if ext == ".srt":
             # Check for an associated audio file
-            for audio_ext in AUDIO_FORMATS:
+            for audio_ext in MEDIA_FORMATS:
                 file_path = basename + audio_ext
                 file_path = os.path.join(folder, file_path)
                 if os.path.exists(file_path):
@@ -1128,8 +1135,21 @@ class MainWindow(QMainWindow):
 
             self.waveform.draw()
 
+        doc_metadata = self.cache.get_doc_metadata(file_path)
+        if "cursor_pos" in doc_metadata:
+            cursor = self.text_edit.textCursor()
+            cursor.setPosition(doc_metadata["cursor_pos"])
+            self.text_edit.setTextCursor(cursor)
+        if "scroll_pos" in doc_metadata:
+            self.text_edit.verticalScrollBar().setValue(doc_metadata["scroll_pos"])
+        if "waveform_pos" in doc_metadata:
+            self.waveform.t_left = doc_metadata["waveform_pos"]
+            self.waveform.draw()
+        if "waveform_pps" in doc_metadata:
+            self.waveform.ppsec = doc_metadata["waveform_pps"]
+            self.waveform.waveform.ppsec = doc_metadata["waveform_pps"]
+        self.text_edit.setEnabled(True)
 
-        self.file_path = file_path
         self.updateWindowTitle()
 
         # Select the first utterance
@@ -1147,37 +1167,55 @@ class MainWindow(QMainWindow):
 
     def loadMediaFile(self, file_path):
         ## XXX: Use QAudioDecoder instead maybe ?
-
-        metadata = get_audiofile_info(file_path)
-        if "r_frame_rate" in metadata:
-            print(f"Stream {metadata["r_frame_rate"]=}")
-            if match := re.match(r"(\d+)/1", metadata["r_frame_rate"]):
-                self.media_fps = 1 / int(match[1])
-            else:
-                print(f"Unrecognized FPS: {metadata["r_frame_rate"]}")
-        # if "avg_frame_rate" in metadata:
-        #     print(f"Stream {metadata["avg_frame_rate"]=}")
+        self.toggleSceneDetect(False)
 
         self.stop()
         self.player.setSource(QUrl.fromLocalFile(file_path))
-        self.audio_path = file_path
+        self.media_path = file_path
+
+        self.media_metadata = self.cache.get_media_metadata(file_path)
+
+        if "fps" in self.media_metadata:
+            self.media_fps = self.media_metadata["fps"]
+        else:
+            # Check video framerate
+            audio_metadata = get_audiofile_info(file_path)
+            if "r_frame_rate" in audio_metadata:
+                print(f"Stream {audio_metadata["r_frame_rate"]=}")
+                if match := re.match(r"(\d+)/1", audio_metadata["r_frame_rate"]):
+                    self.media_fps = int(match[1])
+                    self.cache.update_media_metadata(self.media_path, {"fps": self.media_fps})
+                else:
+                    print(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
+            # if "avg_frame_rate" in metadata:
+            #     print(f"Stream {metadata["avg_frame_rate"]=}")
+
 
         # Convert to MP3 in case of MKV file
         # (problems with PyDub it seems)
-        _, ext = os.path.splitext(file_path)
-        if ext.lower() == ".mkv":
-            mp3_file = file_path[:-4] + ".mp3"
-            if not os.path.exists(mp3_file):
-                convert_to_mp3(file_path, mp3_file)
-                file_path = mp3_file
+        # _, ext = os.path.splitext(file_path)
+        # if ext.lower() == ".mkv":
+        #     mp3_file = file_path[:-4] + ".mp3"
+        #     if not os.path.exists(mp3_file):
+        #         convert_to_mp3(file_path, mp3_file)
+        #         file_path = mp3_file
 
-        print("Rendering waveform...")
-        # import numpy as np
-        # self.audio_samples = get_samples(self.audio_path, 4000)
-        self.audio_samples = get_samples(self.audio_path, 4000)
-
+        # Load waveform
+        cached_waveform = self.cache.get_waveform(self.media_path)
+        if cached_waveform is not None:
+            print("Using cached waveform")
+            self.audio_samples = cached_waveform
+        else:
+            print("Rendering waveform...")
+            self.audio_samples = get_samples(self.media_path, WAVEFORM_SAMPLERATE)
+            self.cache.update_media_metadata(self.media_path, {"waveform": self.audio_samples})
+        
         print(f"{len(self.audio_samples)} samples")
-        self.waveform.setSamples(self.audio_samples, 4000)
+        self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
+
+        if "scenes" in self.media_metadata:
+            self.toggleSceneDetect(True)
+
         self.waveform.draw()
 
 
@@ -1365,25 +1403,38 @@ class MainWindow(QMainWindow):
         self.text_edit.highlighter.setMode(Highlighter.ColorMode.DENSITY)
 
 
-    @Slot(float, list)
+    @Slot(float, tuple)
     def newSceneChange(self, time, color):
-        self.waveform.scenes.append((time, color))
+        self.waveform.scenes.append((time, color[0], color[1], color[2]))
         self.waveform.draw()
-        print("scene change", time, color)
+    
 
+    @Slot()
+    def sceneChangeFinished(self):
+        self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
+        
 
     def toggleSceneDetect(self, checked):
-        if checked and self.media_fps:
-            print("Detect scene changes")
+        print("fn toggleSceneDetect", checked)
+        if checked and "fps" in self.media_metadata:
             self.waveform.display_scene_change = True
-            self.waveform.scenes.clear()
-            self.scene_detector = SceneDetectWorker()
-            self.scene_detector.setFilePath(self.audio_path)
-            self.scene_detector.setThreshold(0.2)
-            self.scene_detector.new_scene.connect(self.newSceneChange)
-            self.scene_detector.start()
+            if "scenes" in self.media_metadata:
+                print("Using cached scene transitions")
+                self.waveform.scenes = self.media_metadata["scenes"]
+                self.waveform.draw()
+            else:
+                print("Detect scene changes")
+                self.scene_detector = SceneDetectWorker()
+                self.scene_detector.setFilePath(self.media_path)
+                self.scene_detector.setThreshold(0.2)
+                self.scene_detector.new_scene.connect(self.newSceneChange)
+                self.scene_detector.finished.connect(self.sceneChangeFinished)
+                self.scene_detector.start()
+            self.scene_detect_action.setChecked(True)
         else:
             self.waveform.display_scene_change = False
+            if self.scene_detector and self.scene_detector.isRunning():
+                self.scene_detector.end()
             self.waveform.draw()
             self.scene_detect_action.setChecked(False)
 
@@ -1395,13 +1446,13 @@ class MainWindow(QMainWindow):
         end_frame = len(self.audio_samples)
         if self.waveform.selection_is_active:
             selection_start, selection_end = self.waveform.selection
-            start_frame = int(selection_start * 4000)
-            end_frame = int(selection_end * 4000)
+            start_frame = int(selection_start * WAVEFORM_SAMPLERATE)
+            end_frame = int(selection_end * WAVEFORM_SAMPLERATE)
             self.waveform.deselect()
 
-        segments = split_to_segments(self.audio_samples[start_frame:end_frame], 4000, 10, 0.05)
+        segments = split_to_segments(self.audio_samples[start_frame:end_frame], WAVEFORM_SAMPLERATE, 10, 0.05)
         segments = [
-            (start+start_frame/4000, end+start_frame/4000)
+            (start+start_frame/WAVEFORM_SAMPLERATE, end+start_frame/WAVEFORM_SAMPLERATE)
             for start, end in segments
         ]
         print(segments)
@@ -1481,11 +1532,11 @@ class MainWindow(QMainWindow):
         elif not self.waveform.segments:
             # Transcribe whole audio file
             self.progress_bar.show()
-            self.recognizer_worker.setArgs(self.audio_path, [])
+            self.recognizer_worker.setArgs(self.media_path, [])
             self.recognizer_worker.start()
             return
 
-        self.recognizer_worker.setArgs(self.audio_path, segments)
+        self.recognizer_worker.setArgs(self.media_path, segments)
 
         # self.status_bar.clearMessage()
         self.progress_bar.setRange(0, len(self.recognizer_worker.segments))
@@ -1640,12 +1691,23 @@ class MainWindow(QMainWindow):
             else:
                 event.ignore()
                 return
-        
+
         if self.video_window:
             self.video_window.close()
-        if self.scene_detector.isRunning():
+        if self.scene_detector and self.scene_detector.isRunning():
             self.scene_detector.end()
             self.scene_detector.wait()
+        
+        # Save document state to cache
+        if self.file_path.lower().endswith(".ali"):
+            doc_metadata = {
+                "cursor_pos": self.text_edit.textCursor().position(),
+                "scroll_pos": self.text_edit.verticalScrollBar().value(),
+                "waveform_pos": self.waveform.t_left,
+                "waveform_pps": self.waveform.ppsec,
+            }
+            self.cache.update_doc_metadata(self.file_path, doc_metadata)
+        self.text_edit._updateScroll
         return super().closeEvent(event)
     
     
