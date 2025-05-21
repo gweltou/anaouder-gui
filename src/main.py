@@ -34,23 +34,26 @@ from ostilhou.utils import sec2hms
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QDialog,
-    QWidget, QLayout, QVBoxLayout, QHBoxLayout, QSizePolicy,
-    QScrollBar, QSizeGrip, QSplitter, QProgressBar,
+    QWidget, QLayout, QVBoxLayout, QHBoxLayout,
+    QSplitter, QProgressBar,
     QPushButton, QDial,
     QLabel, QComboBox, QCheckBox, QMessageBox
 )
 from PySide6.QtCore import (
-    Qt, QSize, QUrl, QEvent,
-    QThread, Signal, Slot,
+    Qt, QSize, QUrl,
+    Signal, Slot, QThread,
     QSettings,
 )
 from PySide6.QtGui import (
-    QAction, QActionGroup, QPixmap, QIcon,
-    QResizeEvent, QWheelEvent, QKeySequence, QShortcut, QKeyEvent,
+    QAction, QActionGroup,
+    QKeySequence, QShortcut, QKeyEvent,
     QTextBlock, QTextCursor,
     QUndoStack, QUndoCommand,
 )
-from PySide6.QtMultimedia import QAudioFormat, QMediaPlayer, QMediaDevices, QAudioOutput, QMediaMetaData
+from PySide6.QtMultimedia import (
+    QAudioFormat, QMediaPlayer,
+    QMediaDevices, QAudioOutput, QMediaMetaData
+)
 
 from src.config import DEFAULT_LANGUAGE, FUTURE
 from src.utils import splitForSubtitle, ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS
@@ -62,8 +65,9 @@ from src.icons import icons, loadIcons, IconWidget
 from src.shortcuts import shortcuts
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand, Handle
 from src.text_widget import (
-    TextEdit, MyTextBlockUserData, BlockType, Highlighter,
-    DIALOG_CHAR, LINE_BREAK
+    TextEdit, MyTextBlockUserData,
+    BlockType, Highlighter,
+    LINE_BREAK
 )
 from src.video_widget import VideoWindow
 from src.recognizer_worker import RecognizerWorker
@@ -75,7 +79,7 @@ import src.lang as lang
 
 
 # Config
-WAVEFORM_SAMPLERATE = 1500
+WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
 AUTOSEG_MAX_LENGTH = 15
 AUTOSEG_MIN_LENGTH = 3
 
@@ -112,6 +116,7 @@ class AddSegmentCommand(QUndoCommand):
         # self.waveform_widget.refreshSegmentInfo()
 
 
+
 class CreateNewUtteranceCommand(QUndoCommand):
     """Create a new utterance with empty text"""
     def __init__(self, parent, segment, seg_id=None):
@@ -141,34 +146,6 @@ class CreateNewUtteranceCommand(QUndoCommand):
 
     # def id(self):
     #     return 20
-
-
-
-class DeleteUtterancesCommand(QUndoCommand):
-    def __init__(self, parent, seg_ids: list):
-        super().__init__()
-        self.text_edit = parent.text_edit
-        self.waveform = parent.waveform
-        self.seg_ids = seg_ids
-        self.segments = [self.waveform.segments[seg_id] for seg_id in seg_ids]
-        self.texts = [self.text_edit.getBlockById(seg_id).text() for seg_id in seg_ids]
-    
-    def undo(self):
-        for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
-            seg_id = self.waveform.addSegment(segment, seg_id)
-            self.text_edit.insertSentenceWithId(text, seg_id)
-        self.waveform.refreshSegmentInfo()
-        self.waveform.draw()
-
-    def redo(self):
-        for seg_id in self.seg_ids:
-            self.text_edit.deleteSentence(seg_id)
-            del self.waveform.segments[seg_id]
-        self.waveform.active_segments = []
-        self.waveform.last_segment_active = -1
-        self.waveform._to_sort = True
-        self.waveform.refreshSegmentInfo()
-        self.waveform.draw()
 
 
 
@@ -372,13 +349,39 @@ class AlignWithSelectionCommand(QUndoCommand):
 
 
 
+class DeleteUtterancesCommand(QUndoCommand):
+    def __init__(self, parent, seg_ids: list):
+        super().__init__()
+        self.text_edit: TextEdit = parent.text_edit
+        self.waveform = parent.waveform
+        self.seg_ids = seg_ids
+        self.segments = [self.waveform.segments[seg_id] for seg_id in seg_ids]
+        self.texts = [self.text_edit.getBlockById(seg_id).text() for seg_id in seg_ids]
+    
+    def undo(self):
+        for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
+            seg_id = self.waveform.addSegment(segment, seg_id)
+            self.text_edit.insertSentenceWithId(text, seg_id)
+        self.waveform.refreshSegmentInfo()
+        self.waveform.draw()
+
+    def redo(self):
+        # Delete text sentences
+        self.text_edit.document().blockSignals(True)
+        for seg_id in self.seg_ids:
+            self.text_edit.deleteSentence(seg_id)
+            del self.waveform.segments[seg_id]
+        self.text_edit.document().blockSignals(False)
+
+        # Delete segments
+        self.waveform.active_segments = []
+        self.waveform.last_segment_active = -1
+        self.waveform._to_sort = True
+        self.waveform.refreshSegmentInfo()
+        self.waveform.draw()
+
+
 class DeleteSegmentsCommand(QUndoCommand):
-    # def __init__(
-    #         self,
-    #         text_edit: TextEdit,
-    #         waveform: WaveformWidget,
-    #         seg_ids: list
-    #     ):
     def __init__(self, parent, seg_ids):
         super().__init__()
         self.text_edit : TextEdit = parent.text_edit
@@ -423,6 +426,13 @@ class DeleteSegmentsCommand(QUndoCommand):
 class MainWindow(QMainWindow):
     APP_NAME = "Anaouder"
 
+    BUTTON_SIZE = 28
+    BUTTON_SPACING = 3
+    BUTTON_MARGIN = 8
+    
+    transcribe_file_signal = Signal(str)
+    transcribe_segments_signal = Signal(str, list)
+
     def __init__(self, file_path=""):
         super().__init__()
         
@@ -434,6 +444,18 @@ class MainWindow(QMainWindow):
 
         self.languages = lang.getLanguages()
         self.available_models = []
+
+        self.recognizer_worker = RecognizerWorker()
+        self.transcribe_file_signal.connect(self.recognizer_worker.transcribeFile)
+        self.transcribe_segments_signal.connect(self.recognizer_worker.transcribeSegments)
+        self.recognizer_worker.message.connect(self.setStatusMessage)
+        self.recognizer_worker.segment_transcribed.connect(self.updateUtteranceTranscription)
+        self.recognizer_worker.new_segment_transcribed.connect(self.addUtterance)
+        self.recognizer_thread = QThread()
+        self.recognizer_worker.moveToThread(self.recognizer_thread)
+        self.recognizer_thread.start()
+        
+        self.scene_detector = None
 
         # Current opened file info
         self.file_path = file_path
@@ -465,14 +487,6 @@ class MainWindow(QMainWindow):
 
         self.initUI()
 
-        self.recognizer_worker = RecognizerWorker()
-        self.recognizer_worker.message.connect(self.slotSetStatusMessage)
-        self.recognizer_worker.transcribedSegment.connect(self.updateSegmentTranscription)
-        self.recognizer_worker.transcribed.connect(self.addUtterance)
-        self.recognizer_worker.finished.connect(self.progress_bar.hide)
-        
-        self.scene_detector = None
-
         # Keyboard shortcuts
         ## Search
         shortcut = QShortcut(QKeySequence.Find, self)
@@ -496,10 +510,6 @@ class MainWindow(QMainWindow):
 
         self.changeLanguage(DEFAULT_LANGUAGE)
 
-        # if len(self.available_models) == 0:
-        #     # Download a model
-        #     load_model()
-
         if file_path:
             self.openFile(file_path)
 
@@ -511,10 +521,6 @@ class MainWindow(QMainWindow):
 
 
     def initUI(self):
-        BUTTON_SIZE = 28
-        BUTTON_SPACING = 3
-        BUTTON_MARGIN = 8
-
         # Menu
         menu_bar = self.menuBar()
 
@@ -566,7 +572,7 @@ class MainWindow(QMainWindow):
         transcribe_action.triggered.connect(self.transcribe)
         operation_menu.addAction(transcribe_action)
         ## Adapt to subtitle
-        adaptSubtitleAction = QAction("Adapt to subtitle", self)
+        adaptSubtitleAction = QAction("Adapt to subtitles", self)
         adaptSubtitleAction.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adaptSubtitleAction)
 
@@ -585,7 +591,7 @@ class MainWindow(QMainWindow):
             lambda checked: self.text_edit.toggleTextMargin(checked))
         display_menu.addAction(toggleTextMargin)
 
-        self.scene_detect_action = QAction("Scene transitions", self)
+        self.scene_detect_action = QAction("Video transitions", self)
         self.scene_detect_action.setCheckable(True)
         self.scene_detect_action.toggled.connect(
             lambda checked: self.toggleSceneDetect(checked))
@@ -630,8 +636,8 @@ class MainWindow(QMainWindow):
         ### TOP BAR
 
         top_bar_layout = QHBoxLayout()
-        top_bar_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
-        top_bar_layout.setSpacing(BUTTON_SPACING)
+        top_bar_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        top_bar_layout.setSpacing(MainWindow.BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
 
@@ -640,9 +646,18 @@ class MainWindow(QMainWindow):
         buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         left_buttons_layout = QHBoxLayout()
-        left_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
-        left_buttons_layout.setSpacing(BUTTON_SPACING)
+        left_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        left_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
         left_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.transcribe_button = QPushButton()
+        self.transcribe_button.setIcon(icons["sparkles"])
+        self.transcribe_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        self.transcribe_button.setCheckable(True)
+        self.transcribe_button.toggled.connect(self.toggleTranscribe)
+        self.transcribe_button.clicked.connect(self.transcribeButtonClicked)
+        self.recognizer_worker.finished.connect(self.transcribe_button.toggle)
+        left_buttons_layout.addWidget(self.transcribe_button)
 
         self.language_selection = QComboBox()
         self.language_selection.addItems(self.languages)
@@ -654,69 +669,56 @@ class MainWindow(QMainWindow):
             left_buttons_layout.addWidget(QLabel("Lang"))
             left_buttons_layout.addWidget(self.language_selection)
 
-        left_buttons_layout.addWidget(
-            IconWidget(icons["head"], BUTTON_SIZE*0.7))
+        left_buttons_layout.addSpacing(4)
+        left_buttons_layout.addWidget(IconWidget(icons["head"], MainWindow.BUTTON_SIZE*0.7))
 
         self.model_selection = QComboBox()
         # self.model_selection.addItems(self.available_models)
         self.model_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        self.model_selection.currentIndexChanged.connect(
-            lambda i: self.recognizer_worker.setModelPath(
-                os.path.join(self.language_selection.currentText(), self.available_models[i])
-            )
-        )
+        self.model_selection.currentTextChanged.connect(self.recognizer_worker.setModelPath)
         left_buttons_layout.addWidget(self.model_selection)
 
         left_buttons_layout.addWidget(
-            IconWidget(icons["numbers"], BUTTON_SIZE*0.7))
+            IconWidget(icons["numbers"], MainWindow.BUTTON_SIZE*0.7))
         normalizationCheckbox = QCheckBox()
         left_buttons_layout.addWidget(normalizationCheckbox)
 
-        left_buttons_layout.addSpacing(8)
-
-        transcribe_button = QPushButton()
-        transcribe_button.setIcon(icons["sparkles"])
-        transcribe_button.setFixedWidth(BUTTON_SIZE)
-        transcribe_button.clicked.connect(self.transcribe)
-        left_buttons_layout.addWidget(transcribe_button)
-
-
         # Play buttons
         center_buttons_layout = QHBoxLayout()
-        center_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
-        center_buttons_layout.setSpacing(BUTTON_SPACING)
+        center_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        center_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
         # centerButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         center_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         back_button = QPushButton()
         back_button.setIcon(icons["back"])
-        back_button.setFixedWidth(BUTTON_SIZE)
+        back_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         back_button.clicked.connect(self.back)
         center_buttons_layout.addWidget(back_button)
 
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prev_button = QPushButton()
         prev_button.setIcon(icons["previous"])
-        prev_button.setFixedWidth(BUTTON_SIZE)
+        prev_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         # button.setIcon(QIcon(icon_path))
         prev_button.clicked.connect(self.playPrev)
         center_buttons_layout.addWidget(prev_button)
 
         self.play_button = QPushButton()
         self.play_button.setIcon(icons["play"])
-        self.play_button.setFixedWidth(BUTTON_SIZE)
+        self.play_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         self.play_button.clicked.connect(self.play)
         center_buttons_layout.addWidget(self.play_button)
 
         next_button = QPushButton()
         next_button.setIcon(icons["next"])
-        next_button.setFixedWidth(BUTTON_SIZE)
+        next_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         next_button.clicked.connect(self.playNext)
         center_buttons_layout.addWidget(next_button)
 
         volume_dial = QDial()
         # volumeDial.setMaximumWidth(button_size*1.5)
-        volume_dial.setMaximumSize(QSize(BUTTON_SIZE*1.1, BUTTON_SIZE*1.1))
+        volume_dial.setMaximumSize(QSize(MainWindow.BUTTON_SIZE*1.1, MainWindow.BUTTON_SIZE*1.1))
         # volumeDial.minimumSizeHint(QSize(button_size, button_size))
         volume_dial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
         volume_dial.setValue(100)
@@ -724,54 +726,54 @@ class MainWindow(QMainWindow):
 
         # buttonsLayout.addSpacing(16)
         format_buttons_layout = QHBoxLayout()
-        format_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
-        format_buttons_layout.setSpacing(BUTTON_SPACING)
+        format_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        format_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
         format_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         italic_button = QPushButton()
         italic_button.setIcon(icons["italic"])
-        italic_button.setFixedWidth(BUTTON_SIZE)
+        italic_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         format_buttons_layout.addWidget(italic_button)
         bold_button = QPushButton()
         bold_button.setIcon(icons["bold"])
-        bold_button.setFixedWidth(BUTTON_SIZE)
+        bold_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         format_buttons_layout.addWidget(bold_button)
 
-        right_buttons_layout = QHBoxLayout()
-        right_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
-        right_buttons_layout.setSpacing(BUTTON_SPACING)
-        right_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        zoom_buttons_layout = QHBoxLayout()
+        zoom_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        zoom_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        zoom_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        right_buttons_layout.addWidget(IconWidget(icons["waveform"], BUTTON_SIZE*0.7))
+        zoom_buttons_layout.addWidget(IconWidget(icons["waveform"], MainWindow.BUTTON_SIZE*0.7))
         wave_zoom_in_button = QPushButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
-        wave_zoom_in_button.setFixedWidth(BUTTON_SIZE)
+        wave_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
-        right_buttons_layout.addWidget(wave_zoom_in_button)
+        zoom_buttons_layout.addWidget(wave_zoom_in_button)
         wave_zoom_out_button = QPushButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
-        wave_zoom_out_button.setFixedWidth(BUTTON_SIZE)
+        wave_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
-        right_buttons_layout.addWidget(wave_zoom_out_button)
+        zoom_buttons_layout.addWidget(wave_zoom_out_button)
         
-        right_buttons_layout.addSpacing(8)
+        zoom_buttons_layout.addSpacing(8)
 
-        right_buttons_layout.addWidget(IconWidget(icons["font"], BUTTON_SIZE*0.7))
+        zoom_buttons_layout.addWidget(IconWidget(icons["font"], MainWindow.BUTTON_SIZE*0.7))
         text_zoom_in_button = QPushButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
-        text_zoom_in_button.setFixedWidth(BUTTON_SIZE)
+        text_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         text_zoom_in_button.clicked.connect(lambda: self.text_edit.zoomIn(1))
-        right_buttons_layout.addWidget(text_zoom_in_button)
+        zoom_buttons_layout.addWidget(text_zoom_in_button)
         text_zoom_out_button = QPushButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
-        text_zoom_out_button.setFixedWidth(BUTTON_SIZE)
+        text_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         text_zoom_out_button.clicked.connect(lambda: self.text_edit.zoomOut(1))
-        right_buttons_layout.addWidget(text_zoom_out_button)
+        zoom_buttons_layout.addWidget(text_zoom_out_button)
 
         buttons_layout.addLayout(left_buttons_layout)
         buttons_layout.addLayout(center_buttons_layout)
-        buttons_layout.addLayout(format_buttons_layout)
-        buttons_layout.addLayout(right_buttons_layout)
+        # buttons_layout.addLayout(format_buttons_layout)
+        buttons_layout.addLayout(zoom_buttons_layout)
 
         bottom_layout = QVBoxLayout()
         bottom_layout.setSpacing(0)
@@ -809,13 +811,13 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("Ready")
         self.status_bar.addPermanentWidget(self.status_label)
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.hide()
-        self.status_bar.addWidget(self.progress_bar, 1)
+        # self.progress_bar = QProgressBar()
+        # self.progress_bar.hide()
+        # self.status_bar.addWidget(self.progress_bar, 1)
 
 
     @Slot(str)
-    def slotSetStatusMessage(self, message: str):
+    def setStatusMessage(self, message: str):
         self.status_label.setText(message)
 
 
@@ -1430,7 +1432,7 @@ class MainWindow(QMainWindow):
                 self.scene_detector.new_scene.connect(self.newSceneChange)
                 self.scene_detector.finished.connect(self.sceneChangeFinished)
                 self.scene_detector.start()
-            self.scene_detect_action.setChecked(True)
+            # self.scene_detect_action.setChecked(True)
         else:
             self.waveform.display_scene_change = False
             if self.scene_detector and self.scene_detector.isRunning():
@@ -1485,7 +1487,7 @@ class MainWindow(QMainWindow):
         self.undo_stack.endMacro()
 
 
-    def createNewUtterance(self):
+    def newUtteranceFromSelection(self):
         """Create a new segment from waveform selection"""
         self.undo_stack.push(CreateNewUtteranceCommand(self, self.waveform.selection))
         self.waveform.deselect()
@@ -1493,7 +1495,7 @@ class MainWindow(QMainWindow):
 
 
     @Slot(str, float, float, int, int)
-    def updateSegmentTranscription(
+    def updateUtteranceTranscription(
         self,
         text: str,
         start: float,
@@ -1507,7 +1509,7 @@ class MainWindow(QMainWindow):
             
         block = self.text_edit.getBlockById(seg_id)
         self.undo_stack.push(ReplaceTextCommand(self.text_edit, block, text, 0, 0))
-        self.progress_bar.setValue(i+1)
+        # self.progress_bar.setValue(i+1)
 
 
     @Slot(str, list)
@@ -1517,34 +1519,38 @@ class MainWindow(QMainWindow):
         self.text_edit.insertSentenceWithId(text, segment_id, with_cursor=False)
         self.waveform.draw()
 
+
+    @Slot(bool)
+    def toggleTranscribe(self, toggled):
+        print("toggle", toggled)
+        if toggled:
+            self.transcribe()
+        else:
+            self.recognizer_worker.must_stop = True
     
+
+    @Slot()
+    def transcribeButtonClicked(self):
+        print("clicked")
+
     def transcribe(self):
-        seg_id = -1
+        print("transcribing request")
         if self.waveform.selection_is_active:
             # Transcribe selection
             seg_id = self.waveform.getNewId()
             segments = [(seg_id, *self.waveform.selection)]
+            self.transcribe_segments_signal.emit(self.media_path, segments)
             self.waveform.deselect()
             self.waveform.draw()
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
             segments = [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
+            self.transcribe_segments_signal.emit(self.media_path, segments)
         elif not self.waveform.segments:
             # Transcribe whole audio file
-            self.progress_bar.show()
-            self.recognizer_worker.setArgs(self.media_path, [])
-            self.recognizer_worker.start()
-            return
+            print("transcribe whole file")
+            self.transcribe_file_signal.emit(self.media_path)        
 
-        self.recognizer_worker.setArgs(self.media_path, segments)
-
-        # self.status_bar.clearMessage()
-        self.progress_bar.setRange(0, len(self.recognizer_worker.segments))
-        self.status_bar.show()
-        self.progress_bar.show()
-
-        self.recognizer_worker.start()
-    
 
     # def splitUtterance(self, seg_id:int, pc:float):
     #     self.undo_stack.push(SplitUtteranceCommand(self.text_edit, self.waveform, seg_id, pc))
@@ -1692,6 +1698,10 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
 
+        if self.recognizer_thread.isRunning():
+            self.recognizer_worker.must_stop = True
+            self.recognizer_thread.quit()
+            self.recognizer_thread.wait()
         if self.video_window:
             self.video_window.close()
         if self.scene_detector and self.scene_detector.isRunning():

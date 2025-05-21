@@ -83,12 +83,12 @@ class SceneDetectWorker(QThread):
         # Scene change detection
         ffmpeg_cmd = [
             'ffmpeg',
+            '-hide_banner',
             '-i', self.input_path,
             '-an',
             '-filter:v', f"select='gt(scene,{self.threshold})',showinfo",
             '-f', 'null',
             '-',             # Output to stdout
-            '-hide_banner'
         ]
         
         process = subprocess.Popen(
