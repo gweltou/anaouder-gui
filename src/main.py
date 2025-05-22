@@ -834,10 +834,10 @@ class MainWindow(QMainWindow):
 
 
     def changeLanguage(self, language: str):
-        # This shouldn't be callable when a recognizer worker is running
+        # This shouldn't be called when a recognizer worker is running
         lang.loadLanguage(language)
         if self.language_selection.currentText() != language:
-            self.language_selection.setItemText(language)
+            self.language_selection.setCurrentIndex(self.languages.index(language))
         self.available_models = lang.getCachedModelList()
         self.model_selection.clear()
         self.model_selection.addItems(self.available_models)
@@ -1697,7 +1697,7 @@ class MainWindow(QMainWindow):
             else:
                 event.ignore()
                 return
-
+        
         if self.recognizer_thread.isRunning():
             self.recognizer_worker.must_stop = True
             self.recognizer_thread.quit()
