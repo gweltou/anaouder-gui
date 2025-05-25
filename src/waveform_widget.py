@@ -597,7 +597,7 @@ class WaveformWidget(QWidget):
 
         elif event.key() == Qt.Key_A and self.selection_is_active:
             # Create a new segment from selection
-            self.parent.createNewUtterance()
+            self.parent.newUtteranceFromSelection()
         elif event.key() == Qt.Key_J and len(self.active_segments) > 1:
             # Join multiple segments
             segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])

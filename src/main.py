@@ -524,25 +524,25 @@ class MainWindow(QMainWindow):
         # Menu
         menu_bar = self.menuBar()
 
-        file_menu = menu_bar.addMenu("&File")
+        file_menu = menu_bar.addMenu(self.tr("&File"))
         ## Open
-        open_action = QAction("&Open", self)
+        open_action = QAction(self.tr("&Open"), self)
         open_action.setShortcut(QKeySequence.Open)
         open_action.triggered.connect(self.openFile)
         file_menu.addAction(open_action)
         ## Save
-        save_action = QAction("&Save", self)
+        save_action = QAction(self.tr("&Save"), self)
         save_action.setShortcut(QKeySequence.Save)
         save_action.triggered.connect(self.saveFile)
         file_menu.addAction(save_action)
         ## Save as
-        saveAs_action = QAction("Save as", self)
+        saveAs_action = QAction(self.tr("Save as"), self)
         saveAs_action.setShortcut(QKeySequence.SaveAs)
         saveAs_action.triggered.connect(self.saveFileAs)
         file_menu.addAction(saveAs_action)
 
         ## Export sub-menu
-        export_subMenu = file_menu.addMenu("&Export as...")
+        export_subMenu = file_menu.addMenu(self.tr("&Export as..."))
         exportSrt_action = QAction("SubRip (.srt)", self)
         # exportSrt_action.setShortcut(QKeySequence.SaveAs)
         exportSrt_action.triggered.connect(self.exportSrt)
@@ -550,48 +550,48 @@ class MainWindow(QMainWindow):
 
         ## Parameters
         file_menu.addSeparator()
-        parameters_action = QAction("&Parameters", self)
+        parameters_action = QAction(self.tr("&Parameters"), self)
         parameters_action.triggered.connect(self.showParameters)
         file_menu.addAction(parameters_action)
 
         ## Exit
-        exit_action = QAction("E&xit", self)
+        exit_action = QAction(self.tr("E&xit"), self)
         exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
 
         # Operation Menu
-        operation_menu = menu_bar.addMenu("&Operations")
+        operation_menu = menu_bar.addMenu(self.tr("&Operations"))
         ## Auto Segment
-        autoSegment_action = QAction("Auto segment", self)
+        autoSegment_action = QAction(self.tr("Auto segment"), self)
         autoSegment_action.triggered.connect(self.autoSegment)
         operation_menu.addAction(autoSegment_action)
         ## Auto Transcribe
-        transcribe_action = QAction("Auto transcribe", self)
-        transcribe_action.triggered.connect(self.transcribe)
-        operation_menu.addAction(transcribe_action)
+        # transcribe_action = QAction(self.tr("Auto transcribe"), self)
+        # transcribe_action.triggered.connect(self.transcribe)
+        # operation_menu.addAction(transcribe_action)
         ## Adapt to subtitle
-        adaptSubtitleAction = QAction("Adapt to subtitles", self)
+        adaptSubtitleAction = QAction(self.tr("Adapt to subtitles"), self)
         adaptSubtitleAction.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adaptSubtitleAction)
 
 
         # Display Menu
-        display_menu = menu_bar.addMenu("&Display")
-        toggleMisspelling = QAction("Misspelling", self)
+        display_menu = menu_bar.addMenu(self.tr("&Display"))
+        toggleMisspelling = QAction(self.tr("Misspelling"), self)
         toggleMisspelling.setCheckable(True)
         toggleMisspelling.toggled.connect(
             lambda checked: self.text_edit.highlighter.toggleMisspelling(checked))
         display_menu.addAction(toggleMisspelling)
 
-        toggleTextMargin = QAction("Subtitle margin", self)
+        toggleTextMargin = QAction(self.tr("Subtitle margin"), self)
         toggleTextMargin.setCheckable(True)
         toggleTextMargin.toggled.connect(
             lambda checked: self.text_edit.toggleTextMargin(checked))
         display_menu.addAction(toggleTextMargin)
 
-        self.scene_detect_action = QAction("Video transitions", self)
+        self.scene_detect_action = QAction(self.tr("Video transitions"), self)
         self.scene_detect_action.setCheckable(True)
         self.scene_detect_action.toggled.connect(
             lambda checked: self.toggleSceneDetect(checked))
@@ -599,18 +599,18 @@ class MainWindow(QMainWindow):
 
 
         ## Coloring sub-menu
-        coloring_subMenu = display_menu.addMenu("Coloring...")
+        coloring_subMenu = display_menu.addMenu(self.tr("Coloring..."))
         coloring_action_group = QActionGroup(self)
         coloring_action_group.setExclusive(True)
 
-        color_alignment_action = QAction("Unaligned sentences", self)
+        color_alignment_action = QAction(self.tr("Unaligned sentences"), self)
         color_alignment_action.setCheckable(True)
         color_alignment_action.setChecked(True)
         color_alignment_action.triggered.connect(self.toggleAlignmentColoring)
         coloring_subMenu.addAction(color_alignment_action)
         coloring_action_group.addAction(color_alignment_action)
 
-        color_density_action = QAction("Speech density", self)
+        color_density_action = QAction(self.tr("Speech density"), self)
         color_density_action.setCheckable(True)
         color_density_action.triggered.connect(self.toggleDensityColoring)
         coloring_subMenu.addAction(color_density_action)
@@ -618,7 +618,7 @@ class MainWindow(QMainWindow):
 
         display_menu.addSeparator()
 
-        toggle_video = QAction("Show video", self)
+        toggle_video = QAction(self.tr("Show video"), self)
         toggle_video.setCheckable(True)
         toggle_video.triggered.connect(self.toggleVideo)
         display_menu.addAction(toggle_video)
@@ -627,8 +627,8 @@ class MainWindow(QMainWindow):
         # for dev in self.input_devices:
         #     deviceMenu.addAction(QAction(dev.description(), self))
         
-        help_menu = menu_bar.addMenu("&Help")
-        about_action = QAction("&About", self)
+        help_menu = menu_bar.addMenu(self.tr("&Help"))
+        about_action = QAction(self.tr("&About"), self)
         about_action.triggered.connect(self.showAbout)
         help_menu.addAction(about_action)
 
@@ -654,6 +654,8 @@ class MainWindow(QMainWindow):
         self.transcribe_button.setIcon(icons["sparkles"])
         self.transcribe_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         self.transcribe_button.setCheckable(True)
+        self.transcribe_button.setToolTip(self.tr("Transcribe") + f" <{shortcuts["transcribe"].toString()}>")
+        self.transcribe_button.setShortcut(shortcuts["transcribe"])
         self.transcribe_button.toggled.connect(self.toggleTranscribe)
         self.transcribe_button.clicked.connect(self.transcribeButtonClicked)
         self.recognizer_worker.finished.connect(self.transcribe_button.toggle)
@@ -675,12 +677,14 @@ class MainWindow(QMainWindow):
         self.model_selection = QComboBox()
         # self.model_selection.addItems(self.available_models)
         self.model_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.model_selection.setToolTip(self.tr("Speech-to-text model"))
         self.model_selection.currentTextChanged.connect(self.recognizer_worker.setModelPath)
         left_buttons_layout.addWidget(self.model_selection)
 
         left_buttons_layout.addWidget(
             IconWidget(icons["numbers"], MainWindow.BUTTON_SIZE*0.7))
         normalizationCheckbox = QCheckBox()
+        normalizationCheckbox.setToolTip(self.tr("Normalize numbers"))
         left_buttons_layout.addWidget(normalizationCheckbox)
 
         # Play buttons
@@ -693,6 +697,7 @@ class MainWindow(QMainWindow):
         back_button = QPushButton()
         back_button.setIcon(icons["back"])
         back_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        back_button.setToolTip(self.tr("Go to first utterance"))
         back_button.clicked.connect(self.back)
         center_buttons_layout.addWidget(back_button)
 
@@ -700,6 +705,7 @@ class MainWindow(QMainWindow):
         prev_button = QPushButton()
         prev_button.setIcon(icons["previous"])
         prev_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        prev_button.setToolTip(self.tr("Previous utterance") + f" <{shortcuts["play_prev"].toString()}>")
         # button.setIcon(QIcon(icon_path))
         prev_button.clicked.connect(self.playPrev)
         center_buttons_layout.addWidget(prev_button)
@@ -707,12 +713,14 @@ class MainWindow(QMainWindow):
         self.play_button = QPushButton()
         self.play_button.setIcon(icons["play"])
         self.play_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        self.play_button.setToolTip(self.tr("Play current utterance") + f" <{shortcuts["play_stop"].toString()}>")
         self.play_button.clicked.connect(self.play)
         center_buttons_layout.addWidget(self.play_button)
 
         next_button = QPushButton()
         next_button.setIcon(icons["next"])
         next_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        next_button.setToolTip(self.tr("Next utterance") + f" <{shortcuts["play_next"].toString()}>")
         next_button.clicked.connect(self.playNext)
         center_buttons_layout.addWidget(next_button)
 
@@ -720,6 +728,7 @@ class MainWindow(QMainWindow):
         # volumeDial.setMaximumWidth(button_size*1.5)
         volume_dial.setMaximumSize(QSize(MainWindow.BUTTON_SIZE*1.1, MainWindow.BUTTON_SIZE*1.1))
         # volumeDial.minimumSizeHint(QSize(button_size, button_size))
+        volume_dial.setToolTip(self.tr("Audio volume"))
         volume_dial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
         volume_dial.setValue(100)
         center_buttons_layout.addWidget(volume_dial)
@@ -893,7 +902,6 @@ class MainWindow(QMainWindow):
         self.updateWindowTitle()
 
     def saveFileAs(self):
-        print(f"fn saveFileAs {self.file_path=}")
         basename = os.path.basename(self.file_path)
         basename, ext = os.path.splitext(basename)
         if os.path.splitext(basename)[1].lower() == ".ali":
@@ -901,7 +909,7 @@ class MainWindow(QMainWindow):
         else:
             basename += ".ali"
         dir = settings.value("editor/last_opened_folder", "")
-        filepath, _ = QFileDialog.getSaveFileName(self, "Save File", os.path.join(dir, basename))
+        filepath, _ = QFileDialog.getSaveFileName(self, self.tr("Save File"), os.path.join(dir, basename))
         self.waveform.ctrl_pressed = False
         if not filepath:
             return
