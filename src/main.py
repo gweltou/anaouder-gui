@@ -509,10 +509,10 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
         shortcut.activated.connect(self.selectAll)
 
-        self.changeLanguage(DEFAULT_LANGUAGE)
-
         if file_path:
             self.openFile(file_path)
+
+        self.changeLanguage(DEFAULT_LANGUAGE)
 
 
     def updateThemeColors(self):
@@ -657,6 +657,7 @@ class MainWindow(QMainWindow):
         self.transcribe_button.setCheckable(True)
         self.transcribe_button.setToolTip(self.tr("Transcribe") + f" <{shortcuts["transcribe"].toString()}>")
         self.transcribe_button.setShortcut(shortcuts["transcribe"])
+        self.transcribe_button.setEnabled(False)
         self.transcribe_button.toggled.connect(self.toggleTranscribe)
         self.transcribe_button.clicked.connect(self.transcribeButtonClicked)
         self.recognizer_worker.finished.connect(self.transcribe_button.toggle)
@@ -1022,7 +1023,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(self.tr("Export to {} completed").format(file_path), STATUS_BAR_TIMEOUT)
                     
 
-    def openFile(self, file_path=""):
+    def openFile(self, file_path="", keep_text=False, keep_audio=False):
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
 
@@ -1033,8 +1034,10 @@ class MainWindow(QMainWindow):
                 return
             settings.setValue("editor/last_opened_folder", os.path.split(file_path)[0])
         
-        self.waveform.clear()
-        self.text_edit.clear()
+        if not keep_audio:
+            self.waveform.clear()
+        if not keep_text:
+            self.text_edit.clear()
 
         self.file_path = file_path
         folder, filename = os.path.split(file_path)
@@ -1227,6 +1230,7 @@ class MainWindow(QMainWindow):
         if "scenes" in self.media_metadata:
             self.toggleSceneDetect(True)
 
+        self.transcribe_button.setEnabled(True)
         self.waveform.draw()
 
 
@@ -1244,7 +1248,7 @@ class MainWindow(QMainWindow):
     def showAbout(self):
         QMessageBox.about(
             self,
-            "About",
+            self.tr("About"),
             "Anaouder\nTreuzskrivadur emgefreek ha lec'hel e brezhoneg."
         )
 
@@ -1683,9 +1687,19 @@ class MainWindow(QMainWindow):
         if mime_data.hasUrls():
             for url in mime_data.urls():
                 file_path = url.toLocalFile()
-                self.loadMediaFile(file_path)
+                basename, ext = os.path.splitext(file_path)
+                ext = ext.lower()
+                if ext == ".ali":
+                    self.openFile(file_path)
+                elif ext == ".srt":
+                    self.openFile(file_path, keep_audio=True)
+                elif ext in MEDIA_FORMATS:
+                    self.openFile(file_path, keep_text=True)
+                else:
+                    print(f"Wrong file type {file_path}")
+                    return
                 event.acceptProposedAction()
-                break  # Only load the first file
+                return  # Only load the first file
 
 
     def closeEvent(self, event):
@@ -1797,6 +1811,20 @@ def main(argv: list):
     loadIcons()
     window = MainWindow(file_path)
     window.show()
+
+    if len(window.available_models) == 0:
+        # Ask to download a first model
+        ret = QMessageBox.question(
+            window, 
+            window.tr("Welcome"),
+            window.tr("It appears you don't have a transcription model yet.") +
+            "\n\n" +
+            window.tr("Would you like to download one ?"),
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+        )
+        if ret == QMessageBox.Ok:
+            window.showParameters()
+
     sys.exit(app.exec())
 
 
