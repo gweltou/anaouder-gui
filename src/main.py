@@ -82,6 +82,7 @@ import src.lang as lang
 WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
 AUTOSEG_MAX_LENGTH = 15
 AUTOSEG_MIN_LENGTH = 3
+STATUS_BAR_TIMEOUT = 3000
 
 
 
@@ -817,9 +818,9 @@ class MainWindow(QMainWindow):
         
         
         self.status_bar = self.statusBar()
-        self.status_label = QLabel("Ready")
-        self.status_bar.addPermanentWidget(self.status_label)
 
+        # self.status_label = QLabel("Ready")
+        # self.status_bar.addPermanentWidget(self.status_label)
         # self.progress_bar = QProgressBar()
         # self.progress_bar.hide()
         # self.status_bar.addWidget(self.progress_bar, 1)
@@ -827,7 +828,7 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def setStatusMessage(self, message: str):
-        self.status_label.setText(message)
+        self.status_bar.showMessage(message, 3000)
 
 
     def updateWindowTitle(self):
@@ -1018,7 +1019,7 @@ class MainWindow(QMainWindow):
             _f.write(srt.compose(subs))
             print(f"Subtitles saved to {file_path}")
 
-            self.status_bar.showMessage(f"Export to {file_path} completed", 3000)
+            self.status_bar.showMessage(self.tr("Export to {} completed").format(file_path), STATUS_BAR_TIMEOUT)
                     
 
     def openFile(self, file_path=""):
@@ -1244,7 +1245,7 @@ class MainWindow(QMainWindow):
         QMessageBox.about(
             self,
             "About",
-            "Anaouder\nTreuzskrivañ emgefreek ha lec'hel e brezhoneg."
+            "Anaouder\nTreuzskrivadur emgefreek ha lec'hel e brezhoneg."
         )
 
 
@@ -1466,7 +1467,7 @@ class MainWindow(QMainWindow):
             for start, end in segments
         ]
         print(segments)
-        self.status_bar.showMessage(f"{len(segments)} segments found", 3000)
+        self.status_bar.showMessage(self.tr("{} segments found").format(len(segments)), STATUS_BAR_TIMEOUT)
         # self.waveform.clear()
         for start, end in segments:
             segment_id = self.waveform.addSegment([start, end])
@@ -1665,10 +1666,10 @@ class MainWindow(QMainWindow):
                 file_path = url.toLocalFile()
                 if file_path.endswith(ALL_COMPATIBLE_FORMATS):
                     event.acceptProposedAction()
-                    self.status_bar.showMessage(f"Drop to open: {file_path}")
+                    self.status_bar.showMessage(self.tr("Drop to open: {}").format(file_path), STATUS_BAR_TIMEOUT)
                     return
-        
-        self.status_bar.showMessage("Cannot open this file type")
+
+        self.status_bar.showMessage(self.tr("Cannot open this file type"), STATUS_BAR_TIMEOUT)
 
 
     def dragMoveEvent(self, event):
@@ -1736,7 +1737,7 @@ class MainWindow(QMainWindow):
         density=None,
     ):
         if id not in self.waveform.segments:
-            self.status_bar.showMessage("")
+            self.status_bar.clearMessage()
             return
         
         # Refresh block color
@@ -1752,13 +1753,13 @@ class MainWindow(QMainWindow):
         density = density or self.getUtteranceDensity(id)
         string_parts = [
             f"ID: {id}",
-            f"start: {start:10}",
-            f"end: {end:10}",
-            f"dur: {dur:.3f}s",
+            self.tr("start: {}").format(f"{start:10}"),
+            self.tr("end: {}").format(f"{end:10}"),
+            self.tr("dur: {}s").format(f"{dur:.3f}"),
         ]
         if density >= 0.0:
-            string_parts.append(f"{density:.1f}c/s")
-        self.status_bar.showMessage('\t\t\t\t'.join(string_parts))
+            string_parts.append(self.tr("{}c/s").format(f"{density:.1f}"))
+        self.status_bar.showMessage("\t\t\t\t".join(string_parts))
 
 
     def getUtteranceDensity(self, id) -> float:

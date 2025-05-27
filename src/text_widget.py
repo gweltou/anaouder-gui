@@ -685,7 +685,7 @@ class TextEdit(QTextEdit):
         else:
             self.deactivateSentence()
             self.parent.waveform.setActive(None)
-            self.parent.status_bar.showMessage("")
+            self.parent.status_bar.clearMessage()
 
 
     def wheelEvent(self, event: QWheelEvent):
