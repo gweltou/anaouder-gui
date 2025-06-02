@@ -1,20 +1,35 @@
+import os
+import re
+import srt
+from datetime import timedelta
+
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QSpinBox, QCheckBox,
-    QDoubleSpinBox, QFileDialog, QPushButton, QComboBox,
-    QGridLayout, QGroupBox
+    QLabel, QSpinBox, QCheckBox, QLineEdit,
+    QFileDialog, QPushButton, QComboBox,
+    QGroupBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, Signal
 from PySide6.QtGui import QFont
+
+from ostilhou.asr.dataset import METADATA_PATTERN
 
 from src.icons import icons
 
 
-class ExportSRTDialog(QDialog):
+
+class ExportSrtSignals(QObject):
+    message = Signal(str)
+
+exportSrtSignals = ExportSrtSignals()
+
+
+
+class ExportSrtDialog(QDialog):
     def __init__(self, parent=None, default_path:str=None):
         super().__init__(parent)
+
         self.setWindowTitle("Export to SRT")
-        self.setMinimumSize(400, 200)
         self.setMaximumSize(800, 400)
         self.setModal(True)
         
@@ -25,7 +40,8 @@ class ExportSRTDialog(QDialog):
         file_group = QGroupBox("Output File")
         file_layout = QHBoxLayout()
         
-        self.file_path = QLabel("No file selected")
+        self.file_path = QLineEdit("No file selected")
+        self.file_path.setMinimumWidth(300)
         if default_path:
             self.file_path.setText(default_path)
         
@@ -99,30 +115,7 @@ class ExportSRTDialog(QDialog):
         opt_layout.addWidget(apostrophe_norm_label_2)
         opt_layout.addWidget(self.apostrophe_norm_check_2)
         options_layout.addLayout(opt_layout)
-
-        
         options_group.setLayout(options_layout)
-        
-        """
-        # Additional encoding options
-        encoding_group = QGroupBox("Encoding Options")
-        encoding_layout = QGridLayout()
-        
-        encoding_label = QLabel("Character Encoding:")
-        self.encoding_combo = QComboBox()
-        self.encoding_combo.addItems(["UTF-8", "UTF-16", "ASCII", "ISO-8859-1"])
-        
-        linebreak_label = QLabel("Line Break Style:")
-        self.linebreak_combo = QComboBox()
-        self.linebreak_combo.addItems(["Unix (LF)", "Windows (CRLF)", "Mac (CR)"])
-        
-        encoding_layout.addWidget(encoding_label, 0, 0)
-        encoding_layout.addWidget(self.encoding_combo, 0, 1)
-        encoding_layout.addWidget(linebreak_label, 1, 0)
-        encoding_layout.addWidget(self.linebreak_combo, 1, 1)
-        
-        encoding_group.setLayout(encoding_layout)"
-        """
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -140,7 +133,7 @@ class ExportSRTDialog(QDialog):
         # Add all sections to main layout
         main_layout.addWidget(file_group)
         main_layout.addWidget(options_group)
-        # main_layout.addWidget(encoding_group)
+        main_layout.addStretch(1)
         main_layout.addLayout(button_layout)
         
         self.setLayout(main_layout)
@@ -169,4 +162,83 @@ class ExportSRTDialog(QDialog):
             self.time_result_label.setText(f"{self.time_seconds:.3f} seconds")
         except ValueError:
             self.time_result_label.setText("Invalid FPS value")
-    
+
+
+
+def exportSrt(parent, media_path, utterances):
+    rm_special_tokens = True
+
+    dir = os.path.split(media_path)[0] if media_path else os.path.expanduser('~')
+    default_path = os.path.splitext(media_path)[0] if media_path else "untitled"
+    default_path += ".srt"
+
+    dialog = ExportSrtDialog(parent, os.path.join(dir, default_path))
+    result = dialog.exec()
+
+    if result == QDialog.Rejected:
+        return
+
+    file_path = dialog.file_path.text()
+
+    # Remove unwanted strings from subtitle output
+    for i, (text, _) in enumerate(utterances):    
+        text = re.sub(METADATA_PATTERN, ' ', text)
+        text = re.sub(r"\*", '', text)
+        text = re.sub(r"<br>", '\n', text, count=0, flags=re.IGNORECASE)
+        text = text.replace('\u2028', '\n')
+
+        if dialog.apostrophe_norm_check_1.isChecked():
+            text = text.replace("'", '’')
+        
+        if dialog.apostrophe_norm_check_2.isChecked():
+            text = text.replace('’', "'")
+
+        if rm_special_tokens:
+            remainder = text[:]
+            text_segments = []
+            while match := re.search(r"</?([a-zA-Z \']+)>", remainder):
+                # Accept a few HTML formatting elements
+                if match[1].lower() in ("i", "b", "br"):
+                    text_segments.append(remainder[:match.end()])
+                else:
+                    text_segments.append(remainder[:match.start()])
+                remainder = remainder[match.end():]
+            text_segments.append(remainder)
+            text = ''.join(text_segments)
+        
+        # Remove extra spaces
+        lines = [' '.join(l.split()) for l in text.split('\n')]
+        text = '\n'.join(lines)
+        
+        utterances[i][0] = text
+
+    # Adjust minimal duration between two subtitles (>= 0.08s)
+    min_time = dialog.time_seconds
+    for i in range(len(utterances) - 1):
+        text, (current_start, current_end) = utterances[i]
+        _, (next_start, _) = utterances[i+1]
+        if next_start - current_end < 0.08:
+            new_seg = (text, (current_start, next_start - min_time))
+            utterances[i] = new_seg
+
+    try:
+        with open(file_path, 'w') as _f:
+            subs = [
+                srt.Subtitle(
+                    index=i,
+                    content=text,
+                    start=timedelta(seconds=start),
+                    end=timedelta(seconds=end)
+                ) for i, (text, (start, end)) in enumerate(utterances)
+            ]
+            _f.write(srt.compose(subs))
+        
+        print(f"Subtitles saved to {file_path}")
+        exportSrtSignals.message.emit(
+            QObject.tr("Export to {file_path} completed").format(file_path=file_path)
+        )
+    except Exception as e:
+        print(f"Couldn't save {file_path}, {e}")
+        exportSrtSignals.message.emit(
+            QObject.tr("Couldn't export file: {error}").format(error=e)
+        )

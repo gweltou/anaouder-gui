@@ -37,13 +37,15 @@ class DownloadProgressDialog(QDialog):
 
     def __init__(self, url, root, model_name, parent=None):
         super().__init__(parent)
+
+        self.signals = self.DownloadSignals()
+        
         self.url = url
         self.root = root
         self.download_target = os.path.join(root, os.path.basename(url))
         self.model_name = model_name
         self.cancelled = False
         self.download_thread = None
-        self.signals = self.DownloadSignals()
         self.file_size = 0
         
         # Setup UI
@@ -423,6 +425,9 @@ class ModelsTab(QWidget):
 
         progress_dialog = DownloadProgressDialog(url, root, model_name, self)
         result = progress_dialog.exec()
+        
+        if result == QDialog.Accepted:
+            self.updateLanguage()
 
 
     def delete_model(self):
@@ -438,7 +443,8 @@ class ModelsTab(QWidget):
     
 
     def updateLanguage(self):
-        lang.loadLanguage(self.lang_selection.currentText())
+        if FUTURE:
+            lang.loadLanguage(self.lang_selection.currentText())
         self.online_models_list.clear()
         self.online_models_list.addItems(lang.getDownloadableModelList())
         self.local_models_list.clear()

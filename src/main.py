@@ -25,7 +25,7 @@ from ostilhou.asr import (
     load_segments_data, load_text_data,
     extract_metadata,
 )
-from ostilhou.asr.dataset import format_timecode, METADATA_PATTERN
+from ostilhou.asr.dataset import format_timecode
 from ostilhou.audio import (
     convert_to_mp3, get_audiofile_info
 )
@@ -59,7 +59,6 @@ from src.config import DEFAULT_LANGUAGE, FUTURE
 from src.utils import splitForSubtitle, ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS
 from src.cache_system import CacheSystem
 from src.version import __version__
-
 from src.theme import theme
 from src.icons import icons, loadIcons, IconWidget
 from src.shortcuts import shortcuts
@@ -74,7 +73,8 @@ from src.recognizer_worker import RecognizerWorker
 from src.scene_detector import SceneDetectWorker
 from src.commands import ReplaceTextCommand, InsertBlockCommand
 from src.parameters_dialog import ParametersDialog
-from src.export_srt import ExportSRTDialog
+from src.export_srt import exportSrt, exportSrtSignals
+from src.export_eaf import exportEaf, exportEafSignals
 import src.lang as lang
 
 
@@ -460,6 +460,7 @@ class MainWindow(QMainWindow):
 
         # Current opened file info
         self.file_path = file_path
+        self.media_path = None
         self.media_fps : int = None
 
         self.video_window = None
@@ -544,10 +545,15 @@ class MainWindow(QMainWindow):
 
         ## Export sub-menu
         export_subMenu = file_menu.addMenu(self.tr("&Export as..."))
-        exportSrt_action = QAction("SubRip (.srt)", self)
-        # exportSrt_action.setShortcut(QKeySequence.SaveAs)
+        
+        exportSrt_action = QAction("&SubRip (.srt)", self)
         exportSrt_action.triggered.connect(self.exportSrt)
         export_subMenu.addAction(exportSrt_action)
+
+        export_eaf_action = QAction("&Elan (.eaf)", self)
+        export_eaf_action.triggered.connect(self.exportEaf)
+        export_subMenu.addAction(export_eaf_action)
+
 
         ## Parameters
         file_menu.addSeparator()
@@ -817,7 +823,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
         
         
-        
         self.status_bar = self.statusBar()
 
         # self.status_label = QLabel("Ready")
@@ -919,109 +924,6 @@ class MainWindow(QMainWindow):
         self.file_path = filepath
         self._saveFile(filepath)
 
-
-    def exportSrt(self):
-        dir = os.path.split(self.file_path)[0] if self.file_path else os.path.expanduser('~')
-        filename = os.path.splitext(self.file_path)[0] if self.file_path else "untitled"
-        filename += ".srt"
-
-        dialog = ExportSRTDialog(self, os.path.join(dir, filename))
-        result = dialog.exec()
-        
-        if result == QDialog.Rejected:
-            return
-        
-        # Here you would implement the actual export functionality
-        file_path = dialog.file_path.text()
-        
-        rm_special_tokens = True
-
-        doc = self.text_edit.document()
-        subs = []
-
-        block = doc.firstBlock()
-        while block.isValid():
-            skip = False
-            
-            if self.text_edit.getBlockType(block) != BlockType.ALIGNED:
-                skip = True
-            else:
-                # Remove unwanted strings from subtitle output
-                text = block.text()
-                text = re.sub(METADATA_PATTERN, ' ', text)
-                text = re.sub(r"<br>", '\u2028', text, count=0, flags=re.IGNORECASE)
-                text = re.sub(r"\*", '', text)
-
-                if dialog.apostrophe_norm_check_1.isChecked():
-                    text = text.replace("'", '’')
-                
-                if dialog.apostrophe_norm_check_2.isChecked():
-                    text = text.replace('’', "'")
-
-                formats = block.textFormats()
-                if len(formats) > 1:
-                    print(text)
-                    for f in formats:
-                        print(f.start, f.length, f.format)
-
-                # Change quotes characters
-                # quote_open = False
-                # while i:=text.find('"') >= 0:
-                #     if quote_open:
-                #         text = text.replace('"', '»', 1)
-                #     else:
-                #         text = text.replace('"', '«', 1)
-                #     quote_open = not quote_open
-
-                if rm_special_tokens:
-                    remainder = text[:]
-                    text_segments = []
-                    while match := re.search(r"</?([a-zA-Z \']+)>", remainder):
-                        # Accept a few HTML formatting elements
-                        if match[1].lower() in ('i', 'b', 'br'):
-                            text_segments.append(remainder[:match.end()])
-                        else:
-                            text_segments.append(remainder[:match.start()])
-                        remainder = remainder[match.end():]
-                    text_segments.append(remainder)
-                    text = ''.join(text_segments)
-                
-                # Remove extra spaces
-                lines = [' '.join(l.split()) for l in text.split('\u2028')]
-                text = '\n'.join(lines)
-                if not text:
-                    skip = True
-            
-            if not skip:
-                block_id = self.text_edit.getBlockId(block)
-                start, end = self.waveform.segments[block_id]
-                subs.append( (text, (start, end)) )
-            
-            block = block.next()
-
-        # Adjust minimal duration between two subtitles (>= 0.08s)
-        min_time = dialog.time_seconds
-        for i in range(len(subs) - 1):
-            text, (current_start, current_end) = subs[i]
-            _, (next_start, _) = subs[i+1]
-            if next_start - current_end < 0.08:
-                new_sub = (text, (current_start, next_start - min_time))
-                subs[i] = new_sub
-        
-        with open(file_path, 'w') as _f:
-            subs = [
-                srt.Subtitle(
-                    index=i,
-                    content=text,
-                    start=timedelta(seconds=start),
-                    end=timedelta(seconds=end)
-                ) for i, (text, (start, end)) in enumerate(subs)
-            ]
-            _f.write(srt.compose(subs))
-            print(f"Subtitles saved to {file_path}")
-
-            self.status_bar.showMessage(self.tr("Export to {} completed").format(file_path), STATUS_BAR_TIMEOUT)
-                    
 
     def openFile(self, file_path="", keep_text=False, keep_audio=False):
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
@@ -1232,6 +1134,37 @@ class MainWindow(QMainWindow):
 
         self.transcribe_button.setEnabled(True)
         self.waveform.draw()
+
+
+    def getUtterances(self):
+        """Return all sentences and segments for export"""
+        utterances = []
+        block = self.text_edit.document().firstBlock()
+        while block.isValid():            
+            if self.text_edit.getBlockType(block) == BlockType.ALIGNED:
+                text = block.text()
+
+                # Remove extra spaces
+                lines = [' '.join(l.split()) for l in text.split('\u2028')]
+                text = '\u2028'.join(lines)
+            
+                block_id = self.text_edit.getBlockId(block)
+                start, end = self.waveform.segments[block_id]
+                utterances.append( [text, (start, end)] )
+            
+            block = block.next()
+        
+        return utterances
+
+
+    def exportSrt(self):
+        exportSrtSignals.message.connect(self.setStatusMessage)
+        exportSrt(self, self.media_path, self.getUtterances())
+    
+
+    def exportEaf(self):
+        exportEafSignals.message.connect(self.setStatusMessage)
+        exportEaf(self, self.media_path, self.getUtterances())
 
 
     def showParameters(self):

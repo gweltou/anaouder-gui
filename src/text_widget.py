@@ -419,39 +419,20 @@ class TextEdit(QTextEdit):
         cursor.block().setUserData(MyTextBlockUserData({"seg_id": id}))
         self.highlighter.rehighlightBlock(cursor.block())
 
-    """
-    def insertSentenceWithId(self, text: str, utt_id: int, with_cursor=False):
-        
-        assert utt_id in self.parent.waveform.segments
-        seg_start, seg_end = self.parent.waveform.segments[utt_id]
-
-        doc = self.document()
-        block = doc.firstBlock()
-        while block.isValid():
-            block_id = self.getBlockId(block)
-            if block_id == utt_id:
-                self.undo_stack.push(
-                    ReplaceTextCommand(
-                        self,
-                        block,
-                        text,
-                        block.position()
-                    )
-                )
-            if block_id >= 0:
-                pass
-            block = block.next()
-    """
-
 
     def insertSentenceWithId(self, text: str, id: int, with_cursor=False):
         """
         Create a new utterance from an existing segment id
+
+        This action won't be added to the undo stack
         """
         assert id in self.parent.waveform.segments
 
         doc = self.document()
         seg_start, seg_end = self.parent.waveform.segments[id]
+
+        if not with_cursor:
+            self.document().blockSignals(True) # Prevent segment info display
 
         block = doc.firstBlock()
         while block.isValid():
@@ -471,13 +452,13 @@ class TextEdit(QTextEdit):
                     # Insert new utterance right before this one
                     cursor = QTextCursor(block)
                     cursor.movePosition(QTextCursor.StartOfBlock)
-                    cursor.movePosition(QTextCursor.Left)
+                    cursor.movePosition(QTextCursor.Left) # Go back one position
                     cursor.insertBlock()
                     cursor.insertText(text)
-                    cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                     cursor.block().setUserData(MyTextBlockUserData({"seg_id": id}))
                     self.highlighter.rehighlightBlock(cursor.block())
                     if with_cursor:
+                        # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                         self.setTextCursor(cursor)
                     return
             
@@ -485,6 +466,10 @@ class TextEdit(QTextEdit):
 
         # Insert new utterance at the end
         self.appendSentence(text, id)
+
+        if not with_cursor:
+            self.document().blockSignals(False)
+
         if with_cursor:
             self.setTextCursor(cursor)
     
