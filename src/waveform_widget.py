@@ -78,7 +78,6 @@ class ResizeSegmentCommand(QUndoCommand):
 
 
 
-
 class WaveformWidget(QWidget):
 
     class ScaledWaveform():
@@ -150,7 +149,6 @@ class WaveformWidget(QWidget):
             return self.filtered_audio
     
 
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
@@ -159,6 +157,25 @@ class WaveformWidget(QWidget):
         self.waveform = None
         self.pixmap = None
         self.painter = QPainter()
+
+        self.recognizer_progress = 0.0
+        self.display_scene_change = False
+        
+        self._to_sort = False
+        self._sorted_segments = []
+
+        self.timecode_margin = 17
+
+        # Accept focus for keyboard events
+        #self.setFocusPolicy(Qt.StrongFocus)
+        self.ctrl_pressed = False
+        self.shift_pressed = False
+        self.setMouseTracking(True) # get mouse move events even when no buttons are held down
+        self.over_left_handle = False
+        self.over_right_handle = False
+        self.mouse_pos = None
+        self.mouse_prev_pos = None
+        self.mouse_dir = 1 # 1 when going right, -1 when going left
 
         self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
         self.segpen = QPen(QColor(180, 150, 50, 180), 1)
@@ -187,24 +204,6 @@ class WaveformWidget(QWidget):
         self.timer.timeout.connect(self._updateScroll)
 
         self.clear()
-
-        # Accept focus for keyboard events
-        #self.setFocusPolicy(Qt.StrongFocus)
-        self.ctrl_pressed = False
-        self.shift_pressed = False
-        self.setMouseTracking(True) # get mouse move events even when no buttons are held down
-        self.over_left_handle = False
-        self.over_right_handle = False
-        self.mouse_pos = None
-        self.mouse_prev_pos = None
-        self.mouse_dir = 1 # 1 when going right, -1 when going left
-
-        self._to_sort = False
-        self._sorted_segments = []
-
-        self.timecode_margin = 17
-
-        self.display_scene_change = False
 
 
     def updateThemeColors(self):
@@ -314,7 +313,7 @@ class WaveformWidget(QWidget):
                     self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
                     if not self.timer.isActive():
                         self.timer.start(1000/30)
-                elif end > self._get_time_right():
+                elif end > self.getTimeRight():
                     t_right_goal = min(self.audio_len, end + 0.1 * window_dur)
                     self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
                     if not self.timer.isActive():
@@ -342,7 +341,7 @@ class WaveformWidget(QWidget):
         if (
                 not self.active_segments
                 and not self.timer.isActive()
-                and (t < self.t_left or t > self._get_time_right())
+                and (t < self.t_left or t > self.getTimeRight())
             ):
             # Slide waveform window
             self.t_left = t
@@ -354,7 +353,7 @@ class WaveformWidget(QWidget):
         self.selection = None
     
 
-    def _get_time_right(self):
+    def getTimeRight(self):
         """ Return the timecode at the right border of the window """
         return self.t_left + self.width() / self.ppsec
 
@@ -377,7 +376,7 @@ class WaveformWidget(QWidget):
 
         self.t_left += self.scroll_vel
         # Check for outside of wavefom positions
-        if self._get_time_right() >= self.audio_len:
+        if self.getTimeRight() >= self.audio_len:
             self.t_left = self.audio_len - self.width() / self.ppsec
             self.scroll_vel = 0
         if self.t_left < 0.0:
@@ -905,6 +904,7 @@ class WaveformWidget(QWidget):
 
     def _drawSceneChanges(self, t_right: float):
         height = 8
+        sep_height = 16
         y_pos = self.height()-height
         opacity = 200
         
@@ -926,7 +926,7 @@ class WaveformWidget(QWidget):
                 self.painter.drawRect(QRect(x, y_pos, w, height))
                 # Draw inter-scene lines
                 self.painter.setPen(QPen(QColor(100, 100, 100)))
-                self.painter.drawLine(x, self.height()-20, x, self.height())
+                self.painter.drawLine(x, self.height() - sep_height, x, self.height())
             elif tc < self.t_left and i < len(self.scenes)-1 and self.scenes[i+1][0] > t_right:
                 self.painter.setBrush(QBrush(QColor(r, g, b, opacity)))
                 self.painter.drawRect(QRect(0, y_pos, self.width(), height))
@@ -936,23 +936,29 @@ class WaveformWidget(QWidget):
     def draw(self):
         if not self.pixmap:
             return
+        
         # Fill background
         if not self.waveform:
             self.pixmap.fill(QColor(240, 240, 240))
             return
+        
         self.pixmap.fill(theme.wf_bg_color)
 
         width = self.width()
     
-        t_right = self._get_time_right()
+        t_right = self.getTimeRight()
         chart = self.waveform.get(self.t_left, t_right, width)
-        
-        # if not chart:
-        #     return
         
         wf_max_height = self.height() - self.timecode_margin
                 
         self.painter.begin(self.pixmap)
+
+        # Draw recognizer progress bar
+        if self.recognizer_progress > self.t_left:
+            self.painter.setPen(Qt.NoPen)
+            self.painter.setBrush(QBrush(theme.wf_progress))
+            w = (self.recognizer_progress - self.t_left) * self.ppsec
+            self.painter.drawRect(QRect(0, 0, w, self.height()))
 
         # Paint timecode lines and text
         if self.ppsec > 60:

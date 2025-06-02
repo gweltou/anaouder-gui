@@ -23,8 +23,8 @@ class RecognizerWorker(QObject):
 
     segment_transcribed = Signal(str, float, float, int, int) # (re-)transcribe a pre-defined segment
     new_segment_transcribed = Signal(str, list) # Create a new utterance with transcription
-    progress = Signal(float)
-    message = Signal(str)
+    progress = Signal(float)    # In seconds since the beginning of the audio file
+    message = Signal(str)   # Sends a message to be displayed in the status bar
     finished = Signal()
 
 
@@ -85,11 +85,15 @@ class RecognizerWorker(QObject):
             # Process the audio stream in chunks
             self.must_stop = False
             chunk_size = 4000
+            cumul_samples = 0
             while not self.must_stop:
                 data = process.stdout.read(chunk_size)
 
                 if len(data) == 0:
                     break
+
+                cumul_samples += len(data) // 2 # 2 bytes per sample
+                self.progress.emit(cumul_samples / self.SAMPLE_RATE) 
                     
                 if self.recognizer.AcceptWaveform(data):
                     result = json.loads(self.recognizer.Result())

@@ -82,7 +82,7 @@ import src.lang as lang
 WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
 AUTOSEG_MAX_LENGTH = 15
 AUTOSEG_MIN_LENGTH = 3
-STATUS_BAR_TIMEOUT = 3000
+STATUS_BAR_TIMEOUT = 4000
 
 
 
@@ -452,6 +452,7 @@ class MainWindow(QMainWindow):
         self.recognizer_worker.message.connect(self.setStatusMessage)
         self.recognizer_worker.segment_transcribed.connect(self.updateUtteranceTranscription)
         self.recognizer_worker.new_segment_transcribed.connect(self.addUtterance)
+        self.recognizer_worker.progress.connect(self.updateProgressBar)
         self.recognizer_thread = QThread()
         self.recognizer_worker.moveToThread(self.recognizer_thread)
         self.recognizer_thread.start()
@@ -834,7 +835,7 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def setStatusMessage(self, message: str):
-        self.status_bar.showMessage(message, 3000)
+        self.status_bar.showMessage(message, STATUS_BAR_TIMEOUT)
 
 
     def updateWindowTitle(self):
@@ -1404,8 +1405,7 @@ class MainWindow(QMainWindow):
             for start, end in segments
         ]
         print(segments)
-        self.status_bar.showMessage(self.tr("{} segments found").format(len(segments)), STATUS_BAR_TIMEOUT)
-        # self.waveform.clear()
+        self.setStatusMessage(self.tr("{n} segments found").format(n=len(segments)))
         for start, end in segments:
             segment_id = self.waveform.addSegment([start, end])
             self.text_edit.insertSentenceWithId('*', segment_id)
@@ -1474,6 +1474,13 @@ class MainWindow(QMainWindow):
         else:
             self.recognizer_worker.must_stop = True
     
+
+    @Slot(float)
+    def updateProgressBar(self, t: float):
+        self.waveform.recognizer_progress = t
+        if t > self.waveform.t_left and t < self.waveform.getTimeRight():
+            self.waveform.draw()
+
 
     @Slot()
     def transcribeButtonClicked(self):
@@ -1603,10 +1610,10 @@ class MainWindow(QMainWindow):
                 file_path = url.toLocalFile()
                 if file_path.endswith(ALL_COMPATIBLE_FORMATS):
                     event.acceptProposedAction()
-                    self.status_bar.showMessage(self.tr("Drop to open: {}").format(file_path), STATUS_BAR_TIMEOUT)
+                    self.setStatusMessage(self.tr("Drop to open: {}").format(file_path))
                     return
 
-        self.status_bar.showMessage(self.tr("Cannot open this file type"), STATUS_BAR_TIMEOUT)
+        self.setStatusMessage(self.tr("Cannot open this file type"))
 
 
     def dragMoveEvent(self, event):
