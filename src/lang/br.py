@@ -4,6 +4,11 @@ Breton
 
 from ostilhou.asr.models import _get_model_list
 from ostilhou.asr.post_processing import post_process_text as ostilhou_post_process_text
+from ostilhou.text import (
+    pre_process,
+    sentence_stats, normalize_sentence,
+)
+
 
 
 NAME = "brezhoneg"
@@ -37,3 +42,34 @@ def post_process_text(text: str) -> str:
 
 def pre_process_density(text: str) -> str:
     return text
+
+
+def process_word_for_alignment(s: str) -> str:
+    """
+    Process sentence for alignment matching used for 'smart splitting'
+    Special tokens and metadata are already accounted for.
+    Character '^' is reserved and used to signal a special token
+    """
+    s = pre_process(s)
+    if sentence_stats(s)["decimal"] > 0:
+        s = normalize_sentence(s, autocorrect=True)
+    s = s.replace("c'h", 'X')
+    s = s.replace('ch', 'S')
+    s = s.replace('à', 'a')
+    s = s.replace('â', 'a')
+    s = s.replace('ù', 'u')
+    s = s.replace('û', 'u')
+    s = s.replace('ê', 'e')
+    s = s.replace('é', 'e')
+    s = s.replace('è', 'e')
+    # Remove silent letters
+    s = s.replace('h', '')
+    # Remove double-letters
+    chars = []
+    for c in s:
+        if not chars:
+            chars.append(c)
+        elif c != chars[-1]:
+            chars.append(c)
+    s = ''.join(chars)
+    return s

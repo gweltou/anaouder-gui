@@ -77,6 +77,8 @@ from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
 import src.lang as lang
 
+from src.levenshtein_aligner import smart_split
+
 
 # Config
 WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
@@ -431,7 +433,7 @@ class MainWindow(QMainWindow):
     BUTTON_SPACING = 3
     BUTTON_MARGIN = 8
     
-    transcribe_file_signal = Signal(str)
+    transcribe_file_signal = Signal(str, float)    # Signals are needed for communication between threads
     transcribe_segments_signal = Signal(str, list)
 
     def __init__(self, file_path=""):
@@ -451,8 +453,9 @@ class MainWindow(QMainWindow):
         self.transcribe_segments_signal.connect(self.recognizer_worker.transcribeSegments)
         self.recognizer_worker.message.connect(self.setStatusMessage)
         self.recognizer_worker.segment_transcribed.connect(self.updateUtteranceTranscription)
-        self.recognizer_worker.new_segment_transcribed.connect(self.addUtterance)
+        self.recognizer_worker.new_segment_transcribed.connect(self.newSegmentTranscribed)
         self.recognizer_worker.progress.connect(self.updateProgressBar)
+        # self.recognizer_worker.end_of_file.connect(lambda: pass)
         self.recognizer_thread = QThread()
         self.recognizer_worker.moveToThread(self.recognizer_thread)
         self.recognizer_thread.start()
@@ -462,7 +465,8 @@ class MainWindow(QMainWindow):
         # Current opened file info
         self.file_path = file_path
         self.media_path = None
-        self.media_fps : int = None
+        self.media_metadata = dict()
+        self.hidden_transcription = False
 
         self.video_window = None
         self.audio_output = QAudioOutput()
@@ -575,14 +579,15 @@ class MainWindow(QMainWindow):
         autoSegment_action = QAction(self.tr("Auto segment"), self)
         autoSegment_action.triggered.connect(self.autoSegment)
         operation_menu.addAction(autoSegment_action)
-        ## Auto Transcribe
-        # transcribe_action = QAction(self.tr("Auto transcribe"), self)
-        # transcribe_action.triggered.connect(self.transcribe)
-        # operation_menu.addAction(transcribe_action)
         ## Adapt to subtitle
         adaptSubtitleAction = QAction(self.tr("Adapt to subtitles"), self)
         adaptSubtitleAction.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adaptSubtitleAction)
+        ## Hidden transcription
+        transcribe_action = QAction(self.tr("Hidden transcription"), self)
+        # transcribe_action.triggered.connect(self.transcribe)
+        operation_menu.addAction(transcribe_action)
+
 
 
         # Display Menu
@@ -666,7 +671,7 @@ class MainWindow(QMainWindow):
         self.transcribe_button.setShortcut(shortcuts["transcribe"])
         self.transcribe_button.setEnabled(False)
         self.transcribe_button.toggled.connect(self.toggleTranscribe)
-        self.transcribe_button.clicked.connect(self.transcribeButtonClicked)
+        # self.transcribe_button.clicked.connect(self.transcribeButtonClicked)
         self.recognizer_worker.finished.connect(self.transcribe_button.toggle)
         left_buttons_layout.addWidget(self.transcribe_button)
 
@@ -1090,24 +1095,6 @@ class MainWindow(QMainWindow):
         self.player.setSource(QUrl.fromLocalFile(file_path))
         self.media_path = file_path
 
-        self.media_metadata = self.cache.get_media_metadata(file_path)
-
-        if "fps" in self.media_metadata:
-            self.media_fps = self.media_metadata["fps"]
-        else:
-            # Check video framerate
-            audio_metadata = get_audiofile_info(file_path)
-            if "r_frame_rate" in audio_metadata:
-                print(f"Stream {audio_metadata["r_frame_rate"]=}")
-                if match := re.match(r"(\d+)/1", audio_metadata["r_frame_rate"]):
-                    self.media_fps = int(match[1])
-                    self.cache.update_media_metadata(self.media_path, {"fps": self.media_fps})
-                else:
-                    print(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
-            # if "avg_frame_rate" in metadata:
-            #     print(f"Stream {metadata["avg_frame_rate"]=}")
-
-
         # Convert to MP3 in case of MKV file
         # (problems with PyDub it seems)
         # _, ext = os.path.splitext(file_path)
@@ -1129,6 +1116,24 @@ class MainWindow(QMainWindow):
         
         print(f"{len(self.audio_samples)} samples")
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
+
+        self.media_metadata = self.cache.get_media_metadata(file_path)
+
+        if not "fps" in self.media_metadata:
+            # Check video framerate
+            audio_metadata = get_audiofile_info(file_path)
+            if "r_frame_rate" in audio_metadata:
+                print(f"Stream {audio_metadata["r_frame_rate"]=}")
+                if match := re.match(r"(\d+)/1", audio_metadata["r_frame_rate"]):
+                    self.media_metadata["fps"] = int(match[1])
+                    self.cache.update_media_metadata(self.media_path, self.media_metadata)
+                else:
+                    print(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
+            # if "avg_frame_rate" in metadata:
+            #     print(f"Stream {metadata["avg_frame_rate"]=}")
+
+        if "transcription_progress" in self.media_metadata:
+            self.waveform.recognizer_progress = self.media_metadata["transcription_progress"]
 
         if "scenes" in self.media_metadata:
             self.toggleSceneDetect(True)
@@ -1440,40 +1445,83 @@ class MainWindow(QMainWindow):
         self.waveform.draw()
 
 
-    @Slot(str, float, float, int, int)
+    @Slot(list, list, int)
     def updateUtteranceTranscription(
         self,
-        text: str,
-        start: float,
-        end: float,
+        tokens: list,
+        segment: list,
         seg_id: int,
-        i: int
     ):
         if seg_id not in self.waveform.segments:
-            # Create segment
-            self.undo_stack.push(CreateNewUtteranceCommand(self, [start, end], seg_id))
+            # Create segment as a undoable action
+            self.undo_stack.push(CreateNewUtteranceCommand(self, segment, seg_id))
             
         block = self.text_edit.getBlockById(seg_id)
+        text = self.handleRecognizerOutput(tokens)
+        text = lang.postProcessText(text)
         self.undo_stack.push(ReplaceTextCommand(self.text_edit, block, text, 0, 0))
-        # self.progress_bar.setValue(i+1)
 
 
-    @Slot(str, list)
-    def addUtterance(self, text, segment):
-        # This modification should not be added to the undo stack
-        segment_id = self.waveform.addSegment(segment)
+    @Slot(list)
+    def newSegmentTranscribed(self, tokens):
+        text = self.handleRecognizerOutput(tokens)
+        text = lang.postProcessText(text)
+        segment_start = tokens[0]["start"]
+        segment_end = tokens[-1]["end"]
+
+        old_progress = self.media_metadata.get("transcription_progress", 0.0)
+        self.media_metadata["transcription_progress"] = max(old_progress, segment_end)
+
+        if self.hidden_transcription:
+            return
+
+        # This action should not be added to the undo stack
+        segment_id = self.waveform.addSegment([segment_start, segment_end])
         self.text_edit.insertSentenceWithId(text, segment_id, with_cursor=False)
         self.waveform.draw()
 
+        # Check if there is already an utterance over this segment
+        # existing_segments = self.waveform.getSortedSegments()
+        # idx = 0
+        # while idx < len(existing_segments) and existing_segments[idx][1][1] < segment_start:
+        #     idx += 1
+        # if idx >= len(existing_segments) or existing_segments[idx][1][0] >= segment_end:
+        #     text = ' '.join([tok[2] for tok in tokens])
+        #     text = lang.postProcessText(text)
+        #     self.addUtterance(text, [segment_start, segment_end])
 
-    @Slot(bool)
-    def toggleTranscribe(self, toggled):
-        print("toggle", toggled)
-        if toggled:
-            self.transcribe()
+
+    def handleRecognizerOutput(self, tokens):
+        tokens = [ (t["start"], t["end"], t["word"], t["conf"], t["lang"]) for t in tokens ]
+
+        # Update backend transcription with new tokens
+        old_tokens = self.media_metadata.get("transcription", [])
+        updated_tokens = []
+        segment_start = tokens[0][0]
+        segment_end = tokens[-1][1]
+        idx = 0
+        if not old_tokens or segment_start >= old_tokens[-1][1]:
+            # Add tokens at the end
+            updated_tokens = old_tokens + tokens
         else:
-            self.recognizer_worker.must_stop = True
-    
+            for tok in old_tokens:
+                # Skip preceding tokens
+                if tok[1] > segment_start:
+                    break
+                updated_tokens.append(tok)
+                idx += 1
+            for tok in tokens:
+                updated_tokens.append(tok)
+            while idx < len(old_tokens) and old_tokens[idx][0] < segment_end:
+                # Go over old tokens in the same location
+                idx += 1
+            for tok in old_tokens[idx:]:
+                # Add latter tokens
+                updated_tokens.append(tok)
+        self.media_metadata["transcription"] = updated_tokens
+
+        return ' '.join([tok[2] for tok in tokens])
+
 
     @Slot(float)
     def updateProgressBar(self, t: float):
@@ -1482,14 +1530,21 @@ class MainWindow(QMainWindow):
             self.waveform.draw()
 
 
-    @Slot()
-    def transcribeButtonClicked(self):
-        print("clicked")
+    @Slot(bool)
+    def toggleTranscribe(self, toggled):
+        if toggled:
+            self.transcribeAction()
+        else:
+            self.recognizer_worker.must_stop = True
+    
 
-    def transcribe(self):
-        print("transcribing request")
+    # @Slot()
+    # def transcribeButtonClicked(self):
+    #     print("clicked")
+
+    def transcribeAction(self):
         if self.waveform.selection_is_active:
-            # Transcribe selection
+            # Transcribe current audio selection
             seg_id = self.waveform.getNewId()
             segments = [(seg_id, *self.waveform.selection)]
             self.transcribe_segments_signal.emit(self.media_path, segments)
@@ -1499,10 +1554,20 @@ class MainWindow(QMainWindow):
             # Transcribe selected segments
             segments = [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
             self.transcribe_segments_signal.emit(self.media_path, segments)
-        elif not self.waveform.segments:
+        else:
             # Transcribe whole audio file
-            print("transcribe whole file")
-            self.transcribe_file_signal.emit(self.media_path)        
+            transcription_progress = self.media_metadata.get("transcription_progress", 0.0)
+            if (
+                not self.waveform.segments
+                or transcription_progress >= self.waveform.getSortedSegments()[-1][1][1]
+            ):
+                # And create utterances
+                self.hidden_transcription = False
+            else:
+                # Don't create utterances
+                # Needed for "smart splitting"
+                self.hidden_transcription = True
+            self.transcribe_file_signal.emit(self.media_path, transcription_progress)
 
 
     # def splitUtterance(self, seg_id:int, pc:float):
@@ -1512,17 +1577,43 @@ class MainWindow(QMainWindow):
         """Split audio segment, given a char position in sentence"""
         block = self.text_edit.getBlockById(id)
         text = block.text()
-        start, end = self.waveform.segments[id]
-
-        dur = end - start
-        pc = position / len(text)
-        left_seg = [start, start + dur*pc - 0.05]
-        right_seg = [start + dur*pc + 0.05, end]
-        # left_id = self.waveform.getNewId()
-        right_id = self.waveform.getNewId()
+        seg_start, seg_end = self.waveform.segments[id]
 
         left_text = text[:position].rstrip()
         right_text = text[position:].lstrip()
+        left_seg = None
+        right_seg = None
+
+        # Check if we can "smart split"
+        cached_transcription = self.media_metadata.get("transcription", [])
+        if cached_transcription:
+            if seg_end <= cached_transcription[-1][1]:
+                tr_len = len(cached_transcription)
+                # Get tokens range corresponding to current segment
+                i = 0
+                while i < tr_len and cached_transcription[i][1] < seg_start:
+                    i += 1
+                j = i
+                while j < tr_len and cached_transcription[j][0] < seg_end:
+                    j += 1
+                tokens_range = cached_transcription[i:j]
+
+                try:
+                    left_seg, right_seg = smart_split(text, position, tokens_range)
+                    left_seg[0] = seg_start
+                    right_seg[1] = seg_end
+                except Exception as e:
+                    print(e)
+
+        if not left_seg or not right_seg:
+            # Revert to naive splitting method
+            dur = seg_end - seg_start
+            pc = position / len(text)
+            left_seg = [seg_start, seg_start + dur*pc - 0.05]
+            right_seg = [seg_start + dur*pc + 0.05, seg_end]
+        
+        # left_id = self.waveform.getNewId()
+        right_id = self.waveform.getNewId()
 
         self.undo_stack.beginMacro("split utterance")
         self.undo_stack.push(
@@ -1608,7 +1699,7 @@ class MainWindow(QMainWindow):
         if mime_data.hasUrls():
             for url in mime_data.urls():
                 file_path = url.toLocalFile()
-                if file_path.endswith(ALL_COMPATIBLE_FORMATS):
+                if file_path.lower().endswith(ALL_COMPATIBLE_FORMATS):
                     event.acceptProposedAction()
                     self.setStatusMessage(self.tr("Drop to open: {}").format(file_path))
                     return
@@ -1680,6 +1771,9 @@ class MainWindow(QMainWindow):
                 "waveform_pps": self.waveform.ppsec,
             }
             self.cache.update_doc_metadata(self.file_path, doc_metadata)
+        # Save media cache
+        if self.media_path:
+            self.cache.update_media_metadata(self.media_path, self.media_metadata)
         self.text_edit._updateScroll
         return super().closeEvent(event)
     

@@ -7,12 +7,11 @@ from vosk import KaldiRecognizer
 from PySide6.QtCore import (
     QObject,
     Signal, Slot,
-    QCoreApplication
 )
 
 from ostilhou.asr.models import load_model
 
-from src.lang import postProcessText, getModelPath
+from src.lang import getModelPath, getCurrentLanguage
 
 
 
@@ -21,11 +20,12 @@ class RecognizerWorker(QObject):
 
     SAMPLE_RATE = 16000
 
-    segment_transcribed = Signal(str, float, float, int, int) # (re-)transcribe a pre-defined segment
-    new_segment_transcribed = Signal(str, list) # Create a new utterance with transcription
+    segment_transcribed = Signal(list, list, int) # (re-)transcribe a pre-defined segment
+    new_segment_transcribed = Signal(list) # Create a new utterance with transcription
     progress = Signal(float)    # In seconds since the beginning of the audio file
     message = Signal(str)   # Sends a message to be displayed in the status bar
-    finished = Signal()
+    end_of_file = Signal()  # Whole file transcription is completed
+    finished = Signal()     # Used to toggle up the transcription button
 
 
     def __init__(self):
@@ -53,12 +53,22 @@ class RecognizerWorker(QObject):
 
 
     @Slot()
-    def transcribeFile(self, file_path: str):
-        def parse_vosk_result(result):
-            text = ' '.join([vosk_token['word'] for vosk_token in result])
-            segment = [result[0]['start'], result[-1]['end']]
-            return postProcessText(text), segment
+    def transcribeFile(self, file_path: str, start_time: float):
+        """ 
+        Transcribe a whole audio file by streaming from ffmpeg to Vosk
+        Emit a signal, passing a list of tokens, for each recognized utterance
         
+        Args:
+            file_path: Path to the audio file
+            start_time: Start time in seconds
+        """
+        # def parse_vosk_result(result):
+        #     text = ' '.join([vosk_token['word'] for vosk_token in result])
+        #     segment = [result[0]['start'], result[-1]['end']]
+        #     return postProcessText(text), segment
+        
+        current_language = getCurrentLanguage()
+
         self.message.emit(f"Transcribing...")
 
         # It's not enough to "reset" the recognizer, lest the timecodes keep incrementing
@@ -69,6 +79,7 @@ class RecognizerWorker(QObject):
             "ffmpeg",
             "-hide_banner", "-loglevel", "error",     # Reduce ffmpeg output to bare minimum
             "-i", file_path,
+            "-ss", str(start_time),                   
             "-ar", str(self.SAMPLE_RATE), "-ac", "1", # 16kHz sample rate, single channel
             "-f", "s16le",                            # 16-bit signed little-endian PCM
             "-",                                      # Output to stdout
@@ -93,23 +104,36 @@ class RecognizerWorker(QObject):
                     break
 
                 cumul_samples += len(data) // 2 # 2 bytes per sample
-                self.progress.emit(cumul_samples / self.SAMPLE_RATE) 
+                self.progress.emit(start_time + (cumul_samples / self.SAMPLE_RATE))
                     
                 if self.recognizer.AcceptWaveform(data):
                     result = json.loads(self.recognizer.Result())
                     if "result" in result:
-                        text, segment = parse_vosk_result(result["result"])
-                        self.new_segment_transcribed.emit(text, segment)
+                        # text, segment = parse_vosk_result(result["result"])
+                        # self.new_segment_transcribed.emit(text, segment)
+                        tokens = result["result"]
+                        for tok in tokens:
+                            tok["start"] += start_time
+                            tok["end"] += start_time
+                            tok["lang"] = current_language
+                        self.new_segment_transcribed.emit(tokens)
             
             if not self.must_stop:
                 result = json.loads(self.recognizer.FinalResult())
                 if "result" in result:
-                    text, segment = parse_vosk_result(result["result"])
-                    self.new_segment_transcribed.emit(text, segment)
+                    # text, segment = parse_vosk_result(result["result"])
+                    # self.new_segment_transcribed.emit(text, segment)
+                    tokens = result["result"]
+                    for tok in tokens:
+                            tok["start"] += start_time
+                            tok["end"] += start_time
+                            tok["lang"] = current_language
+                    self.new_segment_transcribed.emit(tokens)
             
                 # The 'finished' signal should be sent only if
                 # the recognizer wasn't interrupted by the user
                 self.finished.emit()
+                self.end_of_file.emit()
         
         except Exception as e:
             self.message.emit(f"Error during transcription: {e}")
@@ -132,13 +156,17 @@ class RecognizerWorker(QObject):
 
     @Slot(list)
     def transcribeSegments(self, file_path: str, segments: list):
+        current_language = getCurrentLanguage()
+
         self.must_stop = False
         for i, (seg_id, start, end) in enumerate(segments):
-            self.message.emit(f"Transcribing {i+1}/{len(segments)}")
-            text = self._transcribeSegment(file_path, start, end-start)
+            self.message.emit(
+                self.tr("Transcribing {n}/{n_segs}").format(n=i+1, n_segs=len(segments))
+            )
+            tokens = self._transcribeSegment(file_path, start, end-start, current_language)
             if self.must_stop:
                 break
-            self.segment_transcribed.emit(text, start, end, seg_id, i)
+            self.segment_transcribed.emit(tokens, [start, end], seg_id)
         if not self.must_stop:
             # The 'finished' signal should be sent only when
             # the recognizer wasn't interrupted
@@ -150,9 +178,10 @@ class RecognizerWorker(QObject):
             file_path: str,
             start_time: float, 
             duration: float,
-        ) -> str:
+            lang: str,
+        ) -> list:
         """ 
-        Transcribe a segment of an audio file by streaming from ffmpeg to Vosk
+        Transcribe a single segment of an audio file by streaming from ffmpeg to Vosk
         
         Args:
             input_file: Path to the audio file
@@ -160,7 +189,7 @@ class RecognizerWorker(QObject):
             duration: Duration of segment in seconds
             
         Returns:
-            Transcribed text from the segment
+            List of vosk tokens
         """
         
         self.recognizer.Reset()    # We won't be using the timecodes here anyway
@@ -186,7 +215,7 @@ class RecognizerWorker(QObject):
             
             # Process the audio stream in chunks
             chunk_size = 4000
-            text_parts = []
+            tokens = []
             self.must_stop = False
             while not self.must_stop:
                 data = process.stdout.read(chunk_size)
@@ -194,10 +223,10 @@ class RecognizerWorker(QObject):
                     break
                     
                 if self.recognizer.AcceptWaveform(data):
-                    text_parts.append(json.loads(self.recognizer.Result())["text"])
+                    tokens.extend(json.loads(self.recognizer.Result())["result"])
             
             if not self.must_stop:
-                text_parts.append(json.loads(self.recognizer.FinalResult())["text"])
+                tokens.extend(json.loads(self.recognizer.FinalResult())["result"])
         
         except Exception as e:
             self.message.emit(f"Error during transcription: {e}")
@@ -217,4 +246,8 @@ class RecognizerWorker(QObject):
                         process.kill()
                         process.wait()
         
-        return postProcessText(' '.join(text_parts))
+        for tok in tokens:
+            tok["start"] += start_time
+            tok["end"] += start_time
+            tok["lang"] = lang
+        return tokens

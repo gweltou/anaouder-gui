@@ -16,9 +16,10 @@ from PySide6.QtGui import QColor, QTextBlockUserData
 
 DIALOG_CHAR = '–'
 LINE_BREAK = '\u2028'
-STOP_CHARS = '.?!,‚;:«»“”"()[]{}/\…–—-_~^• \t\u2028'
+PUNCTUATION = '.?!,‚;:«»“”"()[]{}/\…–—-_~^•'
+STOP_CHARS = PUNCTUATION + ' \t\u2028'
 
-MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm")
+MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm", ".mov")
 ALL_COMPATIBLE_FORMATS = MEDIA_FORMATS + (".ali", ".seg", ".split", ".srt")
 
 

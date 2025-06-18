@@ -21,6 +21,7 @@ class Language:
     get_model_dict:         Callable[[], List[dict]]
     post_process_text:      Callable[[str], str] | None = None
     pre_process_density:    Callable[[str], str] | None = None
+    prepare_for_alignment:  Callable[[str], str] | None = None
 
     def __post_init__(self):
         self.model_dir = get_cache_directory(os.path.join("models", self.short_name))
@@ -34,6 +35,9 @@ class Language:
 
     def preProcessDensity(self, text: str) -> str:
         return self.pre_process_density(text)
+    
+    def processTextForAlignment(self, text: str) -> str:
+        return self.prepare_for_alignment(self, text)
     
     def getCachedModelList(self) -> List[str]:
         """Return a list of cached models"""
@@ -64,15 +68,12 @@ _current_language : Language = None
 for lang in LANG_MODULES:
     module = import_module(f"{__package__}.{lang}")
     try:
-        name = getattr(module, "NAME")
-        short_name = getattr(module, "SHORT_NAME")
-        get_model_dict = getattr(module, "get_model_dictionary")
-        post_process_text = getattr(module, "post_process_text")
         _languages[lang] = Language(
-            name=name,
-            short_name=short_name,
-            get_model_dict=get_model_dict,
-            post_process_text=post_process_text
+            name = getattr(module, "NAME"),
+            short_name = getattr(module, "SHORT_NAME"),
+            get_model_dict = getattr(module, "get_model_dictionary"),
+            post_process_text = getattr(module, "post_process_text", None),
+            prepare_for_alignment = getattr(module, "process_word_for_alignment", None),
         )
     except:
         print("Wrong Language Type")
@@ -95,6 +96,10 @@ def getModelUrl(model_name: str) -> str:
 
 def postProcessText(text: str) -> str:
     return _current_language.postProcessText(text)
+
+
+def prepWordForAlignment(text: str) -> str:
+    return _current_language.prepare_for_alignment(text)
 
 
 def getLanguages(long_name=False) -> List[str]:

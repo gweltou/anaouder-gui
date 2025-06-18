@@ -55,13 +55,13 @@ class CacheSystem:
 
         cache_dir = get_cache_directory()
         
-        self.transcriptions_dir = cache_dir / "transcripts"
-        if not self.transcriptions_dir.exists():
-            os.makedirs(self.transcriptions_dir, exist_ok=True)
-        
+        self.transcriptions_dir = cache_dir / "transcriptions"
         self.waveforms_dir = cache_dir / "waveforms"
-        if not self.waveforms_dir.exists():
-            os.makedirs(self.waveforms_dir, exist_ok=True)
+        self.scenes_dir = cache_dir / "scenes"
+
+        for d in (self.transcriptions_dir, self.waveforms_dir, self.scenes_dir):
+            if not d.exists():
+                os.makedirs(d, exist_ok=True)
         
         self.media_cache_path = cache_dir / "media_cache.jsonl"
         self.doc_cache_path = cache_dir / "doc_cache.jsonl"
@@ -154,6 +154,7 @@ class CacheSystem:
         if fingerprint in self.media_cache:
             metadata = self.media_cache[fingerprint]
             metadata["last_access"] = datetime.now().timestamp()
+            metadata["transcription"] = self._get_transcription(fingerprint)
             self._media_cache_dirty = True
             self.save()
             return metadata
@@ -166,7 +167,7 @@ class CacheSystem:
 
 
     def update_media_metadata(self, audio_path: str, metadata: dict):
-        print(f"Update media metadata cache, {audio_path}, {metadata}")
+        print(f"Update media metadata cache, {audio_path}")
         fingerprint = calculate_fingerprint(audio_path)
 
         metadata["file_path"] = os.path.abspath(audio_path) # Not sure we need this one, but hey...
@@ -179,6 +180,9 @@ class CacheSystem:
             metadata.update(
                 { "waveform_size": os.stat(waveform_path).st_size }
             )
+        
+        if "transcription" in metadata:
+            self._update_transcription(fingerprint, metadata.pop("transcription"))
         
         if fingerprint not in self.media_cache:
             self.media_cache[fingerprint] = {"file_size": os.stat(audio_path).st_size}
@@ -217,64 +221,42 @@ class CacheSystem:
         self.save()
     
 
-    def get_transcription(self, audio_path: str) -> List[dict]:
+    def _get_transcription(self, fingerprint: str) -> List[dict]:
         """Return the cached transcription for this audio file"""
-        fp = calculate_fingerprint(audio_path)
-        self._access_media(fp)
-        filepath = self._get_transcription_path(fp)
+        filepath = self._get_transcription_path(fingerprint)
         if not os.path.exists(filepath):
             return []
         tokens = []
         with open(filepath, 'r') as _f:
             for line in _f.readlines():
                 fields = line.strip().split('\t')
-                token = {
-                    "word": fields[0],
-                    "start": float(fields[1]),
-                    "end": float(fields[2]),
-                    "conf": float(fields[3]),
-                }
-                if len(fields) > 4:
-                    token["lang"] = fields[4]
+                token = (
+                    float(fields[0]),   # Start
+                    float(fields[1]),   # End
+                    fields[2],          # Word
+                    float(fields[3]),   # Conf
+                    fields[4],          # Lang
+                )
                 tokens.append(token)
         return tokens
 
 
-    def update_transcription(self, audio_path: str, tokens: List[dict], lang='br'):
+    def _update_transcription(self, fingerprint: str, tokens: List[tuple]):
         """
         Transcription format:
             Each word is on a different line.
             On each line, fields are separated by a tab (\t).
             Fields: word, start time, end time, confidence
         """
-        old_tokens = self.get_transcription(audio_path)
-        
-        # Update old transcription with new tokens
-        updated_tokens = []
-        segment_start = tokens[0]["start"]
-        segment_end = tokens[-1]["end"]
-        idx = 0
-        for tok in old_tokens:
-            if tok["end"] > segment_start:
-                break
-            updated_tokens.append(tok)
-            idx += 1
-        for tok in tokens:
-            tok["lang"] = lang
-            updated_tokens.append(tok)
-        while idx < len(old_tokens) and old_tokens[idx]["start"] < segment_end:
-            idx += 1
-        for tok in old_tokens[idx:]:
-            updated_tokens.append(tok)
         
         # Write transcription to disk
-        fp = calculate_fingerprint(audio_path)
-        with open(self._get_transcription_path(fp), 'w') as _fout:
-            for tok in updated_tokens:
-                fields = [ tok["word"], str(tok["start"]), str(tok["end"]), str(tok["conf"]) ]
-                if "lang" in tok:
-                    fields.append(tok["lang"])
-                _fout.write('\t'.join(fields) + '\n')
+        with open(self._get_transcription_path(fingerprint), 'w') as _fout:
+            for tok in tokens:
+                # fields = [ tok["word"], str(tok["start"]), str(tok["end"]), str(tok["conf"]) ]
+                # if "lang" in tok:
+                #     fields.append(tok["lang"])
+                tok = [ str(t) for t in tok ]
+                _fout.write('\t'.join(tok) + '\n')
         self._media_cache_dirty = True
     
     

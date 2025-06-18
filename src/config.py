@@ -2,4 +2,4 @@
 # -*- coding: utf-8 -*-
 
 DEFAULT_LANGUAGE = 'br'
-FUTURE = False
+FUTURE = True
