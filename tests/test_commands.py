@@ -141,3 +141,9 @@ def test_align_with_selection():
     main_window.undo_stack.push(DeleteSegmentsCommand(main_window, [block_id]))
     main_window.waveform.selection = segment
     undo_redo_command(AlignWithSelectionCommand(main_window, block))
+
+
+if main_window.recognizer_thread.isRunning():
+    main_window.recognizer_worker.must_stop = True
+    main_window.recognizer_thread.quit()
+    main_window.recognizer_thread.wait()
