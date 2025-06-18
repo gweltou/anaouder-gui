@@ -20,13 +20,13 @@ class Theme():
     margin_dark = QColor(255, 255, 255, 14)
     margin = margin_light
 
-    wf_bg_color_light = Qt.white
+    wf_bg_color_light = QColor(245, 245, 245)
     wf_bg_color_dark = QColor(30, 30, 30)
     wf_bg_color = wf_bg_color_light
     wf_timeline_light = QColor(210, 210, 210)
     wf_timeline_dark = QColor(180, 180, 180)
     wf_timeline = wf_timeline_light
-    wf_progress_light = QColor(246, 246, 246)
+    wf_progress_light = Qt.white
     wf_progress_dark = QColor(10, 10, 10)
     wf_progress = wf_progress_light
 
