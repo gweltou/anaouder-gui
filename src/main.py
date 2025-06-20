@@ -152,95 +152,95 @@ class CreateNewUtteranceCommand(QUndoCommand):
 
 
 
-class SplitUtteranceCommand(QUndoCommand):
-    def __init__(
-            self,
-            parent,
-            seg_id:int,
-            pos:int
-        ):
-        super().__init__()
-        self.text_edit : TextEdit = parent.text_edit
-        self.waveform : WaveformWidget = parent.waveform
-        self.pos = pos
-        self.text = self.text_edit.getBlockById(seg_id).text()
+# class SplitUtteranceCommand(QUndoCommand):
+#     def __init__(
+#             self,
+#             parent,
+#             seg_id:int,
+#             pos:int
+#         ):
+#         super().__init__()
+#         self.text_edit : TextEdit = parent.text_edit
+#         self.waveform : WaveformWidget = parent.waveform
+#         self.pos = pos
+#         self.text = self.text_edit.getBlockById(seg_id).text()
 
-        self.old_id = seg_id
-        self.old_segment = self.waveform.segments[seg_id][:]
-        self.seg_left_id = -1
-        self.seg_right_id = -1
-        self.user_data = {}
+#         self.old_id = seg_id
+#         self.old_segment = self.waveform.segments[seg_id][:]
+#         self.seg_left_id = -1
+#         self.seg_right_id = -1
+#         self.user_data = {}
     
-    def undo(self):
-        self.text_edit.document().blockSignals(True)
-        right_block = self.text_edit.getBlockById(self.seg_right_id)
+#     def undo(self):
+#         self.text_edit.document().blockSignals(True)
+#         right_block = self.text_edit.getBlockById(self.seg_right_id)
 
-        del self.waveform.segments[self.seg_left_id]
-        del self.waveform.segments[self.seg_right_id]
-        self.waveform.addSegment(self.old_segment, self.old_id)
+#         del self.waveform.segments[self.seg_left_id]
+#         del self.waveform.segments[self.seg_right_id]
+#         self.waveform.addSegment(self.old_segment, self.old_id)
         
-        # Delete new sentences
-        cursor = self.text_edit.textCursor()
-        cursor.setPosition(right_block.position())
-        cursor.select(QTextCursor.BlockUnderCursor)
-        cursor.removeSelectedText()
-        cursor.select(QTextCursor.BlockUnderCursor)
-        cursor.removeSelectedText()
+#         # Delete new sentences
+#         cursor = self.text_edit.textCursor()
+#         cursor.setPosition(right_block.position())
+#         cursor.select(QTextCursor.BlockUnderCursor)
+#         cursor.removeSelectedText()
+#         cursor.select(QTextCursor.BlockUnderCursor)
+#         cursor.removeSelectedText()
 
-        # Add old sentence
-        cursor.insertBlock()
-        cursor.insertText(self.text)
-        cursor.block().setUserData(MyTextBlockUserData(self.user_data))
+#         # Add old sentence
+#         cursor.insertBlock()
+#         cursor.insertText(self.text)
+#         cursor.block().setUserData(MyTextBlockUserData(self.user_data))
 
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, self.pos)
-        self.text_edit.setTextCursor(cursor)
-        self.waveform.setActive(self.old_id)
+#         cursor.movePosition(QTextCursor.StartOfBlock)
+#         cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, self.pos)
+#         self.text_edit.setTextCursor(cursor)
+#         self.waveform.setActive(self.old_id)
 
-        self.text_edit.document().blockSignals(False)
+#         self.text_edit.document().blockSignals(False)
 
-    def redo(self):
-        self.text_edit.document().blockSignals(True)
+#     def redo(self):
+#         self.text_edit.document().blockSignals(True)
 
-        # Split audio segment at pc (%) of total duration
-        dur = self.old_segment[1] - self.old_segment[0]
-        pc = self.pos / len(self.text)
-        seg_left = [self.old_segment[0], self.old_segment[0] + dur*pc - 0.05]
-        seg_right = [self.old_segment[0] + dur*pc + 0.05, self.old_segment[1]]
+#         # Split audio segment at pc (%) of total duration
+#         dur = self.old_segment[1] - self.old_segment[0]
+#         pc = self.pos / len(self.text)
+#         seg_left = [self.old_segment[0], self.old_segment[0] + dur*pc - 0.05]
+#         seg_right = [self.old_segment[0] + dur*pc + 0.05, self.old_segment[1]]
 
-        old_block = self.text_edit.getBlockById(self.old_id)
-        self.text_edit.deactivateSentence(self.old_id)
+#         old_block = self.text_edit.getBlockById(self.old_id)
+#         self.text_edit.deactivateSentence(self.old_id)
 
-        # Delete and recreate waveform segments
-        del self.waveform.segments[self.old_id]
-        self.seg_left_id = self.waveform.addSegment(seg_left)
-        self.seg_right_id = self.waveform.addSegment(seg_right)
+#         # Delete and recreate waveform segments
+#         del self.waveform.segments[self.old_id]
+#         self.seg_left_id = self.waveform.addSegment(seg_left)
+#         self.seg_right_id = self.waveform.addSegment(seg_right)
         
-        # Set old sentence id to left id
-        self.user_data = old_block.userData().data
-        cursor = QTextCursor(old_block)
-        cursor.select(QTextCursor.BlockUnderCursor)
-        cursor.removeSelectedText()
+#         # Set old sentence id to left id
+#         self.user_data = old_block.userData().data
+#         cursor = QTextCursor(old_block)
+#         cursor.select(QTextCursor.BlockUnderCursor)
+#         cursor.removeSelectedText()
 
-        # Create left text block
-        cursor.insertBlock()
-        cursor.insertText(self.text[:self.pos].rstrip())
-        user_data = self.user_data.copy()
-        user_data["seg_id"] = self.seg_left_id
-        cursor.block().setUserData(MyTextBlockUserData(user_data))
+#         # Create left text block
+#         cursor.insertBlock()
+#         cursor.insertText(self.text[:self.pos].rstrip())
+#         user_data = self.user_data.copy()
+#         user_data["seg_id"] = self.seg_left_id
+#         cursor.block().setUserData(MyTextBlockUserData(user_data))
 
-        # Create right text block
-        cursor.insertBlock()
-        cursor.insertText(self.text[self.pos:].lstrip())
-        user_data = self.user_data.copy()
-        user_data["seg_id"] = self.seg_right_id
-        cursor.block().setUserData(MyTextBlockUserData(user_data))
+#         # Create right text block
+#         cursor.insertBlock()
+#         cursor.insertText(self.text[self.pos:].lstrip())
+#         user_data = self.user_data.copy()
+#         user_data["seg_id"] = self.seg_right_id
+#         cursor.block().setUserData(MyTextBlockUserData(user_data))
 
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        self.text_edit.setTextCursor(cursor)
-        # self.waveform.refreshSegmentInfo()
+#         cursor.movePosition(QTextCursor.StartOfBlock)
+#         self.text_edit.setTextCursor(cursor)
+#         # self.waveform.refreshSegmentInfo()
 
-        self.text_edit.document().blockSignals(False)
+#         self.text_edit.document().blockSignals(False)
 
 
 
@@ -593,13 +593,13 @@ class MainWindow(QMainWindow):
             lambda checked: self.text_edit.highlighter.toggleMisspelling(checked))
         display_menu.addAction(toggleMisspelling)
 
-        toggleTextMargin = QAction(self.tr("Subtitle margin"), self)
-        toggleTextMargin.setCheckable(True)
-        toggleTextMargin.toggled.connect(
+        self.toggle_margin_action = QAction(self.tr("Subtitle margin"), self)
+        self.toggle_margin_action.setCheckable(True)
+        self.toggle_margin_action.toggled.connect(
             lambda checked: self.text_edit.toggleTextMargin(checked))
-        display_menu.addAction(toggleTextMargin)
+        display_menu.addAction(self.toggle_margin_action)
 
-        self.scene_detect_action = QAction(self.tr("Video transitions"), self)
+        self.scene_detect_action = QAction(self.tr("Scenes transitions"), self)
         self.scene_detect_action.setCheckable(True)
         self.scene_detect_action.toggled.connect(
             lambda checked: self.toggleSceneDetect(checked))
@@ -1065,7 +1065,12 @@ class MainWindow(QMainWindow):
         if "waveform_pps" in doc_metadata:
             self.waveform.ppsec = doc_metadata["waveform_pps"]
             self.waveform.waveform.ppsec = doc_metadata["waveform_pps"]
-        self.text_edit.setEnabled(True)
+        if "show_scenes" in doc_metadata and doc_metadata["show_scenes"] == True:
+            self.scene_detect_action.setChecked(True)
+        if "show_margin" in doc_metadata:
+            self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
+        
+        # self.text_edit.setEnabled(True)
 
         self.updateWindowTitle()
 
@@ -1131,7 +1136,7 @@ class MainWindow(QMainWindow):
             self.waveform.recognizer_progress = self.media_metadata["transcription_progress"]
 
         if "scenes" in self.media_metadata:
-            self.toggleSceneDetect(True)
+            self.waveform.scenes = self.media_metadata["scenes"]
 
         self.transcribe_button.setEnabled(True)
         self.waveform.draw()
@@ -1352,17 +1357,6 @@ class MainWindow(QMainWindow):
         self.text_edit.highlighter.setMode(Highlighter.ColorMode.DENSITY)
 
 
-    @Slot(float, tuple)
-    def newSceneChange(self, time, color):
-        self.waveform.scenes.append((time, color[0], color[1], color[2]))
-        self.waveform.draw()
-    
-
-    @Slot()
-    def sceneChangeFinished(self):
-        self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
-        
-
     def toggleSceneDetect(self, checked):
         print("fn toggleSceneDetect", checked)
         if checked and "fps" in self.media_metadata:
@@ -1379,7 +1373,6 @@ class MainWindow(QMainWindow):
                 self.scene_detector.new_scene.connect(self.newSceneChange)
                 self.scene_detector.finished.connect(self.sceneChangeFinished)
                 self.scene_detector.start()
-            # self.scene_detect_action.setChecked(True)
         else:
             self.waveform.display_scene_change = False
             if self.scene_detector and self.scene_detector.isRunning():
@@ -1387,6 +1380,17 @@ class MainWindow(QMainWindow):
             self.waveform.draw()
             self.scene_detect_action.setChecked(False)
 
+
+    @Slot(float, tuple)
+    def newSceneChange(self, time, color):
+        self.waveform.scenes.append((time, color[0], color[1], color[2]))
+        self.waveform.draw()
+    
+
+    @Slot()
+    def sceneChangeFinished(self):
+        self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
+    
 
     def autoSegment(self):
         print("Finding segments")
@@ -1571,11 +1575,11 @@ class MainWindow(QMainWindow):
             self.transcribe_file_signal.emit(self.media_path, transcription_progress)
 
 
-    # def splitUtterance(self, seg_id:int, pc:float):
-    #     self.undo_stack.push(SplitUtteranceCommand(self.text_edit, self.waveform, seg_id, pc))
-
     def splitUtterance(self, id:int, position:int):
-        """Split audio segment, given a char position in sentence"""
+        """
+        Split audio segment, given a char position in sentence
+        Called from the text edit widget
+        """
         block = self.text_edit.getBlockById(id)
         text = block.text()
         seg_start, seg_end = self.waveform.segments[id]
@@ -1603,6 +1607,7 @@ class MainWindow(QMainWindow):
                     left_seg, right_seg = smart_split(text, position, tokens_range)
                     left_seg[0] = seg_start
                     right_seg[1] = seg_end
+                    print("smart splitting")
                 except Exception as e:
                     print(e)
 
@@ -1612,8 +1617,9 @@ class MainWindow(QMainWindow):
             pc = position / len(text)
             left_seg = [seg_start, seg_start + dur*pc - 0.05]
             right_seg = [seg_start + dur*pc + 0.05, seg_end]
+            print("ratio splitting")
         
-        # left_id = self.waveform.getNewId()
+        left_id = self.waveform.getNewId()
         right_id = self.waveform.getNewId()
 
         self.undo_stack.beginMacro("split utterance")
@@ -1633,6 +1639,19 @@ class MainWindow(QMainWindow):
                 0
             )
         )
+
+        # self.undo_stack.push(DeleteUtterancesCommand(self, [id]))
+        # self.undo_stack.push(AddSegmentCommand(self.waveform, left_seg, left_id))
+        # self.undo_stack.push(
+        #     InsertBlockCommand(
+        #         self.text_edit,
+        #         block.position(),
+        #         seg_id=left_id,
+        #         text=left_text,
+        #         after=True
+        #     )
+        # )
+
         self.undo_stack.push(AddSegmentCommand(self.waveform, right_seg, right_id))
         self.undo_stack.push(
             InsertBlockCommand(
@@ -1770,8 +1789,11 @@ class MainWindow(QMainWindow):
                 "scroll_pos": self.text_edit.verticalScrollBar().value(),
                 "waveform_pos": self.waveform.t_left,
                 "waveform_pps": self.waveform.ppsec,
+                "show_scenes": self.scene_detect_action.isChecked(),
+                "show_margin": self.toggle_margin_action.isChecked(),
             }
             self.cache.update_doc_metadata(self.file_path, doc_metadata)
+        
         # Save media cache
         if self.media_path:
             self.cache.update_media_metadata(self.media_path, self.media_metadata)
@@ -1852,7 +1874,7 @@ def main(argv: list):
         ret = QMessageBox.question(
             window, 
             window.tr("Welcome"),
-            window.tr("It appears you don't have a transcription model yet.") +
+            window.tr("A transcription model is needed for automatic transcription.") +
             "\n\n" +
             window.tr("Would you like to download one ?"),
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel

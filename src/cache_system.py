@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 import numpy as np
+import copy
 
 from src.utils import get_cache_directory
 
@@ -47,8 +48,12 @@ def calculate_fingerprint(filepath: str):
 
 class CacheSystem:
     def __init__(self):
+        # Copy of cache found on disk
         self.media_cache : Dict[str, Dict] = dict()
         self.doc_cache : Dict[str, Dict] = dict()
+
+        # Volatile cache of last accessed media metadatas (scenes and transcription)
+        self.media_metadata_cache : Dict[str, Dict] = dict()
 
         self._media_cache_dirty = False # True when the db has unsaved changes
         self._doc_cache_dirty = False
@@ -66,10 +71,20 @@ class CacheSystem:
         self.media_cache_path = cache_dir / "media_cache.jsonl"
         self.doc_cache_path = cache_dir / "doc_cache.jsonl"
 
-        self.load()
-        
+        self._load_root_cache()
     
-    def load(self):
+
+    def _get_transcription_path(self, fingerprint: str) -> str:
+        return self.transcriptions_dir / f"{fingerprint}.tsv"
+
+    def _get_waveform_path(self, fingerprint: str) -> str:
+        return self.waveforms_dir / f"{fingerprint}.npy"
+
+    def _get_scenes_path(self, fingerprint: str) -> str:
+        return self.scenes_dir / f"{fingerprint}.tsv"
+
+    
+    def _load_root_cache(self):
         # Media file cache, indexed by audio fingerprint
         print("Loading media cache")
         try:
@@ -105,17 +120,9 @@ class CacheSystem:
             # We should try to restore the database
             self.doc_cache = dict()
 
-    
 
-    def _get_transcription_path(self, fingerprint: str) -> str:
-        return self.transcriptions_dir / f"{fingerprint}.tsv"
-
-    def _get_waveform_path(self, fingerprint: str) -> str:
-        return self.waveforms_dir / f"{fingerprint}.npy"
-
-
-    def save(self):
-        """Save cache to disk in line json format (jsonl)"""
+    def _update_root_cache_to_disk(self):
+        """Save cache root files to disk in line json format (jsonl)"""
         if self._media_cache_dirty:
             try:
                 with open(self.media_cache_path, 'w') as _f:
@@ -147,26 +154,40 @@ class CacheSystem:
                 self._doc_cache_dirty = False
             except Exception as e:
                 print(f"Error: Couln't save document cache to disk ({e})")
-    
-
-    def _access_media(self, fingerprint: int) -> dict:
-        """Get cached metadata for media file and update access time"""
-        if fingerprint in self.media_cache:
-            metadata = self.media_cache[fingerprint]
-            metadata["last_access"] = datetime.now().timestamp()
-            metadata["transcription"] = self._get_transcription(fingerprint)
-            self._media_cache_dirty = True
-            self.save()
-            return metadata
-        return {}
 
 
     def get_media_metadata(self, file_path: str):
+        """
+        Get cached metadata (except waveform) for media file and update access time
+        The waveform is never present in returned dictionary
+        You must call the 'get_waveform' method instead
+        """
         fingerprint = calculate_fingerprint(file_path)
-        return self._access_media(fingerprint)
+
+        if fingerprint in self.media_cache:
+            metadata = self.media_cache[fingerprint]
+            metadata["last_access"] = datetime.now().timestamp()
+            self._media_cache_dirty = True
+            self._update_root_cache_to_disk()
+
+            transcription = self._get_transcription_from_disk(fingerprint)
+            scenes = self._get_scenes_from_disk(fingerprint)
+
+            # We keep a copy of the loaded transcription and scenes in cache
+            self.media_metadata_cache[fingerprint] = {
+                "transcription": transcription,
+                "scenes": scenes
+            }
+
+            all_metadata = copy.deepcopy(metadata)
+            all_metadata["transcription"] = transcription[:]
+            all_metadata["scenes"] = scenes[:]
+            return all_metadata
+        return {}
 
 
     def update_media_metadata(self, audio_path: str, metadata: dict):
+        """Save media metadatas on disk"""
         print(f"Update media metadata cache, {audio_path}")
         fingerprint = calculate_fingerprint(audio_path)
 
@@ -175,14 +196,32 @@ class CacheSystem:
         
         if "waveform" in metadata:
             # Save waveform to disk
+            # the "waveform" property is present only if it was created or updated
             waveform_path = self._get_waveform_path(fingerprint)
             np.save(waveform_path, metadata.pop("waveform"))
             metadata.update(
                 { "waveform_size": os.stat(waveform_path).st_size }
             )
         
-        if "transcription" in metadata:
-            self._update_transcription(fingerprint, metadata.pop("transcription"))
+        if transcription := metadata.pop("transcription", []):
+            # Check if provided transcription differs from previously loaded one
+            if fingerprint in self.media_metadata_cache:
+                cached_transcription = self.media_metadata_cache[fingerprint]["transcription"]
+                if not cached_transcription or transcription != cached_transcription:
+                    self._update_transcription_to_disk(fingerprint, transcription)
+                    self.media_metadata_cache[fingerprint]["transcription"] = transcription
+            else:
+                self._update_transcription_to_disk(fingerprint, transcription)
+        
+        if scenes := metadata.pop("scenes", []):
+            # Check if provided transcription differs from previously loaded one
+            if fingerprint in self.media_metadata_cache:
+                cached_scenes = self.media_metadata_cache[fingerprint].get("scenes", [])
+                if not cached_scenes or scenes != cached_scenes:
+                    self._update_scenes_to_disk(fingerprint, scenes)
+                    self.media_metadata_cache[fingerprint]["scenes"] = scenes
+            else:
+                self._update_scenes_to_disk(fingerprint, scenes)
         
         if fingerprint not in self.media_cache:
             self.media_cache[fingerprint] = {"file_size": os.stat(audio_path).st_size}
@@ -191,7 +230,7 @@ class CacheSystem:
         cached_metadata.update(metadata)
 
         self._media_cache_dirty = True
-        self.save()
+        self._update_root_cache_to_disk()
     
 
     def _access_doc(self, file_path: str):
@@ -200,7 +239,7 @@ class CacheSystem:
             metadata = self.doc_cache[file_path]
             metadata["last_access"] = datetime.now().timestamp()
             self._doc_cache_dirty = True
-            self.save()
+            self._update_root_cache_to_disk()
             return metadata
         return {}
 
@@ -218,30 +257,68 @@ class CacheSystem:
         self.doc_cache.update({file_path: metadata})
 
         self._doc_cache_dirty = True
-        self.save()
+        self._update_root_cache_to_disk()
     
 
-    def _get_transcription(self, fingerprint: str) -> List[dict]:
-        """Return the cached transcription for this audio file"""
+    def _get_scenes_from_disk(self, fingerprint: str) -> List[tuple]:
+        """Return the cached scenes transitions for this media file"""
+        filepath = self._get_scenes_path(fingerprint)
+        if not os.path.exists(filepath):
+            return []
+        try:
+            scenes = []
+            with open(filepath, 'r') as _f:
+                for line in _f.readlines():
+                    t, r, g, b = line.strip().split('\t')
+                    scenes.append((float(t), int(r), int(g), int(b)))
+            return scenes
+        except Exception as e:
+            print(f"Error reading scenes file: {e}")
+            return []
+
+
+    def _update_scenes_to_disk(self, fingerprint: str, scenes: List[tuple]):
+        """
+        Scenes format:
+            Each scene is on a different line.
+            On each line, fields are separated by a tab (\t).
+            Fields: onset time, red channel, green channel, blue channel
+        """
+        
+        # Write scenes to disk
+        print("Writting scenes to disk")
+        with open(self._get_scenes_path(fingerprint), 'w') as _fout:
+            for scene in scenes:
+                scene = [ str(f) for f in scene ]
+                _fout.write('\t'.join(scene) + '\n')
+        self._media_cache_dirty = True
+
+
+    def _get_transcription_from_disk(self, fingerprint: str) -> List[tuple]:
+        """Return the cached transcription for this media file"""
         filepath = self._get_transcription_path(fingerprint)
         if not os.path.exists(filepath):
             return []
-        tokens = []
-        with open(filepath, 'r') as _f:
-            for line in _f.readlines():
-                fields = line.strip().split('\t')
-                token = (
-                    float(fields[0]),   # Start
-                    float(fields[1]),   # End
-                    fields[2],          # Word
-                    float(fields[3]),   # Conf
-                    fields[4],          # Lang
-                )
-                tokens.append(token)
-        return tokens
+        try:
+            tokens = []
+            with open(filepath, 'r') as _f:
+                for line in _f.readlines():
+                    fields = line.strip().split('\t')
+                    token = (
+                        float(fields[0]),   # Start
+                        float(fields[1]),   # End
+                        fields[2],          # Word
+                        float(fields[3]),   # Conf
+                        fields[4],          # Lang
+                    )
+                    tokens.append(token)
+            return tokens
+        except Exception as e:
+            print(f"Error reading transcription file: {e}")
+            return []
 
 
-    def _update_transcription(self, fingerprint: str, tokens: List[tuple]):
+    def _update_transcription_to_disk(self, fingerprint: str, tokens: List[tuple]):
         """
         Transcription format:
             Each word is on a different line.
@@ -250,29 +327,26 @@ class CacheSystem:
         """
         
         # Write transcription to disk
+        print("Writting transcription to disk")
         with open(self._get_transcription_path(fingerprint), 'w') as _fout:
             for tok in tokens:
-                # fields = [ tok["word"], str(tok["start"]), str(tok["end"]), str(tok["conf"]) ]
-                # if "lang" in tok:
-                #     fields.append(tok["lang"])
                 tok = [ str(t) for t in tok ]
                 _fout.write('\t'.join(tok) + '\n')
         self._media_cache_dirty = True
     
     
-    def clear_transcritpion(self, audio_path: str) -> None:
-        fp = calculate_fingerprint(audio_path)
-        filepath = self._get_transcription_path(fp)
-        if os.path.exists(filepath):
-            os.remove(filepath)
+    # def clear_transcription(self, audio_path: str) -> None:
+    #     fp = calculate_fingerprint(audio_path)
+    #     filepath = self._get_transcription_path(fp)
+    #     if os.path.exists(filepath):
+    #         os.remove(filepath)
 
 
     def get_waveform(self, audio_path: str) -> Optional[np.ndarray]:
-        print("get waveform cache")
-        fp = calculate_fingerprint(audio_path)
-        if fp in self.media_cache:
-            self._access_media(fp) # Update access time
-            waveform_path = self._get_waveform_path(fp)
+        print("Loading waveform from cache")
+        fingerprint = calculate_fingerprint(audio_path)
+        if fingerprint in self.media_cache:
+            waveform_path = self._get_waveform_path(fingerprint)
             if os.path.exists(waveform_path):
                 return np.load(waveform_path)
             else:
@@ -282,7 +356,7 @@ class CacheSystem:
     
 
     def clear(self, audio_path: str) -> None:
-        self.clear_transcritpion(audio_path)
+        self.clear_transcription(audio_path)
         fingerprint = calculate_fingerprint(audio_path)
         del self.media_cache[fingerprint]
-        self.save()
+        self._update_root_cache_to_disk()

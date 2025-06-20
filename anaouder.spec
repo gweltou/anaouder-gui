@@ -123,19 +123,20 @@ app = BUNDLE(
     exe,
     name='Anaouder.app',
     icon=None,
-    bundle_identifier='org.otilde.anaouder',
+    bundle_identifier='com.OTilde.Anaouder',
     info_plist={
+        'CFBundleExecutable': 'Anaouder',
+        'CFBundlePackageType': 'APPL',
         'NSPrincipalClass': 'NSApplication',
         'NSAppleScriptEnabled': False,
         'NSHighResolutionCapable': 'True',
         'LSMinimumSystemVersion': '10.13.0',
-        'NSRequiresAquaSystemAppearance': 'False',  # Add this for proper menu integration
+        'NSRequiresAquaSystemAppearance': 'False',
 	    'CFBundleDisplayName': 'Anaouder',
         'CFBundleName': 'Anaouder',
-        'CFBundleIdentifier': 'com.otilde.anaouder',
+        'CFBundleIdentifier': 'com.OTilde.Anaouder',
         'CFBundleShortVersionString': '1.0.0',
         'CFBundleVersion': '1.0.0',
-        'NSAppleScriptEnabled': False,
         'LSApplicationCategoryType': 'public.app-category.utilities',
     }
 )

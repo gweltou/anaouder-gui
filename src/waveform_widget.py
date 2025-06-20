@@ -753,7 +753,7 @@ class WaveformWidget(QWidget):
 
         # context.addSeparator()
         action_transcribe = QAction("Auto transcribe", self)
-        action_transcribe.triggered.connect(self.parent.transcribe)
+        action_transcribe.triggered.connect(self.parent.transcribeAction)
         context.addAction(action_transcribe)
 
         if self.selection_is_active:
