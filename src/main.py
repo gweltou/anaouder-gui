@@ -455,7 +455,7 @@ class MainWindow(QMainWindow):
         self.recognizer_worker.segment_transcribed.connect(self.updateUtteranceTranscription)
         self.recognizer_worker.new_segment_transcribed.connect(self.newSegmentTranscribed)
         self.recognizer_worker.progress.connect(self.updateProgressBar)
-        # self.recognizer_worker.end_of_file.connect(lambda: pass)
+        self.recognizer_worker.end_of_file.connect(self.handleRecognizerEOF)
         self.recognizer_thread = QThread()
         self.recognizer_worker.moveToThread(self.recognizer_thread)
         self.recognizer_thread.start()
@@ -583,11 +583,6 @@ class MainWindow(QMainWindow):
         adaptSubtitleAction = QAction(self.tr("Adapt to subtitles"), self)
         adaptSubtitleAction.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adaptSubtitleAction)
-        ## Hidden transcription
-        transcribe_action = QAction(self.tr("Hidden transcription"), self)
-        # transcribe_action.triggered.connect(self.transcribe)
-        operation_menu.addAction(transcribe_action)
-
 
 
         # Display Menu
@@ -1528,6 +1523,12 @@ class MainWindow(QMainWindow):
         self.waveform.recognizer_progress = t
         if t > self.waveform.t_left and t < self.waveform.getTimeRight():
             self.waveform.draw()
+
+
+    @Slot()
+    def handleRecognizerEOF(self):
+        self.media_metadata["transcription_completed"] = True
+        self.cache.update_media_metadata(self.media_path, self.media_metadata)
 
 
     @Slot(bool)
