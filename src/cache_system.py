@@ -74,13 +74,13 @@ class CacheSystem:
         self._load_root_cache()
     
 
-    def _get_transcription_path(self, fingerprint: str) -> str:
+    def _get_transcription_path(self, fingerprint: str) -> Path:
         return self.transcriptions_dir / f"{fingerprint}.tsv"
 
-    def _get_waveform_path(self, fingerprint: str) -> str:
+    def _get_waveform_path(self, fingerprint: str) -> Path:
         return self.waveforms_dir / f"{fingerprint}.npy"
 
-    def _get_scenes_path(self, fingerprint: str) -> str:
+    def _get_scenes_path(self, fingerprint: str) -> Path:
         return self.scenes_dir / f"{fingerprint}.tsv"
 
     
@@ -96,10 +96,10 @@ class CacheSystem:
                     fingerprint = entry.pop("fingerprint")
                     if "waveform_size" not in entry:
                         waveform_path = self._get_waveform_path(fingerprint)
-                        if os.path.exists(waveform_path):
+                        if waveform_path.exists():
                             # Add "waveform_size" property if absent
                             entry.update(
-                                { "waveform_size": os.stat(waveform_path).st_size }
+                                { "waveform_size": waveform_path.stat().st_size }
                             )
                             self._media_cache_dirty = True
                     self.media_cache[fingerprint] = entry
@@ -121,7 +121,7 @@ class CacheSystem:
             self.doc_cache = dict()
 
 
-    def _update_root_cache_to_disk(self):
+    def _save_root_cache_to_disk(self):
         """Save cache root files to disk in line json format (jsonl)"""
         if self._media_cache_dirty:
             try:
@@ -168,7 +168,7 @@ class CacheSystem:
             metadata = self.media_cache[fingerprint]
             metadata["last_access"] = datetime.now().timestamp()
             self._media_cache_dirty = True
-            self._update_root_cache_to_disk()
+            self._save_root_cache_to_disk()
 
             transcription = self._get_transcription_from_disk(fingerprint)
             scenes = self._get_scenes_from_disk(fingerprint)
@@ -208,20 +208,20 @@ class CacheSystem:
             if fingerprint in self.media_metadata_cache:
                 cached_transcription = self.media_metadata_cache[fingerprint]["transcription"]
                 if not cached_transcription or transcription != cached_transcription:
-                    self._update_transcription_to_disk(fingerprint, transcription)
+                    self._save_transcription_to_disk(fingerprint, transcription)
                     self.media_metadata_cache[fingerprint]["transcription"] = transcription
             else:
-                self._update_transcription_to_disk(fingerprint, transcription)
+                self._save_transcription_to_disk(fingerprint, transcription)
         
         if scenes := metadata.pop("scenes", []):
             # Check if provided transcription differs from previously loaded one
             if fingerprint in self.media_metadata_cache:
                 cached_scenes = self.media_metadata_cache[fingerprint].get("scenes", [])
                 if not cached_scenes or scenes != cached_scenes:
-                    self._update_scenes_to_disk(fingerprint, scenes)
+                    self._save_scenes_to_disk(fingerprint, scenes)
                     self.media_metadata_cache[fingerprint]["scenes"] = scenes
             else:
-                self._update_scenes_to_disk(fingerprint, scenes)
+                self._save_scenes_to_disk(fingerprint, scenes)
         
         if fingerprint not in self.media_cache:
             self.media_cache[fingerprint] = {"file_size": os.stat(audio_path).st_size}
@@ -230,7 +230,7 @@ class CacheSystem:
         cached_metadata.update(metadata)
 
         self._media_cache_dirty = True
-        self._update_root_cache_to_disk()
+        self._save_root_cache_to_disk()
     
 
     def _access_doc(self, file_path: str):
@@ -239,7 +239,7 @@ class CacheSystem:
             metadata = self.doc_cache[file_path]
             metadata["last_access"] = datetime.now().timestamp()
             self._doc_cache_dirty = True
-            self._update_root_cache_to_disk()
+            self._save_root_cache_to_disk()
             return metadata
         return {}
 
@@ -257,7 +257,7 @@ class CacheSystem:
         self.doc_cache.update({file_path: metadata})
 
         self._doc_cache_dirty = True
-        self._update_root_cache_to_disk()
+        self._save_root_cache_to_disk()
     
 
     def _get_scenes_from_disk(self, fingerprint: str) -> List[tuple]:
@@ -277,7 +277,7 @@ class CacheSystem:
             return []
 
 
-    def _update_scenes_to_disk(self, fingerprint: str, scenes: List[tuple]):
+    def _save_scenes_to_disk(self, fingerprint: str, scenes: List[tuple]):
         """
         Scenes format:
             Each scene is on a different line.
@@ -318,7 +318,7 @@ class CacheSystem:
             return []
 
 
-    def _update_transcription_to_disk(self, fingerprint: str, tokens: List[tuple]):
+    def _save_transcription_to_disk(self, fingerprint: str, tokens: List[tuple]):
         """
         Transcription format:
             Each word is on a different line.
@@ -359,4 +359,4 @@ class CacheSystem:
         self.clear_transcription(audio_path)
         fingerprint = calculate_fingerprint(audio_path)
         del self.media_cache[fingerprint]
-        self._update_root_cache_to_disk()
+        self._save_root_cache_to_disk()

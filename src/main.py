@@ -55,7 +55,7 @@ from PySide6.QtMultimedia import (
     QMediaDevices, QAudioOutput, QMediaMetaData
 )
 
-from src.config import DEFAULT_LANGUAGE, FUTURE
+from src.settings import APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG, app_settings
 from src.utils import splitForSubtitle, ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS
 from src.cache_system import CacheSystem
 from src.version import __version__
@@ -75,9 +75,9 @@ from src.commands import ReplaceTextCommand, InsertBlockCommand
 from src.parameters_dialog import ParametersDialog
 from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
+from src.levenshtein_aligner import smart_split
 import src.lang as lang
 
-from src.levenshtein_aligner import smart_split
 
 
 # Config
@@ -427,8 +427,6 @@ class DeleteSegmentsCommand(QUndoCommand):
 
 
 class MainWindow(QMainWindow):
-    APP_NAME = "Anaouder"
-
     BUTTON_SIZE = 28
     BUTTON_SPACING = 3
     BUTTON_MARGIN = 8
@@ -676,7 +674,7 @@ class MainWindow(QMainWindow):
         self.language_selection.currentIndexChanged.connect(
             lambda i: self.changeLanguage(self.languages[i])
         )
-        if FUTURE:
+        if MULTI_LANG:
             left_buttons_layout.addWidget(QLabel("Lang"))
             left_buttons_layout.addWidget(self.language_selection)
 
@@ -842,7 +840,7 @@ class MainWindow(QMainWindow):
         title_parts = []
         if not self.undo_stack.isClean():
             title_parts.append("●")
-        title_parts.append(self.APP_NAME)
+        title_parts.append(APP_NAME)
         title_parts.append(__version__)
         if self.file_path:
             title_parts.append('-')
@@ -916,7 +914,7 @@ class MainWindow(QMainWindow):
             basename += ext
         else:
             basename += ".ali"
-        dir = settings.value("editor/last_opened_folder", "")
+        dir = app_settings.value("editor/last_opened_folder", "")
         filepath, _ = QFileDialog.getSaveFileName(self, self.tr("Save File"), os.path.join(dir, basename))
         self.waveform.ctrl_pressed = False
         if not filepath:
@@ -931,11 +929,11 @@ class MainWindow(QMainWindow):
         audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
 
         if not file_path:
-            dir = settings.value("editor/last_opened_folder", "")
+            dir = app_settings.value("editor/last_opened_folder", "")
             file_path, _ = QFileDialog.getOpenFileName(self, "Open File", dir, ";;".join([supported_filter, audio_filter]))
             if not file_path:
                 return
-            settings.setValue("editor/last_opened_folder", os.path.split(file_path)[0])
+            app_settings.setValue("editor/last_opened_folder", os.path.split(file_path)[0])
         
         if not keep_audio:
             self.waveform.clear()
@@ -1177,9 +1175,7 @@ class MainWindow(QMainWindow):
         old_language = lang.getCurrentLanguage()
         dialog = ParametersDialog(self)
         result = dialog.exec()
-        if result == QDialog.Accepted:
-            # Here you would process and save the parameters
-            print("Parameters saved")
+        
         self.changeLanguage(old_language)
 
 
@@ -1856,9 +1852,6 @@ class MainWindow(QMainWindow):
 
 
 def main(argv: list):
-    global settings
-    settings = QSettings("anaouder", MainWindow.APP_NAME)
-
     file_path = ""
     
     if len(argv) > 1:
@@ -1874,7 +1867,7 @@ def main(argv: list):
         ret = QMessageBox.question(
             window, 
             window.tr("Welcome"),
-            window.tr("A transcription model is needed for automatic transcription.") +
+            window.tr("A Speech-To-Text model is needed for automatic transcription.") +
             "\n\n" +
             window.tr("Would you like to download one ?"),
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel

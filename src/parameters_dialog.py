@@ -7,6 +7,7 @@ import urllib.request
 import zipfile
 import tarfile
 import hashlib
+from pathlib import Path
 from time import sleep
 
 from PySide6.QtWidgets import (
@@ -18,11 +19,17 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QSizePolicy,
 )
-from PySide6.QtCore import Signal, QObject, Slot, Qt
+from PySide6.QtCore import (
+    Qt, QObject,
+    Signal, Slot, QUrl,
+    QSettings
+)
+from PySide6.QtGui import QDesktopServices
 
 import src.lang as lang
-from src.utils import download, get_cache_directory
-from src.config import FUTURE
+from src.cache_system import CacheSystem
+from src.utils import get_cache_directory
+from src.settings import MULTI_LANG, app_settings
 
 
 
@@ -215,24 +222,25 @@ class ParametersDialog(QDialog):
 
         self.tabs.addTab(ModelsTab(), self.tr("Models"))
         self.tabs.addTab(UITab(), self.tr("UI"))
+        self.tabs.addTab(CacheTab(parent.cache, parent.media_metadata), self.tr("Cache"))
         # self.tabs.addTab(self.display_tab, "Display")
         # self.tabs.addTab(self.dictionary_tab, "Dictionary")
         
         # Dialog buttons
         button_layout = QHBoxLayout()
-        self.save_button = QPushButton(self.tr("Save"))
-        self.save_button.clicked.connect(self.accept)
-        self.cancel_button = QPushButton(self.tr("Cancel"))
-        self.cancel_button.clicked.connect(self.reject)
+        self.close_button = QPushButton(self.tr("Close"))
+        self.close_button.clicked.connect(self.close)
+        # self.cancel_button = QPushButton(self.tr("Cancel"))
+        # self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addStretch()
-        button_layout.addWidget(self.save_button)
-        button_layout.addWidget(self.cancel_button)
+        button_layout.addWidget(self.close_button)
+        # button_layout.addWidget(self.cancel_button)
         
         # Main layout
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabs)
-        main_layout.addLayout(button_layout)
+        # main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
     
 
@@ -353,7 +361,7 @@ class ModelsTab(QWidget):
 
         main_layout = QVBoxLayout()
 
-        if FUTURE:
+        if MULTI_LANG:
             lang_group = QGroupBox(self.tr("Language"))
             lang_layout = QHBoxLayout()
             lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -406,7 +414,7 @@ class ModelsTab(QWidget):
         models_layout.addWidget(local_group)
         
         # main_layout.addLayout(lang_layout)
-        if FUTURE:
+        if MULTI_LANG:
             main_layout.addWidget(lang_group)
         main_layout.addLayout(models_layout)
         
@@ -443,7 +451,7 @@ class ModelsTab(QWidget):
     
 
     def updateLanguage(self):
-        if FUTURE:
+        if MULTI_LANG:
             lang.loadLanguage(self.lang_selection.currentText())
         self.online_models_list.clear()
         self.online_models_list.addItems(lang.getDownloadableModelList())
@@ -484,3 +492,305 @@ class UITab(QWidget):
 
     def updateUiLanguage(self):
         pass
+
+
+class CacheTab(QWidget):
+    def __init__(self, cache: CacheSystem, media_metadata, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.media_metadata = media_metadata
+        self.cache = cache
+
+        main_layout = QVBoxLayout()
+
+        self.current_file_group = QGroupBox(self.tr("Current file cache"))
+        self.current_file_group.setEnabled(bool(self.media_metadata) and "fingerprint" in self.media_metadata)
+        current_file_layout = QVBoxLayout()
+        
+        if self.current_file_group.isEnabled():
+            label = QLabel(self.media_metadata["fingerprint"])
+            label.setToolTip(self.tr("Media fingerprint"))
+        else:
+            label = QLabel("No media file loaded")
+        current_file_layout.addWidget(label)
+
+        # Current media size layout
+        current_size_layout = QHBoxLayout()
+        current_size_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        label = QLabel(self.tr("Size on disk:"))
+        current_size_layout.addWidget(label)
+        self.current_size_label = QLabel("")
+        current_size_layout.addWidget(self.current_size_label)
+        if self.current_file_group.isEnabled():
+            current_file_layout.addLayout(current_size_layout)
+
+        current_delete_group = QGroupBox(self.tr("Clear cache"))        
+        current_delete_layout = QHBoxLayout()
+        current_delete_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.current_waveform = QCheckBox(self.tr("Waveform"))
+        self.current_waveform.setChecked(True)
+        self.current_transcription = QCheckBox(self.tr("Transcription"))
+        self.current_transcription.setChecked(True)
+        self.current_scenes = QCheckBox(self.tr("Scenes"))
+        self.current_scenes.setChecked(True)
+        self.current_delete_btn = QPushButton(self.tr("Clear"))
+        self.current_delete_btn.setToolTip(self.tr("Clear cache for current file only"))
+        self.current_delete_btn.clicked.connect(self.clearCurrentCache)
+        current_delete_layout.addWidget(self.current_waveform)
+        current_delete_layout.addWidget(self.current_transcription)
+        current_delete_layout.addWidget(self.current_scenes)
+        current_delete_layout.addSpacing(16)
+        current_delete_layout.addWidget(self.current_delete_btn)
+        current_delete_group.setLayout(current_delete_layout)
+        current_file_layout.addWidget(current_delete_group)
+
+        # Hide unrelevant option
+        if self.current_file_group.isEnabled():
+            if not "transcription" in self.media_metadata or not self.media_metadata["transcription"]:
+                self.current_transcription.setHidden(True)
+            if not "scenes" in self.media_metadata or not self.media_metadata["scenes"]:
+                self.current_scenes.setHidden(True)
+        
+        self.current_file_group.setLayout(current_file_layout)
+        main_layout.addWidget(self.current_file_group)
+
+        ################
+
+        global_group = QGroupBox(self.tr("Global cache"))
+        global_layout = QVBoxLayout()
+        # global_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        open_cache_folder_btn = QPushButton(self.tr("Open folder"))
+        open_cache_folder_btn.setFixedWidth(120)
+        open_cache_folder_btn.setToolTip(self.tr("Open cache folder in file explorer "))
+        open_cache_folder_btn.clicked.connect(self.openCacheDirectory)
+        global_layout.addWidget(open_cache_folder_btn)
+
+        # Global size layout
+        global_size_layout = QHBoxLayout()
+        global_size_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        label = QLabel(self.tr("Size on disk:"))
+        global_size_layout.addWidget(label)
+        self.global_size_label = QLabel("")
+        global_size_layout.addWidget(self.global_size_label)
+        global_size_layout.addSpacing(16)
+        label = QLabel(self.tr("Size limit:"))
+        global_size_layout.addWidget(label)
+
+        self.global_size_spinbox = QSpinBox()
+        self.global_size_spinbox.setSuffix(' ' + self.tr("Mo"))
+        self.global_size_spinbox.setRange(0, 2000)
+        self.global_size_spinbox.setValue(int(app_settings.value("cache/media_cache_size", 500)))
+        self.global_size_spinbox.valueChanged.connect(self.changeCacheSize)
+        self.global_size_spinbox.setEnabled(False) # TODO
+        global_size_layout.addWidget(self.global_size_spinbox)
+
+        global_layout.addLayout(global_size_layout)
+
+        # Delete layout
+        global_delete_group = QGroupBox(self.tr("Clear cache"))
+        
+        global_delete_layout = QHBoxLayout()
+        global_delete_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.global_waveform = QCheckBox(self.tr("Waveforms"))
+        self.global_waveform.setChecked(True)
+        self.global_transcription = QCheckBox(self.tr("Transcriptions"))
+        self.global_transcription.setChecked(True)
+        self.global_scenes = QCheckBox(self.tr("Scenes"))
+        self.global_scenes.setChecked(True)
+        self.global_delete_btn = QPushButton(self.tr("Clear"))
+        self.global_delete_btn.setToolTip(self.tr("Clear global cache"))
+        self.global_delete_btn.clicked.connect(self.clearGlobalCache)
+        global_delete_layout.addWidget(self.global_waveform)
+        global_delete_layout.addWidget(self.global_transcription)
+        global_delete_layout.addWidget(self.global_scenes)
+        global_delete_layout.addSpacing(16)
+        global_delete_layout.addWidget(self.global_delete_btn)
+
+        global_delete_group.setLayout(global_delete_layout)
+        global_layout.addWidget(global_delete_group)
+        
+        global_group.setLayout(global_layout)
+        main_layout.addWidget(global_group)
+        main_layout.addStretch(1)
+
+        self.setLayout(main_layout)
+
+        self.update()
+    
+
+    def update(self):
+        """Update values of cache sizes"""
+        
+        if self.current_file_group.isEnabled():
+            fingerprint = self.media_metadata["fingerprint"]
+            size_strings = []
+            size_current_waveform = self.media_metadata.get("waveform_size", 0)
+            current_total_size = size_current_waveform
+            size_strings.append(
+                self.tr("Waveform ({waveform_size})")
+                    .format(waveform_size=self.simplifySize(size_current_waveform))
+            )
+            if self.cache._get_transcription_path(fingerprint).exists():
+                size_current_transcription = self.cache._get_transcription_path(fingerprint).stat().st_size
+                current_total_size += size_current_transcription
+                size_strings.append(
+                    self.tr("Transcription ({transcription_size})")
+                        .format(transcription_size=self.simplifySize(size_current_transcription))
+                )
+            if self.cache._get_scenes_path(fingerprint).exists():
+                size_current_scenes = self.cache._get_scenes_path(fingerprint).stat().st_size
+                current_total_size += size_current_scenes
+                size_strings.append(
+                    self.tr("Scenes ({scenes_size})")
+                        .format(scenes_size=self.simplifySize(size_current_scenes))
+                )
+            
+            self.current_size_label.setText(self.simplifySize(current_total_size))
+            self.current_size_label.setToolTip('\n'.join([f"* {s}" for s in size_strings]))
+
+        size_strings = []
+        size_all_waveforms = self.getSizeAllWaveforms()
+        size_all_transcriptions = self.getSizeAllTranscriptions()
+        size_all_scenes = self.getSizeAllScenes()
+
+        total_cache_size = size_all_waveforms + size_all_transcriptions + size_all_scenes
+        if self.cache.media_cache_path.exists():
+            total_cache_size += self.cache.media_cache_path.stat().st_size
+        if self.cache.doc_cache_path.exists():
+            total_cache_size += self.cache.doc_cache_path.stat().st_size
+
+        size_strings = [
+            self.tr("Waveforms ({waveforms_size})").format(waveforms_size=self.simplifySize(size_all_waveforms)),
+            self.tr("Transcriptions ({transcriptions_size})").format(transcriptions_size=self.simplifySize(size_all_transcriptions)),
+            self.tr("Scenes ({scenes_size})").format(scenes_size=self.simplifySize(size_all_scenes))
+        ]
+        self.global_size_label.setText(self.simplifySize(total_cache_size))
+        self.global_size_label.setToolTip('\n'.join([f"* {s}" for s in size_strings]))
+
+
+    def simplifySize(self, size: int) -> str:
+        units = [self.tr('o'), self.tr('Ko'), self.tr('Mo')]
+        unit_i = 0
+        while size >= 1000 and unit_i < len(units):
+            size /= 1000
+            unit_i += 1
+        size = round(size, 1)
+        return f"{size} {units[unit_i]}"
+
+    def getSizeAllWaveforms(self) -> int:
+        total_size = 0
+        for file in self.cache.waveforms_dir.iterdir():
+            if file.suffix == '.npy':
+                total_size += file.stat().st_size
+        return total_size
+
+    def getSizeAllTranscriptions(self) -> int:
+        total_size = 0
+        for file in self.cache.transcriptions_dir.iterdir():
+            if file.suffix == '.tsv':
+                total_size += file.stat().st_size
+        return total_size
+    
+    def getSizeAllScenes(self) -> int:
+        total_size = 0
+        for file in self.cache.scenes_dir.iterdir():
+            if file.suffix == '.tsv':
+                total_size += file.stat().st_size
+        return total_size
+    
+
+    def openCacheDirectory(self):
+        file_url = QUrl.fromLocalFile(get_cache_directory())
+        QDesktopServices.openUrl(file_url)
+    
+
+    def changeCacheSize(self):
+        cache_size = int(self.global_size_spinbox.value())
+        app_settings.setValue("cache/media_cache_size", cache_size)
+        app_settings.value("cache/media_cache_size", 500)
+    
+
+    def clearCurrentCache(self):
+        print("Clearing current media cache")
+
+        fingerprint = self.media_metadata["fingerprint"]
+
+        if self.current_waveform.isChecked():
+            waveform_path = self.cache._get_waveform_path(fingerprint)
+            waveform_path.unlink(missing_ok=True)
+            if fingerprint in self.cache.media_cache:
+                self.cache.media_cache[fingerprint].pop("waveform_size", None)
+                self.cache._media_cache_dirty = True
+            self.media_metadata.pop("waveform_size", None)
+
+        if self.current_transcription.isChecked():
+            transcription_path = self.cache._get_transcription_path(fingerprint)
+            transcription_path.unlink(missing_ok=True)
+            if fingerprint in self.cache.media_cache:
+                self.cache.media_cache[fingerprint].pop("transcription_progress", None)
+                self.cache.media_cache[fingerprint].pop("transcription_completed", None)
+                self.cache._media_cache_dirty = True
+            self.media_metadata.pop("transcription", None)
+            self.media_metadata.pop("transcription_progress", None)
+            self.media_metadata.pop("transcription_completed", None)
+        
+        if self.current_scenes.isChecked():
+            transcription_path = self.cache._get_transcription_path(fingerprint)
+            transcription_path.unlink(missing_ok=True)
+            self.media_metadata.pop("scenes", None)
+        
+        if (
+            self.current_waveform.isChecked() and
+            self.current_transcription.isChecked() and
+            self.current_scenes.isChecked()
+        ):
+            # Remove media record from cache root
+            self.cache.media_cache.pop(fingerprint, None)
+            self.cache._media_cache_dirty = True
+
+        self.cache._save_root_cache_to_disk()
+        self.update()
+
+    
+    def clearGlobalCache(self):
+        print("Clearing global media cache")
+
+        if self.global_waveform.isChecked():
+            for file in self.cache.waveforms_dir.iterdir():
+                if file.suffix == '.npy':
+                    file.unlink()
+                fingerprint = file.stem
+                if fingerprint in self.cache.media_cache:
+                    self.cache.media_cache[fingerprint].pop("waveform_size", None)
+                    self.cache._media_cache_dirty = True
+        
+        if self.global_transcription.isChecked():
+            for file in self.cache.transcriptions_dir.iterdir():
+                if file.suffix == '.tsv':
+                    file.unlink()
+                fingerprint = file.stem
+                if fingerprint in self.cache.media_cache:
+                    self.cache.media_cache[fingerprint].pop("transcription_progress", None)
+                    self.cache.media_cache[fingerprint].pop("transcription_completed", None)
+                    self.cache._media_cache_dirty = True
+        
+        if self.global_scenes.isChecked():
+            for file in self.cache.scenes_dir.iterdir():
+                if file.suffix == '.tsv':
+                    file.unlink()
+        
+        if (
+            self.global_waveform.isChecked() and
+            self.global_transcription.isChecked() and
+            self.global_scenes.isChecked()
+        ):
+            # Remove media cache root
+            self.cache.media_cache.clear()
+            self.cache.media_cache_path.unlink()
+            self.cache._media_cache_dirty = False
+        else:
+            self.cache._save_root_cache_to_disk()
+        
+        self.update()
