@@ -428,6 +428,10 @@ class WaveformWidget(QWidget):
     def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
         self.pixmap = QPixmap(self.size())
+        if self.width() > 0 and self.audio_len > 0:
+            self.ppsec = max(self.ppsec, self.width() / self.audio_len)
+            self.ppsec_goal = self.ppsec
+            self.waveform.ppsec = self.ppsec
         self.draw()
     
 
