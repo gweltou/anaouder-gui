@@ -234,7 +234,7 @@ class WaveformWidget(QWidget):
 
         self.selection = None
         self.selection_is_active = False
-        self.id_counter = 0    
+        self.id_counter = 0
         self._to_sort = True
         self.audio_len = 0
 
@@ -857,6 +857,9 @@ class WaveformWidget(QWidget):
 
         # Draw selected segment
         for seg_id in self.active_segments:
+            if seg_id not in self.segments:
+                continue
+
             # Check if segment is being resized
             if self.resizing_handle != None:
                 start, end = self.resizing_segment

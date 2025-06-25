@@ -261,10 +261,10 @@ class TextEdit(QTextEdit):
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document(), self)
 
-        self.defaultBlockFormat = QTextBlockFormat()
-        self.defaultCharFormat = QTextCharFormat()
-        self.activeCharFormat = QTextCharFormat()
-        self.activeCharFormat.setFontWeight(QFont.DemiBold)
+        # self.defaultBlockFormat = QTextBlockFormat()
+        # self.defaultCharFormat = QTextCharFormat()
+        # self.activeCharFormat = QTextCharFormat()
+        # self.activeCharFormat.setFontWeight(QFont.DemiBold)
         self.active_sentence_id = None
 
         self.scroll_goal = 0.0
@@ -289,6 +289,21 @@ class TextEdit(QTextEdit):
 
     def clear(self):
         self.document().clear()
+    
+
+    def getCursorState(self):
+        cursor = self.textCursor()
+        state = {
+            "position": cursor.position(),
+            "anchor": cursor.anchor(),
+        }
+        return state
+    
+
+    def setCursorState(self, state):
+        cursor = self.textCursor()
+        cursor.setPosition(state["position"])
+        self.setTextCursor(cursor)
 
 
     def getBlockType(self, block : QTextBlock) -> BlockType:
@@ -529,8 +544,16 @@ class TextEdit(QTextEdit):
 
 
     def setActive(self, id: int, with_cursor=True, update_waveform=True):
+        """Highlight a given utterance's text
+
+        Arguments:
+            with_cursor (boolean): scroll the text widget to the text cursor
+            update_waveform (boolean): call WaveformWidget's own setActive method
+        
+        # TODO: Maybe this would be better in MainWindow class
         # Cannot use highlighter.rehighilght() here as it would slow thing down too much
-            
+        """
+        
         # Reset previously selected utterance
         self.deactivateSentence()
 
@@ -543,9 +566,9 @@ class TextEdit(QTextEdit):
         self.highlighter.rehighlightBlock(block)
 
         if with_cursor:
-            cursor = QTextCursor(block)
+            # cursor = QTextCursor(block)
             # cursor.clearSelection()
-            self.setTextCursor(cursor)
+            # self.setTextCursor(cursor)
 
             # Scroll to selected utterance
             if not self.timer.isActive():

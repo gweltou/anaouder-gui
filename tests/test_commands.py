@@ -1,4 +1,5 @@
 from copy import deepcopy
+import random
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QUndoCommand, QTextCursor
@@ -6,9 +7,9 @@ from PySide6.QtGui import QUndoCommand, QTextCursor
 from src.main import (
     MainWindow,
     AddSegmentCommand, CreateNewUtteranceCommand,
-    DeleteUtterancesCommand, SplitUtteranceCommand,
+    DeleteUtterancesCommand,
     JoinUtterancesCommand, AlignWithSelectionCommand,
-    DeleteSegmentsCommand,
+    DeleteSegmentsCommand, InsertBlockCommand
 )
 from src.waveform_widget import (
     ResizeSegmentCommand, Handle,
@@ -29,13 +30,11 @@ def loadDocument():
     main_window.undo_stack.clear()
 
     for text, segment in [
-        ("Ur familh eürus.", (0.45, 2.25)),
-        ("Ur wech e oa ur plac'hig, un tad hag ur vamm he doa, hag ivez un tad-kozh hag ur vamm-gozh. Un eontr hag ar Voereb.", (2.773, 14.7)),
-        ("An holl dud-se a veve en un ti koant, gwenn, gant un doenn soul.", (16.05, 21.6)),
-        ("Ar plac'hig, a oa berr he vlev. Berr he divesker ha berr e vrozhioù ivez.", (23.73, 31.2)),
-        ("Brozhioù kotoñs gant roudennoù gwer ha gwenn hañv", (31.95, 35.4)),
-        ("ar re vuiañ liv ruz er goañv", (36.21, 39.24)),
-        ("mat eo", (41.28, 41.609)),
+        ("Linenn kentañ", (0.45, 2.25)),
+        ("Eil linenn.", (16.05, 21.6)),
+        ("Trede linenn", (23.73, 31.2)),
+        ("Pevare linenn", (32, 35)),
+        ("Pempvet linenn", (40, 41))
     ]:
         seg_id = main_window.waveform.addSegment(list(segment))
         main_window.text_edit.appendSentence(text, seg_id)
@@ -53,20 +52,27 @@ def getDocumentState() -> dict:
     while block.isValid():
         text = block.text()[:]
         data = deepcopy(block.userData().data) if block.userData() else {}
+        data.pop("density", None)
         state["blocks"].append((text, data))
         block = block.next()
     state["segments"] = deepcopy(main_window.waveform.segments)
     return state
 
 
-def undo_redo_command(command: QUndoCommand):
+def undo_redo_command(command: QUndoCommand, random_cursor=False):
     state1 = getDocumentState()
     main_window.undo_stack.push(command)
     state2 = getDocumentState()
     assert state1 != state2
+
+    if random_cursor:
+        doc_size = main_window.text_edit.document().lastBlock().position()
+        new_pos = random.randint(0, doc_size)
+        main_window.text_edit.setCursorState({"position": new_pos, "anchor": new_pos})
     main_window.undo()
     state3 = getDocumentState()
     assert state3 == state1
+
     main_window.redo()
     state4 = getDocumentState()
     assert state4 == state2
@@ -85,7 +91,6 @@ def undo_redo_function(function: callable, *args: list):
     assert state4 == state2
 
 
-
 def test_add_segment():
     loadDocument()
     undo_redo_command(AddSegmentCommand(main_window.waveform, [10, 12], 12))
@@ -93,12 +98,18 @@ def test_add_segment():
 
 def test_create_new_utterance():
     loadDocument()
-    undo_redo_command(CreateNewUtteranceCommand(main_window, [10, 12], 12))
+    undo_redo_command(
+        CreateNewUtteranceCommand(main_window, [10, 12], 12),
+        random_cursor=True
+    )
 
 
 def test_delete_utterances():
     loadDocument()
-    undo_redo_command(DeleteUtterancesCommand(main_window, [2, 3, 4]))
+    undo_redo_command(
+        DeleteUtterancesCommand(main_window, [2, 3, 4]),
+        random_cursor=True
+    )
 
 
 def test_split_utterance():
@@ -137,10 +148,38 @@ def test_align_with_selection():
 
     block_id = main_window.text_edit.getBlockId(block)
     segment = main_window.waveform.segments[block_id][:]
-    print(f"\n{block_id=} {segment=}")
     main_window.undo_stack.push(DeleteSegmentsCommand(main_window, [block_id]))
     main_window.waveform.selection = segment
     undo_redo_command(AlignWithSelectionCommand(main_window, block))
+
+
+def test_insert_block_command():
+    loadDocument()
+
+    segment = [40, 41]
+    seg_id = main_window.waveform.addSegment(segment)
+    text = "inserted text"
+
+    undo_redo_command(
+        InsertBlockCommand(
+            main_window.text_edit,
+            main_window.text_edit.textCursor().position(),
+            seg_id=seg_id,
+            text=text,
+        )
+    )
+    
+    loadDocument()
+    undo_redo_command(
+        InsertBlockCommand(
+            main_window.text_edit,
+            main_window.text_edit.textCursor().position(),
+            seg_id=seg_id,
+            text=text,
+            after=True
+        )
+    )
+
 
 
 if main_window.recognizer_thread.isRunning():

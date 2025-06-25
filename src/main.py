@@ -71,7 +71,7 @@ from src.text_widget import (
 from src.video_widget import VideoWindow
 from src.recognizer_worker import RecognizerWorker
 from src.scene_detector import SceneDetectWorker
-from src.commands import ReplaceTextCommand, InsertBlockCommand
+from src.commands import ReplaceTextCommand, InsertBlockCommand, MoveTextCursor
 from src.parameters_dialog import ParametersDialog
 from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
@@ -127,6 +127,7 @@ class CreateNewUtteranceCommand(QUndoCommand):
         self.parent : MainWindow = parent
         self.segment = segment
         self.seg_id = seg_id
+        self.prev_cursor = self.parent.text_edit.getCursorState()
     
     def undo(self):
         if self.parent.playing_segment == self.seg_id:
@@ -137,12 +138,9 @@ class CreateNewUtteranceCommand(QUndoCommand):
             self.parent.waveform.active_segments.remove(self.seg_id)
         self.parent.waveform._to_sort = True
         self.parent.waveform.draw()
-
-        self.parent.text_edit.setTextCursor(self.cursor)
+        self.parent.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
-        self.cursor = self.parent.text_edit.textCursor()
-
         self.seg_id = self.parent.waveform.addSegment(self.segment, self.seg_id)
         self.parent.text_edit.insertSentenceWithId('*', self.seg_id)
         self.parent.text_edit.setActive(self.seg_id, update_waveform=True)
@@ -356,10 +354,11 @@ class DeleteUtterancesCommand(QUndoCommand):
     def __init__(self, parent, seg_ids: list):
         super().__init__()
         self.text_edit: TextEdit = parent.text_edit
-        self.waveform = parent.waveform
+        self.waveform: WaveformWidget = parent.waveform
         self.seg_ids = seg_ids
         self.segments = [self.waveform.segments[seg_id] for seg_id in seg_ids]
         self.texts = [self.text_edit.getBlockById(seg_id).text() for seg_id in seg_ids]
+        self.prev_cursor = self.text_edit.getCursorState()
     
     def undo(self):
         for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
@@ -367,6 +366,7 @@ class DeleteUtterancesCommand(QUndoCommand):
             self.text_edit.insertSentenceWithId(text, seg_id)
         self.waveform.refreshSegmentInfo()
         self.waveform.draw()
+        self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
         # Delete text sentences
@@ -1573,7 +1573,7 @@ class MainWindow(QMainWindow):
 
     def splitUtterance(self, id:int, position:int):
         """
-        Split audio segment, given a char position in sentence
+        Split audio segment, given a char relative position in sentence
         Called from the text edit widget
         """
         block = self.text_edit.getBlockById(id)
@@ -1619,46 +1619,37 @@ class MainWindow(QMainWindow):
         right_id = self.waveform.getNewId()
 
         self.undo_stack.beginMacro("split utterance")
+        self.undo_stack.push(DeleteUtterancesCommand(self, [id]))
+        self.undo_stack.push(AddSegmentCommand(self.waveform, left_seg, left_id))
         self.undo_stack.push(
-            ResizeSegmentCommand(
-                self.waveform,
-                id,
-                Handle.RIGHT,
-                left_seg[1]
-            )
-        )
-        self.undo_stack.push(
-            ReplaceTextCommand(
+            InsertBlockCommand(
                 self.text_edit,
-                block,
-                left_text,
-                0
+                self.text_edit.textCursor().position(),
+                seg_id=left_id,
+                text=left_text,
+                after=True
             )
         )
-
-        # self.undo_stack.push(DeleteUtterancesCommand(self, [id]))
-        # self.undo_stack.push(AddSegmentCommand(self.waveform, left_seg, left_id))
-        # self.undo_stack.push(
-        #     InsertBlockCommand(
-        #         self.text_edit,
-        #         block.position(),
-        #         seg_id=left_id,
-        #         text=left_text,
-        #         after=True
-        #     )
-        # )
-
         self.undo_stack.push(AddSegmentCommand(self.waveform, right_seg, right_id))
         self.undo_stack.push(
             InsertBlockCommand(
                 self.text_edit,
-                block.position(),
+                self.text_edit.textCursor().position(),
                 seg_id=right_id,
                 text=right_text,
                 after=True
             )
         )
+        # Set cursor at the beggining of the right utterance
+        cursor = self.text_edit.textCursor()
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        self.undo_stack.push(
+            MoveTextCursor(self.text_edit, cursor.position())
+        )
         self.undo_stack.endMacro()
+
+        # self.text_edit.setTextCursor(cursor)
+        self.text_edit.setActive(right_id, update_waveform=True)
         self.waveform.draw()
 
 
