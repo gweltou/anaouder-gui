@@ -535,7 +535,7 @@ class TextEdit(QTextEdit):
 
 
     def deactivateSentence(self, id=None):
-        """ Reset format of currently active sentence """
+        """Reset format of currently active sentence"""
         if id or self.active_sentence_id != None:
             block = self.getBlockById(id or self.active_sentence_id)
             self.active_sentence_id = None

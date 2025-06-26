@@ -432,6 +432,18 @@ class WaveformWidget(QWidget):
             self.ppsec = max(self.ppsec, self.width() / self.audio_len)
             self.ppsec_goal = self.ppsec
             self.waveform.ppsec = self.ppsec
+        
+        # Recalculate the graphical elements heights
+        wf_max_height = self.height() - self.timecode_margin
+        self.top_y = self.timecode_margin + 0.18 * wf_max_height
+        self.down_y = self.timecode_margin + 0.82 * wf_max_height - self.top_y
+        self.selection_top_y = self.timecode_margin + 0.16 * wf_max_height
+        self.selection_down_y = self.timecode_margin + 0.86 * wf_max_height - self.top_y
+        self.handle_top_y = self.timecode_margin + 0.14 * wf_max_height
+        self.handle_down_y = self.timecode_margin + 0.86 * wf_max_height
+        self.inactive_top_y = self.timecode_margin + 0.2 * wf_max_height
+        self.inactive_down_y = self.timecode_margin + 0.8 * wf_max_height - self.inactive_top_y
+
         self.draw()
     
 
@@ -448,6 +460,23 @@ class WaveformWidget(QWidget):
 
 
     def getSegmentAtPosition(self, position: QPointF) -> int:
+        """
+        Return the segment id of any segment at this window position
+        or -1 if there is no segment at this position
+
+        Arguments:
+            position (QPointF):
+                Window position of the click
+
+        Returns:
+            segment id or -1
+        """
+        if (
+            position.y() < self.inactive_top_y
+            or position.y() > self.inactive_top_y + self.inactive_down_y
+        ):
+            return -1
+
         t = self.t_left + position.x() / self.ppsec
         for id, (start, end) in self.segments.items():
             if start <= t <= end:
@@ -763,7 +792,7 @@ class WaveformWidget(QWidget):
         if self.selection_is_active:
             # Context menu for selection segment
             action_create_segment = QAction("Add utterance", self)
-            action_create_segment.triggered.connect(self.parent.createNewUtterance)
+            action_create_segment.triggered.connect(self.parent.newUtteranceFromSelection)
             context.addAction(action_create_segment)
         else:
             # Context menu for regular segment(s)
@@ -785,15 +814,6 @@ class WaveformWidget(QWidget):
 
 
     def _drawSegments(self, t_right: float):
-        wf_max_height = self.height() - self.timecode_margin
-
-        top_y = self.timecode_margin + 0.16 * wf_max_height
-        down_y = self.timecode_margin + 0.84 * wf_max_height - top_y
-        handle_top_y = self.timecode_margin + 0.14 * wf_max_height
-        handle_down_y = self.timecode_margin + 0.86 * wf_max_height
-        inactive_top_y = self.timecode_margin + 0.2 * wf_max_height
-        inactive_down_y = self.timecode_margin + 0.8 * wf_max_height - inactive_top_y
-
         # Draw inactive segments
         for id, (start, end) in self.segments.items():
             if id in self.active_segments:
@@ -816,12 +836,12 @@ class WaveformWidget(QWidget):
                 self.painter.setPen(QPen(color, 1))
                 color.setAlpha(40)
                 self.painter.setBrush(QBrush(color))
-                self.painter.drawRoundedRect(QRect(x, inactive_top_y, w, inactive_down_y), 8, 8)
+                self.painter.drawRoundedRect(QRect(x, self.inactive_top_y, w, self.inactive_down_y), 8, 8)
             else:
                 color.setAlpha(40)
                 self.painter.setPen(Qt.NoPen)
                 self.painter.setBrush(QBrush(color))
-                self.painter.drawRect(x, inactive_top_y, w, inactive_down_y)
+                self.painter.drawRect(x, self.inactive_top_y, w, self.inactive_down_y)
 
         # Draw selection
         if self.selection:
@@ -832,32 +852,32 @@ class WaveformWidget(QWidget):
                 
                 if self.selection_is_active:
                     self.painter.setPen(QPen(QColor(110, 180, 240, 40), 3))
-                    self.painter.setBrush(QBrush(QColor(110, 180, 230, 40)))
-                    self.painter.drawRoundedRect(QRect(x, top_y, w, down_y), 8, 8)
-                    self.painter.setPen(QPen(QColor(110, 180, 230), 1))
+                    self.painter.setBrush(QBrush(QColor(110, 180, 240, 40)))
+                    self.painter.drawRoundedRect(QRect(x, self.selection_top_y, w, self.selection_down_y), 8, 8)
+                    self.painter.setPen(QPen(QColor(110, 180, 240), 1))
                     self.painter.setBrush(QBrush())
-                    self.painter.drawRoundedRect(QRect(x, top_y, w, down_y), 8, 8)
+                    self.painter.drawRoundedRect(QRect(x, self.selection_top_y, w, self.selection_down_y), 8, 8)
                 else:
                     self.painter.setBrush(QBrush(QColor(100, 150, 220, 50)))
                     self.painter.setPen(QPen(QColor(100, 150, 220), 1))
                     self.painter.drawRoundedRect(
-                        QRect(x, inactive_top_y, w, inactive_down_y), 8, 8)
+                        QRect(x, self.inactive_top_y, w, self.inactive_down_y), 8, 8)
                 
                 if self.ctrl_pressed:
                     if self.over_left_handle:
                         self.painter.setPen(self.handle_left_pen_shadow)
-                        self.painter.drawLine(x, handle_top_y, x, handle_down_y)
+                        self.painter.drawLine(x, self.handle_top_y, x, self.handle_down_y)
                         self.painter.setPen(self.handle_left_pen)
-                        self.painter.drawLine(x, handle_top_y+2, x, handle_down_y-2)
+                        self.painter.drawLine(x, self.handle_top_y+2, x, self.handle_down_y-2)
                     elif self.over_right_handle:
                         self.painter.setPen(self.handle_right_pen_shadow)
-                        self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
+                        self.painter.drawLine(x+w, self.handle_top_y, x+w, self.handle_down_y)
                         self.painter.setPen(self.handle_right_pen)
-                        self.painter.drawLine(x+w, handle_top_y+2, x+w, handle_down_y-2)
+                        self.painter.drawLine(x+w, self.handle_top_y+2, x+w, self.handle_down_y-2)
                     else:
                         self.painter.setPen(self.handlepen)
-                        self.painter.drawLine(x, handle_top_y, x, handle_down_y)
-                        self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
+                        self.painter.drawLine(x, self.handle_top_y, x, self.handle_down_y)
+                        self.painter.drawLine(x+w, self.handle_top_y, x+w, self.handle_down_y)
 
         # Draw selected segment
         for seg_id in self.active_segments:
@@ -876,14 +896,14 @@ class WaveformWidget(QWidget):
                 w = (end - start) * self.ppsec
                 t = mapNumber(utterance_density, 14.0, 22.0, 0.0, 1.0)
                 color = lerpColor(QColor(0, 255, 80), QColor(255, 80, 0), t)
-                color.setAlpha(60)
+                color.setAlpha(50)
                 self.painter.setPen(QPen(color, 3))
                 self.painter.setBrush(QBrush(color))
-                self.painter.drawRoundedRect(QRect(x, top_y, w, down_y), 8, 8)
+                self.painter.drawRoundedRect(QRect(x, self.top_y, w, self.down_y), 8, 8)
                 color.setAlpha(255)
                 self.painter.setPen(QPen(color, 1))
                 self.painter.setBrush(QBrush())
-                self.painter.drawRoundedRect(QRect(x, top_y, w, down_y), 8, 8)
+                self.painter.drawRoundedRect(QRect(x, self.top_y, w, self.down_y), 8, 8)
 
 
                 # Draw handles
@@ -892,21 +912,21 @@ class WaveformWidget(QWidget):
                 if self.ctrl_pressed:
                     if self.over_left_handle:
                         self.painter.setPen(self.handle_left_pen_shadow)
-                        self.painter.drawLine(x, handle_top_y, x, handle_down_y)
+                        self.painter.drawLine(x, self.handle_top_y, x, self.handle_down_y)
                         self.painter.setPen(self.handle_left_pen)
-                        self.painter.drawLine(x, handle_top_y, x, handle_down_y)
+                        self.painter.drawLine(x, self.handle_top_y, x, self.handle_down_y)
                     elif self.over_right_handle:
                         self.painter.setPen(self.handle_right_pen_shadow)
-                        self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
+                        self.painter.drawLine(x+w, self.handle_top_y, x+w, self.handle_down_y)
                         self.painter.setPen(self.handle_right_pen)
-                        self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
+                        self.painter.drawLine(x+w, self.handle_top_y, x+w, self.handle_down_y)
                     else:
                         self.painter.setPen(self.handlepen_shadow)
-                        self.painter.drawLine(x, handle_top_y, x, handle_down_y)
-                        self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
+                        self.painter.drawLine(x, self.handle_top_y, x, self.handle_down_y)
+                        self.painter.drawLine(x+w, self.handle_top_y, x+w, self.handle_down_y)
                         self.painter.setPen(self.handlepen)
-                        self.painter.drawLine(x, handle_top_y, x, handle_down_y)
-                        self.painter.drawLine(x+w, handle_top_y, x+w, handle_down_y)
+                        self.painter.drawLine(x, self.handle_top_y, x, self.handle_down_y)
+                        self.painter.drawLine(x+w, self.handle_top_y, x+w, self.handle_down_y)
 
 
     def _drawSceneChanges(self, t_right: float):
@@ -1005,7 +1025,7 @@ class WaveformWidget(QWidget):
             self.painter.setPen(QPen(QColor(255, 20, 20, 100)))
             self.painter.drawLine(t_x, 0, t_x, self.height())
         
-        # Paint waveform
+        # Draw waveform
         self.painter.setPen(self.wavepen)
         pix_per_sample = self.waveform.ppsec / self.waveform.sr
         if pix_per_sample <= 1.0:
@@ -1017,6 +1037,7 @@ class WaveformWidget(QWidget):
         else:
             pass
 
+        # Draw segments
         self._drawSegments(t_right)
         
         self.painter.end()

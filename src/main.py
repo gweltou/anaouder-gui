@@ -1558,7 +1558,12 @@ class MainWindow(QMainWindow):
         else:
             # Transcribe whole audio file
             transcription_progress = self.media_metadata.get("transcription_progress", 0.0)
-            if (
+            transcription_completed = self.media_metadata.get("transcription_completed", False)
+            if not self.waveform.segments and transcription_completed:
+                # Reset transcription if there is no segment
+                transcription_progress = 0.0
+                self.hidden_transcription = False
+            elif (
                 not self.waveform.segments
                 or transcription_progress >= self.waveform.getSortedSegments()[-1][1][1]
             ):
