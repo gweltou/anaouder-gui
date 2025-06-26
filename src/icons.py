@@ -26,6 +26,7 @@ def loadIcons():
     icons["back"] = QIcon(resourcePath("icons/back.png"))
     icons["previous"] = QIcon(resourcePath("icons/previous.png"))
     icons["next"] = QIcon(resourcePath("icons/next.png"))
+    icons["loop"] = QIcon(resourcePath("icons/endless-loop.png"))
     icons["zoom_in"] = QIcon(resourcePath("icons/zoom_in.png"))
     icons["zoom_out"] = QIcon(resourcePath("icons/zoom_out.png"))
     icons["sparkles"] = QIcon(resourcePath("icons/sparkles-yellow.png"))
@@ -37,6 +38,8 @@ def loadIcons():
     icons["numbers"] = QIcon(resourcePath("icons/123-numbers.png"))
     icons["font"] = QIcon(resourcePath("icons/font.png"))
     icons["waveform"] = QIcon(resourcePath("icons/waveform.png"))
+    icons["volume"] = QIcon(resourcePath("icons/volume.png"))
+    icons["rabbit"] = QIcon(resourcePath("icons/rabbit-fast.png"))
 
     icons["folder"] = QIcon(resourcePath("icons/folder.png"))
 

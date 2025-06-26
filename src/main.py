@@ -428,8 +428,11 @@ class DeleteSegmentsCommand(QUndoCommand):
 
 class MainWindow(QMainWindow):
     BUTTON_SIZE = 28
+    BUTTON_MEDIA_SIZE = 30
     BUTTON_SPACING = 3
-    BUTTON_MARGIN = 8
+    BUTTON_MARGIN = 4
+    BUTTON_LABEL_SIZE = 15
+    DIAL_SIZE = 32
     
     transcribe_file_signal = Signal(str, float)    # Signals are needed for communication between threads
     transcribe_segments_signal = Signal(str, list)
@@ -472,6 +475,7 @@ class MainWindow(QMainWindow):
         self.player.positionChanged.connect(self.updatePlayer)
         self.player.setAudioOutput(self.audio_output)
         self.playing_segment = -1
+        self.looping = False
         self.caption_counter = 0
 
         self.undo_stack = QUndoStack(self)
@@ -498,14 +502,14 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.search)
         ## Play
         shortcut = QShortcut(shortcuts["play_stop"], self)
-        shortcut.activated.connect(self.play)
+        shortcut.activated.connect(self.playAction)
         # Next
         shortcut = QShortcut(shortcuts["play_next"], self)
         print(shortcuts["play_next"])
-        shortcut.activated.connect(self.playNext)
+        shortcut.activated.connect(self.playNextAction)
         # Prev
         shortcut = QShortcut(shortcuts["play_prev"], self)
-        shortcut.activated.connect(self.playPrev)
+        shortcut.activated.connect(self.playPrevAction)
 
         # shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
         # shortcut.activated.connect(self.undo)
@@ -638,18 +642,15 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.showAbout)
         help_menu.addAction(about_action)
 
-
-        ### TOP BAR
+        ########################
+        ####  TOP TOOL-BAR  ####
+        ########################
 
         top_bar_layout = QHBoxLayout()
-        top_bar_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        # top_bar_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        top_bar_layout.setContentsMargins(0, 2, 0, 2)
         top_bar_layout.setSpacing(MainWindow.BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setContentsMargins(0, 0, 0, 0)
-        buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         left_buttons_layout = QHBoxLayout()
         left_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
@@ -694,52 +695,9 @@ class MainWindow(QMainWindow):
         normalizationCheckbox.setToolTip(self.tr("Normalize numbers"))
         left_buttons_layout.addWidget(normalizationCheckbox)
 
-        # Play buttons
-        center_buttons_layout = QHBoxLayout()
-        center_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        center_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
-        # centerButtonsLayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        center_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        top_bar_layout.addLayout(left_buttons_layout)
 
-        back_button = QPushButton()
-        back_button.setIcon(icons["back"])
-        back_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        back_button.setToolTip(self.tr("Go to first utterance"))
-        back_button.clicked.connect(self.back)
-        center_buttons_layout.addWidget(back_button)
-
-        #buttonsLayout.addSpacerItem(QSpacerItem())
-        prev_button = QPushButton()
-        prev_button.setIcon(icons["previous"])
-        prev_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        prev_button.setToolTip(self.tr("Previous utterance") + f" <{shortcuts["play_prev"].toString()}>")
-        # button.setIcon(QIcon(icon_path))
-        prev_button.clicked.connect(self.playPrev)
-        center_buttons_layout.addWidget(prev_button)
-
-        self.play_button = QPushButton()
-        self.play_button.setIcon(icons["play"])
-        self.play_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        self.play_button.setToolTip(self.tr("Play current utterance") + f" <{shortcuts["play_stop"].toString()}>")
-        self.play_button.clicked.connect(self.play)
-        center_buttons_layout.addWidget(self.play_button)
-
-        next_button = QPushButton()
-        next_button.setIcon(icons["next"])
-        next_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        next_button.setToolTip(self.tr("Next utterance") + f" <{shortcuts["play_next"].toString()}>")
-        next_button.clicked.connect(self.playNext)
-        center_buttons_layout.addWidget(next_button)
-
-        volume_dial = QDial()
-        # volumeDial.setMaximumWidth(button_size*1.5)
-        volume_dial.setMaximumSize(QSize(MainWindow.BUTTON_SIZE*1.1, MainWindow.BUTTON_SIZE*1.1))
-        # volumeDial.minimumSizeHint(QSize(button_size, button_size))
-        volume_dial.setToolTip(self.tr("Audio volume"))
-        volume_dial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
-        volume_dial.setValue(100)
-        center_buttons_layout.addWidget(volume_dial)
-
+        # Text format buttons
         # buttonsLayout.addSpacing(16)
         format_buttons_layout = QHBoxLayout()
         format_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
@@ -749,76 +707,168 @@ class MainWindow(QMainWindow):
         italic_button = QPushButton()
         italic_button.setIcon(icons["italic"])
         italic_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        italic_button.setEnabled(False) # TODO
         format_buttons_layout.addWidget(italic_button)
         bold_button = QPushButton()
         bold_button.setIcon(icons["bold"])
         bold_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        bold_button.setEnabled(False) # TODO
         format_buttons_layout.addWidget(bold_button)
+
+        top_bar_layout.addLayout(format_buttons_layout)
+
+        # Text zoom buttons
+        zoom_buttons_layout = QHBoxLayout()
+        zoom_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        zoom_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        zoom_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        zoom_buttons_layout.addWidget(IconWidget(icons["font"], MainWindow.BUTTON_LABEL_SIZE))
+        text_zoom_out_button = QPushButton()
+        text_zoom_out_button.setIcon(icons["zoom_out"])
+        text_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        text_zoom_out_button.clicked.connect(lambda: self.text_edit.zoomOut(1))
+        zoom_buttons_layout.addWidget(text_zoom_out_button)
+        text_zoom_in_button = QPushButton()
+        text_zoom_in_button.setIcon(icons["zoom_in"])
+        text_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        text_zoom_in_button.clicked.connect(lambda: self.text_edit.zoomIn(1))
+        zoom_buttons_layout.addWidget(text_zoom_in_button)
+
+        top_bar_layout.addStretch(1)
+        top_bar_layout.addLayout(zoom_buttons_layout)
+
+        ########################
+        #### MEDIA TOOL-BAR ####
+        ########################
+
+        media_toolbar_layout = QHBoxLayout()
+        media_toolbar_layout.setContentsMargins(0, 4, 0, 0)
+        media_toolbar_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        media_toolbar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        # Play buttons
+        play_buttons_layout = QHBoxLayout()
+        play_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        play_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        play_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        back_button = QPushButton()
+        back_button.setIcon(icons["back"])
+        back_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.3, MainWindow.BUTTON_MEDIA_SIZE)
+        back_button.setToolTip(self.tr("Go to first utterance"))
+        back_button.clicked.connect(self.backAction)
+        play_buttons_layout.addWidget(back_button)
+
+        #buttonsLayout.addSpacerItem(QSpacerItem())
+        prev_button = QPushButton()
+        prev_button.setIcon(icons["previous"])
+        prev_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.3, MainWindow.BUTTON_MEDIA_SIZE)
+        prev_button.setToolTip(self.tr("Previous utterance") + f" <{shortcuts["play_prev"].toString()}>")
+        # button.setIcon(QIcon(icon_path))
+        prev_button.clicked.connect(self.playPrevAction)
+        play_buttons_layout.addWidget(prev_button)
+
+        self.play_button = QPushButton()
+        self.play_button.setIcon(icons["play"])
+        self.play_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.3, MainWindow.BUTTON_MEDIA_SIZE)
+        self.play_button.setToolTip(self.tr("Play current utterance") + f" <{shortcuts["play_stop"].toString()}>")
+        self.play_button.clicked.connect(self.playAction)
+        play_buttons_layout.addWidget(self.play_button)
+
+        next_button = QPushButton()
+        next_button.setIcon(icons["next"])
+        next_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.3, MainWindow.BUTTON_MEDIA_SIZE)
+        next_button.setToolTip(self.tr("Next utterance") + f" <{shortcuts["play_next"].toString()}>")
+        next_button.clicked.connect(self.playNextAction)
+        play_buttons_layout.addWidget(next_button)
+
+        loop_button = QPushButton()
+        loop_button.setCheckable(True)
+        loop_button.setIcon(icons["loop"])
+        loop_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.1, MainWindow.BUTTON_MEDIA_SIZE)
+        loop_button.setToolTip(self.tr("Loop"))
+        loop_button.toggled.connect(self.setLooping)
+        play_buttons_layout.addWidget(loop_button)
+
+        media_toolbar_layout.addLayout(play_buttons_layout)
+
+        # Dials
+        dial_layout = QHBoxLayout()
+        dial_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        dial_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        dial_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        volume_dial = QDial()
+        volume_dial.setMaximumSize(QSize(MainWindow.DIAL_SIZE, MainWindow.DIAL_SIZE))
+        volume_dial.setNotchesVisible(True)
+        volume_dial.setNotchTarget(5)
+        volume_dial.setToolTip(self.tr("Audio volume"))
+        volume_dial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
+        volume_dial.setValue(100)
+        dial_layout.addWidget(IconWidget(icons["volume"], MainWindow.BUTTON_LABEL_SIZE))
+        dial_layout.addWidget(volume_dial)
+        media_toolbar_layout.addLayout(dial_layout)
+
+        dial_layout = QHBoxLayout()
+        dial_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        dial_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        dial_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        speed_dial = QDial()
+        speed_dial.setMaximumSize(QSize(MainWindow.DIAL_SIZE, MainWindow.DIAL_SIZE))
+        speed_dial.setRange(0, 20)
+        speed_dial.setValue(10)
+        speed_dial.setNotchesVisible(True)
+        speed_dial.setNotchTarget(4)
+        speed_dial.setToolTip(self.tr("Audio speed"))
+        # speed_dial.valueChanged.connect(lambda val: self.player.setPlaybackRate(0.5 + val/10))
+        speed_dial.valueChanged.connect(lambda val: self.player.setPlaybackRate(0.5 + (val**2)/200))
+        dial_layout.addWidget(IconWidget(icons["rabbit"], MainWindow.BUTTON_LABEL_SIZE))
+        dial_layout.addWidget(speed_dial)
+
+        media_toolbar_layout.addLayout(dial_layout)
+
+        # Zoom buttons
 
         zoom_buttons_layout = QHBoxLayout()
         zoom_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
         zoom_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
         zoom_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        zoom_buttons_layout.addWidget(IconWidget(icons["waveform"], MainWindow.BUTTON_SIZE*0.7))
-        wave_zoom_in_button = QPushButton()
-        wave_zoom_in_button.setIcon(icons["zoom_in"])
-        wave_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
-        zoom_buttons_layout.addWidget(wave_zoom_in_button)
+        zoom_buttons_layout.addWidget(IconWidget(icons["waveform"], MainWindow.BUTTON_LABEL_SIZE))
         wave_zoom_out_button = QPushButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
         wave_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
         zoom_buttons_layout.addWidget(wave_zoom_out_button)
+        wave_zoom_in_button = QPushButton()
+        wave_zoom_in_button.setIcon(icons["zoom_in"])
+        wave_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
+        zoom_buttons_layout.addWidget(wave_zoom_in_button)
         
-        zoom_buttons_layout.addSpacing(8)
-
-        zoom_buttons_layout.addWidget(IconWidget(icons["font"], MainWindow.BUTTON_SIZE*0.7))
-        text_zoom_in_button = QPushButton()
-        text_zoom_in_button.setIcon(icons["zoom_in"])
-        text_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        text_zoom_in_button.clicked.connect(lambda: self.text_edit.zoomIn(1))
-        zoom_buttons_layout.addWidget(text_zoom_in_button)
-        text_zoom_out_button = QPushButton()
-        text_zoom_out_button.setIcon(icons["zoom_out"])
-        text_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        text_zoom_out_button.clicked.connect(lambda: self.text_edit.zoomOut(1))
-        zoom_buttons_layout.addWidget(text_zoom_out_button)
-
-        buttons_layout.addLayout(left_buttons_layout)
-        buttons_layout.addLayout(center_buttons_layout)
-        # buttons_layout.addLayout(format_buttons_layout)
-        buttons_layout.addLayout(zoom_buttons_layout)
-
-        bottom_layout = QVBoxLayout()
-        bottom_layout.setSpacing(0)
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
-        bottom_layout.setSizeConstraint(QLayout.SetMaximumSize)
-        bottom_layout.addLayout(buttons_layout)
-        bottom_layout.addWidget(self.text_edit)
-
-        self.bottom_widget = QWidget()
-        self.bottom_widget.setLayout(bottom_layout)
+        # zoom_buttons_layout.addSpacing(8)
+        media_toolbar_layout.addStretch(1)
+        media_toolbar_layout.addLayout(zoom_buttons_layout)
 
 
         top_layout = QVBoxLayout()
         top_layout.setSpacing(0)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSizeConstraint(QLayout.SetMaximumSize)
-        # top_layout.addLayout(top_bar_layout)
-        top_layout.addWidget(self.waveform)
-
-        self.top_widget = QWidget()
-        self.top_widget.setLayout(top_layout)
+        top_layout.addLayout(top_bar_layout)
+        top_layout.addWidget(self.text_edit)
+        top_layout.addLayout(media_toolbar_layout)
         
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(5)
+        self.top_widget = QWidget()
+        self.top_widget.setLayout(top_layout)
         splitter.addWidget(self.top_widget)
-        splitter.addWidget(self.bottom_widget)        
-        splitter.setSizes([200, 400])
+        splitter.addWidget(self.waveform)        
+        splitter.setSizes([400, 140])
         
-        #self.setCentralWidget(self.mainWidget)
         self.setCentralWidget(splitter)
         
         
@@ -1217,17 +1267,25 @@ class MainWindow(QMainWindow):
             if self.playing_segment in self.waveform.segments:
                 segment = self.waveform.segments[self.playing_segment]
                 if player_seconds >= segment[1]:
-                    self.player.pause()
-                    self.play_button.setIcon(icons["play"])
-                    self.waveform.setHead(segment[1])
+                    if self.looping:
+                        self.player.setPosition(int(segment[0] * 1000))
+                        return
+                    else:
+                        self.player.pause()
+                        self.play_button.setIcon(icons["play"])
+                        self.waveform.setHead(segment[1])
             else:
                 # The segment could have been deleted by the user during playback
                 self.playing_segment = -1
         elif self.waveform.selection_is_active:
             if player_seconds >= self.waveform.selection[1]:
-                self.player.pause()
-                self.play_button.setIcon(icons["play"])
-                self.waveform.setHead(self.waveform.selection[1])
+                if self.looping:
+                    self.player.setPosition(int(self.waveform.selection[0] * 1000))
+                    return
+                else:
+                    self.player.pause()
+                    self.play_button.setIcon(icons["play"])
+                    self.waveform.setHead(self.waveform.selection[1])
         
         # Update subtitles
         self.caption_counter += 1
@@ -1236,7 +1294,11 @@ class MainWindow(QMainWindow):
             self.updateSubtitle()
     
 
-    def play(self):
+    def setLooping(self, checked):
+        self.looping = checked
+
+
+    def playAction(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
             self.play_button.setIcon(icons["play"])
@@ -1271,7 +1333,7 @@ class MainWindow(QMainWindow):
         self.play_button.setIcon(icons["pause"])
 
 
-    def playNext(self):
+    def playNextAction(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.stop()
         id = self.waveform.findNextSegment()
@@ -1284,7 +1346,7 @@ class MainWindow(QMainWindow):
         self.playSegment(self.waveform.segments[id])
 
 
-    def playPrev(self):
+    def playPrevAction(self):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.stop()
         if not self.waveform.active_segments:
@@ -1310,7 +1372,7 @@ class MainWindow(QMainWindow):
     #         #self.waveform.setActive(id)
     #         self.textArea.setActive(id)
 
-    def back(self):
+    def backAction(self):
         """Get back to the first segment or to the beginning of the recording"""
         self.stop()
         if len(self.waveform.segments) > 0:

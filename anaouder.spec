@@ -49,6 +49,7 @@ a = Analysis(
         (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.dic"), "ostilhou/hspell/hunspell-dictionary/"),
         (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.aff"), "ostilhou/hspell/hunspell-dictionary/"),
         ("./icons/back.png", "icons/"),
+        ("./icons/endless-loop.png", "icons/"),
         ("./icons/previous.png", "icons/"),
         ("./icons/play-button.png", "icons/"),
         ("./icons/pause.png", "icons/"),
@@ -63,6 +64,8 @@ a = Analysis(
         ("./icons/123-numbers.png", "icons/"),
         ("./icons/font.png", "icons/"),
         ("./icons/waveform.png", "icons/"),
+        ("./icons/volume.png", "icons/"),
+        ("./icons/rabbit-fast.png", "icons/"),
         ("./icons/folder.png", "icons/"),
     ],
     hiddenimports=[
