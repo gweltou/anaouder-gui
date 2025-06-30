@@ -20,16 +20,21 @@ icons = dict()
 
 def loadIcons():
     """This function must be called AFTER creating a QGuiApplication"""
+    icons["sparkles"] = QIcon(resourcePath("icons/sparkles-yellow.png"))
+
     icons["play"] = QIcon(resourcePath("icons/play-button.png"))
     icons["pause"] = QIcon(resourcePath("icons/pause.png"))
-    icons["replay"] = QIcon(resourcePath("icons/replay.png"))
+    # icons["replay"] = QIcon(resourcePath("icons/replay.png"))
     icons["back"] = QIcon(resourcePath("icons/back.png"))
     icons["previous"] = QIcon(resourcePath("icons/previous.png"))
     icons["next"] = QIcon(resourcePath("icons/next.png"))
     icons["loop"] = QIcon(resourcePath("icons/endless-loop.png"))
+
     icons["zoom_in"] = QIcon(resourcePath("icons/zoom_in.png"))
     icons["zoom_out"] = QIcon(resourcePath("icons/zoom_out.png"))
-    icons["sparkles"] = QIcon(resourcePath("icons/sparkles-yellow.png"))
+
+    icons["undo"] = QIcon(resourcePath("icons/undo.png"))
+    icons["redo"] = QIcon(resourcePath("icons/redo.png"))
 
     icons["italic"] = QIcon(resourcePath("icons/italic.png"))
     icons["bold"] = QIcon(resourcePath("icons/bold.png"))
@@ -40,7 +45,6 @@ def loadIcons():
     icons["waveform"] = QIcon(resourcePath("icons/waveform.png"))
     icons["volume"] = QIcon(resourcePath("icons/volume.png"))
     icons["rabbit"] = QIcon(resourcePath("icons/rabbit-fast.png"))
-
     icons["folder"] = QIcon(resourcePath("icons/folder.png"))
 
 

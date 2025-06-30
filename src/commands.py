@@ -174,36 +174,20 @@ class InsertBlockCommand(QUndoCommand):
             # Block has been inserted after
             if self.text:
                 cursor.insertText(self.text)
-            cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
+            if self.seg_id:
+                cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
+            self.text_edit.highlighter.rehighlightBlock(cursor.block())
         else:
             # Block has been inserted before
             cursor.movePosition(QTextCursor.PreviousBlock)
             if self.text:
                 cursor.insertText(self.text)
-            cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
+            if self.seg_id:
+                cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
+            self.text_edit.highlighter.rehighlightBlock(cursor.block())
             if old_data:
                 cursor.movePosition(QTextCursor.NextBlock)
                 cursor.block().setUserData(MyTextBlockUserData(old_data))
-
-
-        #     next_block = cursor.block()
-        #     prev_block = next_block.previous()
-        #     user_data = MyTextBlockUserData({"seg_id": self.seg_id}) if self.seg_id else None
-        # if self.after:
-        #     if next_block.userData():
-        #         print("User data found in next block:", next_block.userData().data)
-        #         prev_block.setUserData(next_block.userData().clone())
-        #     next_block.setUserData(user_data)
-        # else:
-        #     # If a block is inserted at the beginning of an utterance block
-        #     # the old block user data will be linked to the new empty block
-        #     # so we need to put it back to the shifted old block
-        #     if prev_block.userData():
-        #         next_block.setUserData(prev_block.userData().clone())
-        #     prev_block.setUserData(user_data)
-
-        # self.text_edit.highlighter.rehighlightBlock(prev_block)
-        # self.text_edit.highlighter.rehighlightBlock(next_block)
 
         self.text_edit.document().blockSignals(False)
     

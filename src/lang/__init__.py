@@ -69,8 +69,8 @@ for lang in LANG_MODULES:
     module = import_module(f"{__package__}.{lang}")
     try:
         _languages[lang] = Language(
-            name = getattr(module, "NAME"),
-            short_name = getattr(module, "SHORT_NAME"),
+            name = getattr(module, "NAME").lower(),
+            short_name = getattr(module, "SHORT_NAME").lower(),
             get_model_dict = getattr(module, "get_model_dictionary"),
             post_process_text = getattr(module, "post_process_text", None),
             prepare_for_alignment = getattr(module, "process_word_for_alignment", None),
@@ -110,7 +110,7 @@ def getLanguages(long_name=False) -> List[str]:
 
 def getCurrentLanguage(long_name=False) -> str:
     if long_name:
-        return _current_language.name
+        return _current_language.name.capitalize()
     return _current_language.short_name
 
 

@@ -680,15 +680,13 @@ class TextEdit(QTextEdit):
         """Set current utterance active"""
         cursor = self.textCursor()
         current_block = cursor.block()
-        if current_block.userData():
-            # Activate current utterance
-            data = current_block.userData().data
-            if "seg_id" in data and data["seg_id"] in self.parent.waveform.segments:
-                id = data["seg_id"]
-                if id == self.active_sentence_id:
-                    self.parent.updateSegmentInfo(id)
-                    return
-                self.setActive(id, with_cursor=False)
+        if self.isAligned(current_block):
+            # Activate utterance under cursor
+            id = current_block.userData().data["seg_id"]
+            if id == self.active_sentence_id:
+                self.parent.updateSegmentInfo(id)
+                return
+            self.setActive(id, with_cursor=False)
                 
         else:
             self.deactivateSentence()
@@ -855,6 +853,7 @@ class TextEdit(QTextEdit):
             )
             return
         
+        # ENTER
         if event.key() == Qt.Key_Return:
             if event.modifiers() == Qt.ControlModifier:
                 # Prevent Ctrl + ENTER

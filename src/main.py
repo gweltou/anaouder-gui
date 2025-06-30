@@ -432,7 +432,7 @@ class MainWindow(QMainWindow):
     BUTTON_SPACING = 3
     BUTTON_MARGIN = 4
     BUTTON_LABEL_SIZE = 15
-    DIAL_SIZE = 32
+    DIAL_SIZE = 30
     
     transcribe_file_signal = Signal(str, float)    # Signals are needed for communication between threads
     transcribe_segments_signal = Signal(str, list)
@@ -652,10 +652,10 @@ class MainWindow(QMainWindow):
         top_bar_layout.setSpacing(MainWindow.BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        left_buttons_layout = QHBoxLayout()
-        left_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        left_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
-        left_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        transcription_buttons_layout = QHBoxLayout()
+        transcription_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        transcription_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        transcription_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self.transcribe_button = QPushButton()
         self.transcribe_button.setIcon(icons["sparkles"])
@@ -667,7 +667,7 @@ class MainWindow(QMainWindow):
         self.transcribe_button.toggled.connect(self.toggleTranscribe)
         # self.transcribe_button.clicked.connect(self.transcribeButtonClicked)
         self.recognizer_worker.finished.connect(self.transcribe_button.toggle)
-        left_buttons_layout.addWidget(self.transcribe_button)
+        transcription_buttons_layout.addWidget(self.transcribe_button)
 
         self.language_selection = QComboBox()
         self.language_selection.addItems(self.languages)
@@ -676,26 +676,48 @@ class MainWindow(QMainWindow):
             lambda i: self.changeLanguage(self.languages[i])
         )
         if MULTI_LANG:
-            left_buttons_layout.addWidget(QLabel("Lang"))
-            left_buttons_layout.addWidget(self.language_selection)
+            transcription_buttons_layout.addWidget(QLabel("Lang"))
+            transcription_buttons_layout.addWidget(self.language_selection)
 
-        left_buttons_layout.addSpacing(4)
-        left_buttons_layout.addWidget(IconWidget(icons["head"], MainWindow.BUTTON_SIZE*0.7))
+        transcription_buttons_layout.addSpacing(4)
+        transcription_buttons_layout.addWidget(IconWidget(icons["head"], MainWindow.BUTTON_LABEL_SIZE))
 
         self.model_selection = QComboBox()
         # self.model_selection.addItems(self.available_models)
         self.model_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.model_selection.setToolTip(self.tr("Speech-to-text model"))
         self.model_selection.currentTextChanged.connect(self.recognizer_worker.setModelPath)
-        left_buttons_layout.addWidget(self.model_selection)
+        transcription_buttons_layout.addWidget(self.model_selection)
 
-        left_buttons_layout.addWidget(
-            IconWidget(icons["numbers"], MainWindow.BUTTON_SIZE*0.7))
+        transcription_buttons_layout.addWidget(
+            IconWidget(icons["numbers"], MainWindow.BUTTON_LABEL_SIZE))
         normalizationCheckbox = QCheckBox()
         normalizationCheckbox.setToolTip(self.tr("Normalize numbers"))
-        left_buttons_layout.addWidget(normalizationCheckbox)
+        transcription_buttons_layout.addWidget(normalizationCheckbox)
 
-        top_bar_layout.addLayout(left_buttons_layout)
+        top_bar_layout.addLayout(transcription_buttons_layout)
+
+        # Undo/Redo buttons
+        undo_redo_layout = QHBoxLayout()
+        undo_redo_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        undo_redo_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        undo_redo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        undo_button = QPushButton()
+        undo_button.setIcon(icons["undo"])
+        undo_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
+        undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.Undo).toString()}>")
+        undo_button.clicked.connect(self.undo)
+        undo_redo_layout.addWidget(undo_button)
+
+        redo_button = QPushButton()
+        redo_button.setIcon(icons["redo"])
+        redo_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
+        redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.Redo).toString()}>")
+        redo_button.clicked.connect(self.redo)
+        undo_redo_layout.addWidget(redo_button)
+
+        top_bar_layout.addLayout(undo_redo_layout)
 
         # Text format buttons
         # buttonsLayout.addSpacing(16)
@@ -706,12 +728,12 @@ class MainWindow(QMainWindow):
 
         italic_button = QPushButton()
         italic_button.setIcon(icons["italic"])
-        italic_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        italic_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
         italic_button.setEnabled(False) # TODO
         format_buttons_layout.addWidget(italic_button)
         bold_button = QPushButton()
         bold_button.setIcon(icons["bold"])
-        bold_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        bold_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
         bold_button.setEnabled(False) # TODO
         format_buttons_layout.addWidget(bold_button)
 
@@ -726,12 +748,12 @@ class MainWindow(QMainWindow):
         zoom_buttons_layout.addWidget(IconWidget(icons["font"], MainWindow.BUTTON_LABEL_SIZE))
         text_zoom_out_button = QPushButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
-        text_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        text_zoom_out_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
         text_zoom_out_button.clicked.connect(lambda: self.text_edit.zoomOut(1))
         zoom_buttons_layout.addWidget(text_zoom_out_button)
         text_zoom_in_button = QPushButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
-        text_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        text_zoom_in_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
         text_zoom_in_button.clicked.connect(lambda: self.text_edit.zoomIn(1))
         zoom_buttons_layout.addWidget(text_zoom_in_button)
 
@@ -743,9 +765,9 @@ class MainWindow(QMainWindow):
         ########################
 
         media_toolbar_layout = QHBoxLayout()
-        media_toolbar_layout.setContentsMargins(0, 4, 0, 0)
+        media_toolbar_layout.setContentsMargins(0, 2, 0, 0)
         media_toolbar_layout.setSpacing(MainWindow.BUTTON_SPACING)
-        media_toolbar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        # media_toolbar_layout.setAlignment(Qt.AlignmentFlag.AlignBottom)
 
         # Play buttons
         play_buttons_layout = QHBoxLayout()
@@ -755,7 +777,7 @@ class MainWindow(QMainWindow):
 
         back_button = QPushButton()
         back_button.setIcon(icons["back"])
-        back_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.3, MainWindow.BUTTON_MEDIA_SIZE)
+        back_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.2, MainWindow.BUTTON_MEDIA_SIZE)
         back_button.setToolTip(self.tr("Go to first utterance"))
         back_button.clicked.connect(self.backAction)
         play_buttons_layout.addWidget(back_button)
@@ -763,7 +785,7 @@ class MainWindow(QMainWindow):
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prev_button = QPushButton()
         prev_button.setIcon(icons["previous"])
-        prev_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.3, MainWindow.BUTTON_MEDIA_SIZE)
+        prev_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.2, MainWindow.BUTTON_MEDIA_SIZE)
         prev_button.setToolTip(self.tr("Previous utterance") + f" <{shortcuts["play_prev"].toString()}>")
         # button.setIcon(QIcon(icon_path))
         prev_button.clicked.connect(self.playPrevAction)
@@ -771,7 +793,7 @@ class MainWindow(QMainWindow):
 
         self.play_button = QPushButton()
         self.play_button.setIcon(icons["play"])
-        self.play_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.3, MainWindow.BUTTON_MEDIA_SIZE)
+        self.play_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.2, MainWindow.BUTTON_MEDIA_SIZE)
         self.play_button.setToolTip(self.tr("Play current utterance") + f" <{shortcuts["play_stop"].toString()}>")
         self.play_button.clicked.connect(self.playAction)
         play_buttons_layout.addWidget(self.play_button)
@@ -797,7 +819,7 @@ class MainWindow(QMainWindow):
         dial_layout = QHBoxLayout()
         dial_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
         dial_layout.setSpacing(MainWindow.BUTTON_SPACING)
-        dial_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        dial_layout.setAlignment(Qt.AlignmentFlag.AlignBottom)
 
         volume_dial = QDial()
         volume_dial.setMaximumSize(QSize(MainWindow.DIAL_SIZE, MainWindow.DIAL_SIZE))
@@ -813,7 +835,7 @@ class MainWindow(QMainWindow):
         dial_layout = QHBoxLayout()
         dial_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
         dial_layout.setSpacing(MainWindow.BUTTON_SPACING)
-        dial_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        # dial_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         speed_dial = QDial()
         speed_dial.setMaximumSize(QSize(MainWindow.DIAL_SIZE, MainWindow.DIAL_SIZE))
@@ -903,6 +925,7 @@ class MainWindow(QMainWindow):
         lang.loadLanguage(language)
         if self.language_selection.currentText() != language:
             self.language_selection.setCurrentIndex(self.languages.index(language))
+        # Add this language's models in the model combo-box
         self.available_models = lang.getCachedModelList()
         self.model_selection.clear()
         self.model_selection.addItems(self.available_models)
@@ -1268,6 +1291,12 @@ class MainWindow(QMainWindow):
                 segment = self.waveform.segments[self.playing_segment]
                 if player_seconds >= segment[1]:
                     if self.looping:
+                        if (
+                            self.waveform.last_segment_active >= 0
+                            and self.waveform.last_segment_active != self.playing_segment
+                        ):
+                            self.playing_segment = self.waveform.last_segment_active
+                            segment = self.waveform.segments[self.playing_segment]
                         self.player.setPosition(int(segment[0] * 1000))
                         return
                     else:
@@ -1302,8 +1331,10 @@ class MainWindow(QMainWindow):
         if self.player.playbackState() == QMediaPlayer.PlayingState:
             self.player.pause()
             self.play_button.setIcon(icons["play"])
-            if (self.playing_segment == self.waveform.last_segment_active
-                or self.waveform.last_segment_active == -1):
+            if (
+                self.playing_segment == self.waveform.last_segment_active
+                or self.waveform.last_segment_active == -1
+            ):
                 return
 
         if self.waveform.last_segment_active >= 0:
@@ -1416,7 +1447,6 @@ class MainWindow(QMainWindow):
 
 
     def toggleSceneDetect(self, checked):
-        print("fn toggleSceneDetect", checked)
         if checked and "fps" in self.media_metadata:
             self.waveform.display_scene_change = True
             if "scenes" in self.media_metadata:

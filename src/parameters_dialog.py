@@ -369,7 +369,9 @@ class ModelsTab(QWidget):
             self.lang_selection = QComboBox()
             self.lang_selection.addItems(lang.getLanguages(long_name=True))
             # self.lang_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-            self.lang_selection.setCurrentText(lang.getCurrentLanguage(long_name=True))
+            current_language = lang.getCurrentLanguage(long_name=True)
+            print(f"{current_language=}")
+            self.lang_selection.setCurrentText(current_language)
             self.lang_selection.currentIndexChanged.connect(self.updateLanguage)
             # lang_layout.addWidget(lang_label)
             lang_layout.addWidget(self.lang_selection)
@@ -451,6 +453,7 @@ class ModelsTab(QWidget):
     
 
     def updateLanguage(self):
+        print("updatelanguage")
         if MULTI_LANG:
             lang.loadLanguage(self.lang_selection.currentText())
         self.online_models_list.clear()
