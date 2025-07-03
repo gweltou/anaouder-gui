@@ -20,6 +20,8 @@ icons = dict()
 
 def loadIcons():
     """This function must be called AFTER creating a QGuiApplication"""
+    icons["anaouder"] = QIcon(resourcePath("icons/anaouder_256.png"))
+
     icons["sparkles"] = QIcon(resourcePath("icons/sparkles-yellow.png"))
 
     icons["play"] = QIcon(resourcePath("icons/play-button.png"))
@@ -46,6 +48,10 @@ def loadIcons():
     icons["volume"] = QIcon(resourcePath("icons/volume.png"))
     icons["rabbit"] = QIcon(resourcePath("icons/rabbit-fast.png"))
     icons["folder"] = QIcon(resourcePath("icons/folder.png"))
+
+    icons["select"] = QIcon(resourcePath("icons/select_segment.png"))
+    icons["add_segment"] = QIcon(resourcePath("icons/add_segment.png"))
+    icons["del_segment"] = QIcon(resourcePath("icons/del_segment.png"))
 
 
 class IconWidget(QLabel):

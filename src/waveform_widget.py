@@ -11,6 +11,7 @@ from typing import Optional
 from math import ceil
 from enum import Enum
 import numpy as np
+import logging
 
 from ostilhou.utils import sec2hms
 
@@ -18,7 +19,8 @@ from PySide6.QtWidgets import (
     QMenu, QWidget
 )
 from PySide6.QtCore import (
-    Qt, QTimer, QPointF, QEvent, QRect
+    Qt, QTimer, QPointF, QEvent, QRect,
+    Signal,
 )
 from PySide6.QtGui import (
     QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
@@ -33,6 +35,8 @@ from src.utils import lerpColor, mapNumber
 
 Handle = Enum("Handle", ["LEFT", "RIGHT"])
 
+
+log = logging.getLogger(__name__)
 
 
 
@@ -79,6 +83,11 @@ class ResizeSegmentCommand(QUndoCommand):
 
 
 class WaveformWidget(QWidget):
+    join_utterances = Signal(list)
+    delete_utterances = Signal(list)
+    new_utterance_from_selection = Signal()
+    selection_started = Signal()
+    selection_ended = Signal()
 
     class ScaledWaveform():
         def __init__(self, samples, sr: int):
@@ -168,9 +177,10 @@ class WaveformWidget(QWidget):
 
         # Accept focus for keyboard events
         #self.setFocusPolicy(Qt.StrongFocus)
-        self.ctrl_pressed = False
-        self.shift_pressed = False
         self.setMouseTracking(True) # get mouse move events even when no buttons are held down
+        self.is_selecting = False
+        self.is_resizing = False
+        self.shift_pressed = False
         self.over_left_handle = False
         self.over_right_handle = False
         self.mouse_pos = None
@@ -217,7 +227,7 @@ class WaveformWidget(QWidget):
         self.t_left = 0.0      # timecode of left border (in seconds)
         self.scroll_vel = 0.0
         self.playhead = 0.0
-        self.ctrl_pressed = False
+        self.is_resizing = False
         self.shift_pressed = False
         self.timer.stop()
 
@@ -243,7 +253,6 @@ class WaveformWidget(QWidget):
         self.waveform = self.ScaledWaveform(samples, sr)
         self.waveform.ppsec = self.ppsec
         self.audio_len = len(samples) / sr
-        print(sec2hms(self.audio_len))
     
     
     def getNewId(self):
@@ -308,7 +317,7 @@ class WaveformWidget(QWidget):
             segment_dur = end - start
             window_dur = self.width() / self.ppsec
             # re-center segment, if necessary
-            if segment_dur < window_dur * 0.8:
+            if segment_dur < window_dur * 0.9:
                 if start < self.t_left:
                     self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
                     if not self.timer.isActive():
@@ -325,7 +334,7 @@ class WaveformWidget(QWidget):
                 self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
                 self.ppsec_goal = adapted_ppsec
                 if not self.timer.isActive():
-                        self.timer.start(1000/30)
+                    self.timer.start(1000/30)
 
         self.last_segment_active = clicked_id
         self.draw()
@@ -494,12 +503,21 @@ class WaveformWidget(QWidget):
         return False
 
 
-    def getSortedSegments(self) -> list:
+    def getSortedSegments(self) -> list[str, list]:
         if self._to_sort:
             self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
             self._to_sort = False
-            print("sorting")
         return self._sorted_segments
+
+
+    def setSelecting(self, checked: bool):
+        self.is_selecting = checked
+        self.anchor = -1
+
+        if checked:
+            self.setCursor(Qt.SplitHCursor)
+        else:
+            self.unsetCursor()
 
 
     def zoomIn(self, factor=1.333, position=0.5):
@@ -612,13 +630,12 @@ class WaveformWidget(QWidget):
     ###################################
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        print("waveform", event)
         if event.isAutoRepeat():
             event.ignore()
             return
         
         if event.key() == shortcuts["show_handles"]:
-            self.ctrl_pressed = True
+            self.is_resizing = True
             self.scroll_vel = 0.0
             if self.mouse_pos:
                 self.checkHandles(self.t_left + self.mouse_pos.x() / self.ppsec)
@@ -626,19 +643,24 @@ class WaveformWidget(QWidget):
             if not self.selection_is_active:
                 self.deselect()
             self.draw()
+        
+        elif event.key() == shortcuts["select"]:
+            self.selection_started.emit()
+
         elif event.key() == Qt.Key_Shift:
             self.shift_pressed = True
 
         elif event.key() == Qt.Key_A and self.selection_is_active:
             # Create a new segment from selection
-            self.parent.newUtteranceFromSelection()
+            self.new_utterance_from_selection.emit()
         elif event.key() == Qt.Key_J and len(self.active_segments) > 1:
             # Join multiple segments
             segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])
-            self.parent.joinUtterances(segments_id)
-        elif event.key() == Qt.Key_Delete and self.active_segments:
+            self.join_utterances.emit(segments_id)
+        elif event.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.active_segments:
             # Delete segment(s)
-            self.parent.deleteUtterances(self.active_segments)
+            # self.parent.deleteUtterances(self.active_segments)
+            self.delete_utterances.emit(self.active_segments)
             self._to_sort = True
 
         return super().keyPressEvent(event)
@@ -646,18 +668,33 @@ class WaveformWidget(QWidget):
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
         if event.key() == shortcuts["show_handles"]:
+            print("commit resize")
             self._commitResizeSegment()
-            self.ctrl_pressed = False
+            self.is_resizing = False
             self.resizing_handle = None
             self.resizing_id = -1
             self.draw()
+        
+        if event.key() == shortcuts["select"]:
+            self.selection_ended.emit()
+
         elif event.key() == Qt.Key_Shift:
             self.shift_pressed = False
+
         return super().keyReleaseEvent(event)
     
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.click_pos = event.position()
+
+        if event.button() == Qt.LeftButton:
+            if self.is_selecting and self.anchor == -1:
+                # Start selection
+                print("start selection")
+                self.anchor = self.t_left + self.click_pos.x() / self.ppsec
+                return
+            else:
+                self.setCursor(Qt.ClosedHandCursor)
 
         if event.button() == Qt.RightButton:
             segment_under = self.getSegmentAtPosition(self.click_pos)
@@ -672,11 +709,11 @@ class WaveformWidget(QWidget):
                 self.deselect()
             self.parent.movePlayHead(self.t_left + self.click_pos.x() / self.ppsec)
 
-            # Block selection if user has clicked on a defined segment
-            if segment_under == -1:
-                self.anchor = self.playhead
-            else:
-                self.anchor = -1
+            # # Block selection if user has clicked on a defined segment
+            # if segment_under == -1:
+            #     self.anchor = self.playhead
+            # else:
+            #     self.anchor = -1
 
         # "over_[left/right]_handle" are set by `checkHandles`, when mouse moves
         if self.over_left_handle or self.over_right_handle:
@@ -690,17 +727,24 @@ class WaveformWidget(QWidget):
             self.resizing_handle = None
             self.resizing_id = -1
         
-        return super().mousePressEvent(event)
+        # return super().mousePressEvent(event)
     
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self.is_selecting and self.anchor >= 0:
+            self.is_selecting = False
+            self.anchor = -1
+            self.selection_ended.emit()
+        
         if self.resizing_handle:
-            print("commit resize")
             if self.last_segment_active >= 0:
                 self._commitResizeSegment()
             self.resizing_handle = None
             self.resizing_id = -1
+
         if event.button() == Qt.LeftButton:
+            self.unsetCursor()
+            
             dx = event.position().x() - self.click_pos.x()
             dy = event.position().y() - self.click_pos.y()
             dist = dx * dx + dy * dy
@@ -729,8 +773,9 @@ class WaveformWidget(QWidget):
 
         # Scrolling
         if (event.buttons() == Qt.LeftButton
-                and not self.ctrl_pressed 
-                and self.mouse_prev_pos):
+                and not self.is_resizing 
+                and self.mouse_prev_pos
+                and not self.is_selecting):
             # Stop movement if drag direction is opposite
             if -mouse_dpos * self.scroll_vel < 0.0:
                 self.scroll_vel = 0.0
@@ -740,26 +785,28 @@ class WaveformWidget(QWidget):
                 self.timer.start(1000/30)
         
         # Selection
-        elif event.buttons() == Qt.RightButton:
+        elif self.is_selecting and self.anchor >= 0:
+            self.active_segments = []
+            self.last_segment_active = -1
+            self.selection_is_active = True
+
+            left_boundary = 0.0
+            right_boundary = self.audio_len
+            ## Bind selection between preexisting segments
+            # for _, (start, end) in self.getSortedSegments():
+            #     if end < self.anchor:
+            #         left_boundary = end
+            #     elif start > self.anchor:
+            #         right_boundary = start
+            #         break
             head = self.t_left + self.mouse_pos.x() / self.ppsec
-            if self.anchor >= 0:
-                left_boundary = 0.0
-                right_boundary = self.audio_len
-                ## Bind selection between preexisting segments
-                # for _, (start, end) in self.getSortedSegments():
-                #     if end < self.anchor:
-                #         left_boundary = end
-                #     elif start > self.anchor:
-                #         right_boundary = start
-                #         break
-                selection_start = max(min(head, self.anchor), left_boundary + 0.01)
-                selection_end = min(max(head, self.anchor), right_boundary - 0.01)
-                self.selection = [selection_start, selection_end]
-                self.selection_is_active = True
-                self.draw()
+            selection_start = max(min(head, self.anchor), left_boundary + 0.01)
+            selection_end = min(max(head, self.anchor), right_boundary - 0.01)
+            self.selection = [selection_start, selection_end]
+            self.draw()
         
         # Resizing
-        if self.ctrl_pressed:
+        if self.is_resizing:
             time_position = self.t_left + self.mouse_pos.x() / self.ppsec
             if self.resizing_handle != None:
                 self.resizeSegmentOrSelection(time_position)
@@ -806,7 +853,7 @@ class WaveformWidget(QWidget):
             
             if multi:
                 action_join = QAction("Join utterances", self)
-                action_join.triggered.connect(lambda: self.parent.joinUtterances(self.active_segments))
+                action_join.triggered.connect(lambda: self.join_utterances.emit(self.active_segments))
                 context.addAction(action_join)
             
             context.addSeparator()
@@ -867,7 +914,7 @@ class WaveformWidget(QWidget):
                     self.painter.drawRoundedRect(
                         QRect(x, self.selection_inactive_top, w, self.selection_inactive_height), 8, 8)
                 
-                if self.ctrl_pressed:
+                if self.is_resizing:
                     if self.over_left_handle:
                         self.painter.setPen(self.handle_left_pen_shadow)
                         self.painter.drawLine(x, self.handle_top, x, self.handle_down)
@@ -913,7 +960,7 @@ class WaveformWidget(QWidget):
                 # Draw handles
                 if len(self.active_segments) != 1:
                     continue
-                if self.ctrl_pressed:
+                if self.is_resizing:
                     if self.over_left_handle:
                         self.painter.setPen(self.handle_left_pen_shadow)
                         self.painter.drawLine(x, self.handle_top, x, self.handle_down)

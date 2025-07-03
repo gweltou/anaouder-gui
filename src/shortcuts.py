@@ -11,5 +11,6 @@ shortcuts: Dict[str, QKeySequence] = {
     "play_stop":    QKeySequence("Meta+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
     "play_next":    QKeySequence("Ctrl+Right") if _is_darwin else QKeySequence("Ctrl+Right"),
     "play_prev":    QKeySequence("Ctrl+Left") if _is_darwin else QKeySequence("Ctrl+Left"),
+    "select":       Qt.Key_S,
     "show_handles": Qt.Key_Control if _is_darwin else Qt.Key_Control
 }
