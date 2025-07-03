@@ -4,15 +4,14 @@ import platform
 import os
 
 ARCH = os.getenv("ARCH") or 'x86_64' # Set to 'x86_64', or 'arm64' or 'universal2' for macOS
-DEBUG = True
+DEBUG = False
 
 print("Architecture set to", ARCH)
 
 def get_lib_path(path):
     if platform.system() in ("Linux", "Darwin"):
         python_version = f"python{platform.python_version_tuple()[0]}.{platform.python_version_tuple()[1]}"
-        venv_dir = '.venv-arm64' if ARCH=='arm64' else '.venv'
-        return os.path.join(f"./{venv_dir}/lib/{python_version}/site-packages", path)
+        return os.path.join(f"./.venv/lib/{python_version}/site-packages", path)
     elif platform.system() == "Windows":
         return os.path.join("./.venv/Lib/site-packages", path)
 
@@ -49,17 +48,21 @@ a = Analysis(
         (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.dic"), "ostilhou/hspell/hunspell-dictionary/"),
         (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.aff"), "ostilhou/hspell/hunspell-dictionary/"),
         ("./icons/back.png", "icons/"),
-        ("./icons/endless-loop.png", "icons/"),
         ("./icons/previous.png", "icons/"),
         ("./icons/play-button.png", "icons/"),
         ("./icons/pause.png", "icons/"),
         ("./icons/next.png", "icons/"),
+        ("./icons/endless-loop.png", "icons/"),
+
         #("./icons/replay.png", "icons/"),
         ("./icons/sparkles-yellow.png", "icons/"),
+
         ("./icons/italic.png", "icons/"),
         ("./icons/bold.png", "icons/"),
+
         ("./icons/zoom_in.png", "icons/"),
         ("./icons/zoom_out.png", "icons/"),
+
         ("./icons/head-side-thinking.png", "icons/"),
         ("./icons/123-numbers.png", "icons/"),
         ("./icons/font.png", "icons/"),
@@ -67,6 +70,15 @@ a = Analysis(
         ("./icons/volume.png", "icons/"),
         ("./icons/rabbit-fast.png", "icons/"),
         ("./icons/folder.png", "icons/"),
+
+        ("./icons/undo.png", "icons/"),
+        ("./icons/redo.png", "icons/"),
+
+        ("./icons/select_segment.png", "icons/"),
+        ("./icons/add_segment.png", "icons/"),
+        ("./icons/del_segment.png", "icons/"),
+
+        ("./icons/anaouder_256.png", "icons/"),
     ],
     hiddenimports=[
         'src.lang.br',

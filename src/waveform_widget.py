@@ -179,7 +179,7 @@ class WaveformWidget(QWidget):
         #self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True) # get mouse move events even when no buttons are held down
         self.is_selecting = False
-        self.is_resizing = False
+        self.resizing_handle = None # Handle enum or None
         self.shift_pressed = False
         self.over_left_handle = False
         self.over_right_handle = False
@@ -227,17 +227,15 @@ class WaveformWidget(QWidget):
         self.t_left = 0.0      # timecode of left border (in seconds)
         self.scroll_vel = 0.0
         self.playhead = 0.0
-        self.is_resizing = False
         self.shift_pressed = False
         self.timer.stop()
 
         self.segments = dict()
         self.active_segments = []
-        self.last_segment_active = -1
+        self.current_segment_active = -1
         self.scenes = [] # Scene transition timecodes and color channels, in the form [ts, r, g, b]
 
         self.resizing_handle = None
-        self.resizing_id = -1
         self.resizing_segment = []
         self.resizing_textlen = 0
         self.resizing_density = 0.0
@@ -271,20 +269,20 @@ class WaveformWidget(QWidget):
 
 
     def findPrevSegment(self) -> int:
-        if self.last_segment_active < 0:
+        if self.current_segment_active < 0:
             return -1
         sorted_segments = sorted(self.segments.keys(), key=lambda s: self.segments[s][0])
-        order = sorted_segments.index(self.last_segment_active)
+        order = sorted_segments.index(self.current_segment_active)
         if order > 0:
             return sorted_segments[order - 1]
         return -1
 
 
     def findNextSegment(self) -> int:
-        if self.last_segment_active < 0:
+        if self.current_segment_active < 0:
             return -1
         sorted_segments = sorted(self.segments.keys(), key=lambda s: self.segments[s][0])
-        order = sorted_segments.index(self.last_segment_active)
+        order = sorted_segments.index(self.current_segment_active)
         if order < len(sorted_segments) - 1:
             return sorted_segments[order + 1]
         return -1
@@ -294,14 +292,14 @@ class WaveformWidget(QWidget):
         if clicked_id not in self.segments:
             # Clicked outside of any segment, deselect current active segment
             self.active_segments = []
-            self.last_segment_active = -1
+            self.current_segment_active = -1
             self.draw()
             self.refreshSegmentInfo()
             return
         
         if multi:
             # Find segment IDs between `last_segment_active` and `clicked_id`
-            first, last = sorted([self.last_segment_active, clicked_id],
+            first, last = sorted([self.current_segment_active, clicked_id],
                                  key=lambda x: self.segments[x][0])
             first_t = self.segments[first][1]
             last_t = self.segments[last][0]
@@ -336,7 +334,7 @@ class WaveformWidget(QWidget):
                 if not self.timer.isActive():
                     self.timer.start(1000/30)
 
-        self.last_segment_active = clicked_id
+        self.current_segment_active = clicked_id
         self.draw()
         self.refreshSegmentInfo()
 
@@ -400,29 +398,30 @@ class WaveformWidget(QWidget):
         self.draw()
     
 
-    def checkHandles(self, time_position):
-        """Update internal variables if cursor is above active segment's handles"""
-        self.over_left_handle = False
-        self.over_right_handle = False
-        if self.last_segment_active < 0 and not self.selection_is_active:
-            return
+    # def checkHandles(self, time_position):
+    #     """Update internal variables if cursor is above active segment's handles
+    #     Used for the solid segments as well as for the selection"""
+    #     self.over_left_handle = False
+    #     self.over_right_handle = False
+    #     if self.last_segment_active < 0 and not self.selection_is_active:
+    #         return
         
-        if self.selection_is_active:
-            start, end = self.selection
-        elif self.last_segment_active >= 0:
-            start, end = self.segments[self.last_segment_active]
+    #     if self.selection_is_active:
+    #         start, end = self.selection
+    #     elif self.last_segment_active >= 0:
+    #         start, end = self.segments[self.last_segment_active]
             
-        if abs((start-time_position) * self.ppsec) < 8:
-            self.over_left_handle = True
-        if abs((end-time_position) * self.ppsec) < 8:
-            self.over_right_handle = True
+    #     if abs((start-time_position) * self.ppsec) < 8:
+    #         self.over_left_handle = True
+    #     if abs((end-time_position) * self.ppsec) < 8:
+    #         self.over_right_handle = True
         
-        # When handles are close together, select handle depending on mouse direction
-        if self.over_left_handle and self.over_right_handle and self.mouse_dir != None:
-            if self.mouse_dir == 1.0:
-                self.over_right_handle = False
-            elif self.mouse_dir == -1.0:
-                self.over_left_handle = False
+    #     # When handles are close together, select handle depending on mouse direction
+    #     if self.over_left_handle and self.over_right_handle and self.mouse_dir != None:
+    #         if self.mouse_dir == 1.0:
+    #             self.over_right_handle = False
+    #         elif self.mouse_dir == -1.0:
+    #             self.over_left_handle = False
 
 
     def paintEvent(self, event: QPaintEvent):
@@ -547,82 +546,85 @@ class WaveformWidget(QWidget):
 
     def _commitResizeSegment(self):
         """Applies only to actual segments (not the selection)"""
-        if self.last_segment_active  < 0:
+        if self.current_segment_active  < 0:
             return
         
-        current_segment = self.segments[self.last_segment_active]
-
         if self.resizing_handle != None:
             time_pos = self.resizing_segment[0 if self.resizing_handle == Handle.LEFT else 1]
             self.undo_stack.push(
                 ResizeSegmentCommand(
                     self,
-                    self.last_segment_active,
+                    self.current_segment_active,
                     self.resizing_handle,
                     time_pos
                 )
             )
     
 
-    def resizeSegmentOrSelection(self, time_position):
+    def resizeActiveSegment(self, time_position, handle):
+        """Resize the representation of the segment on the waveform
+        The actual segment is not modified"""
+        current_segment = self.segments[self.current_segment_active]
+
+        left_boundary = 0.0
+        right_boundary = self.audio_len
+
+        sorted_segments = self.getSortedSegments()
+        for _, (start, end) in sorted_segments:
+            if end <= current_segment[0]:
+                left_boundary = end
+            elif start >= current_segment[1]:
+                right_boundary = start
+                break
+        if handle == Handle.LEFT:
+            # Bound by segment on the left, if any
+            time_position = max(time_position, left_boundary + 0.01)
+            # Left segment boundary cannot outgrow right boundary
+            time_position = min(time_position, current_segment[1] - 0.01)
+            self.resizing_segment[0] = time_position
+            dur = self.resizing_segment[1] - self.resizing_segment[0]
+            self.resizing_density = self.resizing_textlen / dur
+            
+        elif handle == Handle.RIGHT:
+            # Bound by segment on the right, if any
+            time_position = min(time_position, right_boundary - 0.01)
+            # Right segment boundary cannot be earlier than left boundary
+            time_position = max(time_position, current_segment[0] + 0.01)
+            self.resizing_segment[1] = time_position
+            dur = self.resizing_segment[1] - self.resizing_segment[0]
+            self.resizing_density = self.resizing_textlen / dur
+        
+        self.parent.updateSegmentInfo(
+            self.current_segment_active,
+            segment=self.resizing_segment,
+            density=self.resizing_density,
+        )
+    
+
+    def resizeSelection(self, time_position, handle):
         # Handle dragging
         left_boundary = 0.0
         right_boundary = self.audio_len
-        sorted_segments = self.getSortedSegments()
 
-        # Change selection boundaries
-        if self.selection_is_active:
-            # for _, (start, end) in sorted_segments:
-            #     if end <= self.selection[0]:
-            #         left_boundary = end
-            #     elif start >= self.selection[1]:
-            #         right_boundary = start
-            #         break
-            if self.resizing_handle == Handle.LEFT:
-                # Bound by segment on the left, if any
-                time_position = max(time_position, left_boundary + 0.01)
-                # Left segment boundary cannot outgrow right boundary
-                time_position = min(time_position, self.selection[1] - 0.01)
-                self.selection[0] = time_position
-            elif self.resizing_handle == Handle.RIGHT:
-                # Bound by segment on the right, if any
-                time_position = min(time_position, right_boundary - 0.01)
-                # Right segment boundary cannot be earlier than left boundary
-                time_position = max(time_position, self.selection[0] + 0.01)
-                self.selection[1] = time_position
-
-        # Change segment boundaries (temporary)
-        elif self.last_segment_active >= 0:
-            current_segment = self.segments[self.last_segment_active]
-            for _, (start, end) in sorted_segments:
-                if end <= current_segment[0]:
-                    left_boundary = end
-                elif start >= current_segment[1]:
-                    right_boundary = start
-                    break
-            if self.resizing_handle == Handle.LEFT:
-                # Bound by segment on the left, if any
-                time_position = max(time_position, left_boundary + 0.01)
-                # Left segment boundary cannot outgrow right boundary
-                time_position = min(time_position, current_segment[1] - 0.01)
-                self.resizing_segment[0] = time_position
-                dur = self.resizing_segment[1] - self.resizing_segment[0]
-                self.resizing_density = self.resizing_textlen / dur
-                
-            elif self.resizing_handle == Handle.RIGHT:
-                # Bound by segment on the right, if any
-                time_position = min(time_position, right_boundary - 0.01)
-                # Right segment boundary cannot be earlier than left boundary
-                time_position = max(time_position, current_segment[0] + 0.01)
-                self.resizing_segment[1] = time_position
-                dur = self.resizing_segment[1] - self.resizing_segment[0]
-                self.resizing_density = self.resizing_textlen / dur
-            
-            self.parent.updateSegmentInfo(
-                self.last_segment_active,
-                segment=self.resizing_segment,
-                density=self.resizing_density,
-            )
+        # sorted_segments = self.getSortedSegments()
+        # for _, (start, end) in sorted_segments:
+        #     if end <= self.selection[0]:
+        #         left_boundary = end
+        #     elif start >= self.selection[1]:
+        #         right_boundary = start
+        #         break
+        if handle == Handle.LEFT:
+            # Bound by segment on the left, if any
+            time_position = max(time_position, left_boundary + 0.01)
+            # Left segment boundary cannot outgrow right boundary
+            time_position = min(time_position, self.selection[1] - 0.01)
+            self.selection[0] = time_position
+        elif handle == Handle.RIGHT:
+            # Bound by segment on the right, if any
+            time_position = min(time_position, right_boundary - 0.01)
+            # Right segment boundary cannot be earlier than left boundary
+            time_position = max(time_position, self.selection[0] + 0.01)
+            self.selection[1] = time_position
 
 
     ###################################
@@ -634,15 +636,15 @@ class WaveformWidget(QWidget):
             event.ignore()
             return
         
-        if event.key() == shortcuts["show_handles"]:
-            self.is_resizing = True
-            self.scroll_vel = 0.0
-            if self.mouse_pos:
-                self.checkHandles(self.t_left + self.mouse_pos.x() / self.ppsec)
-            # Cancel selection when resizing another segment
-            if not self.selection_is_active:
-                self.deselect()
-            self.draw()
+        # if event.key() == shortcuts["show_handles"]:
+        #     self.is_resizing = True
+        #     self.scroll_vel = 0.0
+        #     if self.mouse_pos:
+        #         self.checkHandles(self.t_left + self.mouse_pos.x() / self.ppsec)
+        #     # Cancel selection when resizing another segment
+        #     if not self.selection_is_active:
+        #         self.deselect()
+        #     self.draw()
         
         elif event.key() == shortcuts["select"]:
             self.selection_started.emit()
@@ -659,7 +661,6 @@ class WaveformWidget(QWidget):
             self.join_utterances.emit(segments_id)
         elif event.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.active_segments:
             # Delete segment(s)
-            # self.parent.deleteUtterances(self.active_segments)
             self.delete_utterances.emit(self.active_segments)
             self._to_sort = True
 
@@ -667,13 +668,11 @@ class WaveformWidget(QWidget):
     
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
-        if event.key() == shortcuts["show_handles"]:
-            print("commit resize")
-            self._commitResizeSegment()
-            self.is_resizing = False
-            self.resizing_handle = None
-            self.resizing_id = -1
-            self.draw()
+        # if event.key() == shortcuts["show_handles"]:
+        #     print("commit resize")
+        #     self._commitResizeSegment()
+        #     self.resizing_handle = None
+        #     self.draw()
         
         if event.key() == shortcuts["select"]:
             self.selection_ended.emit()
@@ -693,7 +692,7 @@ class WaveformWidget(QWidget):
                 print("start selection")
                 self.anchor = self.t_left + self.click_pos.x() / self.ppsec
                 return
-            else:
+            elif not (self.over_left_handle or self.over_right_handle):
                 self.setCursor(Qt.ClosedHandCursor)
 
         if event.button() == Qt.RightButton:
@@ -702,7 +701,7 @@ class WaveformWidget(QWidget):
             if segment_under not in self.active_segments:
                 # Deactivate currently active segment
                 self.active_segments = []
-                self.last_segment_active = -1
+                self.current_segment_active = -1
                 self.parent.playing_segment = -1
             if not self.isSelectionAtPosition(self.click_pos):
                 # Deselect current selection
@@ -715,17 +714,15 @@ class WaveformWidget(QWidget):
             # else:
             #     self.anchor = -1
 
-        # "over_[left/right]_handle" are set by `checkHandles`, when mouse moves
+        # Check if we are resizing
         if self.over_left_handle or self.over_right_handle:
             self.resizing_handle = Handle.LEFT if self.over_left_handle else Handle.RIGHT
-            if self.last_segment_active >= 0:
-                self.resizing_id = self.last_segment_active
-                self.resizing_segment = self.segments[self.last_segment_active][:]
-                block = self.parent.text_edit.getBlockById(self.last_segment_active)
+            if self.current_segment_active >= 0:
+                self.resizing_segment = self.segments[self.current_segment_active][:]
+                block = self.parent.text_edit.getBlockById(self.current_segment_active)
                 self.resizing_textlen = self.parent.text_edit.getSentenceLength(block)
         else:
             self.resizing_handle = None
-            self.resizing_id = -1
         
         # return super().mousePressEvent(event)
     
@@ -737,10 +734,9 @@ class WaveformWidget(QWidget):
             self.selection_ended.emit()
         
         if self.resizing_handle:
-            if self.last_segment_active >= 0:
+            if self.current_segment_active >= 0:
                 self._commitResizeSegment()
             self.resizing_handle = None
-            self.resizing_id = -1
 
         if event.button() == Qt.LeftButton:
             self.unsetCursor()
@@ -766,6 +762,21 @@ class WaveformWidget(QWidget):
     def mouseMoveEvent(self, event):
         self.mouse_prev_pos = self.mouse_pos
         self.mouse_pos = event.position()
+
+        time_position = self.t_left + self.mouse_pos.x() / self.ppsec
+
+        if self.selection_is_active or self.current_segment_active >= 0:
+            if self.selection_is_active:
+                start, end = self.selection
+            else:
+                start, end = self.segments[self.current_segment_active]
+            self.over_left_handle = abs((start-time_position) * self.ppsec) < 8
+            self.over_right_handle = abs((end-time_position) * self.ppsec) < 8
+        else:
+            self.over_left_handle = False
+            self.over_right_handle = False
+
+        # Calculate mouse direction
         if self.mouse_prev_pos:
             mouse_dpos = self.mouse_pos.x() - self.mouse_prev_pos.x()
             if mouse_dpos != 0.0:
@@ -773,7 +784,7 @@ class WaveformWidget(QWidget):
 
         # Scrolling
         if (event.buttons() == Qt.LeftButton
-                and not self.is_resizing 
+                and self.resizing_handle == None
                 and self.mouse_prev_pos
                 and not self.is_selecting):
             # Stop movement if drag direction is opposite
@@ -787,7 +798,7 @@ class WaveformWidget(QWidget):
         # Selection
         elif self.is_selecting and self.anchor >= 0:
             self.active_segments = []
-            self.last_segment_active = -1
+            self.current_segment_active = -1
             self.selection_is_active = True
 
             left_boundary = 0.0
@@ -805,13 +816,23 @@ class WaveformWidget(QWidget):
             self.selection = [selection_start, selection_end]
             self.draw()
         
+        # Change cursor above resizable boundaries
+        if self.selection_is_active or self.current_segment_active >= 0:
+            if self.over_left_handle or self.over_right_handle or self.resizing_handle:
+                if self.cursor().shape() != Qt.SplitHCursor:
+                    self.setCursor(Qt.SplitHCursor)
+            else:
+                self.unsetCursor()
+
         # Resizing
-        if self.is_resizing:
+        if self.resizing_handle != None:
             time_position = self.t_left + self.mouse_pos.x() / self.ppsec
-            if self.resizing_handle != None:
-                self.resizeSegmentOrSelection(time_position)
-            self.checkHandles(time_position)
+            if self.selection_is_active:
+                self.resizeSelection(time_position, self.resizing_handle)
+            elif self.current_segment_active >= 0:
+                self.resizeActiveSegment(time_position, self.resizing_handle)
             self.draw()
+        
 
 
     def wheelEvent(self, event: QWheelEvent):
@@ -914,7 +935,7 @@ class WaveformWidget(QWidget):
                     self.painter.drawRoundedRect(
                         QRect(x, self.selection_inactive_top, w, self.selection_inactive_height), 8, 8)
                 
-                if self.is_resizing:
+                if self.resizing_handle != None:
                     if self.over_left_handle:
                         self.painter.setPen(self.handle_left_pen_shadow)
                         self.painter.drawLine(x, self.handle_top, x, self.handle_down)
@@ -925,10 +946,10 @@ class WaveformWidget(QWidget):
                         self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
                         self.painter.setPen(self.handle_right_pen)
                         self.painter.drawLine(x+w, self.handle_top+2, x+w, self.handle_down-2)
-                    else:
-                        self.painter.setPen(self.handlepen)
-                        self.painter.drawLine(x, self.handle_top, x, self.handle_down)
-                        self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
+                    # else:
+                    #     self.painter.setPen(self.handlepen)
+                    #     self.painter.drawLine(x, self.handle_top, x, self.handle_down)
+                    #     self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
 
         # Draw selected segment
         for seg_id in self.active_segments:
@@ -956,28 +977,17 @@ class WaveformWidget(QWidget):
                 self.painter.setBrush(QBrush())
                 self.painter.drawRoundedRect(QRect(x, self.active_top, w, self.active_height), 8, 8)
 
-
                 # Draw handles
-                if len(self.active_segments) != 1:
-                    continue
-                if self.is_resizing:
-                    if self.over_left_handle:
-                        self.painter.setPen(self.handle_left_pen_shadow)
-                        self.painter.drawLine(x, self.handle_top, x, self.handle_down)
-                        self.painter.setPen(self.handle_left_pen)
-                        self.painter.drawLine(x, self.handle_top, x, self.handle_down)
-                    elif self.over_right_handle:
-                        self.painter.setPen(self.handle_right_pen_shadow)
-                        self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
-                        self.painter.setPen(self.handle_right_pen)
-                        self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
-                    else:
-                        self.painter.setPen(self.handlepen_shadow)
-                        self.painter.drawLine(x, self.handle_top, x, self.handle_down)
-                        self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
-                        self.painter.setPen(self.handlepen)
-                        self.painter.drawLine(x, self.handle_top, x, self.handle_down)
-                        self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
+                if self.resizing_handle == Handle.LEFT:
+                    self.painter.setPen(self.handle_left_pen_shadow)
+                    self.painter.drawLine(x, self.handle_top, x, self.handle_down)
+                    self.painter.setPen(self.handle_left_pen)
+                    self.painter.drawLine(x, self.handle_top, x, self.handle_down)
+                elif self.resizing_handle == Handle.RIGHT:
+                    self.painter.setPen(self.handle_right_pen_shadow)
+                    self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
+                    self.painter.setPen(self.handle_right_pen)
+                    self.painter.drawLine(x+w, self.handle_top, x+w, self.handle_down)
 
 
     def _drawSceneChanges(self, t_right: float):
