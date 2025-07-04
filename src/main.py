@@ -615,6 +615,7 @@ class MainWindow(QMainWindow):
         self.transcribe_button.setEnabled(False)
         self.transcribe_button.toggled.connect(self.toggleTranscribe)
         self.recognizer_worker.finished.connect(self.transcribe_button.toggle)
+        transcription_buttons_layout.addSpacing(4)
         transcription_buttons_layout.addWidget(self.transcribe_button)
 
         top_bar_layout.addLayout(transcription_buttons_layout)
@@ -1591,17 +1592,17 @@ class MainWindow(QMainWindow):
         return ' '.join([tok[2] for tok in tokens])
 
 
+    @Slot()
+    def handleRecognizerEOF(self):
+        self.media_metadata["transcription_completed"] = True
+        self.cache.update_media_metadata(self.media_path, self.media_metadata)
+
+
     @Slot(float)
     def updateProgressBar(self, t: float):
         self.waveform.recognizer_progress = t
         if t > self.waveform.t_left and t < self.waveform.getTimeRight():
             self.waveform.draw()
-
-
-    @Slot()
-    def handleRecognizerEOF(self):
-        self.media_metadata["transcription_completed"] = True
-        self.cache.update_media_metadata(self.media_path, self.media_metadata)
 
 
     @Slot(bool)

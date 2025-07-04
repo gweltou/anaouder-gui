@@ -191,6 +191,8 @@ class CacheSystem:
         print(f"Update media metadata cache, {audio_path}")
         fingerprint = calculate_fingerprint(audio_path)
 
+        metadata = copy.deepcopy(metadata)
+
         metadata["file_path"] = os.path.abspath(audio_path) # Not sure we need this one, but hey...
         metadata["last_access"] = datetime.now().timestamp()
         
@@ -225,9 +227,7 @@ class CacheSystem:
         
         if fingerprint not in self.media_cache:
             self.media_cache[fingerprint] = {"file_size": os.stat(audio_path).st_size}
-        
-        cached_metadata = self.media_cache[fingerprint]
-        cached_metadata.update(metadata)
+        self.media_cache[fingerprint].update(metadata)
 
         self._media_cache_dirty = True
         self._save_root_cache_to_disk()
