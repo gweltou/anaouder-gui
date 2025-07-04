@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from enum import Enum
 
 from PySide6.QtWidgets import (
@@ -47,7 +47,7 @@ class Highlighter(QSyntaxHighlighter):
 
     def __init__(self, parent, text_edit):
         super().__init__(parent)
-        self.text_edit : TextEdit = text_edit
+        self.text_edit : TextEditWidget = text_edit
         self.mode = self.ColorMode.ALIGNMENT
         self.hunspell = None
         self.show_misspelling = False
@@ -245,7 +245,7 @@ def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
 
 
 
-class TextEdit(QTextEdit):
+class TextEditWidget(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
@@ -353,7 +353,7 @@ class TextEdit(QTextEdit):
             user_data["seg_id"] = id
 
 
-    def getBlockById(self, id: int) -> QTextBlock:
+    def getBlockById(self, id: int) -> Optional[QTextBlock]:
         doc = self.document()
         block = doc.firstBlock()
         while block.isValid():
@@ -662,9 +662,6 @@ class TextEdit(QTextEdit):
     
     
     def contentsChange(self, position, charsRemoved, charsAdded):
-        # Update video subtitle if necessary
-        self.parent.updateSubtitle(force=True)
-
         # Update the utterance density field
         cursor = self.textCursor()
         cursor.setPosition(position)

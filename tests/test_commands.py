@@ -15,7 +15,7 @@ from src.waveform_widget import (
     ResizeSegmentCommand, Handle,
 )
 from src.icons import loadIcons
-from src.text_widget import TextEdit
+from src.text_widget import TextEditWidget
 
 
 app = QApplication()
@@ -26,7 +26,7 @@ main_window = MainWindow()
 
 def loadDocument():
     main_window.waveform.clear()
-    main_window.text_edit.document().clear()
+    main_window.text_widget.document().clear()
     main_window.undo_stack.clear()
 
     for text, segment in [
@@ -37,18 +37,18 @@ def loadDocument():
         ("Pempvet linenn", (40, 41))
     ]:
         seg_id = main_window.waveform.addSegment(list(segment))
-        main_window.text_edit.appendSentence(text, seg_id)
+        main_window.text_widget.appendSentence(text, seg_id)
 
 
 
 def getDocumentState() -> dict:
     state = dict()
-    cursor = main_window.text_edit.textCursor()
+    cursor = main_window.text_widget.textCursor()
     state["cursor_position"] = cursor.position()
     state["cursor_anchor"] = cursor.anchor()
     # state["n_blocks"] = main_window.text_edit.document().blockCount()
     state["blocks"] = []
-    block = main_window.text_edit.document().firstBlock()
+    block = main_window.text_widget.document().firstBlock()
     while block.isValid():
         text = block.text()[:]
         data = deepcopy(block.userData().data) if block.userData() else {}
@@ -66,9 +66,9 @@ def undo_redo_command(command: QUndoCommand, random_cursor=False):
     assert state1 != state2
 
     if random_cursor:
-        doc_size = main_window.text_edit.document().lastBlock().position()
+        doc_size = main_window.text_widget.document().lastBlock().position()
         new_pos = random.randint(0, doc_size)
-        main_window.text_edit.setCursorState({"position": new_pos, "anchor": new_pos})
+        main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
     main_window.undo()
     state3 = getDocumentState()
     assert state3 == state1
@@ -139,14 +139,14 @@ def test_resize_segment():
 
 def test_align_with_selection():
     loadDocument()
-    block = main_window.text_edit.document().findBlockByNumber(3)
+    block = main_window.text_widget.document().findBlockByNumber(3)
     # cursor = main_window.text_edit.textCursor()
     # cursor.movePosition(QTextCursor.Start)
     # print(cursor.position())
     # cursor.movePosition(QTextCursor.NextBlock, QTextCursor.MoveAnchor, 2)
     # print(cursor.position())
 
-    block_id = main_window.text_edit.getBlockId(block)
+    block_id = main_window.text_widget.getBlockId(block)
     segment = main_window.waveform.segments[block_id][:]
     main_window.undo_stack.push(DeleteSegmentsCommand(main_window, [block_id]))
     main_window.waveform.selection = segment
@@ -162,8 +162,8 @@ def test_insert_block_command():
 
     undo_redo_command(
         InsertBlockCommand(
-            main_window.text_edit,
-            main_window.text_edit.textCursor().position(),
+            main_window.text_widget,
+            main_window.text_widget.textCursor().position(),
             seg_id=seg_id,
             text=text,
         )
@@ -172,8 +172,8 @@ def test_insert_block_command():
     loadDocument()
     undo_redo_command(
         InsertBlockCommand(
-            main_window.text_edit,
-            main_window.text_edit.textCursor().position(),
+            main_window.text_widget,
+            main_window.text_widget.textCursor().position(),
             seg_id=seg_id,
             text=text,
             after=True

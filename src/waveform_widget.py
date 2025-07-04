@@ -230,7 +230,7 @@ class WaveformWidget(QWidget):
         self.shift_pressed = False
         self.timer.stop()
 
-        self.segments = dict()
+        self.segments = dict() # Keys are segment ids (int), values are segment [start (float), end (float)]
         self.active_segments = []
         self.current_segment_active = -1
         self.scenes = [] # Scene transition timecodes and color channels, in the form [ts, r, g, b]
@@ -463,13 +463,13 @@ class WaveformWidget(QWidget):
 
 
     def getSegmentAtTime(self, time: float) -> int:
-        for id, (start, end) in self.segments.items():
+        for id, (start, end) in self.getSortedSegments():
             if start <= time <= end:
                 return id
         return -1
 
 
-    def getSegmentAtPosition(self, position: QPointF) -> int:
+    def getSegmentAtPixelPosition(self, position: QPointF) -> int:
         """
         Return the segment id of any segment at this window position
         or -1 if there is no segment at this position
@@ -502,7 +502,7 @@ class WaveformWidget(QWidget):
         return False
 
 
-    def getSortedSegments(self) -> list[str, list]:
+    def getSortedSegments(self) -> list[int, list]:
         if self._to_sort:
             self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
             self._to_sort = False
@@ -513,10 +513,10 @@ class WaveformWidget(QWidget):
         self.is_selecting = checked
         self.anchor = -1
 
-        if checked:
-            self.setCursor(Qt.SplitHCursor)
-        else:
-            self.unsetCursor()
+        # if checked:
+        #     self.setCursor(Qt.SplitHCursor)
+        # else:
+        #     self.unsetCursor()
 
 
     def zoomIn(self, factor=1.333, position=0.5):
@@ -696,7 +696,7 @@ class WaveformWidget(QWidget):
                 self.setCursor(Qt.ClosedHandCursor)
 
         if event.button() == Qt.RightButton:
-            segment_under = self.getSegmentAtPosition(self.click_pos)
+            segment_under = self.getSegmentAtPixelPosition(self.click_pos)
             # Show contextMenu only if right clicking on active segment
             if segment_under not in self.active_segments:
                 # Deactivate currently active segment
@@ -719,8 +719,8 @@ class WaveformWidget(QWidget):
             self.resizing_handle = Handle.LEFT if self.over_left_handle else Handle.RIGHT
             if self.current_segment_active >= 0:
                 self.resizing_segment = self.segments[self.current_segment_active][:]
-                block = self.parent.text_edit.getBlockById(self.current_segment_active)
-                self.resizing_textlen = self.parent.text_edit.getSentenceLength(block)
+                block = self.parent.text_widget.getBlockById(self.current_segment_active)
+                self.resizing_textlen = self.parent.text_widget.getSentenceLength(block)
         else:
             self.resizing_handle = None
         
@@ -747,7 +747,7 @@ class WaveformWidget(QWidget):
             if dist < 20:
                 # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
-                clicked_id = self.getSegmentAtPosition(event.position())
+                clicked_id = self.getSegmentAtPixelPosition(event.position())
                 # self.utterances is set from main
                 self.text_edit.setActive(clicked_id, with_cursor=not self.shift_pressed, update_waveform=False)
                 self.setActive(clicked_id, multi=self.shift_pressed)
@@ -853,7 +853,7 @@ class WaveformWidget(QWidget):
         if not self.active_segments and not self.selection_is_active:
             return
         
-        clicked_segment_id = self.getSegmentAtPosition(event.globalPos())
+        clicked_segment_id = self.getSegmentAtPixelPosition(event.globalPos())
         context = QMenu(self)
 
         # context.addSeparator()
