@@ -29,7 +29,7 @@ class MyTextBlockUserData(QTextBlockUserData):
         Fields:
             - seg_id
     """
-    def __init__(self, data):
+    def __init__(self, data: dict):
         super().__init__()
         self.data = data
 

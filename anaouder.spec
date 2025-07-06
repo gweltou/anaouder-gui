@@ -43,10 +43,6 @@ a = Analysis(
     pathex=[],
     binaries=get_binaries(),
     datas=[
-        (get_lib_path("ostilhou/asr/*.tsv"), "ostilhou/asr"),
-        (get_lib_path("ostilhou/hspell/*.txt"), "ostilhou/hspell"),
-        (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.dic"), "ostilhou/hspell/hunspell-dictionary/"),
-        (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.aff"), "ostilhou/hspell/hunspell-dictionary/"),
         ("./icons/back.png", "icons/"),
         ("./icons/previous.png", "icons/"),
         ("./icons/play-button.png", "icons/"),
@@ -79,15 +75,18 @@ a = Analysis(
         ("./icons/del_segment.png", "icons/"),
 
         ("./icons/anaouder_256.png", "icons/"),
+
+        # Breton language specific files
+        (get_lib_path("ostilhou/asr/*.tsv"), "ostilhou/asr"),
+        (get_lib_path("ostilhou/dicts/*.tsv"), "ostilhou/dicts"),
+        (get_lib_path("ostilhou/hspell/*.txt"), "ostilhou/hspell"),
+        (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.dic"), "ostilhou/hspell/hunspell-dictionary/"),
+        (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.aff"), "ostilhou/hspell/hunspell-dictionary/"),
     ],
     hiddenimports=[
         'src.lang.br',
         'src.lang.cy',
         'src.lang.fr',
-        'PySide6.QtCore',
-        'PySide6.QtGui',
-        'PySide6.QtWidgets',
-        'PySide6.QtMultimedia'
     ],
     hookspath=[],
     hooksconfig={},

@@ -36,8 +36,8 @@ def get_hunspell_url() -> str:
     )
 
 
-def post_process_text(text: str) -> str:
-    return ostilhou_post_process_text(text)
+def post_process_text(text: str, normalize:bool=False) -> str:
+    return ostilhou_post_process_text(text, normalize=normalize)
 
 
 def pre_process_density(text: str) -> str:

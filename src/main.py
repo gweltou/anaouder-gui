@@ -395,6 +395,7 @@ class MainWindow(QMainWindow):
         self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
 
         self.text_widget = TextEditWidget(self)
+        self.text_widget.document().contentsChanged.connect(self.handleTextChanged)
         self.waveform = WaveformWidget(self)
         self.waveform.text_edit = self.text_widget
         
@@ -602,9 +603,10 @@ class MainWindow(QMainWindow):
 
         transcription_buttons_layout.addWidget(
             IconWidget(icons["numbers"], MainWindow.BUTTON_LABEL_SIZE))
-        normalization_checkbox = QCheckBox()
-        normalization_checkbox.setToolTip(self.tr("Normalize numbers"))
-        transcription_buttons_layout.addWidget(normalization_checkbox)
+        self.normalization_checkbox = QCheckBox()
+        self.normalization_checkbox.setChecked(True)
+        self.normalization_checkbox.setToolTip(self.tr("Normalize numbers"))
+        transcription_buttons_layout.addWidget(self.normalization_checkbox)
 
         self.transcribe_button = QPushButton()
         self.transcribe_button.setIcon(icons["sparkles"])
@@ -1480,14 +1482,26 @@ class MainWindow(QMainWindow):
 
 
     @Slot()
+    def handleTextChanged(self):
+        # Update the utterance density field
+        cursor = self.text_widget.textCursor()
+        block = cursor.block()
+        if self.text_widget.isAligned(block):
+            id = self.text_widget.getBlockId(block)
+            # Update utterance density
+            self.updateUtteranceDensity(id)
+            self.updateSegmentInfo(id)
+            self.waveform.draw()
+        
+            # Update current subtitles, if needed
+            start, end = self.waveform.segments[id]
+            if start <= self.waveform.playhead <= end:
+                self.updateSubtitle(self.waveform.playhead)
+
+
+    @Slot()
     def toggleSelect(self, checked):
         print("selecting")
-        # if checked:
-        #     select_cursor = QCursor(Qt.IBeamCursor)
-        #     # self.waveform.setCursor(select_cursor)
-        # else:
-        #     self.waveform.unsetCursor()
-        
         self.waveform.setSelecting(checked)
 
 
@@ -1527,14 +1541,14 @@ class MainWindow(QMainWindow):
             
         block = self.text_widget.getBlockById(seg_id)
         text = self.handleRecognizerOutput(tokens)
-        text = lang.postProcessText(text)
+        text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
         self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text, 0, 0))
 
 
     @Slot(list)
     def newSegmentTranscribed(self, tokens):
         text = self.handleRecognizerOutput(tokens)
-        text = lang.postProcessText(text)
+        text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
         segment_start = tokens[0]["start"]
         segment_end = tokens[-1]["end"]
 
@@ -1612,10 +1626,6 @@ class MainWindow(QMainWindow):
         else:
             self.recognizer_worker.must_stop = True
     
-
-    # @Slot()
-    # def transcribeButtonClicked(self):
-    #     print("clicked")
 
     def transcribeAction(self):
         if self.waveform.selection_is_active:
@@ -1879,7 +1889,7 @@ class MainWindow(QMainWindow):
     
     def updateSegmentInfo(
         self,
-        id,
+        id:int,
         segment=None,
         density=None,
     ):
@@ -1910,7 +1920,7 @@ class MainWindow(QMainWindow):
 
 
     def getUtteranceDensity(self, id) -> float:
-        if self.waveform.current_segment_active == id:
+        if self.waveform.resizing_handle and self.waveform.current_segment_active == id:
             return self.waveform.resizing_density
         block = self.text_widget.getBlockById(id)
         if not block:

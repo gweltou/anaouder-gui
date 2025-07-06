@@ -19,7 +19,7 @@ class Language:
     name:                   str
     short_name:             str
     get_model_dict:         Callable[[], List[dict]]
-    post_process_text:      Callable[[str], str] | None = None
+    post_process_text:      Callable[[str, bool], str] | None = None
     pre_process_density:    Callable[[str], str] | None = None
     prepare_for_alignment:  Callable[[str], str] | None = None
 
@@ -30,8 +30,8 @@ class Language:
     def load(self):
         pass
     
-    def postProcessText(self, text: str) -> str:
-        return self.post_process_text(text)
+    def postProcessText(self, text: str, normalize: bool) -> str:
+        return self.post_process_text(text, normalize)
 
     def preProcessDensity(self, text: str) -> str:
         return self.pre_process_density(text)
@@ -94,8 +94,8 @@ def getModelUrl(model_name: str) -> str:
         return _current_language.model_dict[model_name]["url"]
 
 
-def postProcessText(text: str) -> str:
-    return _current_language.postProcessText(text)
+def postProcessText(text: str, normalize: bool) -> str:
+    return _current_language.postProcessText(text, normalize)
 
 
 def prepWordForAlignment(text: str) -> str:

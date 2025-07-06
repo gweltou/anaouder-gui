@@ -31,7 +31,7 @@ def get_hunspell_url() -> str:
     )
 
 
-def post_process_text(text: str) -> str:
+def post_process_text(text: str, normalize:bool=False) -> str:
     return text
 
 

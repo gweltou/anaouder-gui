@@ -256,7 +256,6 @@ class TextEditWidget(QTextEdit):
                 
         # Signals
         self.cursorPositionChanged.connect(self.cursorChanged)
-        self.document().contentsChange.connect(self.contentsChange)
 
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document(), self)
@@ -660,18 +659,6 @@ class TextEditWidget(QTextEdit):
 
         return super().canInsertFromMimeData(source)
     
-    
-    def contentsChange(self, position, charsRemoved, charsAdded):
-        # Update the utterance density field
-        cursor = self.textCursor()
-        cursor.setPosition(position)
-        block = cursor.block()
-        if self.isAligned(block):
-            id = self.getBlockId(block)
-            self.parent.updateUtteranceDensity(id)
-            self.parent.updateSegmentInfo(id)
-            self.parent.waveform.draw()
-
 
     def cursorChanged(self):
         """Set current utterance active"""
