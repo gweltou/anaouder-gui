@@ -407,8 +407,7 @@ class TextEditWidget(QTextEdit):
 
     def setSentenceText(self, id: int, text: str):
         """
-        TODO: move this to a private method of JoinUtterancesCommand ?
-        It is not used anywhere else
+        TODO: move this to a private method of JoinUtterancesCommand? It is not used anywhere else
         """
         block = self.getBlockById(id)
         if not block:
@@ -424,7 +423,7 @@ class TextEditWidget(QTextEdit):
 
 
     def appendSentence(self, text: str, id: int):
-        """ Insert new utterance at the end of the document """
+        """Insert new utterance at the end of the document"""
         # When using append, html tags are interpreted as formatting tags
         # self.append(text)
         cursor = self.textCursor()
@@ -435,9 +434,7 @@ class TextEditWidget(QTextEdit):
 
 
     def insertSentenceWithId(self, text: str, id: int, with_cursor=False):
-        """
-        Create a new utterance from an existing segment id
-
+        """Create a new utterance from an existing segment id
         This action won't be added to the undo stack
         """
         assert id in self.parent.waveform.segments
@@ -518,7 +515,7 @@ class TextEditWidget(QTextEdit):
 
     def setText(self, text: str):
         """
-        TODO: What is this ?
+        TODO: What is this again ?
         """
         super().setText(text)
 
@@ -531,6 +528,37 @@ class TextEditWidget(QTextEdit):
             i_comment = text.find('#')
             if i_comment >= 0:
                 text = text[:i_comment]
+
+
+    def replaceWord(self, cursor: QTextCursor, new_word: str):
+        """Replace the word under the given cursor with a new word
+        This action is undoable"""
+        print(cursor, new_word)
+        block_text = cursor.block().text()
+        pos_in_block = cursor.positionInBlock()
+        print(pos_in_block)
+        # Find selected word's boundaries
+        left_pos = pos_in_block
+        right_pos = pos_in_block
+        while left_pos > 0 and block_text[left_pos-1] not in STOP_CHARS:
+            left_pos -= 1
+        while right_pos < len(block_text) and block_text[right_pos] not in STOP_CHARS:
+            right_pos += 1
+        cursor.movePosition(QTextCursor.Left, QTextCursor.MoveAnchor, pos_in_block - left_pos)
+        cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, right_pos - left_pos)
+        self.setTextCursor(cursor)
+
+        new_text = block_text[:left_pos] + new_word + block_text[right_pos:]
+        print(new_text)
+
+        self.undo_stack.push(
+                ReplaceTextCommand(
+                    self,
+                    cursor.block(),
+                    new_text,
+                    pos_in_block, pos_in_block
+                )
+            )
 
 
     def deactivateSentence(self, id=None):
@@ -689,43 +717,67 @@ class TextEditWidget(QTextEdit):
         # self.setTextCursor(cursor)
         block = cursor.block()
         block_type = self.getBlockType(block)
+
+        # Check for a misspelled word at this position, by checking the char format
+        misspelled_word = None
+
+        formats = block.layout().formats()
+        for format_range in formats:
+            if format_range.start <= cursor.positionInBlock() <= format_range.start + format_range.length:
+                if format_range.format.underlineStyle() == QTextCharFormat.SpellCheckUnderline:
+                    # Found misspelled word
+                    cursor.select(QTextCursor.WordUnderCursor)
+                    misspelled_word = cursor.selectedText()
         
         # context = self.createStandardContextMenu(event.pos())
-        context = QMenu(self)
+        context_menu = QMenu(self)
+
+        # Propose spellchecker's suggestions
+        if misspelled_word:
+            cursor = self.cursorForPosition(event.pos())
+            n_suggestion = 0
+            for suggestion in self.highlighter.hunspell.suggest(misspelled_word):
+                n_suggestion += 1
+                action = context_menu.addAction(suggestion)
+                action.triggered.connect(lambda checked, c=cursor, s=suggestion: self.replaceWord(c, s))
+                if n_suggestion >= 6:
+                    break
+            if n_suggestion > 0:
+                context_menu.addSeparator()
 
         cut_action = QAction(QIcon.fromTheme("edit-cut"), "Cut", self)
         cut_action.setShortcut(QKeySequence.Cut)
         cut_action.triggered.connect(self.cut)
-        context.addAction(cut_action)
+        context_menu.addAction(cut_action)
 
         # Copy Action
         copy_action = QAction(QIcon.fromTheme("edit-copy"), "Copy", self)
         copy_action.setShortcut(QKeySequence.Copy)
         copy_action.triggered.connect(self.copy)
-        context.addAction(copy_action)
+        context_menu.addAction(copy_action)
 
         # Paste Action
         paste_action = QAction(QIcon.fromTheme("edit-paste"), "Paste", self)
         paste_action.setShortcut(QKeySequence.Paste)
         paste_action.triggered.connect(self.paste)
-        context.addAction(paste_action)
+        context_menu.addAction(paste_action)
 
-        context.addSeparator()
+        context_menu.addSeparator()
 
         # Select All Action
         select_all_action = QAction(QIcon.fromTheme("edit-select-all"), "Select All", self)
         select_all_action.setShortcut(QKeySequence.SelectAll)
         select_all_action.triggered.connect(self.selectAll)
-        context.addAction(select_all_action)
+        context_menu.addAction(select_all_action)
 
         if block_type == BlockType.ALIGNED:
-            context.addSeparator()
-            auto_transcribe = context.addAction("Auto transcribe")
-            auto_transcribe.triggered.connect(self.parent.transcribe)
+            context_menu.addSeparator()
+            auto_transcribe = context_menu.addAction("Auto transcribe")
+            auto_transcribe.triggered.connect(lambda: self.parent.transcribe_button.setChecked(True))
 
         elif block_type == BlockType.NOT_ALIGNED:
-            context.addSeparator()
-            align_action = context.addAction("Align with selection")
+            context_menu.addSeparator()
+            align_action = context_menu.addAction("Align with selection")
             align_action.setEnabled(False)
 
             selection = self.parent.waveform.selection
@@ -748,7 +800,7 @@ class TextEditWidget(QTextEdit):
                     align_action.setEnabled(True)
                     align_action.triggered.connect(lambda checked, b=block: self.parent.alignUtterance(b))
                 
-        action = context.exec(event.globalPos())
+        action = context_menu.exec(event.globalPos())
         
 
     def inputMethodEvent(self, event):
@@ -1025,6 +1077,7 @@ class TextEditWidget(QTextEdit):
     
 
     def mouseDoubleClickEvent(self, event):
+        """Prevent default double-click behaviour"""
         event.ignore()
 
 
