@@ -26,7 +26,7 @@ exportSrtSignals = ExportSrtSignals()
 
 
 class ExportSrtDialog(QDialog):
-    def __init__(self, parent=None, default_path:str=None):
+    def __init__(self, parent, default_path:str=None, fps:float=None):
         super().__init__(parent)
 
         self.setWindowTitle("Export to SRT")
@@ -69,9 +69,12 @@ class ExportSrtDialog(QDialog):
         self.fps_combo = QComboBox()
         common_fps = ["23.976", "24", "25", "29.97", "30", "60"]
         self.fps_combo.addItems(common_fps)
-        self.fps_combo.setCurrentText("24")
-        self.fps_combo.setEditable(True)
-        self.fps_combo.currentTextChanged.connect(self.update_time_label)
+        if fps:
+            self.fps_combo.setCurrentText(str(fps))
+            self.fps_combo.setEnabled(False)
+        else:
+            self.fps_combo.setCurrentText("24")
+            self.fps_combo.setEditable(True)
         
         # Min frames between subtitles
         min_frames_label = QLabel("Frames")
@@ -79,6 +82,8 @@ class ExportSrtDialog(QDialog):
         self.min_frames_spin = QSpinBox()
         self.min_frames_spin.setRange(1, 8)
         self.min_frames_spin.setValue(2)
+
+        self.fps_combo.currentTextChanged.connect(self.update_time_label)
         self.min_frames_spin.valueChanged.connect(self.update_time_label)
         
         # Time calculation result
@@ -87,8 +92,9 @@ class ExportSrtDialog(QDialog):
         
         opt_layout = QHBoxLayout()
         opt_layout.addWidget(time_label)
-        opt_layout.addWidget(fps_label)
-        opt_layout.addWidget(self.fps_combo)
+        if not fps:
+            opt_layout.addWidget(fps_label)
+            opt_layout.addWidget(self.fps_combo)
         opt_layout.addWidget(min_frames_label)
         opt_layout.addWidget(self.min_frames_spin)
         opt_layout.addWidget(self.time_result_label)
@@ -98,7 +104,6 @@ class ExportSrtDialog(QDialog):
         apostrophe_label = QLabel("Apostrophe normalization:")
         font = QFont()
         font.setPointSize(18)
-        # apostrophe_norm_label = QLabel("' → ’")
         apostrophe_norm_label_1 = QLabel("' → ’")
         apostrophe_norm_label_1.setFont(font)
         apostrophe_norm_label_1.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -158,21 +163,21 @@ class ExportSrtDialog(QDialog):
         try:
             fps = float(self.fps_combo.currentText())
             min_frames = self.min_frames_spin.value()
-            self.time_seconds = min_frames / fps
-            self.time_result_label.setText(f"{self.time_seconds:.3f} seconds")
+            self.interval_time = min_frames / fps
+            self.time_result_label.setText(f"{self.interval_time:.3f} seconds")
         except ValueError:
             self.time_result_label.setText("Invalid FPS value")
 
 
 
-def exportSrt(parent, media_path, utterances):
+def exportSrt(parent, media_path, utterances, fps:float=None):
     rm_special_tokens = True
 
     dir = os.path.split(media_path)[0] if media_path else os.path.expanduser('~')
     default_path = os.path.splitext(media_path)[0] if media_path else "untitled"
     default_path += ".srt"
 
-    dialog = ExportSrtDialog(parent, os.path.join(dir, default_path))
+    dialog = ExportSrtDialog(parent, os.path.join(dir, default_path), fps)
     result = dialog.exec()
 
     if result == QDialog.Rejected:
@@ -213,7 +218,7 @@ def exportSrt(parent, media_path, utterances):
         utterances[i][0] = text
 
     # Adjust minimal duration between two subtitles (>= 0.08s)
-    min_time = dialog.time_seconds
+    min_time = dialog.interval_time
     for i in range(len(utterances) - 1):
         text, (current_start, current_end) = utterances[i]
         _, (next_start, _) = utterances[i+1]

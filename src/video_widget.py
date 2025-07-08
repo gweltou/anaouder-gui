@@ -81,7 +81,6 @@ class VideoWidget(QGraphicsView):
         self.text_item.setDefaultTextColor(QColor(255, 255, 255))
 
     def resizeEvent(self, event: QResizeEvent):
-        print("video_widget resize event")
         super().resizeEvent(event)
         self.updateLayout()
 
@@ -89,7 +88,6 @@ class VideoWidget(QGraphicsView):
         """Update the layout of video and text items"""
         if not self.video_item.boundingRect().isValid():
             return
-        print("update layout")
         
         # Fit video to view while maintaining aspect ratio
         video_rect = self.video_item.boundingRect()

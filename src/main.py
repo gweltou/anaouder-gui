@@ -1185,7 +1185,7 @@ class MainWindow(QMainWindow):
 
     def exportSrt(self):
         exportSrtSignals.message.connect(self.setStatusMessage)
-        exportSrt(self, self.media_path, self.getUtterances())
+        exportSrt(self, self.media_path, self.getUtterances(), self.media_metadata.get("fps", None))
     
 
     def exportEaf(self):
