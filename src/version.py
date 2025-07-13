@@ -1,1 +1,1 @@
-__version__ = "Alfa 25.07.03"
+__version__ = "Alfa 25.07.13"

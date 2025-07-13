@@ -12,11 +12,14 @@ from time import sleep
 
 from PySide6.QtWidgets import (
     QDialog, QWidget, QApplication,
-    QTabWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+    QTabWidget,
+    QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, 
     QLineEdit, QCheckBox, QComboBox, QSpinBox, 
     QPushButton, QGroupBox, QFormLayout,
     QMessageBox, QListWidget,
     QProgressBar,
+    QColorDialog,
     QSizePolicy,
 )
 from PySide6.QtCore import (
@@ -24,9 +27,10 @@ from PySide6.QtCore import (
     Signal, Slot, QUrl,
     QSettings
 )
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QPalette, QColor
 
 import src.lang as lang
+from src.video_widget import VideoWidget
 from src.cache_system import CacheSystem
 from src.utils import get_cache_directory
 from src.settings import MULTI_LANG, app_settings
@@ -221,7 +225,7 @@ class ParametersDialog(QDialog):
         self.tabs = QTabWidget()
 
         self.tabs.addTab(ModelsTab(), self.tr("Models"))
-        self.tabs.addTab(UITab(), self.tr("UI"))
+        self.tabs.addTab(UITab(parent.video_widget), self.tr("UI"))
         self.tabs.addTab(CacheTab(parent.cache, parent.media_metadata), self.tr("Cache"))
         # self.tabs.addTab(self.display_tab, "Display")
         # self.tabs.addTab(self.dictionary_tab, "Dictionary")
@@ -464,8 +468,10 @@ class ModelsTab(QWidget):
 
 
 class UITab(QWidget):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, video_widget: VideoWidget, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.video_widget = video_widget
 
         main_layout = QVBoxLayout()
 
@@ -475,7 +481,7 @@ class UITab(QWidget):
         # self.lang_selection.addItems(["Brezhoneg", "Français", "English", "Cymbraeg"])
         # main_layout.addWidget(self.lang_selection)
 
-        lang_group = QGroupBox(self.tr("Language of user interface"))
+        ui_lang_group = QGroupBox(self.tr("Language of user interface"))
         lang_layout = QHBoxLayout()
         lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         # lang_label = QLabel("Lang")
@@ -487,14 +493,96 @@ class UITab(QWidget):
         # lang_layout.addWidget(lang_label)
         lang_layout.addWidget(self.lang_selection)
         
-        lang_group.setLayout(lang_layout)
-        main_layout.addWidget(lang_group)
+        ui_lang_group.setLayout(lang_layout)
 
+        # Subtitles styling
+        ui_subs_group = QGroupBox(self.tr("Subtitles style"))
+        ui_subs_layout = QGridLayout()
+
+        color_label = QLabel(self.tr("Subtitles font color"))
+        ui_subs_layout.addWidget(color_label, 0, 0)
+        self.subs_font_color_button = QPushButton()
+        self.subs_font_color_button.clicked.connect(self.pickColorFont)
+        current_color: QColor = app_settings.value("subtitles/font_color", QColor(255, 255, 255))
+        if current_color.isValid():
+            self.setColorButtonStyle(self.subs_font_color_button, current_color)
+        ui_subs_layout.addWidget(self.subs_font_color_button, 0, 2)
+
+        rect_label = QLabel("Background rectangle")
+        ui_subs_layout.addWidget(rect_label, 1, 0)
+
+        rect_visibility_checkbox = QCheckBox("Show")
+        rect_visibility_checkbox.setChecked(app_settings.value("subtitles/rect_visible", True))
+        rect_visibility_checkbox.toggled.connect(self.toggleRectVisibility)
+        ui_subs_layout.addWidget(rect_visibility_checkbox, 1, 1)
+
+        self.subs_rect_color_button = QPushButton()
+        self.subs_rect_color_button.clicked.connect(self.pickColorRect)
+        current_color: QColor = app_settings.value("subtitles/rect_color", QColor(0, 0, 0, 100))
+        if current_color.isValid():
+            self.setColorButtonStyle(self.subs_rect_color_button, current_color)
+        ui_subs_layout.addWidget(self.subs_rect_color_button, 1, 2)
+        
+        ui_subs_group.setLayout(ui_subs_layout)
+
+        main_layout.addWidget(ui_lang_group)
+        main_layout.addWidget(ui_subs_group)
+        main_layout.addStretch()
         self.setLayout(main_layout)
     
 
     def updateUiLanguage(self):
         pass
+
+
+    def pickColorFont(self):
+        prev_color = app_settings.value("subtitles/font_color", QColor(255, 255, 255))
+        color = QColorDialog.getColor(
+            prev_color,
+            self,
+            self.tr("Select Color")
+        )
+        if color.isValid():
+            self.setColorButtonStyle(self.subs_font_color_button, color)
+            self.video_widget.adjustFontColor(color)
+            app_settings.setValue("subtitles/font_color", color)
+    
+
+    def pickColorRect(self):
+        prev_color = app_settings.value("subtitles/rect_color", QColor(0, 0, 0, 100))
+        color = QColorDialog.getColor(
+            prev_color,
+            self,
+            self.tr("Select Color"),
+            QColorDialog.ColorDialogOption.ShowAlphaChannel
+        )
+        if color.isValid():
+            self.setColorButtonStyle(self.subs_rect_color_button, color)
+            self.video_widget.adjustRectColor(color)
+            app_settings.setValue("subtitles/rect_color", color)
+    
+
+    def toggleRectVisibility(self, checked):
+        self.video_widget.toggleRectVisibility(checked)
+        app_settings.setValue("subtitles/rect_visible", checked)
+
+
+    def setColorButtonStyle(self, button: QPushButton, color: QColor):
+        button.setText(color.name())
+        button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color.name()};
+                    border: 1px solid #ccc;
+                    padding: 8px;
+                }}
+                QPushButton:hover {{
+                    background-color: {color.lighter(120).name()};
+                }}
+                QPushButton:pressed {{
+                    background-color: {color.name()};
+                }}
+            """)
+
 
 
 class CacheTab(QWidget):

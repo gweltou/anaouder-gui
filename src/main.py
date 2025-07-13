@@ -227,6 +227,8 @@ class JoinUtterancesCommand(QUndoCommand):
 
 
 class AlignWithSelectionCommand(QUndoCommand):
+    # TODO: Rewrite this
+
     def __init__(self, parent, block):
         super().__init__()
         self.parent : MainWindow = parent
@@ -234,16 +236,16 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.old_block_data = None
         self.selection = self.parent.waveform.selection[:]
         self.prev_active_segments = self.parent.waveform.active_segments[:]
-        self.prev_last_segment_active = self.parent.waveform.last_segment_active
+        self.prev_current_segment_active = self.parent.waveform.current_segment_active
         self.segment_id = self.parent.waveform.getNewId()
     
     def undo(self):
-        self.parent.text_widget.setActive(self.prev_last_segment_active, update_waveform=False)
+        self.parent.text_widget.setActive(self.prev_current_segment_active, update_waveform=False)
         self.block.setUserData(MyTextBlockUserData(self.old_block_data))
         self.parent.text_widget.highlighter.rehighlightBlock(self.block)
         self.parent.waveform.selection = self.selection
         self.parent.waveform.active_segments = self.prev_active_segments[:]
-        self.parent.waveform.current_segment_active = self.prev_last_segment_active
+        self.parent.waveform.current_segment_active = self.prev_current_segment_active
         del self.parent.waveform.segments[self.segment_id]
         self.parent.waveform.draw()
 
@@ -437,6 +439,8 @@ class MainWindow(QMainWindow):
         self.waveform.join_utterances.connect(self.joinUtterances)
         self.waveform.delete_utterances.connect(self.deleteUtterances)
         self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
+        self.waveform.playhead_moved.connect(self.movePlayHead)
+        self.waveform.refresh_segment_info.connect(self.updateSegmentInfo)
 
         # Restore window geometry and state
         self.restoreGeometry(app_settings.value("main/geometry"))
@@ -528,8 +532,7 @@ class MainWindow(QMainWindow):
 
         self.scene_detect_action = QAction(self.tr("Scenes transitions"), self)
         self.scene_detect_action.setCheckable(True)
-        self.scene_detect_action.toggled.connect(
-            lambda checked: self.toggleSceneDetect(checked))
+        self.scene_detect_action.toggled.connect(lambda checked: self.toggleSceneDetect(checked))
         display_menu.addAction(self.scene_detect_action)
 
 
@@ -1239,6 +1242,7 @@ class MainWindow(QMainWindow):
 
 
     def updatePlayer(self, position: int):
+        # Called every time the position is changed in the QMediaPlayer
         # Convert to seconds
         player_position = position / 1000
 
@@ -1373,6 +1377,7 @@ class MainWindow(QMainWindow):
             self.waveform.setHead(0.0)
 
 
+    @Slot(float)
     def movePlayHead(self, t: float):
         self.waveform.setHead(t)
         self.player.setPosition(int(self.waveform.playhead * 1000))
@@ -1405,7 +1410,7 @@ class MainWindow(QMainWindow):
     def toggleSceneDetect(self, checked):
         if checked and "fps" in self.media_metadata:
             self.waveform.display_scene_change = True
-            if "scenes" in self.media_metadata:
+            if "scenes" in self.media_metadata and self.media_metadata["scenes"]:
                 print("Using cached scene transitions")
                 self.waveform.scenes = self.media_metadata["scenes"]
                 self.waveform.draw()
@@ -1887,6 +1892,7 @@ class MainWindow(QMainWindow):
         return super().closeEvent(event)
     
     
+    @Slot(int)
     def updateSegmentInfo(
         self,
         id:int,

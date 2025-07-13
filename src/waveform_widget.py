@@ -61,7 +61,7 @@ class ResizeSegmentCommand(QUndoCommand):
         self.waveform_widget.segments[self.segment_id] = self.old_segment[:]
         self.waveform_widget._to_sort = True
         self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
-        self.waveform_widget.draw()
+        self.waveform_widget._must_redraw = True
 
     def redo(self):
         if self.side == Handle.LEFT:
@@ -69,7 +69,7 @@ class ResizeSegmentCommand(QUndoCommand):
         elif self.side == Handle.RIGHT:
             self.waveform_widget.segments[self.segment_id][1] = self.time_pos
         self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
-        self.waveform_widget.draw()
+        self.waveform_widget._must_redraw = True
         
     def id(self):
         return 21
@@ -88,6 +88,8 @@ class WaveformWidget(QWidget):
     new_utterance_from_selection = Signal()
     selection_started = Signal()
     selection_ended = Signal()
+    playhead_moved = Signal(float)
+    refresh_segment_info = Signal(int)
 
     class ScaledWaveform():
         def __init__(self, samples, sr: int):
@@ -211,13 +213,14 @@ class WaveformWidget(QWidget):
         self.handle_right_pen_shadow.setCapStyle(Qt.RoundCap)
         
         self.timer = QTimer()
-        self.timer.timeout.connect(self._updateScroll)
+        self.timer.timeout.connect(self._update)
+        self.timer.start(1000/30)   # 30 FPS canvas refresh
 
         self.clear()
 
 
     def updateThemeColors(self):
-        self.draw()
+        self._must_redraw = True
 
 
     def clear(self):
@@ -228,7 +231,6 @@ class WaveformWidget(QWidget):
         self.scroll_vel = 0.0
         self.playhead = 0.0
         self.shift_pressed = False
-        self.timer.stop()
 
         self.segments = dict() # Keys are segment ids (int), values are segment [start (float), end (float)]
         self.active_segments = []
@@ -293,7 +295,7 @@ class WaveformWidget(QWidget):
             # Clicked outside of any segment, deselect current active segment
             self.active_segments = []
             self.current_segment_active = -1
-            self.draw()
+            self._must_redraw = True
             self.refreshSegmentInfo()
             return
         
@@ -318,24 +320,18 @@ class WaveformWidget(QWidget):
             if segment_dur < window_dur * 0.9:
                 if start < self.t_left:
                     self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
-                    if not self.timer.isActive():
-                        self.timer.start(1000/30)
                 elif end > self.getTimeRight():
                     t_right_goal = min(self.audio_len, end + 0.1 * window_dur)
                     self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
-                    if not self.timer.isActive():
-                        self.timer.start(1000/30)
             else:
                 # Choose a zoom level that will fit this segment in 80% of the window width
                 adapted_window_dur = segment_dur / 0.8
                 adapted_ppsec = self.width() / adapted_window_dur
                 self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
                 self.ppsec_goal = adapted_ppsec
-                if not self.timer.isActive():
-                    self.timer.start(1000/30)
 
         self.current_segment_active = clicked_id
-        self.draw()
+        self._must_redraw = True
         self.refreshSegmentInfo()
 
 
@@ -343,16 +339,17 @@ class WaveformWidget(QWidget):
         """
         Set the playing head
         Slide the waveform window following the playhead
+
+        This method is called from the parent
         """
         self.playhead = t
         if (
                 not self.active_segments
-                and not self.timer.isActive()
                 and (t < self.t_left or t > self.getTimeRight())
             ):
             # Slide waveform window
             self.t_left = t
-        self.draw()
+        self._must_redraw = True
     
 
     def deselect(self):
@@ -363,18 +360,28 @@ class WaveformWidget(QWidget):
     def getTimeRight(self):
         """ Return the timecode at the right border of the window """
         return self.t_left + self.width() / self.ppsec
+    
 
-
-    def _updateScroll(self):
+    def _update(self):
         if self.audio_len <= 0:
             return
-
+        
+        # Zooming        
         if self.ppsec_goal != self.ppsec:
             self.ppsec += (self.ppsec_goal - self.ppsec) * 0.2
             self.waveform.ppsec = self.ppsec
 
+        if self.scroll_vel != 0.0:
+            self._updateScroll()
+
+        if self._must_redraw:
+            self.draw()
+            self._must_redraw = False
+
+
+    def _updateScroll(self):
         if self.scroll_goal >= 0.0:
-            # Automatic scrolling
+            # Scrolling
             dist = self.scroll_goal - self.t_left
             self.scroll_vel += 0.2 * dist
             self.scroll_vel *= 0.5
@@ -388,14 +395,15 @@ class WaveformWidget(QWidget):
             self.scroll_vel = 0
         if self.t_left < 0.0:
             self.t_left = 0.0
-            self.scroll_vel = 0
+            self.scroll_vel = 0.0
         
+        # Stop updating if we're centered
         if abs(self.scroll_vel) < 0.001 and abs(self.ppsec_goal - self.ppsec) < 0.1:
             self.scroll_goal = -1
             self.ppsec = self.ppsec_goal
             self.waveform.ppsec = self.ppsec
-            self.timer.stop()
-        self.draw()
+        else:
+            self._must_redraw = True
     
 
     # def checkHandles(self, time_position):
@@ -454,7 +462,7 @@ class WaveformWidget(QWidget):
         self.handle_top = self.timecode_margin + 0.14 * wf_max_height
         self.handle_down = self.timecode_margin + 0.86 * wf_max_height
 
-        self.draw()
+        self._must_redraw = True
     
 
     def enterEvent(self, event: QEvent):
@@ -528,7 +536,7 @@ class WaveformWidget(QWidget):
         self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
         self.waveform.ppsec = self.ppsec
         self.ppsec_goal = self.ppsec
-        self.draw()
+        self._must_redraw = True
     
     def zoomOut(self, factor=1.333, position=0.5):
         prev_ppsec = self.ppsec
@@ -541,7 +549,7 @@ class WaveformWidget(QWidget):
         self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
         self.waveform.ppsec = self.ppsec
         self.ppsec_goal = self.ppsec
-        self.draw()
+        self._must_redraw = True
 
 
     def _commitResizeSegment(self):
@@ -636,16 +644,6 @@ class WaveformWidget(QWidget):
             event.ignore()
             return
         
-        # if event.key() == shortcuts["show_handles"]:
-        #     self.is_resizing = True
-        #     self.scroll_vel = 0.0
-        #     if self.mouse_pos:
-        #         self.checkHandles(self.t_left + self.mouse_pos.x() / self.ppsec)
-        #     # Cancel selection when resizing another segment
-        #     if not self.selection_is_active:
-        #         self.deselect()
-        #     self.draw()
-        
         elif event.key() == shortcuts["select"]:
             self.selection_started.emit()
 
@@ -667,13 +665,7 @@ class WaveformWidget(QWidget):
         return super().keyPressEvent(event)
     
 
-    def keyReleaseEvent(self, event: QKeyEvent) -> None:
-        # if event.key() == shortcuts["show_handles"]:
-        #     print("commit resize")
-        #     self._commitResizeSegment()
-        #     self.resizing_handle = None
-        #     self.draw()
-        
+    def keyReleaseEvent(self, event: QKeyEvent) -> None:       
         if event.key() == shortcuts["select"]:
             self.selection_ended.emit()
 
@@ -706,7 +698,8 @@ class WaveformWidget(QWidget):
             if not self.isSelectionAtPosition(self.click_pos):
                 # Deselect current selection
                 self.deselect()
-            self.parent.movePlayHead(self.t_left + self.click_pos.x() / self.ppsec)
+            
+            self.playhead_moved.emit(self.t_left + self.click_pos.x() / self.ppsec)
 
             # # Block selection if user has clicked on a defined segment
             # if segment_under == -1:
@@ -755,7 +748,7 @@ class WaveformWidget(QWidget):
                     # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
         
-        self.draw()
+        self._must_redraw = True
         return super().mouseReleaseEvent(event)
 
 
@@ -792,8 +785,10 @@ class WaveformWidget(QWidget):
                 self.scroll_vel = 0.0
             self.scroll_vel += -0.1 * mouse_dpos / self.ppsec
             self.scroll_goal = -1 # Deactivate auto scroll
-            if not self.timer.isActive():
-                self.timer.start(1000/30)
+        
+        # Move play head
+        elif (event.buttons() == Qt.RightButton):
+            self.playhead_moved.emit(time_position)
         
         # Selection
         elif self.is_selecting and self.anchor >= 0:
@@ -814,7 +809,7 @@ class WaveformWidget(QWidget):
             selection_start = max(min(head, self.anchor), left_boundary + 0.01)
             selection_end = min(max(head, self.anchor), right_boundary - 0.01)
             self.selection = [selection_start, selection_end]
-            self.draw()
+            self._must_redraw = True
         
         # Change cursor above resizable boundaries
         if self.selection_is_active or self.current_segment_active >= 0:
@@ -831,7 +826,7 @@ class WaveformWidget(QWidget):
                 self.resizeSelection(time_position, self.resizing_handle)
             elif self.current_segment_active >= 0:
                 self.resizeActiveSegment(time_position, self.resizing_handle)
-            self.draw()
+            self._must_redraw = True
         
 
 
@@ -1022,6 +1017,8 @@ class WaveformWidget(QWidget):
 
 
     def draw(self):
+        log.debug("Redraw waveform canvas")
+
         if not self.pixmap:
             return
         
@@ -1106,6 +1103,10 @@ class WaveformWidget(QWidget):
 
 
     def refreshSegmentInfo(self):
+        # TODO: adpot signal mechanism
+        self.refresh_segment_info.emit(
+            self.active_segments[0] if len(self.active_segments) == 1 else -1)
+
         if len(self.active_segments) == 1:
             self.parent.updateSegmentInfo(self.active_segments[0])
         else:

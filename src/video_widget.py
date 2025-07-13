@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtMultimedia import QMediaPlayer
 
+from src.settings import app_settings
+
 log = logging.getLogger(__name__)
 
 
@@ -43,15 +45,15 @@ class VideoWidget(QGraphicsView):
 
         self.setScene(QGraphicsScene(self))
 
-        # Video item - this will be the main content
+        # Video images
         self.video_item = QGraphicsVideoItem()
         self.video_item.setZValue(0)
         self.scene().addItem(self.video_item)
         
         # Background rectangle for subtitle area (optional)
+        self.background_rect_visible = app_settings.value("subtitles/rect_visible", True)
         self.background_rect = QGraphicsRectItem()
         self.background_rect.setPen(Qt.NoPen)
-        self.background_rect.setBrush(QBrush(QColor(0, 0, 0, 100)))  # Semi-transparent black
         self.background_rect.setVisible(False)  # Hidden by default
         self.background_rect.setZValue(1)
         self.scene().addItem(self.background_rect)
@@ -63,46 +65,45 @@ class VideoWidget(QGraphicsView):
         
         # Configure text appearance
         self.setupTextAppearance()
+        self.adjustFontColor(app_settings.value("subtitles/font_color", QColor(255, 255, 255)))
+        self.adjustRectColor(app_settings.value("subtitles/rect_color", QColor(0, 0, 0, 100)))
 
         self.current_caption = ""
         self.subtitle_margin = 6  # Margin from bottom of video
         self.max_subtitle_height_ratio = 0.2  # Max 20% of video height for subtitles
 
+
     def setupTextAppearance(self):
-        """Configure text item appearance for better readability"""
-        # Set a reasonable default font size (will be adjusted based on video size)
+        """Configure text item appearance"""
+        # Font size will be adjusted based on video size
         font = self.text_item.font()
-        font.setPointSize(8)  # Base font size
-        font.setBold(True)
-        font.setFamily("Arial")  # Use a common, readable font
+        font.setPointSize(8)
+        # font.setBold(True)
+        font.setFamily("Arial")
         self.text_item.setFont(font)
-        
-        # Set text color to white with black outline for better visibility
-        self.text_item.setDefaultTextColor(QColor(255, 255, 255))
+
 
     def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
         self.updateLayout()
 
+
     def updateLayout(self):
         """Update the layout of video and text items"""
         if not self.video_item.boundingRect().isValid():
+            print("non valid rect")
             return
         
         # Fit video to view while maintaining aspect ratio
         video_rect = self.video_item.boundingRect()
-
         self.scene().setSceneRect(video_rect)
-        
-        # Now fit the scene (which only contains video bounds)
         self.fitInView(self.scene().sceneRect(), Qt.KeepAspectRatio)
         
         if not video_rect.isEmpty():
-            # Calculate font size based on video dimensions
+            print(f"{video_rect=}")
             self.adjustFontSize(video_rect)
-            
-            # Position subtitles
             self.positionSubtitles(video_rect)
+
 
     def adjustFontSize(self, video_rect: QRectF):
         """Adjust font size based on video dimensions"""
@@ -113,7 +114,24 @@ class VideoWidget(QGraphicsView):
         font = self.text_item.font()
         font.setPointSize(base_font_size)
         self.text_item.setFont(font)
-        print(f"{video_rect=}")
+
+
+    def adjustFontColor(self, color: QColor):
+        self.text_item.setDefaultTextColor(color)
+        self.updateLayout()
+    
+
+    def adjustRectColor(self, color: QColor):
+        self.background_rect.setBrush(color)
+        self.updateLayout()
+
+    
+    def toggleRectVisibility(self, checked):
+        self.background_rect_visible = checked
+        if self.current_caption:
+            self.background_rect.setVisible(checked)
+        self.updateLayout()
+
 
     def positionSubtitles(self, video_rect: QRectF):
         """Position subtitles at the bottom of the video"""
@@ -150,6 +168,7 @@ class VideoWidget(QGraphicsView):
             )
             self.background_rect.setRect(bg_rect)
 
+
     def setCaption(self, caption_text: str):
         """Set the caption text"""
         if caption_text == self.current_caption:
@@ -161,20 +180,23 @@ class VideoWidget(QGraphicsView):
         self.text_item.setText(caption_text)
         
         # Show/hide background based on whether there's text
-        self.background_rect.setVisible(bool(caption_text.strip()))
+        if self.background_rect_visible:
+            self.background_rect.setVisible(bool(caption_text.strip()))
         
-        # Update layout after text change
         self.updateLayout()
+
 
     def setSubtitleMargin(self, margin: int):
         """Set the margin between subtitles and bottom of video"""
         self.subtitle_margin = margin
         self.updateLayout()
 
+
     def setMaxSubtitleHeightRatio(self, ratio: float):
         """Set maximum height ratio for subtitles relative to video height"""
         self.max_subtitle_height_ratio = max(0.1, min(0.5, ratio))
         self.updateLayout()
+
 
     def connectToMediaPlayer(self, media_player):
         """Connect this widget to a QMediaPlayer"""
@@ -185,11 +207,13 @@ class VideoWidget(QGraphicsView):
         if hasattr(media_player, 'mediaStatusChanged'):
             media_player.mediaStatusChanged.connect(self.onMediaStatusChanged)
 
+
     def onMediaStatusChanged(self, status):
         """Handle media player status changes"""
         # Update layout when media loads to ensure proper sizing
-        if status in [QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia]:
-            QTimer.singleShot(50, self.updateLayout)  # Small delay to ensure video size is available
+        print("onMediaStatusChanged", status)
+        if status in [QMediaPlayer.BufferedMedia]:
+            QTimer.singleShot(150, self.updateLayout)  # Small delay to ensure video size is available
 
 
 
