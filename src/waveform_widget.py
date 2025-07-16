@@ -59,9 +59,9 @@ class ResizeSegmentCommand(QUndoCommand):
     
     def undo(self):
         self.waveform_widget.segments[self.segment_id] = self.old_segment[:]
-        self.waveform_widget._to_sort = True
+        self.waveform_widget.must_sort = True
         self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
-        self.waveform_widget._must_redraw = True
+        self.waveform_widget.must_redraw = True
 
     def redo(self):
         if self.side == Handle.LEFT:
@@ -69,7 +69,7 @@ class ResizeSegmentCommand(QUndoCommand):
         elif self.side == Handle.RIGHT:
             self.waveform_widget.segments[self.segment_id][1] = self.time_pos
         self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
-        self.waveform_widget._must_redraw = True
+        self.waveform_widget.must_redraw = True
         
     def id(self):
         return 21
@@ -172,7 +172,7 @@ class WaveformWidget(QWidget):
         self.recognizer_progress = 0.0
         self.display_scene_change = False
         
-        self._to_sort = False
+        self.must_sort = False
         self._sorted_segments = []
 
         self.timecode_margin = 17
@@ -220,7 +220,7 @@ class WaveformWidget(QWidget):
 
 
     def updateThemeColors(self):
-        self._must_redraw = True
+        self.must_redraw = True
 
 
     def clear(self):
@@ -245,8 +245,10 @@ class WaveformWidget(QWidget):
         self.selection = None
         self.selection_is_active = False
         self.id_counter = 0
-        self._to_sort = True
+        self.must_sort = True
         self.audio_len = 0
+
+        self.must_redraw = True
 
 
     def setSamples(self, samples, sr) -> None:
@@ -266,7 +268,7 @@ class WaveformWidget(QWidget):
         if seg_id == None:
             seg_id = self.getNewId()
         self.segments[seg_id] = segment
-        self._to_sort = True
+        self.must_sort = True
         return seg_id
 
 
@@ -291,16 +293,17 @@ class WaveformWidget(QWidget):
 
 
     def setActive(self, clicked_id: int, multi=False) -> None:
+        """Select the given segment and adjust view in the waveform"""
         if clicked_id not in self.segments:
             # Clicked outside of any segment, deselect current active segment
             self.active_segments = []
             self.current_segment_active = -1
-            self._must_redraw = True
+            self.must_redraw = True
             self.refreshSegmentInfo()
             return
         
         if multi:
-            # Find segment IDs between `last_segment_active` and `clicked_id`
+            # Find segment IDs between `current_segment_active` and `clicked_id`
             first, last = sorted([self.current_segment_active, clicked_id],
                                  key=lambda x: self.segments[x][0])
             first_t = self.segments[first][1]
@@ -331,7 +334,7 @@ class WaveformWidget(QWidget):
                 self.ppsec_goal = adapted_ppsec
 
         self.current_segment_active = clicked_id
-        self._must_redraw = True
+        self.must_redraw = True
         self.refreshSegmentInfo()
 
 
@@ -349,7 +352,7 @@ class WaveformWidget(QWidget):
             ):
             # Slide waveform window
             self.t_left = t
-        self._must_redraw = True
+        self.must_redraw = True
     
 
     def deselect(self):
@@ -364,6 +367,7 @@ class WaveformWidget(QWidget):
 
     def _update(self):
         if self.audio_len <= 0:
+            self.draw()
             return
         
         # Zooming        
@@ -371,12 +375,12 @@ class WaveformWidget(QWidget):
             self.ppsec += (self.ppsec_goal - self.ppsec) * 0.2
             self.waveform.ppsec = self.ppsec
 
-        if self.scroll_vel != 0.0:
+        if self.scroll_vel != 0.0 or self.scroll_goal >= 0.0:
             self._updateScroll()
 
-        if self._must_redraw:
+        if self.must_redraw:
             self.draw()
-            self._must_redraw = False
+            self.must_redraw = False
 
 
     def _updateScroll(self):
@@ -403,7 +407,7 @@ class WaveformWidget(QWidget):
             self.ppsec = self.ppsec_goal
             self.waveform.ppsec = self.ppsec
         else:
-            self._must_redraw = True
+            self.must_redraw = True
     
 
     # def checkHandles(self, time_position):
@@ -462,7 +466,7 @@ class WaveformWidget(QWidget):
         self.handle_top = self.timecode_margin + 0.14 * wf_max_height
         self.handle_down = self.timecode_margin + 0.86 * wf_max_height
 
-        self._must_redraw = True
+        self.must_redraw = True
     
 
     def enterEvent(self, event: QEvent):
@@ -471,6 +475,7 @@ class WaveformWidget(QWidget):
 
 
     def getSegmentAtTime(self, time: float) -> int:
+        """Return the ID of any segment at a given position, or -1 if none is present"""
         for id, (start, end) in self.getSortedSegments():
             if start <= time <= end:
                 return id
@@ -511,9 +516,9 @@ class WaveformWidget(QWidget):
 
 
     def getSortedSegments(self) -> list[int, list]:
-        if self._to_sort:
+        if self.must_sort:
             self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
-            self._to_sort = False
+            self.must_sort = False
         return self._sorted_segments
 
 
@@ -536,7 +541,7 @@ class WaveformWidget(QWidget):
         self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
         self.waveform.ppsec = self.ppsec
         self.ppsec_goal = self.ppsec
-        self._must_redraw = True
+        self.must_redraw = True
     
     def zoomOut(self, factor=1.333, position=0.5):
         prev_ppsec = self.ppsec
@@ -549,7 +554,7 @@ class WaveformWidget(QWidget):
         self.t_left = min(max(self.t_left, 0), self.audio_len - self.width() / self.ppsec)
         self.waveform.ppsec = self.ppsec
         self.ppsec_goal = self.ppsec
-        self._must_redraw = True
+        self.must_redraw = True
 
 
     def _commitResizeSegment(self):
@@ -660,7 +665,7 @@ class WaveformWidget(QWidget):
         elif event.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.active_segments:
             # Delete segment(s)
             self.delete_utterances.emit(self.active_segments)
-            self._to_sort = True
+            self.must_sort = True
 
         return super().keyPressEvent(event)
     
@@ -688,6 +693,7 @@ class WaveformWidget(QWidget):
                 self.setCursor(Qt.ClosedHandCursor)
 
         if event.button() == Qt.RightButton:
+            print("right click")
             segment_under = self.getSegmentAtPixelPosition(self.click_pos)
             # Show contextMenu only if right clicking on active segment
             if segment_under not in self.active_segments:
@@ -741,33 +747,36 @@ class WaveformWidget(QWidget):
                 # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPixelPosition(event.position())
-                # self.utterances is set from main
-                self.text_edit.setActive(clicked_id, with_cursor=not self.shift_pressed, update_waveform=False)
+                self.text_edit.setActive(clicked_id, scroll_text=not self.shift_pressed, update_waveform=False)
                 self.setActive(clicked_id, multi=self.shift_pressed)
                 if clicked_id < 0:
                     # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
         
-        self._must_redraw = True
+        self.must_redraw = True
         return super().mouseReleaseEvent(event)
 
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, event: QMouseEvent):
         self.mouse_prev_pos = self.mouse_pos
         self.mouse_pos = event.position()
 
         time_position = self.t_left + self.mouse_pos.x() / self.ppsec
 
+        self.over_left_handle = False
+        self.over_right_handle = False
         if self.selection_is_active or self.current_segment_active >= 0:
             if self.selection_is_active:
                 start, end = self.selection
             else:
                 start, end = self.segments[self.current_segment_active]
-            self.over_left_handle = abs((start-time_position) * self.ppsec) < 8
-            self.over_right_handle = abs((end-time_position) * self.ppsec) < 8
-        else:
-            self.over_left_handle = False
-            self.over_right_handle = False
+            if (
+                event.y() >= self.inactive_top
+                and event.y() < self.inactive_top + self.inactive_height
+            ):
+                self.over_left_handle = abs((start-time_position) * self.ppsec) < 8
+                self.over_right_handle = abs((end-time_position) * self.ppsec) < 8
+            
 
         # Calculate mouse direction
         if self.mouse_prev_pos:
@@ -809,7 +818,7 @@ class WaveformWidget(QWidget):
             selection_start = max(min(head, self.anchor), left_boundary + 0.01)
             selection_end = min(max(head, self.anchor), right_boundary - 0.01)
             self.selection = [selection_start, selection_end]
-            self._must_redraw = True
+            self.must_redraw = True
         
         # Change cursor above resizable boundaries
         if self.selection_is_active or self.current_segment_active >= 0:
@@ -826,7 +835,7 @@ class WaveformWidget(QWidget):
                 self.resizeSelection(time_position, self.resizing_handle)
             elif self.current_segment_active >= 0:
                 self.resizeActiveSegment(time_position, self.resizing_handle)
-            self._must_redraw = True
+            self.must_redraw = True
         
 
 
@@ -845,10 +854,13 @@ class WaveformWidget(QWidget):
 
 
     def contextMenuEvent(self, event):
-        if not self.active_segments and not self.selection_is_active:
+        if not self.active_segments:
             return
         
-        clicked_segment_id = self.getSegmentAtPixelPosition(event.globalPos())
+        # clicked_segment_id = self.getSegmentAtPixelPosition(event.position())
+        # if clicked_segment_id == -1:
+        #     return
+
         context = QMenu(self)
 
         # context.addSeparator()

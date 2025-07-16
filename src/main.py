@@ -113,7 +113,7 @@ class AddSegmentCommand(QUndoCommand):
     
     def undo(self):
         del self.waveform_widget.segments[self.seg_id]
-        self.waveform_widget._to_sort = True
+        self.waveform_widget.must_sort = True
         self.waveform_widget._redraw = True
         # self.waveform_widget.refreshSegmentInfo()
 
@@ -140,8 +140,8 @@ class CreateNewUtteranceCommand(QUndoCommand):
         del self.parent.waveform.segments[self.seg_id]
         if self.seg_id in self.parent.waveform.active_segments:
             self.parent.waveform.active_segments.remove(self.seg_id)
-        self.parent.waveform._to_sort = True
-        self.parent.waveform.draw()
+        self.parent.waveform.must_sort = True
+        self.parent.waveform.must_redraw = True
         self.parent.text_widget.setCursorState(self.prev_cursor)
 
     def redo(self):
@@ -187,8 +187,8 @@ class JoinUtterancesCommand(QUndoCommand):
         self.text_edit.setTextCursor(cursor) # TODO: clean that
         self.text_edit.setTextCursor(self.cursor_backup)
 
-        self.waveform._to_sort = True
-        self.waveform.draw()
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True
         self.waveform.refreshSegmentInfo()
 
     def redo(self):
@@ -220,8 +220,8 @@ class JoinUtterancesCommand(QUndoCommand):
         self.text_edit.setTextCursor(cursor)
 
         self.waveform.active_segments = [first_id]
-        self.waveform._to_sort = True
-        self.waveform.draw()
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True
         self.waveform.refreshSegmentInfo()
 
 
@@ -247,7 +247,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.parent.waveform.active_segments = self.prev_active_segments[:]
         self.parent.waveform.current_segment_active = self.prev_current_segment_active
         del self.parent.waveform.segments[self.segment_id]
-        self.parent.waveform.draw()
+        self.parent.waveform.must_redraw = True
 
     def redo(self):
         if self.block.userData():
@@ -257,7 +257,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.parent.text_widget.setBlockId(self.block, self.segment_id)
         self.parent.updateUtteranceDensity(self.segment_id)
         self.parent.text_widget.highlighter.rehighlightBlock(self.block)
-        self.parent.waveform.draw()
+        self.parent.waveform.must_redraw = True
 
 
 
@@ -276,7 +276,7 @@ class DeleteUtterancesCommand(QUndoCommand):
             seg_id = self.waveform.addSegment(segment, seg_id)
             self.text_edit.insertSentenceWithId(text, seg_id)
         self.waveform.refreshSegmentInfo()
-        self.waveform.draw()
+        self.waveform.must_redraw = True
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
@@ -290,9 +290,9 @@ class DeleteUtterancesCommand(QUndoCommand):
         # Delete segments
         self.waveform.active_segments = []
         self.waveform.current_segment_active = -1
-        self.waveform._to_sort = True
+        self.waveform.must_sort = True
         self.waveform.refreshSegmentInfo()
-        self.waveform.draw()
+        self.waveform.must_redraw = True
 
 
 class DeleteSegmentsCommand(QUndoCommand):
@@ -313,8 +313,8 @@ class DeleteSegmentsCommand(QUndoCommand):
             self.text_edit.highlighter.rehighlightBlock(block)
 
         self.waveform.active_segments = list(self.segments.keys())
-        self.waveform._to_sort = True
-        self.waveform.draw()
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True
 
     def redo(self):
         for seg_id in self.segments:
@@ -325,8 +325,8 @@ class DeleteSegmentsCommand(QUndoCommand):
         
         self.waveform.current_segment_active = -1
         self.waveform.active_segments = []
-        self.waveform._to_sort = True
-        self.waveform.draw()
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True
 
 
 
@@ -382,12 +382,12 @@ class MainWindow(QMainWindow):
         self.media_metadata = dict()
         self.hidden_transcription = False
 
-        self.video_window = None
+        # self.video_window = None
         self.video_widget = VideoWidget(self)
         self.audio_output = QAudioOutput()
         self.player = QMediaPlayer()
         self.player.setAudioOutput(self.audio_output)
-        self.player.positionChanged.connect(self.updatePlayer)
+        self.player.positionChanged.connect(self.onPlayerPositionChanged)
         self.video_widget.connectToMediaPlayer(self.player)
         self.playing_segment = -1
         self.looping = False
@@ -556,10 +556,10 @@ class MainWindow(QMainWindow):
 
         display_menu.addSeparator()
 
-        toggle_video = QAction(self.tr("Show video"), self)
-        toggle_video.setCheckable(True)
-        toggle_video.triggered.connect(self.toggleVideo)
-        display_menu.addAction(toggle_video)
+        # toggle_video = QAction(self.tr("Show video"), self)
+        # toggle_video.setCheckable(True)
+        # toggle_video.triggered.connect(self.toggleVideo)
+        # display_menu.addAction(toggle_video)
         
         # deviceMenu = menu_bar.addMenu("Device")
         # for dev in self.input_devices:
@@ -1074,7 +1074,7 @@ class MainWindow(QMainWindow):
                 content = subtitle.content.strip().replace('\n', '<BR>')
                 self.text_widget.appendSentence(content, seg_id)
 
-            self.waveform.draw()
+            self.waveform.must_redraw = True
 
         doc_metadata = self.cache.get_doc_metadata(file_path)
         if "cursor_pos" in doc_metadata:
@@ -1085,7 +1085,7 @@ class MainWindow(QMainWindow):
             self.text_widget.verticalScrollBar().setValue(doc_metadata["scroll_pos"])
         if "waveform_pos" in doc_metadata:
             self.waveform.t_left = doc_metadata["waveform_pos"]
-            self.waveform.draw()
+            self.waveform.must_redraw = True
         if "waveform_pps" in doc_metadata:
             self.waveform.ppsec = doc_metadata["waveform_pps"]
             self.waveform.waveform.ppsec = doc_metadata["waveform_pps"]
@@ -1162,10 +1162,10 @@ class MainWindow(QMainWindow):
             self.waveform.scenes = self.media_metadata["scenes"]
 
         self.transcribe_button.setEnabled(True)
-        self.waveform.draw()
+        self.waveform.must_redraw = True
 
 
-    def getUtterances(self):
+    def getUtterancesForExport(self):
         """Return all sentences and segments for export"""
         utterances = []
         block = self.text_widget.document().firstBlock()
@@ -1188,12 +1188,12 @@ class MainWindow(QMainWindow):
 
     def exportSrt(self):
         exportSrtSignals.message.connect(self.setStatusMessage)
-        exportSrt(self, self.media_path, self.getUtterances(), self.media_metadata.get("fps", None))
+        exportSrt(self, self.media_path, self.getUtterancesForExport(), self.media_metadata.get("fps", None))
     
 
     def exportEaf(self):
         exportEafSignals.message.connect(self.setStatusMessage)
-        exportEaf(self, self.media_path, self.getUtterances())
+        exportEaf(self, self.media_path, self.getUtterancesForExport())
 
 
     def showParameters(self):
@@ -1237,12 +1237,11 @@ class MainWindow(QMainWindow):
 
         if self.video_widget:
             self.video_widget.setCaption(text)
-        if self.video_window:
-            self.video_window.setCaption(text)
 
 
-    def updatePlayer(self, position: int):
-        # Called every time the position is changed in the QMediaPlayer
+    def onPlayerPositionChanged(self, position: int):
+        """Called every time the position is changed in the QMediaPlayer"""
+
         # Convert to seconds
         player_position = position / 1000
 
@@ -1251,21 +1250,22 @@ class MainWindow(QMainWindow):
         # Check if end of current segment is reached
         if self.playing_segment >= 0:
             if self.playing_segment in self.waveform.segments:
-                segment = self.waveform.segments[self.playing_segment]
-                if player_position >= segment[1]:
+                start, end = self.waveform.segments[self.playing_segment]
+                if player_position >= end:
                     if self.looping:
                         if (
                             self.waveform.current_segment_active >= 0
                             and self.waveform.current_segment_active != self.playing_segment
                         ):
+                            # A different segment has been selected
                             self.playing_segment = self.waveform.current_segment_active
-                            segment = self.waveform.segments[self.playing_segment]
-                        self.player.setPosition(int(segment[0] * 1000))
+                            start, _ = self.waveform.segments[self.playing_segment]
+                        self.player.setPosition(int(start * 1000))
                         return
                     else:
                         self.player.pause()
                         self.play_button.setIcon(icons["play"])
-                        self.waveform.setHead(segment[1])
+                        self.waveform.setHead(end)
             else:
                 # The segment could have been deleted by the user during playback
                 self.playing_segment = -1
@@ -1279,6 +1279,10 @@ class MainWindow(QMainWindow):
                     self.player.pause()
                     self.play_button.setIcon(icons["play"])
                     self.waveform.setHead(self.waveform.selection[1])
+        # Free running, highlight text sentence
+        elif (seg_id := self.waveform.getSegmentAtTime(player_position)) >= 0:
+            if seg_id != self.text_widget.active_sentence_id:
+                self.text_widget.setActive(seg_id, scroll_text=False, update_waveform=False)
         
         self.updateSubtitle(player_position)
     
@@ -1351,18 +1355,6 @@ class MainWindow(QMainWindow):
         self.playSegment(self.waveform.segments[id])
     
 
-    # def kbdNext(self):
-    #     id = self.waveform.findNextSegment()
-    #     if id >= 0:
-    #         #self.waveform.setActive(id)
-    #         self.textArea.setActive(id)
-    
-    # def kbdPrev(self):
-    #     id = self.waveform.findPrevSegment()
-    #     if id >= 0:
-    #         #self.waveform.setActive(id)
-    #         self.textArea.setActive(id)
-
     def backAction(self):
         """Get back to the first segment or to the beginning of the recording"""
         self.stop()
@@ -1383,22 +1375,6 @@ class MainWindow(QMainWindow):
         self.player.setPosition(int(self.waveform.playhead * 1000))
 
 
-    def toggleVideo(self):
-        if not self.video_window:
-            vid_size = self.player.metaData().value(QMediaMetaData.Resolution)
-            print("vid size", vid_size)
-            self.video_window = VideoWindow(size=vid_size)
-            self.player.setVideoOutput(self.video_window.video_item)
-            self.video_window.show()
-
-            # self.video_window.video_item.setPos(0.0, -self.video_item.boundingRect().height()/2)
-            self.video_window.resize(vid_size)
-            self.video_window.video_item.setSize(vid_size)
-            self.video_window.graphics_view.fitInView(self.video_window.video_item, Qt.KeepAspectRatio)
-        else:
-            self.video_window = None
-
-
     def toggleAlignmentColoring(self, checked):
         self.text_widget.highlighter.setMode(Highlighter.ColorMode.ALIGNMENT)
     
@@ -1413,7 +1389,7 @@ class MainWindow(QMainWindow):
             if "scenes" in self.media_metadata and self.media_metadata["scenes"]:
                 print("Using cached scene transitions")
                 self.waveform.scenes = self.media_metadata["scenes"]
-                self.waveform.draw()
+                self.waveform.must_redraw = True
             else:
                 print("Detect scene changes")
                 self.scene_detector = SceneDetectWorker()
@@ -1426,14 +1402,14 @@ class MainWindow(QMainWindow):
             self.waveform.display_scene_change = False
             if self.scene_detector and self.scene_detector.isRunning():
                 self.scene_detector.end()
-            self.waveform.draw()
+            self.waveform.must_redraw = True
             self.scene_detect_action.setChecked(False)
 
 
     @Slot(float, tuple)
     def newSceneChange(self, time, color):
         self.waveform.scenes.append((time, color[0], color[1], color[2]))
-        self.waveform.draw()
+        self.waveform.must_redraw = True
     
 
     @Slot()
@@ -1442,7 +1418,8 @@ class MainWindow(QMainWindow):
     
 
     def autoSegment(self):
-        print("Finding segments")
+        log.info("Finding segments...")
+        
         # Check if there is an active selection
         start_frame = 0
         end_frame = len(self.audio_samples)
@@ -1457,12 +1434,13 @@ class MainWindow(QMainWindow):
             (start+start_frame/WAVEFORM_SAMPLERATE, end+start_frame/WAVEFORM_SAMPLERATE)
             for start, end in segments
         ]
-        print(segments)
+        log.debug("Segments found:", segments)
         self.setStatusMessage(self.tr("{n} segments found").format(n=len(segments)))
         for start, end in segments:
             segment_id = self.waveform.addSegment([start, end])
             self.text_widget.insertSentenceWithId('*', segment_id)
-        self.waveform.draw()
+
+        self.waveform.must_redraw = True
     
 
     def adaptToSubtitle(self):
@@ -1496,7 +1474,7 @@ class MainWindow(QMainWindow):
             # Update utterance density
             self.updateUtteranceDensity(id)
             self.updateSegmentInfo(id)
-            self.waveform.draw()
+            self.waveform.must_redraw = True
         
             # Update current subtitles, if needed
             start, end = self.waveform.segments[id]
@@ -1521,7 +1499,7 @@ class MainWindow(QMainWindow):
                     or (seg[0] <= self.waveform.selection[1] <= seg[1])
                 ):
                     self.waveform.deselect()
-                    self.waveform.draw()
+                    self.waveform.must_redraw = True
                     self.setStatusMessage(self.tr("Can't create a segment over another segment"))
                     return
         else:
@@ -1530,7 +1508,7 @@ class MainWindow(QMainWindow):
 
         self.undo_stack.push(CreateNewUtteranceCommand(self, self.waveform.selection))
         self.waveform.deselect()
-        self.waveform.draw()
+        self.waveform.must_redraw = True
 
 
     @Slot(list, list, int)
@@ -1566,7 +1544,7 @@ class MainWindow(QMainWindow):
         # This action should not be added to the undo stack
         segment_id = self.waveform.addSegment([segment_start, segment_end])
         self.text_widget.insertSentenceWithId(text, segment_id, with_cursor=False)
-        self.waveform.draw()
+        self.waveform.must_redraw = True
 
         # Check if there is already an utterance over this segment
         # existing_segments = self.waveform.getSortedSegments()
@@ -1621,7 +1599,7 @@ class MainWindow(QMainWindow):
     def updateProgressBar(self, t: float):
         self.waveform.recognizer_progress = t
         if t > self.waveform.t_left and t < self.waveform.getTimeRight():
-            self.waveform.draw()
+            self.waveform.must_redraw = True
 
 
     @Slot(bool)
@@ -1639,7 +1617,7 @@ class MainWindow(QMainWindow):
             segments = [(seg_id, *self.waveform.selection)]
             self.transcribe_segments_signal.emit(self.media_path, segments)
             self.waveform.deselect()
-            self.waveform.draw()
+            self.waveform.must_redraw = True
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
             segments = [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
@@ -1744,7 +1722,7 @@ class MainWindow(QMainWindow):
 
         # self.text_edit.setTextCursor(cursor)
         self.text_widget.setActive(right_id, update_waveform=True)
-        self.waveform.draw()
+        self.waveform.must_redraw = True
 
 
     @Slot(list)
@@ -1776,7 +1754,7 @@ class MainWindow(QMainWindow):
         selection = [ id for id, _ in self.waveform.getSortedSegments() ]
         self.waveform.active_segments = selection
         self.waveform.current_segment_active = selection[-1] if selection else -1
-        self.waveform.draw()
+        self.waveform.must_redraw = True
 
 
     def search(self):
@@ -1862,8 +1840,8 @@ class MainWindow(QMainWindow):
             self.recognizer_worker.must_stop = True
             self.recognizer_thread.quit()
             self.recognizer_thread.wait()
-        if self.video_window:
-            self.video_window.close()
+        # if self.video_window:
+        #     self.video_window.close()
         if self.scene_detector and self.scene_detector.isRunning():
             self.scene_detector.end()
             self.scene_detector.wait()
@@ -1883,7 +1861,6 @@ class MainWindow(QMainWindow):
         # Save media cache
         if self.media_path:
             self.cache.update_media_metadata(self.media_path, self.media_metadata)
-        self.text_widget._updateScroll
 
         # Save window geometry and state
         app_settings.setValue("main/geometry", self.saveGeometry());

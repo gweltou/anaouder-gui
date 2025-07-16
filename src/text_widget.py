@@ -266,10 +266,6 @@ class TextEditWidget(QTextEdit):
         # self.activeCharFormat.setFontWeight(QFont.DemiBold)
         self.active_sentence_id = None
 
-        self.scroll_goal = 0.0
-        self.timer = QTimer()
-        self.timer.timeout.connect(self._updateScroll)
-
         # Subtitles margin
         self._text_margin = False
         self._char_width = -1
@@ -570,11 +566,11 @@ class TextEditWidget(QTextEdit):
                 self.highlighter.rehighlightBlock(block)
 
 
-    def setActive(self, id: int, with_cursor=True, update_waveform=True):
+    def setActive(self, id: int, scroll_text=True, update_waveform=True):
         """Highlight a given utterance's text
 
         Arguments:
-            with_cursor (boolean): scroll the text widget to the text cursor
+            scroll_text (boolean): scroll the text widget to the text cursor
             update_waveform (boolean): call WaveformWidget's own setActive method
         
         # TODO: Maybe this would be better in MainWindow class
@@ -592,20 +588,11 @@ class TextEditWidget(QTextEdit):
 
         self.highlighter.rehighlightBlock(block)
 
-        if with_cursor:
-            # cursor = QTextCursor(block)
-            # cursor.clearSelection()
-            # self.setTextCursor(cursor)
-
-            # Scroll to selected utterance
-            if not self.timer.isActive():
-                self.timer.start(1000/30)
-            scroll_bar = self.verticalScrollBar()
-            scroll_old_val = scroll_bar.value()
-            scroll_bar.setValue(scroll_bar.maximum())
+        if scroll_text:
+            cursor = self.textCursor()
+            cursor.setPosition(self.getBlockById(id).position())
+            self.setTextCursor(cursor)
             self.ensureCursorVisible()
-            self.scroll_goal = max(scroll_bar.value() - 40, 0)
-            scroll_bar.setValue(scroll_old_val)
         
         if update_waveform:
             self.parent.waveform.setActive(id)
@@ -617,30 +604,20 @@ class TextEditWidget(QTextEdit):
                 self.parent.updateSegmentInfo(seg_id)
     
 
-    def _updateScroll(self):
-        dist = self.scroll_goal - self.verticalScrollBar().value()
-        if abs(dist) > 7:
-            scroll_value = self.verticalScrollBar().value()
-            scroll_value += dist * 0.1
-            self.verticalScrollBar().setValue(scroll_value)
-        else:
-            self.timer.stop()
-    
-
     def zoomIn(self, *args):
         super().zoomIn(*args)
-        self._updateMargin()
+        self._updateSubtitleMargin()
     
     def zoomOut(self, *args):
         super().zoomOut(*args)
-        self._updateMargin()
+        self._updateSubtitleMargin()
 
 
     def toggleTextMargin(self, checked: bool):
         self._text_margin = checked
-        self._updateMargin()
+        self._updateSubtitleMargin()
 
-    def _updateMargin(self):
+    def _updateSubtitleMargin(self):
         if not self._text_margin:
             return
         
@@ -698,18 +675,12 @@ class TextEditWidget(QTextEdit):
             if id == self.active_sentence_id:
                 self.parent.updateSegmentInfo(id)
                 return
-            self.setActive(id, with_cursor=False)
+            self.setActive(id, scroll_text=False)
                 
         else:
             self.deactivateSentence()
             self.parent.waveform.setActive(None)
             self.parent.status_bar.clearMessage()
-
-
-    def wheelEvent(self, event: QWheelEvent):
-        if self.timer.isActive():
-            self.timer.stop()
-        super().wheelEvent(event)
 
 
     def contextMenuEvent(self, event):
