@@ -7,7 +7,7 @@ ZOOM_MIN = 0.2  # In pixels per second
 ZOOM_MAX = 512  # In pixels per second
 
 
-from typing import Optional
+from typing import List, Optional
 from math import ceil
 from enum import Enum
 import numpy as np
@@ -23,8 +23,9 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import (
-    QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap, QMouseEvent,
+    QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap,
     QColor, QResizeEvent, QWheelEvent, QKeyEvent, QUndoCommand,
+    QMouseEvent, QKeySequence, QShortcut
 )
 
 from src.theme import theme
@@ -33,8 +34,9 @@ from src.utils import lerpColor, mapNumber
 
 
 
-Handle = Enum("Handle", ["LEFT", "RIGHT"])
+type Segment = List[float]
 
+Handle = Enum("Handle", ["LEFT", "RIGHT"])
 
 log = logging.getLogger(__name__)
 
@@ -90,6 +92,7 @@ class WaveformWidget(QWidget):
     selection_ended = Signal()
     playhead_moved = Signal(float)
     refresh_segment_info = Signal(int)
+    select_segment = Signal(int)
 
     class ScaledWaveform():
         def __init__(self, samples, sr: int):
@@ -194,29 +197,36 @@ class WaveformWidget(QWidget):
         self.segbrush = QBrush(QColor(180, 170, 50, 50))
 
         self.handlepen = QPen(QColor(240, 220, 60, 160), 2)
-        self.handlepen.setCapStyle(Qt.RoundCap)
+        self.handlepen.setCapStyle(Qt.PenCapStyle.RoundCap)
         self.handlepen_shadow = QPen(QColor(240, 220, 60, 50), 5)
-        self.handlepen_shadow.setCapStyle(Qt.RoundCap)
+        self.handlepen_shadow.setCapStyle(Qt.PenCapStyle.RoundCap)
         self.handle_active_pen = QPen(QColor(255, 250, 80, 150), 2)
-        self.handle_active_pen.setCapStyle(Qt.RoundCap)
+        self.handle_active_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         self.handle_active_pen_shadow = QPen(QColor(255, 250, 80, 50), 5)
-        self.handle_active_pen_shadow.setCapStyle(Qt.RoundCap)
+        self.handle_active_pen_shadow.setCapStyle(Qt.PenCapStyle.RoundCap)
 
         self.handle_left_pen = QPen(QColor(255, 80, 80, 150), 3)
-        self.handle_left_pen.setCapStyle(Qt.RoundCap)
+        self.handle_left_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         self.handle_left_pen_shadow = QPen(QColor(255, 80, 100, 50), 5)
-        self.handle_left_pen_shadow.setCapStyle(Qt.RoundCap)
+        self.handle_left_pen_shadow.setCapStyle(Qt.PenCapStyle.RoundCap)
 
         self.handle_right_pen = QPen(QColor(80, 255, 80, 150), 3)
-        self.handle_right_pen.setCapStyle(Qt.RoundCap)
+        self.handle_right_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         self.handle_right_pen_shadow = QPen(QColor(80, 255, 100, 50), 5)
-        self.handle_right_pen_shadow.setCapStyle(Qt.RoundCap)
+        self.handle_right_pen_shadow.setCapStyle(Qt.PenCapStyle.RoundCap)
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._update)
-        self.timer.start(1000/30)   # 30 FPS canvas refresh
+        self.timer.start(1000 // 30)   # 30 FPS canvas refresh
+
+        # Keyboard shortcuts
+        zoom_in_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.ZoomIn), self)
+        zoom_in_shortcut.activated.connect(self.zoomIn)
+        zoom_out_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.ZoomOut), self)
+        zoom_out_shortcut.activated.connect(self.zoomOut)
 
         self.clear()
+
 
 
     def updateThemeColors(self):
@@ -229,6 +239,7 @@ class WaveformWidget(QWidget):
         self.ppsec_goal = self.ppsec
         self.t_left = 0.0      # timecode of left border (in seconds)
         self.scroll_vel = 0.0
+        self.scroll_goal = 0.0
         self.playhead = 0.0
         self.shift_pressed = False
 
@@ -658,10 +669,12 @@ class WaveformWidget(QWidget):
         elif event.key() == Qt.Key_A and self.selection_is_active:
             # Create a new segment from selection
             self.new_utterance_from_selection.emit()
+
         elif event.key() == Qt.Key_J and len(self.active_segments) > 1:
             # Join multiple segments
             segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])
             self.join_utterances.emit(segments_id)
+
         elif event.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.active_segments:
             # Delete segment(s)
             self.delete_utterances.emit(self.active_segments)
@@ -683,16 +696,16 @@ class WaveformWidget(QWidget):
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.click_pos = event.position()
 
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             if self.is_selecting and self.anchor == -1:
                 # Start selection
                 print("start selection")
                 self.anchor = self.t_left + self.click_pos.x() / self.ppsec
                 return
             elif not (self.over_left_handle or self.over_right_handle):
-                self.setCursor(Qt.ClosedHandCursor)
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
 
-        if event.button() == Qt.RightButton:
+        if event.button() == Qt.MouseButton.RightButton:
             print("right click")
             segment_under = self.getSegmentAtPixelPosition(self.click_pos)
             # Show contextMenu only if right clicking on active segment
@@ -737,7 +750,7 @@ class WaveformWidget(QWidget):
                 self._commitResizeSegment()
             self.resizing_handle = None
 
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self.unsetCursor()
             
             dx = event.position().x() - self.click_pos.x()
@@ -747,8 +760,9 @@ class WaveformWidget(QWidget):
                 # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPixelPosition(event.position())
-                self.text_edit.setActive(clicked_id, scroll_text=not self.shift_pressed, update_waveform=False)
-                self.setActive(clicked_id, multi=self.shift_pressed)
+                # self.text_edit.setActive(clicked_id, scroll_text=not self.shift_pressed)
+                # self.setActive(clicked_id, multi=self.shift_pressed)
+                self.select_segment.emit(clicked_id)
                 if clicked_id < 0:
                     # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
@@ -785,7 +799,7 @@ class WaveformWidget(QWidget):
                 self.mouse_dir = mouse_dpos / abs(mouse_dpos)
 
         # Scrolling
-        if (event.buttons() == Qt.LeftButton
+        if (event.buttons() == Qt.MouseButton.LeftButton
                 and self.resizing_handle == None
                 and self.mouse_prev_pos
                 and not self.is_selecting):
@@ -796,7 +810,7 @@ class WaveformWidget(QWidget):
             self.scroll_goal = -1 # Deactivate auto scroll
         
         # Move play head
-        elif (event.buttons() == Qt.RightButton):
+        elif (event.buttons() == Qt.MouseButton.RightButton):
             self.playhead_moved.emit(time_position)
         
         # Selection
@@ -823,8 +837,8 @@ class WaveformWidget(QWidget):
         # Change cursor above resizable boundaries
         if self.selection_is_active or self.current_segment_active >= 0:
             if self.over_left_handle or self.over_right_handle or self.resizing_handle:
-                if self.cursor().shape() != Qt.SplitHCursor:
-                    self.setCursor(Qt.SplitHCursor)
+                if self.cursor().shape() != Qt.CursorShape.SplitHCursor:
+                    self.setCursor(Qt.CursorShape.SplitHCursor)
             else:
                 self.unsetCursor()
 
@@ -840,7 +854,7 @@ class WaveformWidget(QWidget):
 
 
     def wheelEvent(self, event: QWheelEvent):
-        if event.modifiers() & Qt.ControlModifier:
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             zoomFactor = 1.08
             zoomLoc = event.position().x() / self.width()            
             if event.angleDelta().y() > 0:

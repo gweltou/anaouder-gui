@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import sys
 import os
 import platform
@@ -40,7 +40,7 @@ class MyTextBlockUserData(QTextBlockUserData):
 
 
 
-def get_cache_directory(name: str = None) -> Path:
+def get_cache_directory(name: Optional[str] = None) -> Path:
     # Use XDG_CACHE_HOME if available, otherwise use default
     if platform.system() in ("Linux", "Darwin"):
         default = Path.home() / ".cache"
@@ -208,7 +208,7 @@ def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) 
     return min_m + (n - min_n) * d
 
 
-def yuv_to_rgb(y: int, u: int, v: int, color_range='full') -> tuple:
+def yuv_to_rgb(y: float, u: float, v: float, color_range='full') -> tuple:
     # https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/
     if color_range == 'tv':
         y = mapNumber(y, 16, 235, 0.0, 1.0)
@@ -223,7 +223,7 @@ def yuv_to_rgb(y: int, u: int, v: int, color_range='full') -> tuple:
     return (r, g, b)
 
 
-def bt709_to_rgb(g: int, b: int, r: int, color_range='tv') -> tuple:
+def bt709_to_rgb(g: float, b: float, r: float, color_range='tv') -> tuple:
     # It's BRG
     print(color_range)
     if color_range == 'tv':

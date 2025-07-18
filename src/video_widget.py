@@ -32,8 +32,8 @@ class VideoWidget(QGraphicsView):
         super().__init__(parent)
 
         # Configure the view for optimal video display
-        self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
-        self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
+        self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
+        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
         self.setOptimizationFlags(QGraphicsView.DontAdjustForAntialiasing | QGraphicsView.DontSavePainterState)
         self.setTransformationAnchor(QGraphicsView.AnchorViewCenter)  # Changed from AnchorUnderMouse
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)  # Changed from AnchorUnderMouse
@@ -211,7 +211,6 @@ class VideoWidget(QGraphicsView):
     def onMediaStatusChanged(self, status):
         """Handle media player status changes"""
         # Update layout when media loads to ensure proper sizing
-        print("onMediaStatusChanged", status)
         if status in [QMediaPlayer.BufferedMedia]:
             QTimer.singleShot(150, self.updateLayout)  # Small delay to ensure video size is available
 

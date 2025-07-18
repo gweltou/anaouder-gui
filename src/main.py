@@ -114,12 +114,12 @@ class AddSegmentCommand(QUndoCommand):
     def undo(self):
         del self.waveform_widget.segments[self.seg_id]
         self.waveform_widget.must_sort = True
-        self.waveform_widget._redraw = True
+        self.waveform_widget.must_redraw = True
         # self.waveform_widget.refreshSegmentInfo()
 
     def redo(self):
         self.seg_id = self.waveform_widget.addSegment(self.segment, self.seg_id)
-        self.waveform_widget._redraw = True
+        self.waveform_widget.must_redraw = True
         # self.waveform_widget.refreshSegmentInfo()
 
 
@@ -147,7 +147,7 @@ class CreateNewUtteranceCommand(QUndoCommand):
     def redo(self):
         self.parent.waveform.addSegment(self.segment, self.seg_id)
         self.parent.text_widget.insertSentenceWithId('*', self.seg_id)
-        self.parent.text_widget.setActive(self.seg_id, update_waveform=True)
+        self.parent.text_widget.setActive(self.seg_id)
 
 
 
@@ -171,7 +171,7 @@ class JoinUtterancesCommand(QUndoCommand):
         
         block = self.text_edit.getBlockById(first_id)
         cursor = QTextCursor(block)
-        cursor.movePosition(QTextCursor.EndOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
         
         # Restore other utterances
         for i, id in enumerate(self.seg_ids[1:]):
@@ -201,7 +201,7 @@ class JoinUtterancesCommand(QUndoCommand):
         for id in self.seg_ids[1:]:
             block = self.text_edit.getBlockById(id)
             cursor = QTextCursor(block)
-            cursor.select(QTextCursor.BlockUnderCursor)
+            cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
             cursor.removeSelectedText()
         
         joined_text = ' '.join( [ t.strip() for t in self.segments_text ] )
@@ -215,8 +215,8 @@ class JoinUtterancesCommand(QUndoCommand):
         for id in self.seg_ids[1:]:
             del self.waveform.segments[id]
         
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, len(self.segments_text[0]))
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, len(self.segments_text[0]))
         self.text_edit.setTextCursor(cursor)
 
         self.waveform.active_segments = [first_id]
@@ -240,7 +240,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.segment_id = self.parent.waveform.getNewId()
     
     def undo(self):
-        self.parent.text_widget.setActive(self.prev_current_segment_active, update_waveform=False)
+        self.parent.text_widget.setActive(self.prev_current_segment_active)
         self.block.setUserData(MyTextBlockUserData(self.old_block_data))
         self.parent.text_widget.highlighter.rehighlightBlock(self.block)
         self.parent.waveform.selection = self.selection
@@ -415,7 +415,7 @@ class MainWindow(QMainWindow):
 
         # Keyboard shortcuts
         ## Search
-        shortcut = QShortcut(QKeySequence.Find, self)
+        shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
         shortcut.activated.connect(self.search)
         ## Play
         shortcut = QShortcut(shortcuts["play_stop"], self)
@@ -434,6 +434,10 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
         shortcut.activated.connect(self.selectAll)
 
+
+        # Signal connections
+        self.text_widget.cursor_changed_signal.connect(self.onTextCursorChange)
+
         self.waveform.selection_started.connect(lambda: self.select_button.setChecked(True))
         self.waveform.selection_ended.connect(lambda: self.select_button.setChecked(False))
         self.waveform.join_utterances.connect(self.joinUtterances)
@@ -441,6 +445,7 @@ class MainWindow(QMainWindow):
         self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
         self.waveform.playhead_moved.connect(self.movePlayHead)
         self.waveform.refresh_segment_info.connect(self.updateSegmentInfo)
+        self.waveform.select_segment.connect(self.selectFromWaveform)
 
         # Restore window geometry and state
         self.restoreGeometry(app_settings.value("main/geometry"))
@@ -803,7 +808,6 @@ class MainWindow(QMainWindow):
         media_toolbar_layout.addLayout(dial_layout)
 
         # Zoom buttons
-
         zoom_buttons_layout = QHBoxLayout()
         zoom_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
         zoom_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
@@ -813,11 +817,13 @@ class MainWindow(QMainWindow):
         wave_zoom_out_button = QPushButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
         wave_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        wave_zoom_out_button.setToolTip(self.tr("Zoom out") + f" <{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}>")
         wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
         zoom_buttons_layout.addWidget(wave_zoom_out_button)
         wave_zoom_in_button = QPushButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
         wave_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        wave_zoom_in_button.setToolTip(self.tr("Zoom in") + f" <{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}>")
         wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
         zoom_buttons_layout.addWidget(wave_zoom_in_button)
         
@@ -1038,7 +1044,7 @@ class MainWindow(QMainWindow):
                 for i, sentence in enumerate(sentences):
                     self.text_widget.appendSentence(sentence, seg_id_list[i])
                 
-                self.text_widget.setActive(seg_id_list[0], update_waveform=False)
+                self.text_widget.setActive(seg_id_list[0])
             else:
                 print(f"Couldn't find text file {txt_filepath}")
             
@@ -1241,7 +1247,7 @@ class MainWindow(QMainWindow):
 
     def onPlayerPositionChanged(self, position: int):
         """Called every time the position is changed in the QMediaPlayer"""
-
+        
         # Convert to seconds
         player_position = position / 1000
 
@@ -1282,7 +1288,7 @@ class MainWindow(QMainWindow):
         # Free running, highlight text sentence
         elif (seg_id := self.waveform.getSegmentAtTime(player_position)) >= 0:
             if seg_id != self.text_widget.active_sentence_id:
-                self.text_widget.setActive(seg_id, scroll_text=False, update_waveform=False)
+                self.text_widget.setActive(seg_id, scroll_text=False)
         
         self.updateSubtitle(player_position)
     
@@ -1324,6 +1330,7 @@ class MainWindow(QMainWindow):
     def playSegment(self, segment):
         start, _ = segment
         self.player.setPosition(int(start * 1000))
+        print("play")
         self.player.play()
         self.play_button.setIcon(icons["pause"])
 
@@ -1336,13 +1343,13 @@ class MainWindow(QMainWindow):
             id = self.waveform.current_segment_active
             return
         self.waveform.setActive(id)
-        self.text_widget.setActive(id, update_waveform=False)
+        self.text_widget.setActive(id)
         self.playing_segment = id
         self.playSegment(self.waveform.segments[id])
 
 
     def playPrevAction(self):
-        if self.player.playbackState() == QMediaPlayer.PlayingState:
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.stop()
         if not self.waveform.active_segments:
             return
@@ -1350,7 +1357,7 @@ class MainWindow(QMainWindow):
         if id < 0:
             id = self.waveform.current_segment_active
         self.waveform.setActive(id)
-        self.text_widget.setActive(id, update_waveform=False)
+        self.text_widget.setActive(id)
         self.playing_segment = id
         self.playSegment(self.waveform.segments[id])
     
@@ -1361,7 +1368,7 @@ class MainWindow(QMainWindow):
         if len(self.waveform.segments) > 0:
             first_seg_id = self.waveform.getSortedSegments()[0][0]
             self.waveform.setActive(first_seg_id)
-            self.text_widget.setActive(first_seg_id, update_waveform=False)
+            self.text_widget.setActive(first_seg_id)
             self.waveform.setHead(self.waveform.segments[first_seg_id][0])
         else:
             self.waveform.t_left = 0.0
@@ -1714,14 +1721,14 @@ class MainWindow(QMainWindow):
         )
         # Set cursor at the beggining of the right utterance
         cursor = self.text_widget.textCursor()
-        cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         self.undo_stack.push(
             MoveTextCursor(self.text_widget, cursor.position())
         )
         self.undo_stack.endMacro()
 
         # self.text_edit.setTextCursor(cursor)
-        self.text_widget.setActive(right_id, update_waveform=True)
+        self.text_widget.setActive(right_id)
         self.waveform.must_redraw = True
 
 
@@ -1823,14 +1830,14 @@ class MainWindow(QMainWindow):
                 self, 
                 "Unsaved work", 
                 "Do you want to save your changes?",
-                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-                QMessageBox.Save,
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save,
             )
             # Decide whether to close based on user's response
-            if reply == QMessageBox.Save:
+            if reply == QMessageBox.StandardButton.Save:
                 self.saveFile()
                 event.accept()
-            elif reply == QMessageBox.Discard:
+            elif reply == QMessageBox.StandardButton.Discard:
                 event.accept()
             else:
                 event.ignore()
@@ -1868,14 +1875,45 @@ class MainWindow(QMainWindow):
 
         return super().closeEvent(event)
     
+
+    @Slot(int)
+    def onTextCursorChange(self, seg_id: int):
+        print("cursor changed", seg_id)
+        if seg_id == -1:
+            self.waveform.setActive(-1)
+            self.status_bar.clearMessage()
+        else:
+            self.updateSegmentInfo(seg_id)
+
+            if (
+                self.player.playbackState() != QMediaPlayer.PlaybackState.PlayingState
+                and seg_id != self.text_widget.active_sentence_id
+                ):
+                self.text_widget.setActive(seg_id, scroll_text=False)
+                self.waveform.setActive(seg_id)
     
+    
+    @Slot(int)
+    def selectFromWaveform(self, seg_id: int):
+        """Scroll the text widget to display the sentence"""
+        
+        self.waveform.setActive(seg_id)
+        
+        if seg_id == -1:
+            return
+        
+        if seg_id != self.text_widget.active_sentence_id:
+            self.text_widget.setActive(seg_id, scroll_text=True)
+
+
     @Slot(int)
     def updateSegmentInfo(
         self,
-        id:int,
+        id: int,
         segment=None,
         density=None,
     ):
+        """Rehighlight sentence in text widget and update status bar info"""
         if id not in self.waveform.segments:
             self.status_bar.clearMessage()
             return

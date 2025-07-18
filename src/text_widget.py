@@ -5,7 +5,8 @@ from PySide6.QtWidgets import (
     QApplication, QMenu, QTextEdit,
 )
 from PySide6.QtCore import (
-    Qt, QTimer, QRegularExpression,
+    Qt, Signal,
+    QRegularExpression,
     QRect
 )
 from PySide6.QtGui import (
@@ -246,6 +247,8 @@ def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
 
 
 class TextEditWidget(QTextEdit):
+    cursor_changed_signal = Signal(int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
@@ -566,12 +569,11 @@ class TextEditWidget(QTextEdit):
                 self.highlighter.rehighlightBlock(block)
 
 
-    def setActive(self, id: int, scroll_text=True, update_waveform=True):
+    def setActive(self, id: int, scroll_text=True):
         """Highlight a given utterance's text
 
         Arguments:
             scroll_text (boolean): scroll the text widget to the text cursor
-            update_waveform (boolean): call WaveformWidget's own setActive method
         
         # TODO: Maybe this would be better in MainWindow class
         # Cannot use highlighter.rehighilght() here as it would slow thing down too much
@@ -581,7 +583,7 @@ class TextEditWidget(QTextEdit):
         self.deactivateSentence()
 
         block = self.getBlockById(id)
-        if not block:
+        if block == None:
             return
 
         self.active_sentence_id = id
@@ -590,18 +592,9 @@ class TextEditWidget(QTextEdit):
 
         if scroll_text:
             cursor = self.textCursor()
-            cursor.setPosition(self.getBlockById(id).position())
+            cursor.setPosition(block.position())
             self.setTextCursor(cursor)
             self.ensureCursorVisible()
-        
-        if update_waveform:
-            self.parent.waveform.setActive(id)
-        
-        if self.getBlockType(block) == BlockType.ALIGNED:
-            data = block.userData().data
-            if "seg_id" in data:
-                seg_id = data["seg_id"]
-                self.parent.updateSegmentInfo(seg_id)
     
 
     def zoomIn(self, *args):
@@ -667,20 +660,16 @@ class TextEditWidget(QTextEdit):
 
     def cursorChanged(self):
         """Set current utterance active"""
+        
         cursor = self.textCursor()
         current_block = cursor.block()
         if self.isAligned(current_block):
             # Activate utterance under cursor
             id = current_block.userData().data["seg_id"]
-            if id == self.active_sentence_id:
-                self.parent.updateSegmentInfo(id)
-                return
-            self.setActive(id, scroll_text=False)
-                
+            self.cursor_changed_signal.emit(id)
         else:
             self.deactivateSentence()
-            self.parent.waveform.setActive(None)
-            self.parent.status_bar.clearMessage()
+            self.cursor_changed_signal.emit(-1)
 
 
     def contextMenuEvent(self, event):
@@ -695,9 +684,9 @@ class TextEditWidget(QTextEdit):
         formats = block.layout().formats()
         for format_range in formats:
             if format_range.start <= cursor.positionInBlock() <= format_range.start + format_range.length:
-                if format_range.format.underlineStyle() == QTextCharFormat.SpellCheckUnderline:
+                if format_range.format.underlineStyle() == QTextCharFormat.UnderlineStyle.SpellCheckUnderline:
                     # Found misspelled word
-                    cursor.select(QTextCursor.WordUnderCursor)
+                    cursor.select(QTextCursor.SelectionType.WordUnderCursor)
                     misspelled_word = cursor.selectedText()
         
         # context = self.createStandardContextMenu(event.pos())
@@ -717,19 +706,19 @@ class TextEditWidget(QTextEdit):
                 context_menu.addSeparator()
 
         cut_action = QAction(QIcon.fromTheme("edit-cut"), "Cut", self)
-        cut_action.setShortcut(QKeySequence.Cut)
+        cut_action.setShortcut(QKeySequence.StandardKey.Cut)
         cut_action.triggered.connect(self.cut)
         context_menu.addAction(cut_action)
 
         # Copy Action
         copy_action = QAction(QIcon.fromTheme("edit-copy"), "Copy", self)
-        copy_action.setShortcut(QKeySequence.Copy)
+        copy_action.setShortcut(QKeySequence.StandardKey.Copy)
         copy_action.triggered.connect(self.copy)
         context_menu.addAction(copy_action)
 
         # Paste Action
         paste_action = QAction(QIcon.fromTheme("edit-paste"), "Paste", self)
-        paste_action.setShortcut(QKeySequence.Paste)
+        paste_action.setShortcut(QKeySequence.StandardKey.Paste)
         paste_action.triggered.connect(self.paste)
         context_menu.addAction(paste_action)
 
@@ -737,7 +726,7 @@ class TextEditWidget(QTextEdit):
 
         # Select All Action
         select_all_action = QAction(QIcon.fromTheme("edit-select-all"), "Select All", self)
-        select_all_action.setShortcut(QKeySequence.SelectAll)
+        select_all_action.setShortcut(QKeySequence.StandardKey.SelectAll)
         select_all_action.triggered.connect(self.selectAll)
         context_menu.addAction(select_all_action)
 
@@ -794,22 +783,22 @@ class TextEditWidget(QTextEdit):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         print("keyPressEvent", event.key())
 
-        if (event.matches(QKeySequence.Undo) or
-            event.matches(QKeySequence.Redo)):
+        if (event.matches(QKeySequence.StandardKey.Undo) or
+            event.matches(QKeySequence.StandardKey.Redo)):
             return event.ignore()
         
-        if event.matches(QKeySequence.Cut):
+        if event.matches(QKeySequence.StandardKey.Cut):
             self.cut()
             return event.accept()
-        if event.matches(QKeySequence.Paste):
+        if event.matches(QKeySequence.StandardKey.Paste):
             self.paste()
             return event.accept()
 
-        if (event.matches(QKeySequence.ZoomIn) or
-            (event.modifiers() & Qt.ControlModifier and event.text() == '+')):
+        if (event.matches(QKeySequence.StandardKey.ZoomIn) or
+            (event.modifiers() & Qt.KeyboardModifier.ControlModifier and event.text() == '+')):
             self.zoomIn(1)
             return event.accept()
-        if event.matches(QKeySequence.ZoomOut):
+        if event.matches(QKeySequence.StandardKey.ZoomOut):
             self.zoomOut(1)
             return event.accept()
 
@@ -828,11 +817,11 @@ class TextEditWidget(QTextEdit):
         
         pos_in_block = cursor.positionInBlock()
         block = cursor.block()
-        block_data = block.userData()
+        block_data: MyTextBlockUserData = block.userData()
         block_len = block.length()
         
         # Dialog hyphen for subtitles (U+2013)
-        if event.matches(QKeySequence.AddTab):
+        if event.matches(QKeySequence.StandardKey.AddTab):
             text = block.text()            
             
             cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
@@ -861,8 +850,8 @@ class TextEditWidget(QTextEdit):
             return
         
         # ENTER
-        if event.key() == Qt.Key_Return:
-            if event.modifiers() == Qt.ControlModifier:
+        if event.key() == Qt.Key.Key_Return:
+            if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
                 # Prevent Ctrl + ENTER
                 return
             print("ENTER")
@@ -873,7 +862,7 @@ class TextEditWidget(QTextEdit):
 
             text = block.text()
 
-            if event.modifiers() == Qt.ShiftModifier:
+            if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
                 left_part = text[:pos_in_block].rstrip()
                 right_part = text[pos_in_block:].lstrip()
                 new_text = left_part + LINE_BREAK + right_part
@@ -926,7 +915,7 @@ class TextEditWidget(QTextEdit):
                             after=True
                         )
                     )
-                    cursor.movePosition(QTextCursor.NextBlock)
+                    cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
                     self.undo_stack.push(
                         InsertTextCommand(
                             self,
@@ -946,7 +935,7 @@ class TextEditWidget(QTextEdit):
                     self.undo_stack.endMacro()
                     return
 
-        elif event.key() == Qt.Key_Delete:
+        elif event.key() == Qt.Key.Key_Delete:
             print("Delete")
         
             if cursor.hasSelection():
@@ -970,7 +959,7 @@ class TextEditWidget(QTextEdit):
                 self.parent.joinUtterances([seg_id, prev_seg_id], cursor_pos)
                 return
 
-        elif event.key() == Qt.Key_Backspace:
+        elif event.key() == Qt.Key.Key_Backspace:
             print("Backspace")
             if cursor.hasSelection():
                 # Special treatment when a selection is active
@@ -1007,7 +996,7 @@ class TextEditWidget(QTextEdit):
     
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             if self._last_click is not None:
                 time_since_last = event.timestamp() - self._last_click
                 if time_since_last < QApplication.doubleClickInterval():
@@ -1031,16 +1020,16 @@ class TextEditWidget(QTextEdit):
                     left_pos -= 1
                 while right_pos < len(block_text) and block_text[right_pos] not in STOP_CHARS:
                     right_pos += 1
-                cursor.movePosition(QTextCursor.Left, QTextCursor.MoveAnchor, pos_in_block - left_pos)
-                cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, right_pos - left_pos)
+                cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, pos_in_block - left_pos)
+                cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, right_pos - left_pos)
                 self.setTextCursor(cursor)
                 return
             if self._click_count == 3:
                 # Triple-click (selects block under cursor)
                 event.accept()
                 cursor = self.cursorForPosition(event.position().toPoint())
-                cursor.movePosition(QTextCursor.StartOfBlock)
-                cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+                cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+                cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
                 self.setTextCursor(cursor)
                 return
                 
@@ -1057,7 +1046,7 @@ class TextEditWidget(QTextEdit):
 
         if self._text_margin:
             painter = QPainter(self.viewport())
-            gray_start_x = self._char_width * 42
+            gray_start_x = int(self._char_width * 42)
             painter.fillRect(
                 QRect(gray_start_x, 0, self.width() - gray_start_x, self.height()), 
                 self.margin_color
