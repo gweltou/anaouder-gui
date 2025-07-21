@@ -245,7 +245,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.parent.text_widget.highlighter.rehighlightBlock(self.block)
         self.parent.waveform.selection = self.selection
         self.parent.waveform.active_segments = self.prev_active_segments[:]
-        self.parent.waveform.current_segment_active = self.prev_current_segment_active
+        self.parent.waveform.active_segment_id = self.prev_current_segment_active
         del self.parent.waveform.segments[self.segment_id]
         self.parent.waveform.must_redraw = True
 
@@ -289,7 +289,7 @@ class DeleteUtterancesCommand(QUndoCommand):
 
         # Delete segments
         self.waveform.active_segments = []
-        self.waveform.current_segment_active = -1
+        self.waveform.active_segment_id = -1
         self.waveform.must_sort = True
         self.waveform.refreshSegmentInfo()
         self.waveform.must_redraw = True
@@ -323,7 +323,7 @@ class DeleteSegmentsCommand(QUndoCommand):
                 del self.waveform.segments[seg_id]
             self.text_edit.highlighter.rehighlightBlock(block)
         
-        self.waveform.current_segment_active = -1
+        self.waveform.active_segment_id = -1
         self.waveform.active_segments = []
         self.waveform.must_sort = True
         self.waveform.must_redraw = True
@@ -1260,11 +1260,11 @@ class MainWindow(QMainWindow):
                 if player_position >= end:
                     if self.looping:
                         if (
-                            self.waveform.current_segment_active >= 0
-                            and self.waveform.current_segment_active != self.playing_segment
+                            self.waveform.active_segment_id >= 0
+                            and self.waveform.active_segment_id != self.playing_segment
                         ):
                             # A different segment has been selected
-                            self.playing_segment = self.waveform.current_segment_active
+                            self.playing_segment = self.waveform.active_segment_id
                             start, _ = self.waveform.segments[self.playing_segment]
                         self.player.setPosition(int(start * 1000))
                         return
@@ -1302,13 +1302,13 @@ class MainWindow(QMainWindow):
             self.player.pause()
             self.play_button.setIcon(icons["play"])
             if (
-                self.playing_segment == self.waveform.current_segment_active
-                or self.waveform.current_segment_active == -1
+                self.playing_segment == self.waveform.active_segment_id
+                or self.waveform.active_segment_id == -1
             ):
                 return
 
-        if self.waveform.current_segment_active >= 0:
-            self.playing_segment = self.waveform.current_segment_active
+        if self.waveform.active_segment_id >= 0:
+            self.playing_segment = self.waveform.active_segment_id
             self.playSegment(self.waveform.segments[self.playing_segment])
         elif self.waveform.selection_is_active:
             self.playing_segment = -1
@@ -1340,7 +1340,7 @@ class MainWindow(QMainWindow):
             self.player.stop()
         id = self.waveform.findNextSegment()
         if id < 0:
-            id = self.waveform.current_segment_active
+            id = self.waveform.active_segment_id
             return
         self.waveform.setActive(id)
         self.text_widget.setActive(id)
@@ -1355,7 +1355,7 @@ class MainWindow(QMainWindow):
             return
         id = self.waveform.findPrevSegment()
         if id < 0:
-            id = self.waveform.current_segment_active
+            id = self.waveform.active_segment_id
         self.waveform.setActive(id)
         self.text_widget.setActive(id)
         self.playing_segment = id
@@ -1760,7 +1760,7 @@ class MainWindow(QMainWindow):
     def selectAll(self):
         selection = [ id for id, _ in self.waveform.getSortedSegments() ]
         self.waveform.active_segments = selection
-        self.waveform.current_segment_active = selection[-1] if selection else -1
+        self.waveform.active_segment_id = selection[-1] if selection else -1
         self.waveform.must_redraw = True
 
 
@@ -1941,7 +1941,7 @@ class MainWindow(QMainWindow):
 
 
     def getUtteranceDensity(self, id) -> float:
-        if self.waveform.resizing_handle and self.waveform.current_segment_active == id:
+        if self.waveform.resizing_handle and self.waveform.active_segment_id == id:
             return self.waveform.resizing_density
         block = self.text_widget.getBlockById(id)
         if not block:
