@@ -31,7 +31,6 @@ from ostilhou.audio import (
     convert_to_mp3, get_audiofile_info
 )
 from ostilhou.audio.audio_numpy import split_to_segments, get_samples
-from ostilhou.utils import sec2hms
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QDialog,
@@ -58,7 +57,7 @@ from PySide6.QtMultimedia import (
 )
 
 from src.settings import APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG, app_settings
-from src.utils import splitForSubtitle, ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS
+from src.utils import sec2hms, splitForSubtitle, ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS
 from src.cache_system import CacheSystem
 from src.version import __version__
 from src.theme import theme

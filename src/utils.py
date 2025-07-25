@@ -235,3 +235,17 @@ def bt709_to_rgb(g: float, b: float, r: float, color_range='tv') -> tuple:
     g = min(max(int(g), 0), 255)
     b = min(max(int(b), 0), 255)
     return (r, g, b)
+
+
+def sec2hms(seconds, sep=' ', precision=0, h_unit='h', m_unit='\'', s_unit="''") -> str:
+    """Return a string of hours, minutes, seconds from a given number of seconds"""
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    parts = []
+    if hours > 0:
+        parts.append(f"{int(hours)}{h_unit}")
+    if hours > 0 or minutes > 0:
+        parts.append(f"{int(minutes)}{m_unit}")
+    seconds = round(seconds, precision)
+    parts.append(f"{seconds:.2f}{s_unit}")
+    return sep.join(parts)

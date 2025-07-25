@@ -65,11 +65,12 @@ class ResizeSegmentCommand(QUndoCommand):
     def undo(self):
         self.waveform_widget.segments[self.segment_id] = self.old_segment[:]
         self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
-        # self.waveform_widget.must_sort = True
+        self.waveform_widget.must_sort = True
         self.waveform_widget.must_redraw = True
     def redo(self):
         self.waveform_widget.segments[self.segment_id] = [self.seg_start, self.seg_end]
         self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
+        self.waveform_widget.must_sort = True
         self.waveform_widget.must_redraw = True
         
     # def id(self):
@@ -99,8 +100,8 @@ class WaveformWidget(QWidget):
             Manage the loading/unloading of samples chunks dynamically
 
             Parameters:
-            - samples (ndarray, dtype=np.float16)
-            - sr: sampling rate
+                - samples (ndarray, dtype=np.float16)
+                - sr: sampling rate
             """
             self.ppsec = 150.0    # pixels per seconds (audio)
 
@@ -215,6 +216,7 @@ class WaveformWidget(QWidget):
         # self.handle_right_pen_shadow = QPen(QColor(80, 255, 100, 50), 5)
         # self.handle_right_pen_shadow.setCapStyle(Qt.PenCapStyle.RoundCap)
         
+        # Animate the rendering loop
         self.timer = QTimer()
         self.timer.timeout.connect(self._update)
         self.timer.start(1000 // 30)   # 30 FPS canvas refresh
@@ -1176,11 +1178,5 @@ class WaveformWidget(QWidget):
 
 
     def refreshSegmentInfo(self):
-        # TODO: adpot signal mechanism
         self.refresh_segment_info.emit(
             self.active_segments[0] if len(self.active_segments) == 1 else -1)
-
-        if len(self.active_segments) == 1:
-            self.parent.updateSegmentInfo(self.active_segments[0])
-        else:
-            self.parent.updateSegmentInfo(None)
