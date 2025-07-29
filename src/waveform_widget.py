@@ -1,19 +1,11 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
-ZOOM_Y = 3.5    # In pixels per second
-ZOOM_MIN = 0.2  # In pixels per second
-ZOOM_MAX = 512  # In pixels per second
-
-
 from typing import List, Tuple, Dict, Optional
 from math import ceil
 from enum import Enum
 import numpy as np
 import logging
-
-from ostilhou.utils import sec2hms
 
 from PySide6.QtWidgets import (
     QMenu, QWidget
@@ -34,6 +26,11 @@ from src.theme import theme
 from src.shortcuts import shortcuts
 from src.utils import lerpColor, mapNumber
 
+
+ZOOM_Y = 3.5    # In pixels per second
+ZOOM_MIN = 0.2  # In pixels per second
+ZOOM_MAX = 512  # In pixels per second
+SNAPPING_RADIUS = 4 # In pixels
 
 
 type Segment = List[float]
@@ -64,12 +61,12 @@ class ResizeSegmentCommand(QUndoCommand):
     
     def undo(self):
         self.waveform_widget.segments[self.segment_id] = self.old_segment[:]
-        self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
+        self.waveform_widget.refresh_segment_info.emit(self.segment_id)
         self.waveform_widget.must_sort = True
         self.waveform_widget.must_redraw = True
     def redo(self):
         self.waveform_widget.segments[self.segment_id] = [self.seg_start, self.seg_end]
-        self.waveform_widget.parent.updateUtteranceDensity(self.segment_id)
+        self.waveform_widget.refresh_segment_info.emit(self.segment_id)
         self.waveform_widget.must_sort = True
         self.waveform_widget.must_redraw = True
         
@@ -92,6 +89,7 @@ class WaveformWidget(QWidget):
     selection_ended = Signal()
     playhead_moved = Signal(float)
     refresh_segment_info = Signal(int)
+    refresh_segment_info_resizing = Signal(int, list, float)
     select_segment = Signal(int)
 
     class ScaledWaveform():
@@ -179,11 +177,13 @@ class WaveformWidget(QWidget):
         self.must_sort = False
         self._sorted_segments = []
 
-        self.timecode_margin = 17
+        self.snapping = True
+
+        self.timecode_margin = 20
 
         # Accept focus for keyboard events
         #self.setFocusPolicy(Qt.StrongFocus)
-        self.setMouseTracking(True) # get mouse move events even when no buttons are held down
+        self.setMouseTracking(True) # get mouse move events even if no buttons are held down
         self.is_selecting = False
         self.shift_pressed = False
         self.handle_state = [False, False, False]   # Left, Middle, Right
@@ -219,7 +219,7 @@ class WaveformWidget(QWidget):
         # Animate the rendering loop
         self.timer = QTimer()
         self.timer.timeout.connect(self._update)
-        self.timer.start(1000 // 30)   # 30 FPS canvas refresh
+        self.timer.start(1000 // 30)   # 30 FPS (canvas refresh rate)
 
         # Keyboard shortcuts
         zoom_in_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.ZoomIn), self)
@@ -254,11 +254,12 @@ class WaveformWidget(QWidget):
         self.resizing_textlen = 0
         self.resizing_density = 0.0
 
-        self.selection: Optional[Segment] = None
+        self._selection: Optional[Segment] = None
         self.selection_is_active = False
         self.id_counter = 0
         self.must_sort = True
         self.audio_len = 0
+        self.fps = 0
 
         self.must_redraw = True
 
@@ -268,15 +269,19 @@ class WaveformWidget(QWidget):
         self.waveform.ppsec = self.ppsec
         self.audio_len = len(samples) / sr
     
+
+    def getSelection(self) -> Segment:
+        return self._selection
+
     
-    def getNewId(self):
-        """Returns the next free segment ID"""
+    def getNewId(self) -> SegmentId:
+        """Returns the next available segment ID"""
         seg_id = self.id_counter
         self.id_counter += 1
         return seg_id
     
 
-    def addSegment(self, segment, seg_id=None) -> int:
+    def addSegment(self, segment, seg_id:Optional[SegmentId]=None) -> SegmentId:
         if seg_id == None:
             seg_id = self.getNewId()
         self.segments[seg_id] = segment
@@ -284,38 +289,42 @@ class WaveformWidget(QWidget):
         return seg_id
 
 
-    def findPrevSegment(self) -> int:
+    def findPrevSegmentId(self) -> SegmentId:
         if self.active_segment_id < 0:
             return -1
-        sorted_segments = sorted(self.segments.keys(), key=lambda s: self.segments[s][0])
-        order = sorted_segments.index(self.active_segment_id)
-        if order > 0:
-            return sorted_segments[order - 1]
+        sorted_segments = self.getSortedSegments()
+        for i, (seg_id, _) in enumerate(sorted_segments):
+            if seg_id == self.active_segment_id:
+                if i > 0:
+                    return sorted_segments[i - 1][0]
+                return -1
         return -1
 
 
-    def findNextSegment(self) -> int:
+    def findNextSegmentId(self) -> SegmentId:
         if self.active_segment_id < 0:
             return -1
-        sorted_segments = sorted(self.segments.keys(), key=lambda s: self.segments[s][0])
-        order = sorted_segments.index(self.active_segment_id)
-        if order < len(sorted_segments) - 1:
-            return sorted_segments[order + 1]
+        sorted_segments = self.getSortedSegments()
+        for i, (seg_id, _) in enumerate(sorted_segments):
+            if seg_id == self.active_segment_id:
+                if i < len(sorted_segments) - 1:
+                    return sorted_segments[i + 1][0]
+                return -1
         return -1
 
 
-    def setActive(self, clicked_id: int, multi=False) -> None:
+    def setActive(self, clicked_id:SegmentId, multi=False) -> None:
         """Select the given segment and adjust view in the waveform"""
         if clicked_id not in self.segments:
             # Clicked outside of any segment, deselect current active segment
             self.active_segments = []
             self.active_segment_id = -1
             self.must_redraw = True
-            self.refreshSegmentInfo()
+            self.refresh_segment_info.emit(-1)
             return
         
         if multi:
-            # Find segment IDs between `current_segment_active` and `clicked_id`
+            # Find segment IDs between `active_segment_id` and `clicked_id`
             first, last = sorted([self.active_segment_id, clicked_id],
                                  key=lambda x: self.segments[x][0])
             first_t = self.segments[first][1]
@@ -347,7 +356,9 @@ class WaveformWidget(QWidget):
 
         self.active_segment_id = clicked_id
         self.must_redraw = True
-        self.refreshSegmentInfo()
+        self.refresh_segment_info.emit(
+            self.active_segment_id if len(self.active_segments) == 1 else -1
+        )
 
 
     def setHead(self, t):
@@ -369,7 +380,7 @@ class WaveformWidget(QWidget):
 
     def deselect(self):
         self.selection_is_active = False
-        self.selection = None
+        self._selection = None
     
 
     def getTimeRight(self):
@@ -399,7 +410,7 @@ class WaveformWidget(QWidget):
         if self.scroll_goal >= 0.0:
             # Scrolling
             dist = self.scroll_goal - self.t_left
-            self.scroll_vel += 0.2 * dist
+            self.scroll_vel += 0.25 * dist
             self.scroll_vel *= 0.5
         
         self.scroll_vel *= 0.9
@@ -421,32 +432,6 @@ class WaveformWidget(QWidget):
         else:
             self.must_redraw = True
     
-
-    # def checkHandles(self, time_position):
-    #     """Update internal variables if cursor is above active segment's handles
-    #     Used for the solid segments as well as for the selection"""
-    #     self.over_left_handle = False
-    #     self.over_right_handle = False
-    #     if self.last_segment_active < 0 and not self.selection_is_active:
-    #         return
-        
-    #     if self.selection_is_active:
-    #         start, end = self.selection
-    #     elif self.last_segment_active >= 0:
-    #         start, end = self.segments[self.last_segment_active]
-            
-    #     if abs((start-time_position) * self.ppsec) < 8:
-    #         self.over_left_handle = True
-    #     if abs((end-time_position) * self.ppsec) < 8:
-    #         self.over_right_handle = True
-        
-    #     # When handles are close together, select handle depending on mouse direction
-    #     if self.over_left_handle and self.over_right_handle and self.mouse_dir != None:
-    #         if self.mouse_dir == 1.0:
-    #             self.over_right_handle = False
-    #         elif self.mouse_dir == -1.0:
-    #             self.over_left_handle = False
-
 
     def paintEvent(self, event: QPaintEvent):
         """
@@ -520,8 +505,8 @@ class WaveformWidget(QWidget):
 
     def isSelectionAtPosition(self, position: QPointF) -> bool:
         t = self.t_left + position.x() / self.ppsec
-        if self.selection != None:
-            start, end = self.selection
+        if self._selection != None:
+            start, end = self._selection
             return start < t < end
         return False
 
@@ -625,15 +610,15 @@ class WaveformWidget(QWidget):
             time_position = min(time_position, right_boundary - half_seg_len - 0.01)
             self.resizing_segment = [time_position - half_seg_len, time_position + half_seg_len]
         
-        self.parent.updateSegmentInfo(
+        self.refresh_segment_info_resizing.emit(
             self.active_segment_id,
-            segment=self.resizing_segment,
-            density=self.resizing_density,
+            self.resizing_segment,
+            self.resizing_density,
         )
     
 
     def resizeSelection(self, time_position, handle):
-        if self.selection == None:
+        if self._selection == None:
             return
         
         # Handle dragging
@@ -651,20 +636,20 @@ class WaveformWidget(QWidget):
             # Bound by segment on the left, if any
             time_position = max(time_position, left_boundary + 0.01)
             # Left segment boundary cannot outgrow right boundary
-            time_position = min(time_position, self.selection[1] - 0.01)
-            self.selection[0] = time_position
+            time_position = min(time_position, self._selection[1] - 0.01)
+            self._selection[0] = time_position
         elif handle == Handle.RIGHT:
             # Bound by segment on the right, if any
             time_position = min(time_position, right_boundary - 0.01)
             # Right segment boundary cannot be earlier than left boundary
-            time_position = max(time_position, self.selection[0] + 0.01)
-            self.selection[1] = time_position
+            time_position = max(time_position, self._selection[0] + 0.01)
+            self._selection[1] = time_position
         elif handle == Handle.MIDDLE:
             # Time position is the requested middle position in the segment
-            half_seg_len = (self.selection[1] - self.selection[0]) * 0.5
+            half_seg_len = (self._selection[1] - self._selection[0]) * 0.5
             time_position = max(time_position, left_boundary + half_seg_len + 0.01)
             time_position = min(time_position, right_boundary - half_seg_len - 0.01)
-            self.selection = [time_position - half_seg_len, time_position + half_seg_len]
+            self._selection = [time_position - half_seg_len, time_position + half_seg_len]
 
 
     ###################################
@@ -745,6 +730,9 @@ class WaveformWidget(QWidget):
                 self.resizing_segment = self.segments[self.active_segment_id][:]
                 block = self.parent.text_widget.getBlockById(self.active_segment_id)
                 self.resizing_textlen = self.parent.text_widget.getSentenceLength(block)
+                seg_len = self.resizing_segment[1] - self.resizing_segment[0]
+                self.resizing_density = self.resizing_textlen / seg_len
+                self.must_redraw = True
         else:
             self.resizing_handle = None
         
@@ -773,7 +761,6 @@ class WaveformWidget(QWidget):
                 # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPixelPosition(event.position())
-                # self.setActive(clicked_id, multi=self.shift_pressed)
                 self.select_segment.emit(clicked_id)
                 if clicked_id < 0:
                     # Check is the selection was clicked
@@ -794,8 +781,8 @@ class WaveformWidget(QWidget):
             self.last_handle_state = self.handle_state
             self.handle_state = [False, False, False]
             if self.selection_is_active or self.active_segment_id >= 0:
-                if self.selection_is_active and self.selection:
-                    start, end = self.selection
+                if self.selection_is_active and self._selection:
+                    start, end = self._selection
                 else:
                     start, end = self.segments[self.active_segment_id]
                 if (
@@ -821,7 +808,7 @@ class WaveformWidget(QWidget):
                 and self.mouse_prev_pos
                 and not self.is_selecting):
             # Stop movement if drag direction is opposite
-            if -mouse_dpos * self.scroll_vel < 0.0:
+            if -1 * mouse_dpos * self.scroll_vel < 0.0:
                 self.scroll_vel = 0.0
             self.scroll_vel += -0.1 * mouse_dpos / self.ppsec
             self.scroll_goal = -1 # Deactivate auto scroll
@@ -846,9 +833,12 @@ class WaveformWidget(QWidget):
             #         right_boundary = start
             #         break
             head = self.t_left + self.mouse_pos.x() / self.ppsec
+            if self.snapping and self.fps > 0:
+                head = round(head * self.fps) / self.fps
+
             selection_start = max(min(head, self.anchor), left_boundary + 0.01)
             selection_end = min(max(head, self.anchor), right_boundary - 0.01)
-            self.selection = [selection_start, selection_end]
+            self._selection = [selection_start, selection_end]
             self.must_redraw = True
         
         # Change cursor above resizable boundaries
@@ -867,6 +857,11 @@ class WaveformWidget(QWidget):
         # Resizing or moving segment
         if self.resizing_handle != None:
             time_position = self.t_left + self.mouse_pos.x() / self.ppsec
+
+            # Snapping enabled
+            if self.snapping and self.fps > 0:
+                time_position = round(time_position * self.fps) / self.fps
+
             if self.selection_is_active:
                 self.resizeSelection(time_position, self.resizing_handle)
             elif self.active_segment_id >= 0:
@@ -927,6 +922,11 @@ class WaveformWidget(QWidget):
 
         context.exec(event.globalPos())
 
+
+    def toggleSnapping(self, checked:bool):
+        log.debug("toggle snapping on waveform")
+        print("toggle snapping")
+        self.snapping = checked
 
     def _drawHandle(self, pos: int, handle: Handle):
         if self.selection_is_active:
@@ -992,8 +992,8 @@ class WaveformWidget(QWidget):
                 self.painter.drawRect(x, self.inactive_top, w, self.inactive_height)
 
         # Draw selection
-        if self.selection:
-            start, end = self.selection
+        if self._selection:
+            start, end = self._selection
             if end > self.t_left and start < t_right:
                 x = round((start - self.t_left) * self.ppsec)
                 w = round((end - start) * self.ppsec)
@@ -1033,6 +1033,7 @@ class WaveformWidget(QWidget):
                 start, end = self.segments[seg_id]
             utterance_density = self.parent.getUtteranceDensity(seg_id)
             
+            # Check if segment is in viewport
             if end > self.t_left or start < t_right:
                 x = round((start - self.t_left) * self.ppsec)
                 w = round((end - start) * self.ppsec)
@@ -1058,12 +1059,56 @@ class WaveformWidget(QWidget):
                     middle_t = start + (end - start) / 2
                     middle_x = round((middle_t - self.t_left) * self.ppsec)
                     self._drawHandle(middle_x, Handle.MIDDLE)
+                
+                # Draw snapping markers for video media
+                if self.resizing_handle == Handle.RIGHT and self.fps > 0:
+                    self._drawSnappingMarkers()
+
+
+    def _drawSnappingMarkers(self):
+        start, end = self.segments[self.active_segment_id]
+        current_dur = end - start
+        markers = []
+
+        # Check next segment boundary
+        next_segment_id = self.findNextSegmentId()
+        next_segment_start = self.audio_len
+        if next_segment_id >= 0:
+            next_segment_start = self.segments[next_segment_id][0]
+
+        # Minimum duration
+        min_dur = 16 / self.fps # 16 frames minimum
+        if current_dur < min_dur:
+            markers.append(start + min_dur)
+        
+        # Maximum duration
+        # minimum of 5 seconds or 2 frames before next segment
+        max_dur = min(5.0, (next_segment_start - 2 / self.fps) - start)
+        # if current_dur > max_dur:
+        markers.append(start + max_dur)
+                
+        # Ideal density
+        ideal_density_dur = self.resizing_textlen / 16.0
+        t = start + ideal_density_dur
+        tag = "16c/s"
+        t_x = round((t - self.t_left) * self.ppsec)
+        self.painter.setPen(QPen(QColor(120, 120, 120)))
+        self.painter.drawText(t_x - 8 * len(tag) // 2, round(self.height() * 0.15 + 15), tag)
+        markers.append(t)
+        
+        self.painter.setPen(QPen(QColor(120, 120, 120), 1))
+        for t in markers:
+            pos = round((t - self.t_left) * self.ppsec)
+            self.painter.drawLine(
+                pos, round(self.timecode_margin + (self.height() - self.timecode_margin) * 0.15),
+                pos, round(self.timecode_margin + (self.height() - self.timecode_margin) * 0.85)
+            )
 
 
     def _drawSceneChanges(self, t_right: float):
         height = 8
         sep_height = 16
-        y_pos = self.height()-height
+        y_pos = self.height() - height
         opacity = 200
         
         for i, (tc, r, g, b) in enumerate(self.scenes):
@@ -1121,7 +1166,7 @@ class WaveformWidget(QWidget):
             self.painter.drawRect(QRect(0, 0, int(w), self.height()))
 
         # Paint timecode lines and text
-        if self.ppsec > 60:
+        if self.ppsec > 50:
             time_step = 1
         elif self.ppsec > 6:
             time_step = 10
@@ -1131,8 +1176,18 @@ class WaveformWidget(QWidget):
             time_step = 60
         else:
             time_step = 300 # Every 5 min
-        ti = ceil(self.t_left / time_step) * time_step
         self.painter.setPen(QPen(theme.wf_timeline))
+
+        # Video frames timecodes
+        if self.fps > 0 and time_step == 1:
+            frame_time_step = 1.0 / self.fps
+            t = ceil(self.t_left / frame_time_step) * frame_time_step
+            while t < t_right:
+                t += frame_time_step
+                t_x = round((t - self.t_left) * self.ppsec)
+                self.painter.drawLine(t_x, self.timecode_margin - 4, t_x, self.timecode_margin)
+
+        ti = ceil(self.t_left / time_step) * time_step
         for t in range(ti, int(t_right)+1, time_step):
             t_x = round((t - self.t_left) * self.ppsec)
             self.painter.drawLine(t_x, self.timecode_margin, t_x, self.height()-4)
@@ -1175,8 +1230,3 @@ class WaveformWidget(QWidget):
         
         self.painter.end()
         self.update()
-
-
-    def refreshSegmentInfo(self):
-        self.refresh_segment_info.emit(
-            self.active_segments[0] if len(self.active_segments) == 1 else -1)

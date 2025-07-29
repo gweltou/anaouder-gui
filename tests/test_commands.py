@@ -149,7 +149,7 @@ def test_align_with_selection():
     block_id = main_window.text_widget.getBlockId(block)
     segment = main_window.waveform.segments[block_id][:]
     main_window.undo_stack.push(DeleteSegmentsCommand(main_window, [block_id]))
-    main_window.waveform.selection = segment
+    main_window.waveform._selection = segment
     undo_redo_command(AlignWithSelectionCommand(main_window, block))
 
 
