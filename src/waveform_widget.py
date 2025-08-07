@@ -469,6 +469,12 @@ class WaveformWidget(QWidget):
         super().enterEvent(event)
 
 
+    def getSegmentById(self, utt_id) -> Optional[Segment]:
+        if utt_id in self.segments:
+            return self.segments[utt_id]
+        return None
+
+
     def getSegmentAtTime(self, time: float) -> int:
         """Return the ID of any segment at a given position, or -1 if none is present"""
         for id, (start, end) in self.getSortedSegments():

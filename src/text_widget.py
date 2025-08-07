@@ -126,7 +126,7 @@ class Highlighter(QSyntaxHighlighter):
 
         if self.currentBlockUserData():
             if self.text_edit.isAligned(block):
-                if self.text_edit.active_sentence_id == self.text_edit.getBlockId(block):
+                if self.text_edit.highlighted_sentence_id == self.text_edit.getBlockId(block):
                     cursor.setBlockFormat(self.active_green_block_format)
                 else:
                     cursor.setBlockFormat(self.green_block_format)
@@ -148,12 +148,12 @@ class Highlighter(QSyntaxHighlighter):
                 utt_id = self.text_edit.getBlockId(block)
                 density = self.text_edit.parent.getUtteranceDensity(utt_id)
                 if density < 17.0:
-                    if self.text_edit.active_sentence_id == self.text_edit.getBlockId(block):
+                    if self.text_edit.highlighted_sentence_id == self.text_edit.getBlockId(block):
                         cursor.setBlockFormat(self.active_green_block_format)
                     else:
                         cursor.setBlockFormat(self.green_block_format)
                 else:
-                    if self.text_edit.active_sentence_id == self.text_edit.getBlockId(block):
+                    if self.text_edit.highlighted_sentence_id == self.text_edit.getBlockId(block):
                         cursor.setBlockFormat(self.active_red_block_format)
                     else:
                         cursor.setBlockFormat(self.red_block_format)
@@ -275,7 +275,7 @@ class TextEditWidget(QTextEdit):
         # self.defaultCharFormat = QTextCharFormat()
         # self.activeCharFormat = QTextCharFormat()
         # self.activeCharFormat.setFontWeight(QFont.DemiBold)
-        self.active_sentence_id = -1
+        self.highlighted_sentence_id = -1
 
         # Subtitles margin
         self._text_margin = False
@@ -517,7 +517,7 @@ class TextEditWidget(QTextEdit):
             new_block.setUserData(None)
         
         self.document().blockSignals(False)
-        self.active_sentence_id = -1
+        self.highlighted_sentence_id = -1
 
 
     def setText(self, text: str):
@@ -571,17 +571,17 @@ class TextEditWidget(QTextEdit):
     def deactivateSentence(self, seg_id:Optional[int]=None):
         """Reset format of currently active sentence"""
         if seg_id == None:
-            seg_id = self.active_sentence_id
+            seg_id = self.highlighted_sentence_id
         if seg_id < 0:
             return
         
-        self.active_sentence_id = -1 # Needs to be set before rehighlighting
+        self.highlighted_sentence_id = -1 # Needs to be set before rehighlighting
         block = self.getBlockById(seg_id)
         if block:
             self.highlighter.rehighlightBlock(block)
 
 
-    def setActive(self, seg_id:SegmentId, scroll_text=True):
+    def highlightUtterance(self, seg_id:SegmentId, scroll_text=True):
         """Highlight a given utterance's sentence
 
         Arguments:
@@ -597,7 +597,7 @@ class TextEditWidget(QTextEdit):
         if block == None:
             return
         
-        self.active_sentence_id = seg_id # Needs to be set before rehighlighting
+        self.highlighted_sentence_id = seg_id # Needs to be set before rehighlighting
         self.highlighter.rehighlightBlock(block)
 
         self.blockSignals(True)
