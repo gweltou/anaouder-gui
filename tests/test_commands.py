@@ -1,5 +1,7 @@
 from copy import deepcopy
 import random
+from typing import List
+import logging
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QUndoCommand, QTextCursor
@@ -9,13 +11,29 @@ from src.main import (
     AddSegmentCommand, CreateNewUtteranceCommand,
     DeleteUtterancesCommand,
     JoinUtterancesCommand, AlignWithSelectionCommand,
-    DeleteSegmentsCommand, InsertBlockCommand
+    DeleteSegmentsCommand, InsertBlockCommand,
 )
 from src.waveform_widget import (
     ResizeSegmentCommand, Handle,
 )
+from src.commands import (
+    InsertTextCommand,
+    DeleteTextCommand,
+    InsertBlockCommand,
+    ReplaceTextCommand
+)
 from src.icons import loadIcons
 from src.text_widget import TextEditWidget
+
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(levelname)s %(asctime)s %(name)s %(filename)s:%(lineno)d %(message)s',
+    handlers=[
+        logging.FileHandler('anaouder_app.log'),
+        logging.StreamHandler()
+    ]
+)
 
 
 app = QApplication()
@@ -24,7 +42,7 @@ main_window = MainWindow()
 
 
 
-def loadDocument():
+def load_document():
     main_window.waveform.clear()
     main_window.text_widget.document().clear()
     main_window.undo_stack.clear()
@@ -39,6 +57,13 @@ def loadDocument():
         seg_id = main_window.waveform.addSegment(list(segment))
         main_window.text_widget.appendSentence(text, seg_id)
 
+
+def load_document_2():
+    main_window.waveform.clear()
+    main_window.text_widget.document().clear()
+    main_window.undo_stack.clear()
+
+    main_window.openFile("Meli_mila_Malou_1.ali")
 
 
 def getDocumentState() -> dict:
@@ -69,35 +94,53 @@ def undo_redo_command(command: QUndoCommand, random_cursor=False):
         doc_size = main_window.text_widget.document().lastBlock().position()
         new_pos = random.randint(0, doc_size)
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
+    
     main_window.undo()
     state3 = getDocumentState()
     assert state3 == state1
 
+    if random_cursor:
+        doc_size = main_window.text_widget.document().lastBlock().position()
+        new_pos = random.randint(0, doc_size)
+        main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
+    
     main_window.redo()
     state4 = getDocumentState()
     assert state4 == state2
 
 
-def undo_redo_function(function: callable, *args: list):
+def undo_redo_function(function: callable, *args: list, random_cursor=False):
     state1 = getDocumentState()
     function(*args)
     state2 = getDocumentState()
     assert state1 != state2
+
+    if random_cursor:
+        doc_size = main_window.text_widget.document().lastBlock().position()
+        new_pos = random.randint(0, doc_size)
+        main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
+    
     main_window.undo()
     state3 = getDocumentState()
     assert state3 == state1
+
+    if random_cursor:
+        doc_size = main_window.text_widget.document().lastBlock().position()
+        new_pos = random.randint(0, doc_size)
+        main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
+
     main_window.redo()
     state4 = getDocumentState()
     assert state4 == state2
 
 
 def test_add_segment():
-    loadDocument()
+    load_document()
     undo_redo_command(AddSegmentCommand(main_window.waveform, [10, 12], 12))
 
 
 def test_create_new_utterance():
-    loadDocument()
+    load_document()
     undo_redo_command(
         CreateNewUtteranceCommand(main_window, [10, 12], 12),
         random_cursor=True
@@ -105,7 +148,7 @@ def test_create_new_utterance():
 
 
 def test_delete_utterances():
-    loadDocument()
+    load_document()
     undo_redo_command(
         DeleteUtterancesCommand(main_window, [2, 3, 4]),
         random_cursor=True
@@ -113,32 +156,32 @@ def test_delete_utterances():
 
 
 def test_split_utterance():
-    loadDocument()
+    load_document()
     undo_redo_function(main_window.splitUtterance, 1, 8)
 
 
 def test_join_utterances():
-    loadDocument()
-    undo_redo_command(JoinUtterancesCommand(main_window, [2, 3, 4], 40))
+    load_document()
+    undo_redo_command(JoinUtterancesCommand(main_window, [2, 3, 4]))
 
 
 def test_delete_segments():
-    loadDocument()
+    load_document()
     undo_redo_command(DeleteSegmentsCommand(main_window, [2, 3, 4]))
 
 
 def test_resize_segment():
-    loadDocument()
+    load_document()
     undo_redo_command(ResizeSegmentCommand(
                     main_window.waveform,
                     2,
-                    Handle.LEFT,
-                    17
+                    24,
+                    30
                 ))
 
 
 def test_align_with_selection():
-    loadDocument()
+    load_document()
     block = main_window.text_widget.document().findBlockByNumber(3)
     # cursor = main_window.text_edit.textCursor()
     # cursor.movePosition(QTextCursor.Start)
@@ -154,7 +197,7 @@ def test_align_with_selection():
 
 
 def test_insert_block_command():
-    loadDocument()
+    load_document()
 
     segment = [40, 41]
     seg_id = main_window.waveform.addSegment(segment)
@@ -169,7 +212,7 @@ def test_insert_block_command():
         )
     )
     
-    loadDocument()
+    load_document()
     undo_redo_command(
         InsertBlockCommand(
             main_window.text_widget,
@@ -179,6 +222,53 @@ def test_insert_block_command():
             after=True
         )
     )
+
+
+def test_insert_text_command():
+    load_document()
+
+    undo_redo_command(
+        InsertTextCommand(
+            main_window.text_widget,
+            "hello",
+            20
+        )
+    )
+
+
+def test_delete_text_command():
+    load_document()
+
+    undo_redo_command(
+        DeleteTextCommand(
+            main_window.text_widget,
+            20,
+            4,
+            QTextCursor.MoveOperation.Right
+        )
+    )
+    
+
+def test_delete_first_utterance():
+    load_document_2()
+
+    def apply_commands():
+        main_window.undo_stack.beginMacro("delete first utterance")
+        main_window.undo_stack.push(
+            DeleteTextCommand(
+                main_window.text_widget,
+                position=117,
+                size=34,
+                direction=QTextCursor.MoveOperation.Left
+            )
+        )
+        main_window.undo_stack.push(
+            DeleteUtterancesCommand(main_window, seg_ids=[0])
+        )
+        main_window.undo_stack.endMacro()
+
+    undo_redo_function(apply_commands, )
+    
 
 
 

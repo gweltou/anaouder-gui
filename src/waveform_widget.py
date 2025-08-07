@@ -87,6 +87,7 @@ class WaveformWidget(QWidget):
     new_utterance_from_selection = Signal()
     selection_started = Signal()
     selection_ended = Signal()
+    toggle_selection = Signal()
     playhead_moved = Signal(float)
     refresh_segment_info = Signal(int)
     refresh_segment_info_resizing = Signal(int, list, float)
@@ -270,7 +271,7 @@ class WaveformWidget(QWidget):
         self.audio_len = len(samples) / sr
     
 
-    def getSelection(self) -> Segment:
+    def getSelection(self) -> Optional[Segment]:
         return self._selection
 
     
@@ -286,6 +287,7 @@ class WaveformWidget(QWidget):
             seg_id = self.getNewId()
         self.segments[seg_id] = segment
         self.must_sort = True
+        self.must_redraw = True
         return seg_id
 
 
@@ -381,6 +383,7 @@ class WaveformWidget(QWidget):
     def deselect(self):
         self.selection_is_active = False
         self._selection = None
+        self.must_redraw = True
     
 
     def getTimeRight(self):
@@ -389,10 +392,6 @@ class WaveformWidget(QWidget):
     
 
     def _update(self):
-        if self.audio_len <= 0:
-            self.draw()
-            return
-        
         # Zooming        
         if self.ppsec_goal != self.ppsec:
             self.ppsec += (self.ppsec_goal - self.ppsec) * 0.2
@@ -662,7 +661,7 @@ class WaveformWidget(QWidget):
             return
         
         elif event.key() == shortcuts["select"]:
-            self.selection_started.emit()
+            self.toggle_selection.emit()
 
         elif event.key() == Qt.Key.Key_Shift:
             self.shift_pressed = True
@@ -1142,9 +1141,9 @@ class WaveformWidget(QWidget):
         if not self.pixmap:
             return
         
-        # Fill background
-        if not self.waveform:
-            self.pixmap.fill(QColor(240, 240, 240))
+        # Empty background when no media is loaded
+        if self.audio_len == 0:
+            self.pixmap.fill(theme.wf_bg_color)
             return
         
         self.pixmap.fill(theme.wf_bg_color)

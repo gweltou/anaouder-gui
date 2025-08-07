@@ -1,4 +1,6 @@
+from __future__ import annotations
 from typing import Optional
+import logging
 
 from PySide6.QtWidgets import (
     QTextEdit,
@@ -11,6 +13,9 @@ from PySide6.QtGui import (
 from src.utils import MyTextBlockUserData
 
 
+log = logging.getLogger(__name__)
+
+
 
 class InsertTextCommand(QUndoCommand):
     """Add characters at a given position in the document"""
@@ -19,13 +24,15 @@ class InsertTextCommand(QUndoCommand):
         self.text_edit : QTextEdit = text_edit
         self.text : str = text
         self.position : int = position
+        # Save the cursor state
+        self.prev_cursor = self.text_edit.getCursorState()
     
     def undo(self):
         cursor : QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
-        cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(self.text))
+        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, len(self.text))
         cursor.removeSelectedText()
-        self.text_edit.setTextCursor(cursor)
+        self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
         cursor : QTextCursor = self.text_edit.textCursor()
@@ -35,7 +42,7 @@ class InsertTextCommand(QUndoCommand):
     def id(self):
         return 0
     
-    def mergeWith(self, other: QUndoCommand) -> bool:
+    def mergeWith(self, other: InsertTextCommand) -> bool:
         if other.position - (self.position + len(self.text)) == 0:
             self.text += other.text
             return True
@@ -47,51 +54,56 @@ class DeleteTextCommand(QUndoCommand):
     """Delete characters at a given position in the document"""
     def __init__(
             self,
-            text_edit : QTextEdit,
-            position : int,
-            size : int,
-            direction : QTextCursor.MoveOperation
+            text_edit: QTextEdit,
+            position: int,
+            size: int,
+            direction: QTextCursor.MoveOperation
         ):
+        log.debug(f"Calling DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
         super().__init__()
-        self.text_edit : QTextEdit = text_edit
-        self.position : int = position
+        self.text_edit = text_edit
+        self.position = position
         self.size = size
         self.direction = direction
+        self.deleted_text = ""
+        self.prev_cursor = self.text_edit.getCursorState()
+        print("DeleteUtterancesCommand INIT")
+        print(f"{self.prev_cursor=}")
 
     def undo(self):
-        cursor : QTextCursor = self.text_edit.textCursor()
-        if self.direction == QTextCursor.Left:
+        cursor: QTextCursor = self.text_edit.textCursor()
+        if self.direction == QTextCursor.MoveOperation.Left:
             cursor.setPosition(self.position - self.size)
-            cursor.insertText(self.text)
-        elif self.direction == QTextCursor.Right:
+            cursor.insertText(self.deleted_text)
+        elif self.direction == QTextCursor.MoveOperation.Right:
             cursor.setPosition(self.position)
-            cursor.insertText(self.text)
+            cursor.insertText(self.deleted_text)
             cursor.setPosition(self.position)
-            self.text_edit.setTextCursor(cursor)
+        self.text_edit.setCursorState(self.prev_cursor)
     
     def redo(self):
-        cursor : QTextCursor = self.text_edit.textCursor()
+        cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
-        cursor.movePosition(self.direction, QTextCursor.KeepAnchor, self.size)
-        self.text = cursor.selectedText()
+        cursor.movePosition(self.direction, QTextCursor.MoveMode.KeepAnchor, self.size)
+        self.deleted_text = cursor.selectedText()
         cursor.removeSelectedText()
     
-    def id(self):
+    def id(self) -> int:
         return 1
     
-    def mergeWith(self, other: QUndoCommand) -> bool:
+    def mergeWith(self, other: DeleteTextCommand) -> bool:
         if self.direction != other.direction:
             return False
 
-        if (self.direction == QTextCursor.Left and
+        if (self.direction == QTextCursor.MoveOperation.Left and
             self.position - other.position == self.size):
             self.size += other.size
-            self.text = other.text + self.text
+            self.deleted_text = other.deleted_text + self.deleted_text
             return True
-        elif (self.direction == QTextCursor.Right and
+        elif (self.direction == QTextCursor.MoveOperation.Right and
             self.position - other.position == 0):
             self.size += other.size
-            self.text += other.text
+            self.deleted_text += other.deleted_text
             return True
         return False
 
@@ -100,7 +112,7 @@ class DeleteTextCommand(QUndoCommand):
 class InsertBlockCommand(QUndoCommand):
     """Create a new text block in the document
     
-    Arguments:
+    Parameters:
         position (int):
             The reference position in the text document
         text (str, optional):
@@ -115,25 +127,23 @@ class InsertBlockCommand(QUndoCommand):
             self,
             text_edit: QTextEdit,
             position: int,
-            text: str = None,
-            seg_id: int = None,
+            text = "",
+            seg_id: Optional[int] = None,
             after = False
         ):
         super().__init__()
         self.text_edit = text_edit
-
-        # Save the cursor state
         self.prev_cursor = self.text_edit.getCursorState()
 
         cursor = self.text_edit.textCursor()
         cursor.setPosition(position)
         if after:
-            cursor.movePosition(QTextCursor.EndOfBlock)
+            cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
         else:
-            cursor.movePosition(QTextCursor.StartOfBlock)
+            cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         self.position = cursor.position() # Set at the beginning or end of the block
         
-        self.text = text
+        self.inserted_text = text
         self.seg_id = seg_id
         self.after = after
     
@@ -145,13 +155,13 @@ class InsertBlockCommand(QUndoCommand):
 
         if self.after:
             # The block to delete is the next one
-            cursor.movePosition(QTextCursor.NextBlock)
-            cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+            cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+            cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
             cursor.removeSelectedText()
             cursor.deletePreviousChar()
         else:
             # The block to delete is the current one
-            cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+            cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
             cursor.removeSelectedText()
             cursor.deleteChar()
 
@@ -172,21 +182,21 @@ class InsertBlockCommand(QUndoCommand):
 
         if self.after:
             # Block has been inserted after
-            if self.text:
-                cursor.insertText(self.text)
+            if self.inserted_text:
+                cursor.insertText(self.inserted_text)
             if self.seg_id:
                 cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
             self.text_edit.highlighter.rehighlightBlock(cursor.block())
         else:
             # Block has been inserted before
-            cursor.movePosition(QTextCursor.PreviousBlock)
-            if self.text:
-                cursor.insertText(self.text)
+            cursor.movePosition(QTextCursor.MoveOperation.PreviousBlock)
+            if self.inserted_text:
+                cursor.insertText(self.inserted_text)
             if self.seg_id:
                 cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
             self.text_edit.highlighter.rehighlightBlock(cursor.block())
             if old_data:
-                cursor.movePosition(QTextCursor.NextBlock)
+                cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
                 cursor.block().setUserData(MyTextBlockUserData(old_data))
 
         self.text_edit.document().blockSignals(False)
@@ -202,7 +212,7 @@ class InsertBlockCommand(QUndoCommand):
 class ReplaceTextCommand(QUndoCommand):
     """Replace the content of a text block
 
-    Arguments:
+    Parameters:
         cursor_pos_old (int):
             position of cursor (relative to start of block) before modification
         cursor_pos_new (int):
@@ -230,16 +240,16 @@ class ReplaceTextCommand(QUndoCommand):
     def undo(self):
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
         cursor.insertText(self.old_text)
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
         cursor.insertText(self.new_text)
         cursor.setPosition(self.block.position() + self.cursor_pos_new)
         self.text_edit.setTextCursor(cursor)
@@ -252,7 +262,7 @@ class ReplaceTextCommand(QUndoCommand):
 class MoveTextCursor(QUndoCommand):
     """Move the text cursor
 
-    Arguments:
+    Parameters:
         text_edit (TextEdit):
             parent TextEdit widget
         position (int):

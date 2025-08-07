@@ -49,6 +49,7 @@ def loadIcons():
     icons["rabbit"] = QIcon(resourcePath("icons/rabbit-fast.png"))
     icons["folder"] = QIcon(resourcePath("icons/folder.png"))
 
+    icons["magnet"] = QIcon(resourcePath("icons/magnet.png"))
     icons["select"] = QIcon(resourcePath("icons/select_segment.png"))
     icons["add_segment"] = QIcon(resourcePath("icons/add_segment.png"))
     icons["del_segment"] = QIcon(resourcePath("icons/del_segment.png"))

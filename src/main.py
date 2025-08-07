@@ -203,9 +203,12 @@ class MainWindow(QMainWindow):
 
         # Signal connections
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChange)
+        self.text_widget.join_utterances.connect(self.joinUtterances)
+        self.text_widget.delete_utterances.connect(self.deleteUtterances)
 
-        self.waveform.selection_started.connect(lambda: self.select_button.setChecked(True))
-        self.waveform.selection_ended.connect(lambda: self.select_button.setChecked(False))
+        # self.waveform.selection_started.connect(lambda: self.select_button.setChecked(True))
+        # self.waveform.selection_ended.connect(lambda: self.select_button.setChecked(False))
+        self.waveform.toggle_selection.connect(self.select_button.toggle)
         self.waveform.join_utterances.connect(self.joinUtterances)
         self.waveform.delete_utterances.connect(self.deleteUtterances)
         self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
@@ -473,13 +476,6 @@ class MainWindow(QMainWindow):
         segment_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
         segment_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
 
-        # Snapping checkbox
-        self.snapping_checkbox = QCheckBox()
-        self.snapping_checkbox.setChecked(True)
-        self.snapping_checkbox.setToolTip(self.tr("Snap to video frames"))
-        self.snapping_checkbox.toggled.connect(lambda checked: self.waveform.toggleSnapping(checked))
-        segment_buttons_layout.addWidget(self.snapping_checkbox)
-
         self.select_button = QPushButton()
         self.select_button.setIcon(icons["select"])
         # self.select_button.setIconSize(QSize(28*0.8, 28*0.8))
@@ -502,6 +498,15 @@ class MainWindow(QMainWindow):
         self.del_segment_button.setToolTip(self.tr("Delete segment") + f" <{QKeySequence(Qt.Key_Delete).toString()}>/<{QKeySequence(Qt.Key_Backspace).toString()}>")
         self.del_segment_button.clicked.connect(lambda: self.deleteUtterances(self.waveform.active_segments))
         segment_buttons_layout.addWidget(self.del_segment_button)
+
+        # Snapping checkbox
+        segment_buttons_layout.addWidget(
+            IconWidget(icons["magnet"], MainWindow.BUTTON_LABEL_SIZE))
+        self.snapping_checkbox = QCheckBox()
+        self.snapping_checkbox.setChecked(True)
+        self.snapping_checkbox.setToolTip(self.tr("Snap to video frames"))
+        self.snapping_checkbox.toggled.connect(lambda checked: self.waveform.toggleSnapping(checked))
+        segment_buttons_layout.addWidget(self.snapping_checkbox)
 
         media_toolbar_layout.addLayout(segment_buttons_layout)
 
@@ -1223,8 +1228,6 @@ class MainWindow(QMainWindow):
         for start, end in segments:
             segment_id = self.waveform.addSegment([start, end])
             self.text_widget.insertSentenceWithId('*', segment_id)
-
-        self.waveform.must_redraw = True
     
 
     def adaptToSubtitle(self):
@@ -1283,8 +1286,7 @@ class MainWindow(QMainWindow):
                     (seg_start < selection_start < seg_end)
                     or (seg_start < selection_end < seg_end)
                 ):
-                    self.waveform.deselect()
-                    self.waveform.must_redraw = True
+                    # self.waveform.deselect()
                     self.setStatusMessage(self.tr("Can't create a segment over another segment"))
                     return
         else:
@@ -1293,7 +1295,6 @@ class MainWindow(QMainWindow):
 
         self.undo_stack.push(CreateNewUtteranceCommand(self, self.waveform.getSelection()))
         self.waveform.deselect()
-        self.waveform.must_redraw = True
 
 
     @Slot(list, list, int)
@@ -1402,7 +1403,6 @@ class MainWindow(QMainWindow):
             segments = [(seg_id, *self.waveform.getSelection())]
             self.transcribe_segments_signal.emit(self.media_path, segments)
             self.waveform.deselect()
-            self.waveform.must_redraw = True
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
             segments = [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
@@ -1511,12 +1511,11 @@ class MainWindow(QMainWindow):
 
 
     @Slot(list)
-    def joinUtterances(self, segments_id, pos=None):
-        """
-        Join many segments in one.
+    def joinUtterances(self, segments_id):
+        """Join many segments in one.
         Keep the segment ID of the earliest segment among the selected ones.
         """
-        self.undo_stack.push(JoinUtterancesCommand(self, segments_id, pos))
+        self.undo_stack.push(JoinUtterancesCommand(self, segments_id))
 
 
     def alignUtterance(self, block:QTextBlock):
@@ -1526,6 +1525,8 @@ class MainWindow(QMainWindow):
     @Slot(list)
     def deleteUtterances(self, segments_id:List) -> None:
         if segments_id:
+            if self.text_widget.active_sentence_id in segments_id:
+                self.status_bar.clearMessage()
             self.undo_stack.push(DeleteUtterancesCommand(self, segments_id))
         else:
             self.setStatusMessage(self.tr("Select one or more utterances first"))
@@ -1554,9 +1555,9 @@ class MainWindow(QMainWindow):
 
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.matches(QKeySequence.Undo):
+        if event.matches(QKeySequence.StandardKey.Undo):
             self.undo()
-        elif event.matches(QKeySequence.Redo):
+        elif event.matches(QKeySequence.StandardKey.Redo):
             self.redo()
 
 
@@ -1673,10 +1674,16 @@ class MainWindow(QMainWindow):
     
     @Slot(int)
     def selectFromWaveform(self, seg_id:int):
-        """Scroll the text widget to display the sentence"""
+        """Scroll the text widget to display the sentence
+        
+        Parameters:
+            seg_id (int):
+                ID of selected segment or -1 if no segment is selected
+        """
         self.waveform.setActive(seg_id)
         
         if seg_id == -1:
+            self.playing_segment = -1
             return
         
         if seg_id != self.text_widget.active_sentence_id:
@@ -1807,16 +1814,18 @@ class CreateNewUtteranceCommand(QUndoCommand):
 
 
 class JoinUtterancesCommand(QUndoCommand):
-    def __init__(self, parent, seg_ids, pos=None):
+    def __init__(
+            self,
+            parent,
+            seg_ids: List[SegmentId],
+        ):
         super().__init__()
-        self.text_edit : TextEditWidget = parent.text_widget
-        self.waveform : WaveformWidget = parent.waveform
+        self.text_edit: TextEditWidget = parent.text_widget
+        self.waveform: WaveformWidget = parent.waveform
         self.seg_ids = sorted(seg_ids, key=lambda x: self.waveform.segments[x][0])
-        self.segments : list
-        self.segments_text : list
-        
-        # If no pos is given, take pos of first block
-        self.pos : int = pos or self.text_edit.getBlockById(self.seg_ids[0]).position()
+        self.segments: list
+        self.segments_text: list
+        self.prev_cursor = self.text_edit.getCursorState()
 
     def undo(self):
         # Restore first utterance
@@ -1837,21 +1846,15 @@ class JoinUtterancesCommand(QUndoCommand):
             self.waveform.segments[id] = self.segments[i+1]
             self.text_edit.deactivateSentence(id)
         
-        cursor.setPosition(self.pos)
-        
-        self.text_edit.setTextCursor(cursor) # TODO: clean that
-        self.text_edit.setTextCursor(self.cursor_backup)
-
+        self.text_edit.setCursorState(self.prev_cursor)
         self.waveform.must_sort = True
         self.waveform.must_redraw = True
         # self.waveform.refreshSegmentInfo()
 
     def redo(self):
-        self.cursor_backup = self.text_edit.textCursor()
-
         self.segments = [self.waveform.segments[id] for id in self.seg_ids]
         self.segments_text = [self.text_edit.getBlockById(id).text() for id in self.seg_ids]
-
+        print(self.segments_text)
         # Remove all sentences except the first one
         for id in self.seg_ids[1:]:
             block = self.text_edit.getBlockById(id)
@@ -1889,7 +1892,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.parent : MainWindow = parent
         self.block : QTextBlock = block
         self.old_block_data = None
-        self.selection = self.parent.waveform.selection[:]
+        self.selection = self.parent.waveform.getSelection()[:]
         self.prev_active_segments = self.parent.waveform.active_segments[:]
         self.prev_active_segment_id = self.parent.waveform.active_segment_id
         self.segment_id = self.parent.waveform.getNewId()
@@ -1912,21 +1915,24 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.parent.text_widget.setBlockId(self.block, self.segment_id)
         self.parent.updateUtteranceDensity(self.segment_id)
         self.parent.text_widget.highlighter.rehighlightBlock(self.block)
-        self.parent.waveform.must_redraw = True
 
 
 
 class DeleteUtterancesCommand(QUndoCommand):
     def __init__(self, parent, seg_ids: list):
         super().__init__()
+        log.debug(f"Calling DeleteUtterancesCommand(parent, {seg_ids=})")
         self.text_edit: TextEditWidget = parent.text_widget
         self.waveform: WaveformWidget = parent.waveform
-        self.seg_ids = seg_ids
-        self.segments = [self.waveform.segments[seg_id] for seg_id in seg_ids]
+        self.seg_ids = seg_ids[:]
+        self.segments = [self.waveform.segments[seg_id][:] for seg_id in self.seg_ids]
         self.texts = [self.text_edit.getBlockById(seg_id).text() for seg_id in seg_ids]
         self.prev_cursor = self.text_edit.getCursorState()
+        print("DeleteUtterancesCommand INIT")
+        print(f"{self.prev_cursor=}")
     
     def undo(self):
+        print("DeleteUtterancesCommand UNDO")
         for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
             seg_id = self.waveform.addSegment(segment, seg_id)
             self.text_edit.insertSentenceWithId(text, seg_id)
@@ -1934,8 +1940,9 @@ class DeleteUtterancesCommand(QUndoCommand):
         # self.waveform.refreshSegmentInfo()
         self.text_edit.setCursorState(self.prev_cursor)
 
-    def redo(self):
+    def redo(self): # TODO: Fix that
         # Delete text sentences
+        print("DeleteUtterancesCommand REDO")
         self.text_edit.document().blockSignals(True)
         for seg_id in self.seg_ids:
             self.text_edit.deleteSentence(seg_id)
