@@ -76,6 +76,7 @@ from src.commands import ReplaceTextCommand, InsertBlockCommand, MoveTextCursor
 from src.parameters_dialog import ParametersDialog
 from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
+from src.export_txt import exportTxt, exportTxtSignals
 from src.levenshtein_aligner import smart_split
 import src.lang as lang
 
@@ -241,17 +242,17 @@ class MainWindow(QMainWindow):
         file_menu = menu_bar.addMenu(self.tr("&File"))
         ## Open
         open_action = QAction(self.tr("&Open"), self)
-        open_action.setShortcut(QKeySequence.Open)
+        open_action.setShortcut(QKeySequence.StandardKey.Open)
         open_action.triggered.connect(self.openFile)
         file_menu.addAction(open_action)
         ## Save
         save_action = QAction(self.tr("&Save"), self)
-        save_action.setShortcut(QKeySequence.Save)
+        save_action.setShortcut(QKeySequence.StandardKey.Save)
         save_action.triggered.connect(self.saveFile)
         file_menu.addAction(save_action)
         ## Save as
         saveAs_action = QAction(self.tr("Save as"), self)
-        saveAs_action.setShortcut(QKeySequence.SaveAs)
+        saveAs_action.setShortcut(QKeySequence.StandardKey.SaveAs)
         saveAs_action.triggered.connect(self.saveFileAs)
         file_menu.addAction(saveAs_action)
 
@@ -266,6 +267,9 @@ class MainWindow(QMainWindow):
         export_eaf_action.triggered.connect(self.exportEaf)
         export_subMenu.addAction(export_eaf_action)
 
+        export_txt_action = QAction(self.tr("Raw &text (.txt)"), self)
+        export_txt_action.triggered.connect(self.exportTxt)
+        export_subMenu.addAction(export_txt_action)
 
         ## Parameters
         file_menu.addSeparator()
@@ -275,7 +279,7 @@ class MainWindow(QMainWindow):
 
         ## Exit
         exit_action = QAction(self.tr("E&xit"), self)
-        exit_action.setShortcut(QKeySequence.Quit)
+        exit_action.setShortcut(QKeySequence.StandardKey.Quit)
         exit_action.triggered.connect(self.close)
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
@@ -983,6 +987,11 @@ class MainWindow(QMainWindow):
     def exportEaf(self):
         exportEafSignals.message.connect(self.setStatusMessage)
         exportEaf(self, self.media_path, self.getUtterancesForExport())
+
+
+    def exportTxt(self):
+        exportTxtSignals.message.connect(self.setStatusMessage)
+        exportTxt(self, self.media_path, self.getUtterancesForExport())
 
 
     def showParameters(self):
