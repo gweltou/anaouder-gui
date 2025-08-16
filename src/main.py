@@ -274,6 +274,7 @@ class MainWindow(QMainWindow):
         ## Parameters
         file_menu.addSeparator()
         parameters_action = QAction(self.tr("&Parameters"), self)
+        parameters_action.setShortcut(QKeySequence.StandardKey.Print)
         parameters_action.triggered.connect(self.showParameters)
         file_menu.addAction(parameters_action)
 
@@ -996,8 +997,17 @@ class MainWindow(QMainWindow):
 
     def showParameters(self):
         old_language = lang.getCurrentLanguage()
-        dialog = ParametersDialog(self)
+        dialog = ParametersDialog(self, self.media_metadata)
+
+        # Connect signals
+        dialog.signals.subtitles_margin_size_changed.connect(self.text_widget.onMarginSizeChanged)
+        dialog.signals.subtitles_cps_changed.connect(self.waveform.onTargetDensityChanged)
+
         result = dialog.exec()
+
+        # Disconnect signals (not sure if it is necessary, better safe than sorry)
+        dialog.signals.subtitles_margin_size_changed.disconnect()
+        dialog.signals.subtitles_cps_changed.disconnect()
         
         self.changeLanguage(old_language)
 

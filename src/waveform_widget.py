@@ -23,6 +23,7 @@ from PySide6.QtGui import (
 )
 
 from src.theme import theme
+from src.settings import app_settings, SUBTITLES_CPS
 from src.shortcuts import shortcuts
 from src.utils import lerpColor, mapNumber
 
@@ -179,6 +180,7 @@ class WaveformWidget(QWidget):
         self._sorted_segments = []
 
         self.snapping = True
+        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS)
 
         self.timecode_margin = 20
 
@@ -933,6 +935,12 @@ class WaveformWidget(QWidget):
         print("toggle snapping")
         self.snapping = checked
 
+
+    def onTargetDensityChanged(self, cps=float):
+        """Must be connected to the ParametersDialog's signal from MainWindow"""
+        self._target_density = cps
+
+
     def _drawHandle(self, pos: int, handle: Handle):
         if self.selection_is_active:
             handle_top = self.selection_top - 2
@@ -1093,9 +1101,9 @@ class WaveformWidget(QWidget):
         markers.append(start + max_dur)
                 
         # Ideal density
-        ideal_density_dur = self.resizing_textlen / 16.0
+        ideal_density_dur = self.resizing_textlen / self._target_density
         t = start + ideal_density_dur
-        tag = "16c/s"
+        tag = str(round(self._target_density, 1)) + self.tr("c/s")
         t_x = round((t - self.t_left) * self.ppsec)
         self.painter.setPen(QPen(QColor(120, 120, 120)))
         self.painter.drawText(t_x - 8 * len(tag) // 2, round(self.height() * 0.15 + 15), tag)

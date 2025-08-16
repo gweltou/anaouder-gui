@@ -1,5 +1,6 @@
 import os
 import threading
+import logging
 
 import ssl
 import certifi
@@ -15,7 +16,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, 
-    QLineEdit, QCheckBox, QComboBox, QSpinBox, 
+    QLineEdit, QCheckBox, QComboBox, QSpinBox, QDoubleSpinBox,
     QPushButton, QGroupBox, QFormLayout,
     QMessageBox, QListWidget,
     QProgressBar,
@@ -33,14 +34,21 @@ import src.lang as lang
 from src.video_widget import VideoWidget
 from src.cache_system import CacheSystem
 from src.utils import get_cache_directory
-from src.settings import MULTI_LANG, app_settings
+from src.settings import (
+    MULTI_LANG, app_settings,
+    SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_MIN_INTERVAL,
+    SUBTITLES_AUTO_EXTEND, SUBTITLES_AUTO_EXTEND_MAX_GAP,
+    SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
+)
 
+
+log = logging.getLogger(__name__)
 
 
 
 class DownloadProgressDialog(QDialog):
-    class DownloadSignals(QObject):
-        """Custom signals for thread communication"""
+    class Signals(QObject):
+        """Custom signals"""
         progress = Signal(int)
         finished = Signal()
         error = Signal(str)
@@ -49,7 +57,7 @@ class DownloadProgressDialog(QDialog):
     def __init__(self, url, root, model_name, parent=None):
         super().__init__(parent)
 
-        self.signals = self.DownloadSignals()
+        self.signals = self.Signals()
         
         self.url = url
         self.root = root
@@ -109,17 +117,16 @@ class DownloadProgressDialog(QDialog):
     def download_worker(self):
         """Worker function that runs in a separate thread to download the file"""
         try:
-            print(f"Downloading {self.url}")
+            log.info(f"Downloading {self.url}")
             os.makedirs(self.root, exist_ok=True)
             certifi_context = ssl.create_default_context(cafile=certifi.where())
-            
-            # Get file size
-            with urllib.request.urlopen(self.url, timeout=5.0, context=certifi_context) as source:
-                self.file_size = int(source.info().get("Content-Length", 0))
-            print(f"{self.file_size=}")
-                
+              
             req = urllib.request.Request(self.url)
             with urllib.request.urlopen(req, timeout=5.0, context=certifi_context) as source, open(self.download_target, "wb") as output:
+                # Get file size
+                self.file_size = int(source.info().get("Content-Length", 0))
+                log.info(f"File size: {self.file_size}")
+                
                 self.n_bytes = 0
                 self.last_percent = 0
                 block_size = 8192
@@ -145,14 +152,14 @@ class DownloadProgressDialog(QDialog):
                 self.status_label.setText(self.tr("Verifying checksum..."))
                 md5sum = hashlib.file_digest(open(self.download_target, 'rb'), "md5").hexdigest()
                 if md5sum != lang.getMd5Sum(self.model_name):
-                    print(f"Mismatch in md5 sum:\n\tExpected: {lang.getMd5Sum(self.model_name)}\n\tCalculated: {md5sum}")
+                    log.info(f"Mismatch in md5 sum:\n\tExpected: {lang.getMd5Sum(self.model_name)}\n\tCalculated: {md5sum}")
                     # Remove corrupted archive
                     os.remove(self.download_target)
                     raise Exception("Wrong MD5 sum !")
 
             # Extract the archive
             if not self.cancelled:
-                self.status_label.setText(self.tr("Extracting files..."))
+                self.status_label.setText(self.tr("Extracting downloaded files..."))
 
                 if zipfile.is_zipfile(self.download_target):
                     with zipfile.ZipFile(self.download_target, 'r') as zip_ref:
@@ -217,16 +224,27 @@ class DownloadProgressDialog(QDialog):
 
 
 class ParametersDialog(QDialog):
-    def __init__(self, parent=None):
+    class Signals(QObject):
+        """Custom signals"""
+        subtitles_margin_size_changed = Signal(int)
+        subtitles_cps_changed = Signal(float)
+        
+
+
+    def __init__(self, parent, media_metadata: dict):
         super().__init__(parent)
+
+        self.signals = self.Signals()
+
         self.setWindowTitle(self.tr("Parameters"))
         self.setMinimumSize(450, 350)
         
         self.tabs = QTabWidget()
 
         self.tabs.addTab(ModelsTab(), self.tr("Models"))
+        self.tabs.addTab(SubtitlesTab(self, media_metadata.get("fps", 0)), self.tr("Subtitles"))
         self.tabs.addTab(UITab(parent.video_widget), self.tr("UI"))
-        self.tabs.addTab(CacheTab(parent.cache, parent.media_metadata), self.tr("Cache"))
+        self.tabs.addTab(CacheTab(parent.cache, media_metadata), self.tr("Cache"))
         # self.tabs.addTab(self.display_tab, "Display")
         # self.tabs.addTab(self.dictionary_tab, "Dictionary")
         
@@ -393,7 +411,7 @@ class ModelsTab(QWidget):
         
         self.download_button = QPushButton(self.tr("Download"))
         self.download_button.setFixedWidth(80)
-        self.download_button.clicked.connect(self.download_model)
+        self.download_button.clicked.connect(self.downloadModel)
         
         online_layout.addWidget(self.online_models_list)
         online_layout.addWidget(self.download_button)
@@ -410,7 +428,7 @@ class ModelsTab(QWidget):
         
         self.delete_button = QPushButton(self.tr("Delete"))
         self.delete_button.setFixedWidth(80)
-        self.delete_button.clicked.connect(self.delete_model)
+        self.delete_button.clicked.connect(self.deleteModel)
         
         local_layout.addWidget(self.local_models_list)
         local_layout.addWidget(self.delete_button)
@@ -427,7 +445,7 @@ class ModelsTab(QWidget):
         self.setLayout(main_layout)
 
     
-    def download_model(self):
+    def downloadModel(self):
         selected_items = self.online_models_list.selectedItems()
         if not selected_items:
             QMessageBox.information(self, "Selection Required", "Please select a model to download.")
@@ -444,7 +462,7 @@ class ModelsTab(QWidget):
             self.updateLanguage()
 
 
-    def delete_model(self):
+    def deleteModel(self):
         selected_items = self.local_models_list.selectedItems()
         if not selected_items:
             QMessageBox.information(self, "Selection Required", "Please select a model to delete.")
@@ -464,6 +482,177 @@ class ModelsTab(QWidget):
         self.online_models_list.addItems(lang.getDownloadableModelList())
         self.local_models_list.clear()
         self.local_models_list.addItems(lang.getCachedModelList())
+
+
+
+class SubtitlesTab(QWidget):
+    def __init__(self, parent: ParametersDialog, fps: int, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.my_parent = parent
+        self.fps = fps if fps > 0 else 25 # Default to 25 fps
+    
+        main_layout = QVBoxLayout()
+
+        # Subtitles duration
+        duration_group = QGroupBox(self.tr("Subtitles duration"))
+        duration_layout = QVBoxLayout()
+        duration_group.setLayout(duration_layout)
+
+        ## Minimum duration for a subtitle
+        self.min_frames_spin = QSpinBox()
+        self.min_frames_spin.setSuffix(' ' + self.tr("Frames"))
+        self.min_frames_spin.setMinimum(1)
+        self.min_frames_spin.setValue(app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES))
+        self.min_frames_spin.valueChanged.connect(self.updateMinFrames)
+        self.min_dur_label = QLabel()
+        min_frames_layout = QHBoxLayout()
+        min_frames_layout.addWidget(QLabel(self.tr("Minimum")))
+        min_frames_layout.addWidget(self.min_frames_spin)
+        min_frames_layout.addWidget(self.min_dur_label)
+
+        ## Maximum duration for a subtitle
+        self.max_frames_spin = QSpinBox()
+        self.max_frames_spin.setSuffix(' ' + self.tr("Frames"))
+        self.max_frames_spin.setMinimum(1)
+        self.max_frames_spin.setMaximum(250)
+        self.max_frames_spin.setValue(app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES))
+        self.max_frames_spin.valueChanged.connect(self.updateMaxFrames)
+        self.max_dur_label = QLabel()
+        max_frames_layout = QHBoxLayout()
+        max_frames_layout.addWidget(QLabel(self.tr("Maximum")))
+        max_frames_layout.addWidget(self.max_frames_spin)
+        max_frames_layout.addWidget(self.max_dur_label)
+
+        duration_layout.addLayout(min_frames_layout)
+        duration_layout.addLayout(max_frames_layout)
+
+        # Subtitles interval
+        interval_group = QGroupBox(self.tr("Time gap between subtitles"))
+        interval_layout = QVBoxLayout()
+        interval_group.setLayout(interval_layout)
+
+        ## Minimum time interval between two subtitles
+        self.min_interval_spin = QSpinBox()
+        self.min_interval_spin.setSuffix(' ' + self.tr("Frames"))
+        self.min_interval_spin.setRange(0, 8)
+        self.min_interval_spin.setValue(
+            app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL)
+        )
+        self.min_interval_spin.valueChanged.connect(self.updateMinInterval)
+        self.min_interval_time_label = QLabel()
+        min_interval_layout = QHBoxLayout()
+        min_interval_layout.addWidget(QLabel(self.tr("Minimum")))
+        min_interval_layout.addWidget(self.min_interval_spin)
+        min_interval_layout.addWidget(self.min_interval_time_label)
+        interval_layout.addLayout(min_interval_layout)
+
+        ## Auto extend subtitles for uniform gaps
+        auto_extend_interval_checkbox = QCheckBox(self.tr("Auto extend"))
+        auto_extend_interval_checkbox.setChecked(
+            app_settings.value("subtitles/auto_extend", SUBTITLES_AUTO_EXTEND)
+        )
+        auto_extend_interval_checkbox.toggled.connect(
+            lambda checked: app_settings.setValue("subtitles/auto_extend", checked)
+        )
+        self.extend_max_gap_spin = QSpinBox()
+        self.extend_max_gap_spin.setSuffix(' ' + self.tr("Frames"))
+        self.extend_max_gap_spin.setMaximum(16)
+        self.extend_max_gap_spin.setValue(
+            app_settings.value("subtitles/auto_extend_max_gap", SUBTITLES_AUTO_EXTEND_MAX_GAP)
+        )
+        self.extend_max_gap_spin.valueChanged.connect(self.updateExtendMaxGap)
+        self.extend_max_gap_time_label = QLabel()
+        auto_extend_layout = QHBoxLayout()
+        auto_extend_layout.addWidget(auto_extend_interval_checkbox)
+        auto_extend_layout.addWidget(QLabel(self.tr("when gap is under")))
+        auto_extend_layout.addWidget(self.extend_max_gap_spin)
+        auto_extend_layout.addWidget(self.extend_max_gap_time_label)
+        interval_layout.addLayout(auto_extend_layout)
+
+        # Subtitles text length
+        text_group = QGroupBox(self.tr("Text length and density"))
+        text_layout = QVBoxLayout()
+        text_group.setLayout(text_layout)
+
+        ## Text margin
+        self.text_margin_spin = QSpinBox()
+        self.text_margin_spin.setSuffix(' ' + self.tr("chars"))
+        self.text_margin_spin.setValue(
+            app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE)
+        )
+        self.text_margin_spin.valueChanged.connect(self.updateMarginSize)
+        text_margin_layout = QHBoxLayout()
+        text_margin_layout.addWidget(QLabel(self.tr("Text margin size")))
+        text_margin_layout.addWidget(self.text_margin_spin)
+        text_layout.addLayout(text_margin_layout)
+
+        ## Text density
+        self.text_density_spin = QDoubleSpinBox()
+        self.text_density_spin.setSuffix(' ' + self.tr("c/s"))
+        self.text_density_spin.setDecimals(1)
+        self.text_density_spin.setSingleStep(0.1)
+        self.text_density_spin.setValue(
+            app_settings.value("subtitles/cps", SUBTITLES_CPS)
+        )
+        self.text_density_spin.valueChanged.connect(self.updateDensity)
+        text_density_layout = QHBoxLayout()
+        text_density_layout.addWidget(QLabel(self.tr("Characters per second")))
+        text_density_layout.addWidget(self.text_density_spin)
+        text_layout.addLayout(text_density_layout)
+
+        ####
+
+        main_layout.addWidget(duration_group)
+        main_layout.addWidget(interval_group)
+        main_layout.addWidget(text_group)
+        main_layout.addStretch()
+
+        self.setLayout(main_layout)
+
+        self.updateMinFrames()
+        self.updateMaxFrames()
+        self.updateMinInterval()
+        self.updateExtendMaxGap()
+    
+
+    def updateMinFrames(self):
+        min_frames = self.min_frames_spin.value()
+        app_settings.setValue("subtitles/min_frames", min_frames)
+        t = min_frames / self.fps
+        self.min_dur_label.setText(self.tr("{time}s @{fps}fps")
+                                  .format(time=round(t, 3), fps=self.fps))
+
+    def updateMaxFrames(self):
+        max_frames = self.max_frames_spin.value()
+        app_settings.setValue("subtitles/max_frames", max_frames)
+        t = max_frames / self.fps
+        self.max_dur_label.setText(self.tr("{time}s @{fps}fps")
+                                  .format(time=round(t, 3), fps=self.fps))
+
+    def updateMinInterval(self):
+        min_interval = self.min_interval_spin.value()
+        app_settings.setValue("subtitles/min_interval", min_interval)
+        t = min_interval / self.fps
+        self.min_interval_time_label.setText(self.tr("{time}s @{fps}fps")
+                                  .format(time=round(t, 3), fps=self.fps))
+        self.extend_max_gap_spin.setMinimum(min_interval + 1)
+    
+    def updateExtendMaxGap(self):
+        max_gap = self.extend_max_gap_spin.value()
+        app_settings.setValue("subtitles/auto_extend_max_gap", max_gap)
+        t = max_gap / self.fps
+        self.extend_max_gap_time_label.setText(self.tr("{time}s @{fps}fps")
+                                  .format(time=round(t, 3), fps=self.fps))
+    
+    def updateMarginSize(self):
+        margin_size = self.text_margin_spin.value()
+        app_settings.setValue("subtitles/margin_size", margin_size)
+        self.my_parent.signals.subtitles_margin_size_changed.emit(margin_size)
+    
+    def updateDensity(self):
+        density = self.text_density_spin.value()
+        app_settings.setValue("subtitles/cps", density)
+        self.my_parent.signals.subtitles_cps_changed.emit(density)
 
 
 

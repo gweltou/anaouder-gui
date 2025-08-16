@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QApplication, QMenu, QTextEdit,
 )
 from PySide6.QtCore import (
-    Qt, Signal,
+    Qt, Signal, Slot,
     QRegularExpression,
     QRect
 )
@@ -36,6 +36,7 @@ from src.utils import (
     LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
     MEDIA_FORMATS, ALL_COMPATIBLE_FORMATS
 )
+from src.settings import app_settings, SUBTITLES_MARGIN_SIZE
 
 
 type Segment = List[float]
@@ -279,6 +280,7 @@ class TextEditWidget(QTextEdit):
 
         # Subtitles margin
         self._text_margin = False
+        self._margin_size = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE)
         self._char_width = -1
         self.margin_color = theme.margin
 
@@ -624,11 +626,20 @@ class TextEditWidget(QTextEdit):
         self._updateSubtitleMargin()
 
 
+    @Slot(int)
+    def onMarginSizeChanged(self, size):
+        """Must be connected to the ParametersDialog's signal from MainWindow"""
+        self._margin_size = size
+        self._updateSubtitleMargin()
+
+
     def _updateSubtitleMargin(self):
         if not self._text_margin:
             return
         
         font_metrics = QFontMetricsF(self.font())
+        print(f"{self.font()=}")
+        print(f"{font_metrics.lineWidth()=}")
         self._char_width = font_metrics.averageCharWidth()
         self.viewport().update()
 
@@ -1188,7 +1199,8 @@ class TextEditWidget(QTextEdit):
 
         if self._text_margin:
             painter = QPainter(self.viewport())
-            gray_start_x = int(self._char_width * 42)
+            gray_start_x = int(self._char_width * self._margin_size)
+            print(f"{self._char_width=} {self._margin_size=} {gray_start_x=}")
             painter.fillRect(
                 QRect(gray_start_x, 0, self.width() - gray_start_x, self.height()), 
                 self.margin_color
