@@ -61,6 +61,7 @@ def get_cache_directory(name: Optional[str] = None) -> Path:
     return cache_dir
 
 
+
 def download(url: str, root: str) -> str:
     """Download an archive from the web and decompress it"""
 
@@ -93,6 +94,7 @@ def download(url: str, root: str) -> str:
     os.remove(download_target)
 
     return download_target
+
 
 
 def getSentenceSplits(text: str) -> List[tuple]:

@@ -28,7 +28,7 @@ class ExportTxtDialog(QDialog):
     def __init__(self, parent, default_path:str=None):
         super().__init__(parent)
 
-        self.setWindowTitle("Export to TXT")
+        self.setWindowTitle(self.tr("Export to TXT"))
         self.setMaximumSize(800, 400)
         self.setModal(True)
         
@@ -36,10 +36,10 @@ class ExportTxtDialog(QDialog):
         main_layout = QVBoxLayout()
         
         # File selection section
-        file_group = QGroupBox("Output File")
+        file_group = QGroupBox(self.tr("Output File"))
         file_layout = QHBoxLayout()
         
-        self.file_path = QLineEdit("No file selected")
+        self.file_path = QLineEdit(self.tr("No file selected"))
         self.file_path.setMinimumWidth(300)
         if default_path:
             self.file_path.setText(default_path)
@@ -56,11 +56,11 @@ class ExportTxtDialog(QDialog):
         file_group.setLayout(file_layout)
         
         # Export options section
-        options_group = QGroupBox("Export Options")
+        options_group = QGroupBox(self.tr("Export Options"))
         options_layout = QVBoxLayout()
 
         # Apostrophe normalization
-        apostrophe_label = QLabel("Apostrophe normalization:")
+        apostrophe_label = QLabel(self.tr("Apostrophe normalization") + ':')
         font = QFont()
         font.setPointSize(18)
         apostrophe_norm_label_1 = QLabel("' → ’")
@@ -83,10 +83,10 @@ class ExportTxtDialog(QDialog):
         
         # Buttons
         button_layout = QHBoxLayout()
-        cancel_button = QPushButton("Cancel")
+        cancel_button = QPushButton(self.tr("Cancel"))
         cancel_button.clicked.connect(self.reject)
         
-        export_button = QPushButton("Export")
+        export_button = QPushButton(self.tr("Export"))
         export_button.clicked.connect(self.accept)
         export_button.setDefault(True)
         
@@ -106,7 +106,7 @@ class ExportTxtDialog(QDialog):
     def browse_file(self, default_path:str=None):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save TXT File",
+            self.tr("Save TXT File"),
             default_path,
             "Text files (*.txt);;All files (*.*)"
         )
@@ -119,7 +119,7 @@ def exportTxt(parent, media_path, utterances):
     rm_special_tokens = True
 
     dir = os.path.split(media_path)[0] if media_path else os.path.expanduser('~')
-    default_path = os.path.splitext(media_path)[0] if media_path else "untitled"
+    default_path = os.path.splitext(media_path)[0] if media_path else QObject.tr("untitled")
     default_path += ".txt"
 
     dialog = ExportTxtDialog(parent, os.path.join(dir, default_path))

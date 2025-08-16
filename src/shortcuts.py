@@ -10,8 +10,8 @@ _is_darwin = platform.system() == "Darwin"
 shortcuts: Dict[str, QKeySequence] = {
     "transcribe":   QKeySequence("Ctrl+R"),
     "play_stop":    QKeySequence("Alt+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
-    "play_next":    QKeySequence("Alt+Right") if _is_darwin else QKeySequence("Ctrl+Down"),
-    "play_prev":    QKeySequence("Alt+Left") if _is_darwin else QKeySequence("Ctrl+Up"),
+    "play_next":    QKeySequence("Alt+Down") if _is_darwin else QKeySequence("Ctrl+Down"),
+    "play_prev":    QKeySequence("Alt+Up") if _is_darwin else QKeySequence("Ctrl+Up"),
     "select":       QKeySequence("S"), #Qt.Key.Key_S,
     "show_handles": Qt.Key_Control if _is_darwin else Qt.Key_Control,
 
