@@ -254,7 +254,7 @@ def DeleteSelectedText(parent: QTextEdit, cursor: QTextCursor):
 
 
 class TextEditWidget(QTextEdit):
-    cursor_changed_signal = Signal(int)
+    cursor_changed_signal = Signal(list)
     join_utterances = Signal(list)
     delete_utterances = Signal(list)
 
@@ -638,8 +638,6 @@ class TextEditWidget(QTextEdit):
             return
         
         font_metrics = QFontMetricsF(self.font())
-        print(f"{self.font()=}")
-        print(f"{font_metrics.lineWidth()=}")
         self._char_width = font_metrics.averageCharWidth()
         self.viewport().update()
 
@@ -684,12 +682,37 @@ class TextEditWidget(QTextEdit):
     
 
     def cursorChanged(self):
-        """
+        """Get the list of aligned utterances under the text selection
         This signal can be blocked with the `QTextEdit.blockSignals` method
         """
         cursor = self.textCursor()
-        current_block = cursor.block()
-        self.cursor_changed_signal.emit(self.getBlockId(current_block))
+        if cursor.hasSelection():
+            selected_ids = []
+
+            start_pos = cursor.selectionStart()
+            end_pos = cursor.selectionEnd()
+
+            tmp_cursor = QTextCursor(self.document())
+            tmp_cursor.setPosition(start_pos)
+
+            current_block = tmp_cursor.block()
+            while current_block.isValid() and current_block.position() < end_pos:
+                block_id = self.getBlockId(current_block)
+                if block_id >= 0:
+                    selected_ids.append(block_id)
+                
+                if not tmp_cursor.movePosition(QTextCursor.MoveOperation.NextBlock):
+                    break
+                current_block = tmp_cursor.block()
+            self.cursor_changed_signal.emit(selected_ids)
+        
+        else:
+            current_block = cursor.block()
+            current_block_id = self.getBlockId(current_block)
+            if current_block_id >= 0:
+                self.cursor_changed_signal.emit( [current_block_id] )
+            else:
+                self.cursor_changed_signal.emit(None)
 
 
     def contextMenuEvent(self, event):
@@ -1200,7 +1223,6 @@ class TextEditWidget(QTextEdit):
         if self._text_margin:
             painter = QPainter(self.viewport())
             gray_start_x = int(self._char_width * self._margin_size)
-            print(f"{self._char_width=} {self._margin_size=} {gray_start_x=}")
             painter.fillRect(
                 QRect(gray_start_x, 0, self.width() - gray_start_x, self.height()), 
                 self.margin_color

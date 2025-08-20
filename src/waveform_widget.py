@@ -23,8 +23,7 @@ from PySide6.QtGui import (
 )
 
 from src.theme import theme
-from src.settings import app_settings, SUBTITLES_CPS
-from src.shortcuts import shortcuts
+from src.settings import app_settings, shortcuts, SUBTITLES_CPS
 from src.utils import lerpColor, mapNumber
 
 
@@ -92,7 +91,7 @@ class WaveformWidget(QWidget):
     playhead_moved = Signal(float)
     refresh_segment_info = Signal(int)
     refresh_segment_info_resizing = Signal(int, list, float)
-    select_segment = Signal(int)
+    select_segments = Signal(list)
 
     class ScaledWaveform():
         def __init__(self):
@@ -293,33 +292,41 @@ class WaveformWidget(QWidget):
         return seg_id
 
 
-    def findPrevSegmentId(self) -> SegmentId:
-        if self.active_segment_id < 0:
+    def getPrevSegmentId(self, seg_id:Optional[SegmentId]=None) -> SegmentId:
+        if seg_id == None:
+            seg_id = self.active_segment_id
+        if seg_id < 0:
             return -1
         sorted_segments = self.getSortedSegments()
-        for i, (seg_id, _) in enumerate(sorted_segments):
-            if seg_id == self.active_segment_id:
+        for i, (sid, _) in enumerate(sorted_segments):
+            if sid == seg_id:
                 if i > 0:
                     return sorted_segments[i - 1][0]
                 return -1
         return -1
 
 
-    def findNextSegmentId(self) -> SegmentId:
-        if self.active_segment_id < 0:
+    def getNextSegmentId(self, seg_id:Optional[SegmentId]=None) -> SegmentId:
+        if seg_id == None:
+            seg_id = self.active_segment_id
+        if seg_id < 0:
             return -1
         sorted_segments = self.getSortedSegments()
-        for i, (seg_id, _) in enumerate(sorted_segments):
-            if seg_id == self.active_segment_id:
+        for i, (sid, _) in enumerate(sorted_segments):
+            if sid == seg_id:
                 if i < len(sorted_segments) - 1:
                     return sorted_segments[i + 1][0]
                 return -1
         return -1
 
 
-    def setActive(self, clicked_id:SegmentId, multi=False) -> None:
-        """Select the given segment and adjust view in the waveform"""
-        if clicked_id not in self.segments:
+    def setActive(self, seg_ids: List[SegmentId] | None) -> None:
+        """Select the given segment(s) and adjust view in the waveform.
+        This method is called from MainWindow only.
+        """
+
+
+        if seg_ids == None:
             # Clicked outside of any segment, deselect current active segment
             self.active_segments = []
             self.active_segment_id = -1
@@ -327,6 +334,33 @@ class WaveformWidget(QWidget):
             self.refresh_segment_info.emit(-1)
             return
         
+        self.active_segments = seg_ids
+        self.active_segment_id = seg_ids[-1]
+
+        # re-center segment, if necessary
+        start, end = self.segments[self.active_segment_id]
+        segment_dur = end - start
+        window_dur = self.width() / self.ppsec
+        if segment_dur < window_dur * 0.9:
+            if start < self.t_left:
+                self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
+            elif end > self.getTimeRight():
+                t_right_goal = min(self.audio_len, end + 0.1 * window_dur)
+                self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
+        else:
+            # Choose a zoom level that will fit this segment in 80% of the window width
+            adapted_window_dur = segment_dur / 0.8
+            adapted_ppsec = self.width() / adapted_window_dur
+            self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
+            self.ppsec_goal = adapted_ppsec
+
+        self.selection_is_active = False
+        self.must_redraw = True
+        self.refresh_segment_info.emit(
+            self.active_segment_id if len(self.active_segments) == 1 else -1
+        )
+        return
+
         if multi:
             # Find segment IDs between `active_segment_id` and `clicked_id`
             first, last = sorted([self.active_segment_id, clicked_id],
@@ -341,22 +375,6 @@ class WaveformWidget(QWidget):
         else:
             self.active_segments = [clicked_id]
             self.selection_is_active = False
-            start, end = self.segments[clicked_id]
-            segment_dur = end - start
-            window_dur = self.width() / self.ppsec
-            # re-center segment, if necessary
-            if segment_dur < window_dur * 0.9:
-                if start < self.t_left:
-                    self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
-                elif end > self.getTimeRight():
-                    t_right_goal = min(self.audio_len, end + 0.1 * window_dur)
-                    self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
-            else:
-                # Choose a zoom level that will fit this segment in 80% of the window width
-                adapted_window_dur = segment_dur / 0.8
-                adapted_ppsec = self.width() / adapted_window_dur
-                self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
-                self.ppsec_goal = adapted_ppsec
 
         self.active_segment_id = clicked_id
         self.must_redraw = True
@@ -471,9 +489,9 @@ class WaveformWidget(QWidget):
         super().enterEvent(event)
 
 
-    def getSegmentById(self, utt_id) -> Optional[Segment]:
-        if utt_id in self.segments:
-            return self.segments[utt_id]
+    def getSegment(self, seg_id: SegmentId) -> Optional[Segment]:
+        if seg_id in self.segments:
+            return self.segments[seg_id]
         return None
 
 
@@ -768,7 +786,7 @@ class WaveformWidget(QWidget):
                 # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPixelPosition(event.position())
-                self.select_segment.emit(clicked_id)
+                self.select_segments.emit([clicked_id])
                 if clicked_id < 0:
                     # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
@@ -1084,7 +1102,7 @@ class WaveformWidget(QWidget):
         markers = []
 
         # Check next segment boundary
-        next_segment_id = self.findNextSegmentId()
+        next_segment_id = self.getNextSegmentId()
         next_segment_start = self.audio_len
         if next_segment_id >= 0:
             next_segment_start = self.segments[next_segment_id][0]

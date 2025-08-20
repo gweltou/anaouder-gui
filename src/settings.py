@@ -1,7 +1,9 @@
-#! /usr/bin/env python3
-# -*- coding: utf-8 -*-
+from typing import Dict
+import platform
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import Qt, QSettings
+from PySide6.QtGui import QShortcut, QKeySequence
+
 
 
 APP_NAME = "Anaouder"
@@ -19,3 +21,20 @@ SUBTITLES_AUTO_EXTEND = True
 SUBTITLES_AUTO_EXTEND_MAX_GAP = 12
 SUBTITLES_MARGIN_SIZE = 42
 SUBTITLES_CPS = 16.0
+
+
+
+_is_darwin = platform.system() == "Darwin"
+
+shortcuts: Dict[str, QKeySequence] = {
+    "transcribe":   QKeySequence("Ctrl+R"),
+    "play_stop":    QKeySequence("Alt+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
+    "play_next":    QKeySequence("Alt+Down") if _is_darwin else QKeySequence("Ctrl+Down"),
+    "play_prev":    QKeySequence("Alt+Up") if _is_darwin else QKeySequence("Ctrl+Up"),
+    "select":       QKeySequence("S"), #Qt.Key.Key_S,
+    "show_handles": Qt.Key_Control if _is_darwin else Qt.Key_Control,
+
+    # This creates a segmentation fault, for some reason...
+    # "zoom_in":      QKeySequence(QKeySequence.StandardKey.ZoomIn),
+    # "zoom_out":     QKeySequence(QKeySequence.StandardKey.ZoomOut),
+}

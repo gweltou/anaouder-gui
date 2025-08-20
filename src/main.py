@@ -12,6 +12,7 @@ import sys
 import os.path
 from typing import List, Tuple, Optional
 import logging
+from math import floor, ceil
 
 import static_ffmpeg
 static_ffmpeg.add_paths()
@@ -56,20 +57,23 @@ from PySide6.QtMultimedia import (
     QMediaDevices, QAudioOutput, QMediaMetaData
 )
 
-from src.settings import APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG, app_settings
+from src.settings import (
+    APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
+    app_settings, shortcuts,
+    SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL,
+)
 from src.utils import sec2hms, splitForSubtitle, ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS
 from src.cache_system import CacheSystem
 from src.version import __version__
 from src.theme import theme
 from src.icons import icons, loadIcons, IconWidget
-from src.shortcuts import shortcuts
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand, Handle
 from src.text_widget import (
     TextEditWidget, MyTextBlockUserData,
     BlockType, Highlighter,
     LINE_BREAK
 )
-from src.video_widget import VideoWindow, VideoWidget
+from src.video_widget import VideoWidget
 from src.recognizer_worker import RecognizerWorker
 from src.scene_detector import SceneDetectWorker
 from src.commands import ReplaceTextCommand, InsertBlockCommand, MoveTextCursor
@@ -190,21 +194,17 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.playAction)
         # Next
         shortcut = QShortcut(shortcuts["play_next"], self)
-        print(shortcuts["play_next"])
         shortcut.activated.connect(self.playNextAction)
         # Prev
         shortcut = QShortcut(shortcuts["play_prev"], self)
         shortcut.activated.connect(self.playPrevAction)
 
-        # shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
-        # shortcut.activated.connect(self.undo)
-
-        shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
+        shortcut = QShortcut(QKeySequence.StandardKey.SelectAll, self)
         shortcut.activated.connect(self.selectAll)
 
 
         # Signal connections
-        self.text_widget.cursor_changed_signal.connect(self.onTextCursorChange)
+        self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
 
@@ -217,7 +217,7 @@ class MainWindow(QMainWindow):
         self.waveform.playhead_moved.connect(self.onWaveformHeadMoved)
         self.waveform.refresh_segment_info.connect(self.updateSegmentInfo)
         self.waveform.refresh_segment_info_resizing.connect(self.updateSegmentInfoResizing)
-        self.waveform.select_segment.connect(self.selectFromWaveform)
+        self.waveform.select_segments.connect(self.selectFromWaveform)
 
         # Restore window geometry and state
         self.restoreGeometry(app_settings.value("main/geometry"))
@@ -831,7 +831,7 @@ class MainWindow(QMainWindow):
                 
                 self.text_widget.highlightUtterance(seg_id_list[0])
             else:
-                print(f"Couldn't find text file {txt_filepath}")
+                self.log.error(f"Couldn't find text file {txt_filepath}")
             
             # Check for an associated audio file
             for audio_ext in MEDIA_FORMATS:
@@ -942,7 +942,7 @@ class MainWindow(QMainWindow):
                     self.media_metadata["fps"] = int(match[1])
                     self.cache.update_media_metadata(self.media_path, self.media_metadata)
                 else:
-                    print(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
+                    self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
             # if "avg_frame_rate" in metadata:
             #     print(f"Stream {metadata["avg_frame_rate"]=}")
 
@@ -1053,16 +1053,20 @@ class MainWindow(QMainWindow):
         Updates the head position on the waveform and highlight the
         sentence in the text widget if play head is above a segment
         """
+
+        if not self.video_widget.video_is_valid:
+            self.video_widget.updateLayout() # fixes the video layout updating
         
         # Convert to seconds
         player_position = position / 1000
 
         self.waveform.setHead(player_position)
 
-        # Check if end of current segment is reached
+        # Check if end of current selected segments is reached
         if self.playing_segment >= 0:
             if self.playing_segment in self.waveform.segments:
                 start, end = self.waveform.segments[self.playing_segment]
+
                 if player_position >= end:
 
                     # Compare the playing segment with the text cursor position
@@ -1079,7 +1083,7 @@ class MainWindow(QMainWindow):
                             self.waveform.active_segment_id >= 0
                             and self.waveform.active_segment_id != self.playing_segment
                         ):
-                            # A different segment has been selected
+                            # A different segment has been selected on the waveform
                             self.playing_segment = self.waveform.active_segment_id
                             start, _ = self.waveform.segments[self.playing_segment]
                         self.player.setPosition(int(start * 1000))
@@ -1149,7 +1153,6 @@ class MainWindow(QMainWindow):
     def playSegment(self, segment):
         start, _ = segment
         self.player.setPosition(int(start * 1000))
-        print("play")
         self.player.play()
         self.play_button.setIcon(icons["pause"])
 
@@ -1157,11 +1160,11 @@ class MainWindow(QMainWindow):
     def playNextAction(self):
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.stop()
-        id = self.waveform.findNextSegmentId()
+        id = self.waveform.getNextSegmentId()
         if id < 0:
             id = self.waveform.active_segment_id
             return
-        self.waveform.setActive(id)
+        self.waveform.setActive([id])
         self.text_widget.highlightUtterance(id)
         self.playing_segment = id
         self.playSegment(self.waveform.segments[id])
@@ -1172,10 +1175,11 @@ class MainWindow(QMainWindow):
             self.player.stop()
         if not self.waveform.active_segments:
             return
-        id = self.waveform.findPrevSegmentId()
+        id = self.waveform.getPrevSegmentId()
         if id < 0:
             id = self.waveform.active_segment_id
-        self.waveform.setActive(id)
+            return
+        self.waveform.setActive([id])
         self.text_widget.highlightUtterance(id)
         self.playing_segment = id
         self.playSegment(self.waveform.segments[id])
@@ -1213,11 +1217,11 @@ class MainWindow(QMainWindow):
         if checked and "fps" in self.media_metadata:
             self.waveform.display_scene_change = True
             if "scenes" in self.media_metadata and self.media_metadata["scenes"]:
-                print("Using cached scene transitions")
+                self.log.info("Using cached scene transitions")
                 self.waveform.scenes = self.media_metadata["scenes"]
                 self.waveform.must_redraw = True
             else:
-                print("Detect scene changes")
+                self.log.info("Start scene changes detection")
                 self.scene_detector = SceneDetectWorker()
                 self.scene_detector.setFilePath(self.media_path)
                 self.scene_detector.setThreshold(0.2)
@@ -1268,16 +1272,45 @@ class MainWindow(QMainWindow):
     
 
     def adaptToSubtitle(self):
+        """
+        Try to adapt the selected utterance to a subtitle format by:
+          * Setting the segments boundaries on frame positions
+          * Adding line breaks if text is longer than the subtitle line limit
+        """
         # Get selected blocks
         cursor = self.text_widget.textCursor()
         block = self.text_widget.document().findBlock(cursor.selectionStart())
         end_block = self.text_widget.document().findBlock(cursor.selectionEnd())
+
+        line_max_size = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE)
+
         self.undo_stack.beginMacro("adapt to subtitles")
         while True:
-            id = self.text_widget.getBlockId(block)
-            if id >= 0:
+            seg_id = self.text_widget.getBlockId(block)
+            if seg_id >= 0:
+                if (fps := self.media_metadata.get("fps", 0)) > 0:
+                    # Adjust segment boundaries on frame positions
+                    seg_start, seg_end = self.waveform.getSegment(seg_id)
+                    frame_start = floor(seg_start * fps) / fps
+                    frame_end = ceil(seg_end * fps) / fps
+                    if (prev_id := self.waveform.getPrevSegmentId(seg_id)) >= 0:
+                        prev_end = self.waveform.getSegment(prev_id)[1]
+                        if frame_start < prev_end:
+                            # The previous frame position overlaps the previous segment,
+                            # choose next frame
+                            frame_start = ceil(seg_start * fps) / fps
+                    if (next_id := self.waveform.getNextSegmentId(seg_id)) >= 0:
+                        next_start = self.waveform.getSegment(next_id)[0]
+                        right_boundary = floor(next_start * fps) / fps
+                        right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL) / fps
+                        if frame_end > right_boundary:
+                            # The next frame position overlaps the next segment,
+                            # choose previous frame
+                            frame_end = right_boundary
+                    self.undo_stack.push(ResizeSegmentCommand(self.waveform, seg_id, frame_start, frame_end))
+
                 text = block.text()
-                splits = splitForSubtitle(text, 42)
+                splits = splitForSubtitle(text, line_max_size)
                 if len(splits) > 1:
                     text = LINE_BREAK.join([ s.strip() for s in splits ])
                     self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text, 0, 0))
@@ -1306,29 +1339,28 @@ class MainWindow(QMainWindow):
                 self.updateSubtitle(self.waveform.playhead)
 
 
-    @Slot(int)
-    def onTextCursorChange(self, utt_id: int):
+    @Slot(list)
+    def onTextCursorChanged(self, seg_ids: List[SegmentId] | None):
         """Sets the corresponding segment active on the waveform
         Called only on aligned text blocks or with -1"""
-        self.text_cursor_utterance_id = utt_id
+        print(f"{seg_ids=}")
+        print(f"{self.waveform.active_segments=}")
 
-        # if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-        #     # Sentence highlighting is locked on current playing segment
-        #     return
-                
-        # if utt_id == self.text_widget.highlighted_sentence_id:
-        #     # Cursor is on the same sentence as before
-        #     return
+        self.waveform.setActive(seg_ids)
         
-        if utt_id not in self.waveform.active_segments:
-            self.waveform.setActive(utt_id)
+        if seg_ids == None:
+            return
+        
+        seg_id = seg_ids[0]
+        self.text_cursor_utterance_id = seg_id # Set the segment that should be played
 
-            if self.player.playbackState() in (QMediaPlayer.PlaybackState.PausedState, QMediaPlayer.PlaybackState.StoppedState):
-                # Set the play head at the beggining of the segment
-                segment = self.waveform.getSegmentById(utt_id)
-                if segment:
-                    self.onWaveformHeadMoved(segment[0])
-                    self.waveform.must_redraw = True
+        if self.player.playbackState() in (QMediaPlayer.PlaybackState.PausedState, QMediaPlayer.PlaybackState.StoppedState):
+            # Set the play head at the beggining of the segment
+            segment = self.waveform.getSegment(seg_id)
+            if segment:
+                self.onWaveformHeadMoved(segment[0])
+                self.waveform.must_redraw = True
+       
 
         # if utt_id == -1:
         #     self.waveform.setActive(-1)
@@ -1723,22 +1755,23 @@ class MainWindow(QMainWindow):
         return super().closeEvent(event)
     
     
-    @Slot(int)
-    def selectFromWaveform(self, seg_id:int):
+    @Slot(list)
+    def selectFromWaveform(self, seg_ids: List[SegmentId] | None):
         """Scroll the text widget to display the sentence
         
         Parameters:
             seg_id (int):
                 ID of selected segment or -1 if no segment is selected
         """
-        self.waveform.setActive(seg_id)
+        self.waveform.setActive(seg_ids)
         
-        if seg_id == -1:
+        if seg_ids == None:
             self.playing_segment = -1
             return
         
-        if seg_id != self.text_widget.highlighted_sentence_id:
-            self.text_widget.highlightUtterance(seg_id, scroll_text=True)
+        last_id = seg_ids[-1]
+        if last_id != self.text_widget.highlighted_sentence_id:
+            self.text_widget.highlightUtterance(last_id, scroll_text=True)
 
 
     @Slot(int)
@@ -1905,7 +1938,6 @@ class JoinUtterancesCommand(QUndoCommand):
     def redo(self):
         self.segments = [self.waveform.segments[id] for id in self.seg_ids]
         self.segments_text = [self.text_edit.getBlockById(id).text() for id in self.seg_ids]
-        print(self.segments_text)
         # Remove all sentences except the first one
         for id in self.seg_ids[1:]:
             block = self.text_edit.getBlockById(id)
