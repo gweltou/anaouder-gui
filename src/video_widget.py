@@ -49,6 +49,8 @@ class VideoWidget(QGraphicsView):
         self.video_item = QGraphicsVideoItem()
         self.video_item.setZValue(0)
         self.scene().addItem(self.video_item)
+
+        self.video_is_valid = False
         
         # Background rectangle for subtitle area (optional)
         self.background_rect_visible = app_settings.value("subtitles/rect_visible", True)
@@ -90,8 +92,12 @@ class VideoWidget(QGraphicsView):
 
     def updateLayout(self):
         """Update the layout of video and text items"""
-        if not self.video_item.boundingRect().isValid():
-            print("non valid rect")
+        if self.video_item.boundingRect().isValid():
+            self.video_is_valid = True
+            log.debug("valid video bounding rectangle")
+        else:
+            self.video_is_valid = False
+            log.debug("non valid video bounding rectangle")
             return
         
         # Fit video to view while maintaining aspect ratio
@@ -100,7 +106,7 @@ class VideoWidget(QGraphicsView):
         self.fitInView(self.scene().sceneRect(), Qt.KeepAspectRatio)
         
         if not video_rect.isEmpty():
-            print(f"{video_rect=}")
+            log.debug(f"{video_rect=}")
             self.adjustFontSize(video_rect)
             self.positionSubtitles(video_rect)
 
@@ -216,6 +222,11 @@ class VideoWidget(QGraphicsView):
 
 
 
+
+
+"""
+
+
 class VideoWindow(QMainWindow):
     def __init__(self, parent=None, size:Optional[QSize]=None):
         log.info("Initializing VideoWidget")
@@ -290,3 +301,6 @@ class VideoWindow(QMainWindow):
         caption_pos = QPointF(0.0, vid_rect.y() + vid_rect.height() - caption_rect.height())
         self.text_item.setPos(caption_pos)
         self.text_item.setTextWidth(vid_rect.width())
+
+
+"""
