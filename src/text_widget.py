@@ -1,5 +1,6 @@
 from typing import List, Optional
 from enum import Enum
+import logging
 
 from PySide6.QtWidgets import (
     QApplication, QMenu, QTextEdit,
@@ -37,6 +38,9 @@ from src.utils import (
     MEDIA_FORMATS, ALL_COMPATIBLE_FORMATS
 )
 from src.settings import app_settings, SUBTITLES_MARGIN_SIZE
+
+
+log = logging.getLogger(__name__)
 
 
 type Segment = List[float]
@@ -570,7 +574,7 @@ class TextEditWidget(QTextEdit):
             )
 
 
-    def deactivateSentence(self, seg_id:Optional[int]=None):
+    def deactivateSentence(self, seg_id: Optional[SegmentId]=None):
         """Reset format of currently active sentence"""
         if seg_id == None:
             seg_id = self.highlighted_sentence_id
@@ -583,13 +587,13 @@ class TextEditWidget(QTextEdit):
             self.highlighter.rehighlightBlock(block)
 
 
-    def highlightUtterance(self, seg_id:SegmentId, scroll_text=True):
+    def highlightUtterance(self, seg_id: SegmentId, scroll_text=True):
         """Highlight a given utterance's sentence
 
         Arguments:
             scroll_text (boolean): scroll the text widget to the text cursor
         """
-        print("text_widget.setactive", seg_id)
+        log.debug("Highlight Utterance", seg_id)
         was_blocked = self.document().blockSignals(True)
 
         # Reset previously selected utterance

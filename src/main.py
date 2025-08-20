@@ -171,7 +171,6 @@ class MainWindow(QMainWindow):
         self.text_widget = TextEditWidget(self)
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
         self.waveform = WaveformWidget(self)
-        self.waveform.text_edit = self.text_widget
         
         QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
         self.updateThemeColors()
@@ -199,7 +198,7 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(shortcuts["play_prev"], self)
         shortcut.activated.connect(self.playPrevAction)
 
-        shortcut = QShortcut(QKeySequence.StandardKey.SelectAll, self)
+        shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.selectAll)
 
 
@@ -214,7 +213,7 @@ class MainWindow(QMainWindow):
         self.waveform.join_utterances.connect(self.joinUtterances)
         self.waveform.delete_utterances.connect(self.deleteUtterances)
         self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
-        self.waveform.playhead_moved.connect(self.onWaveformHeadMoved)
+        self.waveform.playhead_moved.connect(self.onWaveformPlayHeadMoved)
         self.waveform.refresh_segment_info.connect(self.updateSegmentInfo)
         self.waveform.refresh_segment_info_resizing.connect(self.updateSegmentInfoResizing)
         self.waveform.select_segments.connect(self.selectFromWaveform)
@@ -299,7 +298,14 @@ class MainWindow(QMainWindow):
 
         # Display Menu
         display_menu = menu_bar.addMenu(self.tr("&Display"))
-        toggle_misspelling = QAction(self.tr("Misspelling"), self)
+        toggle_video = QAction(self.tr("&Video"), self)
+        toggle_video.setCheckable(True)
+        toggle_video.setChecked(True)
+        toggle_video.toggled.connect(
+            lambda checked: self.toggleVideo(checked))
+        display_menu.addAction(toggle_video)
+
+        toggle_misspelling = QAction(self.tr("&Misspelling"), self)
         toggle_misspelling.setCheckable(True)
         toggle_misspelling.toggled.connect(
             lambda checked: self.text_widget.highlighter.toggleMisspelling(checked))
@@ -337,11 +343,6 @@ class MainWindow(QMainWindow):
 
         display_menu.addSeparator()
 
-        # toggle_video = QAction(self.tr("Show video"), self)
-        # toggle_video.setCheckable(True)
-        # toggle_video.triggered.connect(self.toggleVideo)
-        # display_menu.addAction(toggle_video)
-        
         # deviceMenu = menu_bar.addMenu("Device")
         # for dev in self.input_devices:
         #     deviceMenu.addAction(QAction(dev.description(), self))
@@ -415,14 +416,14 @@ class MainWindow(QMainWindow):
         undo_button = QPushButton()
         undo_button.setIcon(icons["undo"])
         undo_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
-        undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.Undo).toString()}>")
+        undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
         undo_button.clicked.connect(self.undo)
         undo_redo_layout.addWidget(undo_button)
 
         redo_button = QPushButton()
         redo_button.setIcon(icons["redo"])
         redo_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
-        redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.Redo).toString()}>")
+        redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
         redo_button.clicked.connect(self.redo)
         undo_redo_layout.addWidget(redo_button)
 
@@ -501,7 +502,9 @@ class MainWindow(QMainWindow):
         self.del_segment_button = QPushButton()
         self.del_segment_button.setIcon(icons["del_segment"])
         self.del_segment_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE, MainWindow.BUTTON_MEDIA_SIZE)
-        self.del_segment_button.setToolTip(self.tr("Delete segment") + f" <{QKeySequence(Qt.Key_Delete).toString()}>/<{QKeySequence(Qt.Key_Backspace).toString()}>")
+        self.del_segment_button.setToolTip(
+            self.tr("Delete segment") + f" <{QKeySequence(Qt.Key.Key_Delete).toString()}>/<{QKeySequence(Qt.Key.Key_Backspace).toString()}>"
+        )
         self.del_segment_button.clicked.connect(lambda: self.deleteUtterances(self.waveform.active_segments))
         segment_buttons_layout.addWidget(self.del_segment_button)
 
@@ -524,7 +527,10 @@ class MainWindow(QMainWindow):
 
         back_button = QPushButton()
         back_button.setIcon(icons["back"])
-        back_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.2, MainWindow.BUTTON_MEDIA_SIZE)
+        back_button.setFixedSize(
+            round(MainWindow.BUTTON_MEDIA_SIZE * 1.2),
+            MainWindow.BUTTON_MEDIA_SIZE
+        )
         back_button.setToolTip(self.tr("Go to first utterance"))
         back_button.clicked.connect(self.backAction)
         play_buttons_layout.addWidget(back_button)
@@ -532,21 +538,30 @@ class MainWindow(QMainWindow):
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prev_button = QPushButton()
         prev_button.setIcon(icons["previous"])
-        prev_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.2, MainWindow.BUTTON_MEDIA_SIZE)
+        prev_button.setFixedSize(
+            round(MainWindow.BUTTON_MEDIA_SIZE * 1.2),
+            MainWindow.BUTTON_MEDIA_SIZE
+        )
         prev_button.setToolTip(self.tr("Previous utterance") + f" <{shortcuts["play_prev"].toString()}>")
         prev_button.clicked.connect(self.playPrevAction)
         play_buttons_layout.addWidget(prev_button)
 
         self.play_button = QPushButton()
         self.play_button.setIcon(icons["play"])
-        self.play_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.2, MainWindow.BUTTON_MEDIA_SIZE)
+        self.play_button.setFixedSize(
+            round(MainWindow.BUTTON_MEDIA_SIZE * 1.2),
+            MainWindow.BUTTON_MEDIA_SIZE
+        )
         self.play_button.setToolTip(self.tr("Play current utterance") + f" <{shortcuts["play_stop"].toString()}>")
         self.play_button.clicked.connect(self.playAction)
         play_buttons_layout.addWidget(self.play_button)
 
         next_button = QPushButton()
         next_button.setIcon(icons["next"])
-        next_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.3, MainWindow.BUTTON_MEDIA_SIZE)
+        next_button.setFixedSize(
+            round(MainWindow.BUTTON_MEDIA_SIZE * 1.3),
+            MainWindow.BUTTON_MEDIA_SIZE
+        )
         next_button.setToolTip(self.tr("Next utterance") + f" <{shortcuts["play_next"].toString()}>")
         next_button.clicked.connect(self.playNextAction)
         play_buttons_layout.addWidget(next_button)
@@ -554,7 +569,10 @@ class MainWindow(QMainWindow):
         loop_button = QPushButton()
         loop_button.setCheckable(True)
         loop_button.setIcon(icons["loop"])
-        loop_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE * 1.1, MainWindow.BUTTON_MEDIA_SIZE)
+        loop_button.setFixedSize(
+            round(MainWindow.BUTTON_MEDIA_SIZE * 1.1),
+            MainWindow.BUTTON_MEDIA_SIZE
+        )
         loop_button.setToolTip(self.tr("Loop"))
         loop_button.toggled.connect(self.setLooping)
         play_buttons_layout.addWidget(loop_button)
@@ -623,17 +641,17 @@ class MainWindow(QMainWindow):
         top_layout.addLayout(top_bar_layout)
 
         # Video widget right of text widget
-        text_video_splitter = QSplitter(Qt.Horizontal)
-        text_video_splitter.setHandleWidth(5)
-        text_video_splitter.addWidget(self.text_widget)
-        text_video_splitter.addWidget(self.video_widget)
-        text_video_splitter.setSizes([1, 1])
-        top_layout.addWidget(text_video_splitter)
-
+        self.text_video_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.text_video_splitter.setHandleWidth(5)
+        self.text_video_splitter.addWidget(self.text_widget)
+        self.text_video_splitter.addWidget(self.video_widget)
+        self.text_video_splitter.setSizes([1, 1])
+        top_layout.addWidget(self.text_video_splitter)
+        
         # top_layout.addWidget(self.text_edit)
         top_layout.addLayout(media_toolbar_layout)
         
-        splitter = QSplitter(Qt.Vertical)
+        splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.setHandleWidth(5)
         self.top_widget = QWidget()
         self.top_widget.setLayout(top_layout)
@@ -644,6 +662,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
         
         self.status_bar = self.statusBar()
+
+        print(f"{self.video_widget.isVisible()=}")
 
 
     @Slot(str)
@@ -1043,7 +1063,7 @@ class MainWindow(QMainWindow):
         """
         _, text = self.getSubtitleAtPosition(time)
 
-        if self.video_widget:
+        if self.video_widget.isVisible():
             self.video_widget.setCaption(text)
 
 
@@ -1054,13 +1074,13 @@ class MainWindow(QMainWindow):
         sentence in the text widget if play head is above a segment
         """
 
-        if not self.video_widget.video_is_valid:
+        if self.video_widget.isVisible() and not self.video_widget.video_is_valid:
             self.video_widget.updateLayout() # fixes the video layout updating
         
         # Convert to seconds
         player_position = position / 1000
 
-        self.waveform.setHead(player_position)
+        self.waveform.setPlayHead(player_position)
 
         # Check if end of current selected segments is reached
         if self.playing_segment >= 0:
@@ -1091,7 +1111,7 @@ class MainWindow(QMainWindow):
                     else:
                         self.player.pause()
                         self.play_button.setIcon(icons["play"])
-                        self.waveform.setHead(end)
+                        self.waveform.setPlayHead(end)
             else:
                 # The segment could have been deleted by the user during playback
                 self.playing_segment = -1
@@ -1106,12 +1126,14 @@ class MainWindow(QMainWindow):
                 else:
                     self.player.pause()
                     self.play_button.setIcon(icons["play"])
-                    self.waveform.setHead(selection_end)
+                    self.waveform.setPlayHead(selection_end)
         
         # Highlight text sentence at this time position
         if (seg_id := self.waveform.getSegmentAtTime(player_position)) >= 0:
             if seg_id != self.text_widget.highlighted_sentence_id:
                 self.text_widget.highlightUtterance(seg_id, scroll_text=False)
+        else:
+            self.text_widget.deactivateSentence()
         
         self.updateSubtitle(player_position)
     
@@ -1192,17 +1214,26 @@ class MainWindow(QMainWindow):
             first_seg_id = self.waveform.getSortedSegments()[0][0]
             self.waveform.setActive(first_seg_id)
             self.text_widget.highlightUtterance(first_seg_id)
-            self.waveform.setHead(self.waveform.segments[first_seg_id][0])
+            self.waveform.setPlayHead(self.waveform.segments[first_seg_id][0])
         else:
             self.waveform.t_left = 0.0
             self.waveform.scroll_vel = 0.0
-            self.waveform.setHead(0.0)
+            self.waveform.setPlayHead(0.0)
 
 
     @Slot(float)
-    def onWaveformHeadMoved(self, t: float):
-        self.waveform.setHead(t)
+    def onWaveformPlayHeadMoved(self, t: float):
+        self.waveform.setPlayHead(t)
         self.player.setPosition(int(self.waveform.playhead * 1000))
+
+
+    def toggleVideo(self, checked):
+        print("toggle video", checked)
+        print(f"{self.text_video_splitter.size()=}")
+        print(f"{self.text_video_splitter.sizes()=}")
+        if self.text_video_splitter.sizes()[1] < 100:
+            self.text_video_splitter.setSizes([1, 1])
+        self.video_widget.setVisible(checked)
 
 
     def toggleAlignmentColoring(self, checked):
@@ -1358,7 +1389,7 @@ class MainWindow(QMainWindow):
             # Set the play head at the beggining of the segment
             segment = self.waveform.getSegment(seg_id)
             if segment:
-                self.onWaveformHeadMoved(segment[0])
+                self.onWaveformPlayHeadMoved(segment[0])
                 self.waveform.must_redraw = True
        
 
@@ -1763,6 +1794,8 @@ class MainWindow(QMainWindow):
             seg_id (int):
                 ID of selected segment or -1 if no segment is selected
         """
+        seg_ids = seg_ids if seg_ids else None
+
         self.waveform.setActive(seg_ids)
         
         if seg_ids == None:

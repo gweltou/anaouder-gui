@@ -183,6 +183,8 @@ class WaveformWidget(QWidget):
 
         self.timecode_margin = 20
 
+        self._must_open_context_menu = False
+
         # Accept focus for keyboard events
         #self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True) # get mouse move events even if no buttons are held down
@@ -325,7 +327,6 @@ class WaveformWidget(QWidget):
         This method is called from MainWindow only.
         """
 
-
         if seg_ids == None:
             # Clicked outside of any segment, deselect current active segment
             self.active_segments = []
@@ -361,6 +362,7 @@ class WaveformWidget(QWidget):
         )
         return
 
+        """
         if multi:
             # Find segment IDs between `active_segment_id` and `clicked_id`
             first, last = sorted([self.active_segment_id, clicked_id],
@@ -381,14 +383,15 @@ class WaveformWidget(QWidget):
         self.refresh_segment_info.emit(
             self.active_segment_id if len(self.active_segments) == 1 else -1
         )
+        """
 
 
-    def setHead(self, t):
+    def setPlayHead(self, t):
         """
         Set the playing head
         Slide the waveform window following the playhead
 
-        This method is called from the parent
+        This method is called from MainWindow.
         """
         self.playhead = t
         if (
@@ -503,21 +506,27 @@ class WaveformWidget(QWidget):
         return -1
 
 
-    def getSegmentAtPixelPosition(self, position: QPointF) -> int:
+    def getSegmentAtPixelPosition(self, position: QPointF, vertical=True) -> int:
         """
         Return the segment id of any segment at this window position
-        or -1 if there is no segment at this position
+        or -1 if there is no segment at this position.
+        
+        A given position is inside a segment if it fits both vertically and horizontally.
 
         Arguments:
             position (QPointF):
                 Window position of the click
+            vertical (bool):
+                Verify only on the horizontal axis if True
 
         Returns:
             segment id or -1
         """
         if (
-            position.y() < self.inactive_top
-            or position.y() > self.inactive_top + self.inactive_height
+            vertical and (
+                position.y() < self.inactive_top
+                or position.y() > self.inactive_top + self.inactive_height
+            )
         ):
             return -1
 
@@ -732,17 +741,24 @@ class WaveformWidget(QWidget):
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
 
         if event.button() == Qt.MouseButton.RightButton:
-            segment_under = self.getSegmentAtPixelPosition(self.click_pos)
+
             # Show contextMenu only if right clicking on active segment
-            if segment_under not in self.active_segments:
+            if self.getSegmentAtPixelPosition(self.click_pos) in self.active_segments:
+                self._must_open_context_menu = True
+            else:
+                self._must_open_context_menu = False
+
+            if self.getSegmentAtPixelPosition(self.click_pos, vertical=False) not in self.active_segments:
                 # Deactivate currently active segment
                 self.active_segments = []
                 self.active_segment_id = -1
                 self.parent.playing_segment = -1
+
             if not self.isSelectionAtPosition(self.click_pos):
                 # Deselect current selection
                 self.deselect()
             
+            # Move the playhead
             self.playhead_moved.emit(self.t_left + self.click_pos.x() / self.ppsec)
 
         # Check if we are resizing or moving the segment
@@ -786,7 +802,8 @@ class WaveformWidget(QWidget):
                 # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPixelPosition(event.position())
-                self.select_segments.emit([clicked_id])
+                print(f"{clicked_id=}")
+                self.select_segments.emit( (None if clicked_id == -1 else [clicked_id]) )
                 if clicked_id < 0:
                     # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
@@ -841,6 +858,13 @@ class WaveformWidget(QWidget):
         # Move play head
         elif (event.buttons() == Qt.MouseButton.RightButton):
             self.playhead_moved.emit(time_position)
+
+            # Deactivate currently active segment
+            if self.getSegmentAtPixelPosition(self.mouse_pos, vertical=False) not in self.active_segments:
+                self.active_segments = []
+                self.active_segment_id = -1
+                self.parent.playing_segment = -1
+                self.must_redraw = True
         
         # Selection
         elif self.is_selecting and self.anchor >= 0:
@@ -910,8 +934,10 @@ class WaveformWidget(QWidget):
 
 
     def contextMenuEvent(self, event):
-        if not self.active_segments:
+        print("context")
+        if not self._must_open_context_menu:
             return
+        self._must_open_context_menu = False
         
         # clicked_segment_id = self.getSegmentAtPixelPosition(event.position())
         # if clicked_segment_id == -1:
