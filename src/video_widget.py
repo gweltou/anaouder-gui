@@ -179,8 +179,6 @@ class VideoWidget(QGraphicsView):
         """Set the caption text"""
         if caption_text == self.current_caption:
             return
-
-        print(f"{self.video_item.nativeSize()=}")
         
         self.current_caption = caption_text
         self.text_item.setText(caption_text)

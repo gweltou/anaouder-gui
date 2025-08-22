@@ -4,9 +4,10 @@ import platform
 import os
 
 ARCH = os.getenv("ARCH") or 'x86_64' # Set to 'x86_64', or 'arm64' or 'universal2' for macOS
-DEBUG = False
+DEBUG = True if os.getenv("DEBUG") == 'True' else False
 
 print("Architecture set to", ARCH)
+print(f"{DEBUG=}")
 
 def get_lib_path(path):
     if platform.system() in ("Linux", "Darwin"):
@@ -70,11 +71,15 @@ a = Analysis(
         ("./icons/undo.png", "icons/"),
         ("./icons/redo.png", "icons/"),
 
+        ("./icons/magnet.png", "icons/"),
         ("./icons/select_segment.png", "icons/"),
         ("./icons/add_segment.png", "icons/"),
         ("./icons/del_segment.png", "icons/"),
 
         ("./icons/anaouder_256.png", "icons/"),
+        ("./icons/OTilde.png", "icons/"),
+        ("./icons/logo_dizale_small.png", "icons/"),
+        ("./icons/logo_rannvro_breizh.png", "icons/"),
 
         # Breton language specific files
         (get_lib_path("ostilhou/asr/*.tsv"), "ostilhou/asr"),
@@ -121,7 +126,7 @@ exe = EXE(
     debug=DEBUG,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,	# Some kind of compression, lighter but slower
+    upx=False,	# Some kind of compression, lighter but slower
     upx_exclude=[],
     runtime_tmpdir=None,
     console=DEBUG,

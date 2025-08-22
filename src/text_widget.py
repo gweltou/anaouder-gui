@@ -103,7 +103,7 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def setMode(self, mode: ColorMode):
-        print(f"Set highligher to {mode}")
+        log.info(f"Set highlighter to {mode}")
         self.mode = mode
         self.rehighlight()
 
@@ -450,8 +450,8 @@ class TextEditWidget(QTextEdit):
         """Create a new utterance from an existing segment id
         This action won't be added to the undo stack
         """
+        log.debug(f"text_widget.insertSenteceWithId({text=}, {id=}, {with_cursor=})")
         assert id in self.parent.waveform.segments
-        print("text_widget.insertSenteceWithId")
         doc = self.document()
         seg_start, seg_end = self.parent.waveform.segments[id]
 
@@ -466,9 +466,12 @@ class TextEditWidget(QTextEdit):
             
             # Find corresponding block position
             user_data = block.userData().data
+            print(f"{user_data=}")
             if "seg_id" in user_data:
                 other_id = user_data["seg_id"]
                 if other_id not in self.parent.waveform.segments:
+                    print(f"{self.parent.waveform.segments=}")
+                    block = block.next()
                     continue
                 
                 other_start, _ = self.parent.waveform.segments[other_id]
@@ -498,7 +501,7 @@ class TextEditWidget(QTextEdit):
             self.setTextCursor(cursor)
     
 
-    def deleteSentence(self, utt_id:int) -> None:
+    def deleteSentence(self, utt_id: int) -> None:
         """Delete the sentence of a utterance, and its metadata"""
         # TODO: fix this (userData aren't deleted)
         block = self.getBlockById(utt_id)
@@ -546,10 +549,9 @@ class TextEditWidget(QTextEdit):
     def replaceWord(self, cursor: QTextCursor, new_word: str):
         """Replace the word under the given cursor with a new word
         This action is undoable"""
-        print(cursor, new_word)
         block_text = cursor.block().text()
         pos_in_block = cursor.positionInBlock()
-        print(pos_in_block)
+
         # Find selected word's boundaries
         left_pos = pos_in_block
         right_pos = pos_in_block
@@ -562,7 +564,6 @@ class TextEditWidget(QTextEdit):
         self.setTextCursor(cursor)
 
         new_text = block_text[:left_pos] + new_word + block_text[right_pos:]
-        print(new_text)
 
         self.undo_stack.push(
                 ReplaceTextCommand(
@@ -593,7 +594,7 @@ class TextEditWidget(QTextEdit):
         Arguments:
             scroll_text (boolean): scroll the text widget to the text cursor
         """
-        log.debug("Highlight Utterance", seg_id)
+        log.debug(f"Highlight Utterance {seg_id=}")
         was_blocked = self.document().blockSignals(True)
 
         # Reset previously selected utterance
@@ -665,13 +666,14 @@ class TextEditWidget(QTextEdit):
         clipboard = QApplication.clipboard()
         cursor = self.textCursor()
         pos = cursor.position()
+        self.undo_stack.beginMacro("Replace text")
         if cursor.hasSelection():
             DeleteSelectedText(self, cursor)
             pos = cursor.selectionStart()
         paragraphs = clipboard.text().split('\n')
         for text in paragraphs:
             self.undo_stack.push(InsertTextCommand(self, text, pos))
-        return
+        self.undo_stack.endMacro()
     
 
     def canInsertFromMimeData(self, source):

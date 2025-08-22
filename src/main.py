@@ -51,6 +51,7 @@ from PySide6.QtGui import (
     QTextBlock, QTextCursor,
     QUndoStack, QUndoCommand,
     QCursor,
+    QFont,
 )
 from PySide6.QtMultimedia import (
     QAudioFormat, QMediaPlayer,
@@ -209,7 +210,7 @@ class MainWindow(QMainWindow):
 
         # self.waveform.selection_started.connect(lambda: self.select_button.setChecked(True))
         # self.waveform.selection_ended.connect(lambda: self.select_button.setChecked(False))
-        self.waveform.toggle_selection.connect(self.select_button.toggle)
+        self.waveform.toggle_selection.connect(self.selection_button.toggle)
         self.waveform.join_utterances.connect(self.joinUtterances)
         self.waveform.delete_utterances.connect(self.deleteUtterances)
         self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
@@ -483,19 +484,19 @@ class MainWindow(QMainWindow):
         segment_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
         segment_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
 
-        self.select_button = QPushButton()
-        self.select_button.setIcon(icons["select"])
+        self.selection_button = QPushButton()
+        self.selection_button.setIcon(icons["select"])
         # self.select_button.setIconSize(QSize(28*0.8, 28*0.8))
-        self.select_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE, MainWindow.BUTTON_MEDIA_SIZE)
-        self.select_button.setToolTip(self.tr("Select on waveform") + f" <>")
-        self.select_button.setCheckable(True)
-        self.select_button.toggled.connect(self.toggleSelect)
-        segment_buttons_layout.addWidget(self.select_button)
+        self.selection_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE, MainWindow.BUTTON_MEDIA_SIZE)
+        self.selection_button.setToolTip(self.tr("Create a selection") + f" &lt;{shortcuts["select"].toString()}&gt;")
+        self.selection_button.setCheckable(True)
+        self.selection_button.toggled.connect(self.toggleSelect)
+        segment_buttons_layout.addWidget(self.selection_button)
 
         self.add_segment_button = QPushButton()
         self.add_segment_button.setIcon(icons["add_segment"])
         self.add_segment_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE, MainWindow.BUTTON_MEDIA_SIZE)
-        self.add_segment_button.setToolTip(self.tr("Create segment from selection") + f" <A>")
+        self.add_segment_button.setToolTip(self.tr("Create segment from selection") + f" &lt;A&gt;")
         self.add_segment_button.clicked.connect(self.newUtteranceFromSelection)
         segment_buttons_layout.addWidget(self.add_segment_button)
 
@@ -503,7 +504,7 @@ class MainWindow(QMainWindow):
         self.del_segment_button.setIcon(icons["del_segment"])
         self.del_segment_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE, MainWindow.BUTTON_MEDIA_SIZE)
         self.del_segment_button.setToolTip(
-            self.tr("Delete segment") + f" <{QKeySequence(Qt.Key.Key_Delete).toString()}>/<{QKeySequence(Qt.Key.Key_Backspace).toString()}>"
+            self.tr("Delete segment") + f" &lt;{QKeySequence(Qt.Key.Key_Delete).toString()}&gt;/&lt;{QKeySequence(Qt.Key.Key_Backspace).toString()}&gt;"
         )
         self.del_segment_button.clicked.connect(lambda: self.deleteUtterances(self.waveform.active_segments))
         segment_buttons_layout.addWidget(self.del_segment_button)
@@ -542,7 +543,7 @@ class MainWindow(QMainWindow):
             round(MainWindow.BUTTON_MEDIA_SIZE * 1.2),
             MainWindow.BUTTON_MEDIA_SIZE
         )
-        prev_button.setToolTip(self.tr("Previous utterance") + f" <{shortcuts["play_prev"].toString()}>")
+        prev_button.setToolTip(self.tr("Previous utterance") + f" &lt;{shortcuts["play_prev"].toString()}&gt;")
         prev_button.clicked.connect(self.playPrevAction)
         play_buttons_layout.addWidget(prev_button)
 
@@ -552,7 +553,7 @@ class MainWindow(QMainWindow):
             round(MainWindow.BUTTON_MEDIA_SIZE * 1.2),
             MainWindow.BUTTON_MEDIA_SIZE
         )
-        self.play_button.setToolTip(self.tr("Play current utterance") + f" <{shortcuts["play_stop"].toString()}>")
+        self.play_button.setToolTip(self.tr("Play current utterance") + f" &lt;{shortcuts["play_stop"].toString()}&gt;")
         self.play_button.clicked.connect(self.playAction)
         play_buttons_layout.addWidget(self.play_button)
 
@@ -562,7 +563,7 @@ class MainWindow(QMainWindow):
             round(MainWindow.BUTTON_MEDIA_SIZE * 1.3),
             MainWindow.BUTTON_MEDIA_SIZE
         )
-        next_button.setToolTip(self.tr("Next utterance") + f" <{shortcuts["play_next"].toString()}>")
+        next_button.setToolTip(self.tr("Next utterance") + f" &lt;{shortcuts["play_next"].toString()}&gt;")
         next_button.clicked.connect(self.playNextAction)
         play_buttons_layout.addWidget(next_button)
 
@@ -620,13 +621,13 @@ class MainWindow(QMainWindow):
         wave_zoom_out_button = QPushButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
         wave_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        wave_zoom_out_button.setToolTip(self.tr("Zoom out") + f" <{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}>")
+        wave_zoom_out_button.setToolTip(self.tr("Zoom out") + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;")
         wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
         zoom_buttons_layout.addWidget(wave_zoom_out_button)
         wave_zoom_in_button = QPushButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
         wave_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        wave_zoom_in_button.setToolTip(self.tr("Zoom in") + f" <{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}>")
+        wave_zoom_in_button.setToolTip(self.tr("Zoom in") + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;")
         wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
         zoom_buttons_layout.addWidget(wave_zoom_in_button)
         
@@ -662,8 +663,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
         
         self.status_bar = self.statusBar()
-
-        print(f"{self.video_widget.isVisible()=}")
 
 
     @Slot(str)
@@ -1033,12 +1032,91 @@ class MainWindow(QMainWindow):
 
 
 
-    def showAbout(self):
+    def showAbout_old(self):
         QMessageBox.about(
             self,
             self.tr("About"),
             "Anaouder\nTreuzskrivadur emgefreek ha lec'hel e brezhoneg."
         )
+    
+    def showAbout(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr("About"))
+        dialog.setFixedSize(400, 500)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header with logo and title
+        header_layout = QHBoxLayout()
+        header_layout.addStretch()
+        
+        # Application logo
+        app_logo = QLabel()
+        if hasattr(self, 'windowIcon') and not self.windowIcon().isNull():
+            logo_pixmap = self.windowIcon().pixmap(96, 96)
+            app_logo.setPixmap(logo_pixmap)
+            app_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            header_layout.addWidget(app_logo)
+            header_layout.addSpacing(20)
+        
+        # Title
+        title = QLabel("Anaouder")
+        title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        font = QFont()
+        font.setPointSize(16)
+        font.setBold(True)
+        title.setFont(font)
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        
+        layout.addLayout(header_layout)
+        layout.addStretch()
+        
+        # Combined description and acknowledgments in rich text
+        content = QLabel()
+        content.setText("""
+        <p align="center">Treuzskrivañ emgefreek ha lec'hel e brezhoneg.</p>
+        <br>
+        <h4>Darempred</h4>
+        <p>anaouder@dizale.bzh</p>
+        <h4>Kod mammen</h4>
+        <p>https://github.com/gweltou/anaouder-gui</p>
+        <h4>Trugarekaat</h4>
+        <p>Anna Duval-Guennoc, Jean-Mari Ollivier, Jeanne Mégly, Karen Treguier, Léane Rumin, Mevena Guillouzic-Gouret, Samuel Julien</p>
+        """)
+        content.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        content.setWordWrap(True)
+        layout.addWidget(content)
+        layout.addStretch()
+        
+        # Logo section
+        logo_layout = QHBoxLayout()
+        
+        # Add logos
+        for icon_name in ["otile", "dizale", "rannvro"]:
+            if icon_name in icons:
+                label = QLabel()
+                
+                pixmap = icons[icon_name].pixmap(64, 64)
+                
+                label.setPixmap(pixmap)
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                logo_layout.addWidget(label)
+        
+        layout.addLayout(logo_layout)
+        layout.addStretch()
+        
+        # OK button
+        ok_button = QPushButton(self.tr("OK"))
+        ok_button.clicked.connect(dialog.accept)
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(ok_button)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
+        
+        dialog.exec()
 
 
     def getSubtitleAtPosition(self, time) -> Tuple[int, str]:
@@ -1228,9 +1306,7 @@ class MainWindow(QMainWindow):
 
 
     def toggleVideo(self, checked):
-        print("toggle video", checked)
-        print(f"{self.text_video_splitter.size()=}")
-        print(f"{self.text_video_splitter.sizes()=}")
+        log.debug(f"toggle video {checked=}")
         if self.text_video_splitter.sizes()[1] < 100:
             self.text_video_splitter.setSizes([1, 1])
         self.video_widget.setVisible(checked)
@@ -1373,10 +1449,10 @@ class MainWindow(QMainWindow):
     @Slot(list)
     def onTextCursorChanged(self, seg_ids: List[SegmentId] | None):
         """Sets the corresponding segment active on the waveform
-        Called only on aligned text blocks or with -1"""
-        print(f"{seg_ids=}")
-        print(f"{self.waveform.active_segments=}")
-
+        Called only on aligned text blocks or with None"""
+        if not seg_ids:
+            seg_ids = None
+        
         self.waveform.setActive(seg_ids)
         
         if seg_ids == None:
@@ -1564,7 +1640,11 @@ class MainWindow(QMainWindow):
         Split audio segment, given a char relative position in sentence
         Called from the text edit widget
         """
+        log.debug(f"splitUtterance {id=} {position=}")
         block = self.text_widget.getBlockById(id)
+        if block == None:
+            return
+        
         text = block.text()
         seg_start, seg_end = self.waveform.segments[id]
 
@@ -2037,18 +2117,16 @@ class AlignWithSelectionCommand(QUndoCommand):
 class DeleteUtterancesCommand(QUndoCommand):
     def __init__(self, parent, seg_ids: list):
         super().__init__()
-        log.debug(f"Calling DeleteUtterancesCommand(parent, {seg_ids=})")
+        log.debug(f"DeleteUtterancesCommand(parent, {seg_ids=})")
         self.text_edit: TextEditWidget = parent.text_widget
         self.waveform: WaveformWidget = parent.waveform
         self.seg_ids = seg_ids[:]
         self.segments = [self.waveform.segments[seg_id][:] for seg_id in self.seg_ids]
         self.texts = [self.text_edit.getBlockById(seg_id).text() for seg_id in seg_ids]
         self.prev_cursor = self.text_edit.getCursorState()
-        print("DeleteUtterancesCommand INIT")
-        print(f"{self.prev_cursor=}")
     
     def undo(self):
-        print("DeleteUtterancesCommand UNDO")
+        log.debug("DeleteUtterancesCommand UNDO")
         for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
             seg_id = self.waveform.addSegment(segment, seg_id)
             self.text_edit.insertSentenceWithId(text, seg_id)
@@ -2058,7 +2136,7 @@ class DeleteUtterancesCommand(QUndoCommand):
 
     def redo(self): # TODO: Fix that
         # Delete text sentences
-        print("DeleteUtterancesCommand REDO")
+        log.debug("DeleteUtterancesCommand REDO")
         self.text_edit.document().blockSignals(True)
         for seg_id in self.seg_ids:
             self.text_edit.deleteSentence(seg_id)

@@ -285,7 +285,8 @@ class WaveformWidget(QWidget):
         return seg_id
     
 
-    def addSegment(self, segment, seg_id:Optional[SegmentId]=None) -> SegmentId:
+    def addSegment(self, segment, seg_id: Optional[SegmentId]=None) -> SegmentId:
+        log.debug("addSegment")
         if seg_id == None:
             seg_id = self.getNewId()
         self.segments[seg_id] = segment
@@ -294,7 +295,7 @@ class WaveformWidget(QWidget):
         return seg_id
 
 
-    def getPrevSegmentId(self, seg_id:Optional[SegmentId]=None) -> SegmentId:
+    def getPrevSegmentId(self, seg_id: Optional[SegmentId]=None) -> SegmentId:
         if seg_id == None:
             seg_id = self.active_segment_id
         if seg_id < 0:
@@ -308,7 +309,7 @@ class WaveformWidget(QWidget):
         return -1
 
 
-    def getNextSegmentId(self, seg_id:Optional[SegmentId]=None) -> SegmentId:
+    def getNextSegmentId(self, seg_id: Optional[SegmentId]=None) -> SegmentId:
         if seg_id == None:
             seg_id = self.active_segment_id
         if seg_id < 0:
@@ -556,6 +557,12 @@ class WaveformWidget(QWidget):
         self.is_selecting = checked
         self.anchor = -1
 
+        if checked:
+            self.setCursor(Qt.CursorShape.SplitHCursor)
+        else:
+            self.unsetCursor()
+            self.deselect()
+
         # if checked:
         #     self.setCursor(Qt.SplitHCursor)
         # else:
@@ -802,7 +809,6 @@ class WaveformWidget(QWidget):
                 # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
                 clicked_id = self.getSegmentAtPixelPosition(event.position())
-                print(f"{clicked_id=}")
                 self.select_segments.emit( (None if clicked_id == -1 else [clicked_id]) )
                 if clicked_id < 0:
                     # Check is the selection was clicked
@@ -934,7 +940,6 @@ class WaveformWidget(QWidget):
 
 
     def contextMenuEvent(self, event):
-        print("context")
         if not self._must_open_context_menu:
             return
         self._must_open_context_menu = False
@@ -976,7 +981,6 @@ class WaveformWidget(QWidget):
 
     def toggleSnapping(self, checked:bool):
         log.debug("toggle snapping on waveform")
-        print("toggle snapping")
         self.snapping = checked
 
 

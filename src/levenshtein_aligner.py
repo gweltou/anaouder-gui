@@ -23,14 +23,13 @@ def smart_split(text, position, vosk_tokens):
         A 2-tuple consisting of the left part and the right part,
         where each part is a list of timecoded tokens
     """
-    # print(text)
-    # print(' '.join([t[2] for t in vosk_tokens]))
 
     left_text = text[:position].rstrip()
     right_text = text[position:].lstrip()
 
     result = align_texts_with_vosk_tokens(' '.join([left_text, SPLIT_TOKEN, right_text]), vosk_tokens)
-    print(' '.join([left_text, SPLIT_TOKEN, right_text]))
+    #print(' '.join([left_text, SPLIT_TOKEN, right_text]))
+    
     # Find index of split token
     i = 0
     for t, _ in result:
