@@ -3,12 +3,13 @@ import sys
 import os
 import platform
 from pathlib import Path
+import logging
+import functools
 
 import ssl
 import certifi
 import urllib
 import zipfile
-from tqdm import tqdm
 
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtGui import QColor, QTextBlockUserData
@@ -63,34 +64,39 @@ def get_cache_directory(name: Optional[str] = None) -> Path:
 
 
 def download(url: str, root: str) -> str:
-    """Download an archive from the web and decompress it"""
-
+    """
+    Download an archive from the web and decompress it
+    
+    Args:
+        url: URL to download from
+        root: Directory to save and extract the archive
+    
+    Returns:
+        Path to the downloaded file (before extraction)
+    """
     os.makedirs(root, exist_ok=True)
 
     certifi_context = ssl.create_default_context(cafile=certifi.where())
-
     download_target = os.path.join(root, os.path.basename(url))
 
     print(f"Downloading model from {url}", file=sys.stderr)
-    with urllib.request.urlopen(url, context=certifi_context) as source, open(download_target, "wb") as output:
-        with tqdm(
-            total=int(source.info().get("Content-Length")),
-            ncols=80,
-            unit="iB",
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as loop:
+    with urllib.request.urlopen(url, context=certifi_context) as source:
+        with open(download_target, "wb") as output:
+            downloaded = 0
+
             while True:
                 buffer = source.read(8192)
                 if not buffer:
                     break
 
                 output.write(buffer)
-                loop.update(len(buffer))
+                downloaded += len(buffer)
     
+    # Extract the archive
     with zipfile.ZipFile(download_target, 'r') as zip_ref:
         zip_ref.extractall(root)
 
+    # Clean up the downloaded archive
     os.remove(download_target)
 
     return download_target
