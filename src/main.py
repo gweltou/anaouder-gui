@@ -1815,7 +1815,7 @@ class MainWindow(QMainWindow):
                 elif ext == ".srt":
                     self.openFile(file_path, keep_audio=True)
                 elif ext in MEDIA_FORMATS:
-                    self.openFile(file_path, keep_text=True)
+                    self.openFile(file_path)
                 else:
                     print(f"Wrong file type {file_path}")
                     return

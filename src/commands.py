@@ -22,22 +22,23 @@ class InsertTextCommand(QUndoCommand):
     def __init__(self, text_edit, text, position):
         super().__init__()
         self.text_edit : QTextEdit = text_edit
-        self.text : str = text
+        self.text: str = text[:]
         self.position : int = position
         # Save the cursor state
         self.prev_cursor = self.text_edit.getCursorState()
     
     def undo(self):
-        cursor : QTextCursor = self.text_edit.textCursor()
+        cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, len(self.text))
         cursor.removeSelectedText()
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
-        cursor : QTextCursor = self.text_edit.textCursor()
+        cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.insertText(self.text)
+        self.text_edit.setTextCursor(cursor)
     
     def id(self):
         return 0

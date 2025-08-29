@@ -74,6 +74,8 @@ class VideoWidget(QGraphicsView):
         self.subtitle_margin = 6  # Margin from bottom of video
         self.max_subtitle_height_ratio = 0.2  # Max 20% of video height for subtitles
 
+        self.setAcceptDrops(False)
+
 
     def setupTextAppearance(self):
         """Configure text item appearance"""

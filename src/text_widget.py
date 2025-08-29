@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QApplication, QMenu, QTextEdit,
 )
 from PySide6.QtCore import (
-    Qt, Signal, Slot,
+    Qt, Signal, Slot, QMimeData,
     QRegularExpression,
     QRect
 )
@@ -17,7 +17,7 @@ from PySide6.QtGui import (
     QTextCursor, QTextBlockFormat, QTextCharFormat, QFontMetricsF,
     QSyntaxHighlighter,
     QPainter, QPaintEvent,
-    QClipboard,
+    QClipboard, QEnterEvent, QDragMoveEvent, QDropEvent,
     QUndoStack
 )
 
@@ -687,7 +687,7 @@ class TextEditWidget(QTextEdit):
         """
         clipboard = QApplication.clipboard()
         cursor = self.textCursor()
-        pos = cursor.position()
+        pos = self.cursor_pos
         self.undo_stack.beginMacro("Replace text")
         if cursor.hasSelection():
             DeleteSelectedText(self, cursor)
@@ -698,15 +698,44 @@ class TextEditWidget(QTextEdit):
         self.undo_stack.endMacro()
     
 
-    def canInsertFromMimeData(self, source):
-        if source.hasText():
-            print(f"{source=} has text")
-            print(source.text())
-            print(source.urls())
+    def canInsertFromMimeData(self, mime_data: QMimeData):
+        if mime_data.hasUrls():
+            return False
+        elif mime_data.hasText():
+            return True
         else:
-            print(f"{source=}")
+            return False
 
-        return super().canInsertFromMimeData(source)
+
+    def dropEvent(self, event: QDropEvent):
+        print("drop")
+
+        mime_data = event.mimeData()
+        print(f"{event.source()=}")
+        print(f"{mime_data.urls()=}")
+        if mime_data.hasUrls():
+            # Could be a media file, ignore event
+            event.ignore()
+            super().dropEvent(event)
+            return
+
+        self.cursor_pos = self.cursorForPosition(event.pos()).position()
+
+        if event.source() == None:
+            # Drop from an external application
+            # self.undo_stack.push(InsertTextCommand(self, mime_data.text(), self.cursor_pos))
+            pass
+        else:
+            # Internal drag and drop
+            self.undo_stack.beginMacro("Drop text")
+            self.cut()
+            self.paste()
+            self.undo_stack.endMacro()
+
+        event.accept()
+        mime_data.clear() # Avoid the default "cut-paste" behaviour
+        print(f"{mime_data.text()=}")
+        super().dropEvent(event)
     
 
     def cursorChanged(self):
@@ -716,6 +745,7 @@ class TextEditWidget(QTextEdit):
         #log.debug(f"cursorChanged")
 
         cursor = self.textCursor()
+        self.cursor_pos = cursor.position()
         if cursor.hasSelection():
             # Make a list of utterance ids under selection (if any)
             selected_ids = []
@@ -1252,6 +1282,11 @@ class TextEditWidget(QTextEdit):
     def mouseDoubleClickEvent(self, event):
         """Prevent default double-click behaviour"""
         event.ignore()
+
+
+    def enterEvent(self, event: QEnterEvent):
+        self.setFocus()
+        super().enterEvent(event)
 
 
     def paintEvent(self, event: QPaintEvent):
