@@ -63,7 +63,10 @@ from src.settings import (
     app_settings, shortcuts,
     SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL,
 )
-from src.utils import sec2hms, splitForSubtitle, ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS
+from src.utils import (
+    sec2hms, splitForSubtitle,
+    ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS,
+)
 from src.cache_system import CacheSystem
 from src.version import __version__
 from src.theme import theme
@@ -675,7 +678,6 @@ class MainWindow(QMainWindow):
         if not self.undo_stack.isClean():
             title_parts.append("●")
         title_parts.append(APP_NAME)
-        title_parts.append(__version__)
         if self.file_path:
             title_parts.append('-')
             title_parts.append(os.path.split(self.file_path)[1])
@@ -739,6 +741,7 @@ class MainWindow(QMainWindow):
         if self.file_path and self.file_path.endswith(".ali"):
             self._saveFile(self.file_path)
         else:
+            # Open a file dialog
             self.saveFileAs()
         self.undo_stack.setClean()
         self.updateWindowTitle()
@@ -746,11 +749,13 @@ class MainWindow(QMainWindow):
     def saveFileAs(self):
         basename = os.path.basename(self.file_path)
         basename, ext = os.path.splitext(basename)
-        if os.path.splitext(basename)[1].lower() == ".ali":
+        if ext.lower() == ".ali":
             basename += ext
+            dir = app_settings.value("main/last_opened_folder", "")
         else:
             basename += ".ali"
-        dir = app_settings.value("main/last_opened_folder", "")
+            dir = os.path.split(self.file_path)[0]
+        
         filepath, _ = QFileDialog.getSaveFileName(self, self.tr("Save File"), os.path.join(dir, basename))
         self.waveform.is_resizing = False
         if not filepath:
@@ -758,6 +763,7 @@ class MainWindow(QMainWindow):
         
         self.file_path = filepath
         self._saveFile(filepath)
+        self.updateWindowTitle()
 
 
     def openFile(self, file_path="", keep_text=False, keep_audio=False):
@@ -844,10 +850,15 @@ class MainWindow(QMainWindow):
             txt_filepath = os.path.extsep.join((basename, "txt"))
             txt_filepath = os.path.join(folder, txt_filepath)
             if os.path.exists(txt_filepath):
-                sentences = [s for s, _ in load_text_data(txt_filepath)]
-                for i, sentence in enumerate(sentences):
-                    self.text_widget.appendSentence(sentence, seg_id_list[i])
-                
+                with open(txt_filepath, 'r') as _f:
+                    i = 0
+                    for sentence in _f.readlines():
+                        cleaned = extract_metadata(sentence)[0].strip()
+                        if cleaned and not cleaned.startswith('#'):
+                            self.text_widget.appendSentence(sentence.strip(), seg_id_list[i])
+                            i += 1
+                        else:
+                            self.text_widget.appendSentence(sentence.strip(), None)
                 self.text_widget.highlightUtterance(seg_id_list[0])
             else:
                 self.log.error(f"Couldn't find text file {txt_filepath}")
@@ -1031,14 +1042,6 @@ class MainWindow(QMainWindow):
         self.changeLanguage(old_language)
 
 
-
-    def showAbout_old(self):
-        QMessageBox.about(
-            self,
-            self.tr("About"),
-            "Anaouder\nTreuzskrivadur emgefreek ha lec'hel e brezhoneg."
-        )
-    
     def showAbout(self):
         dialog = QDialog(self)
         dialog.setWindowTitle(self.tr("About"))
@@ -1070,6 +1073,9 @@ class MainWindow(QMainWindow):
         header_layout.addStretch()
         
         layout.addLayout(header_layout)
+
+        # Software version
+        layout.addWidget(QLabel(__version__))
         layout.addStretch()
         
         # Combined description and acknowledgments in rich text
@@ -1450,6 +1456,8 @@ class MainWindow(QMainWindow):
     def onTextCursorChanged(self, seg_ids: List[SegmentId] | None):
         """Sets the corresponding segment active on the waveform
         Called only on aligned text blocks or with None"""
+        log.debug(f"onTextCursorChanged({seg_ids=})")
+
         if not seg_ids:
             seg_ids = None
         
@@ -1641,6 +1649,7 @@ class MainWindow(QMainWindow):
         Called from the text edit widget
         """
         log.debug(f"splitUtterance {id=} {position=}")
+        
         block = self.text_widget.getBlockById(id)
         if block == None:
             return
@@ -1668,12 +1677,12 @@ class MainWindow(QMainWindow):
                 tokens_range = cached_transcription[i:j]
 
                 try:
+                    log.info("smart splitting")
                     left_seg, right_seg = smart_split(text, position, tokens_range)
                     left_seg[0] = seg_start
                     right_seg[1] = seg_end
-                    print("smart splitting")
                 except Exception as e:
-                    print(e)
+                    log.error(e)
 
         if not left_seg or not right_seg:
             # Revert to naive splitting method
@@ -1681,7 +1690,7 @@ class MainWindow(QMainWindow):
             pc = position / len(text)
             left_seg = [seg_start, seg_start + dur*pc - 0.05]
             right_seg = [seg_start + dur*pc + 0.05, seg_end]
-            print("ratio splitting")
+            log.info("ratio splitting")
         
         left_id = self.waveform.getNewId()
         right_id = self.waveform.getNewId()
@@ -1986,13 +1995,21 @@ class AddSegmentCommand(QUndoCommand):
 class CreateNewUtteranceCommand(QUndoCommand):
     """Create a new utterance with empty text"""
     def __init__(self, parent, segment:Segment, seg_id:Optional[SegmentId]=None):
+        log.debug(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {seg_id=})")
+        print(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {seg_id=})")
+
         super().__init__()
         self.parent : MainWindow = parent
         self.segment = segment
         self.seg_id = seg_id or self.parent.waveform.getNewId()
         self.prev_cursor = self.parent.text_widget.getCursorState()
+
+        self.parent.text_widget.printDocumentStructure()
     
     def undo(self):
+        print("Before undo")
+        self.parent.text_widget.printDocumentStructure()
+
         if self.parent.playing_segment == self.seg_id:
             self.parent.playing_segment = -1
         self.parent.text_widget.deleteSentence(self.seg_id)
@@ -2003,10 +2020,20 @@ class CreateNewUtteranceCommand(QUndoCommand):
         self.parent.waveform.must_redraw = True
         self.parent.text_widget.setCursorState(self.prev_cursor)
 
+        print("After undo")
+        self.parent.text_widget.printDocumentStructure()
+
     def redo(self):
+        print("Before redo")
+        self.parent.text_widget.printDocumentStructure()
+
         self.parent.waveform.addSegment(self.segment, self.seg_id)
+        print(f"{self.parent.waveform.segments=}")
         self.parent.text_widget.insertSentenceWithId('*', self.seg_id)
         self.parent.text_widget.highlightUtterance(self.seg_id)
+
+        print("After redo")
+        self.parent.text_widget.printDocumentStructure()
 
 
 
@@ -2116,34 +2143,46 @@ class AlignWithSelectionCommand(QUndoCommand):
 
 class DeleteUtterancesCommand(QUndoCommand):
     def __init__(self, parent, seg_ids: list):
+        log.debug(f"DeleteUtterancesCommand.__init__(parent, {seg_ids=})")
+
         super().__init__()
-        log.debug(f"DeleteUtterancesCommand(parent, {seg_ids=})")
         self.text_edit: TextEditWidget = parent.text_widget
         self.waveform: WaveformWidget = parent.waveform
         self.seg_ids = seg_ids[:]
-        self.segments = [self.waveform.segments[seg_id][:] for seg_id in self.seg_ids]
-        self.texts = [self.text_edit.getBlockById(seg_id).text() for seg_id in seg_ids]
+        self.segments = [ self.waveform.segments[seg_id][:] for seg_id in self.seg_ids ]
+        
+        blocks = [ block for seg_id in seg_ids if (block := self.text_edit.getBlockById(seg_id)) is not None ]
+        self.texts = [ block.text() for block in blocks ]
+        self.datas = [ block.userData() for block in blocks ]
+        self.datas = [ m.data.copy() if m else None for m in self.datas ]
+        self.positions = [ block.position() for block in blocks ]
         self.prev_cursor = self.text_edit.getCursorState()
     
     def undo(self):
         log.debug("DeleteUtterancesCommand UNDO")
-        for segment, text, seg_id in zip(self.segments, self.texts, self.seg_ids):
+
+        for segment, text, seg_id, data, pos in zip(self.segments, self.texts, self.seg_ids, self.datas, self.positions):
+            print(f"{segment=} {text=} {seg_id=}")
             seg_id = self.waveform.addSegment(segment, seg_id)
-            self.text_edit.insertSentenceWithId(text, seg_id)
+            #self.text_edit.insertSentenceWithId(text, seg_id)
+            self.text_edit.insertBlock(text, data, pos - 1)
         self.waveform.must_redraw = True
         # self.waveform.refreshSegmentInfo()
         self.text_edit.setCursorState(self.prev_cursor)
 
-    def redo(self): # TODO: Fix that
+    def redo(self):
         # Delete text sentences
         log.debug("DeleteUtterancesCommand REDO")
+
         self.text_edit.document().blockSignals(True)
+
+        self.text_edit.setCursorState(self.prev_cursor)
+        
         for seg_id in self.seg_ids:
             self.text_edit.deleteSentence(seg_id)
             del self.waveform.segments[seg_id]
         self.text_edit.document().blockSignals(False)
 
-        # Delete segments
         self.waveform.active_segments = []
         self.waveform.active_segment_id = -1
         self.waveform.must_sort = True

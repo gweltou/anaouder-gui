@@ -97,13 +97,12 @@ class VideoWidget(QGraphicsView):
             log.debug("valid video bounding rectangle")
         else:
             self.video_is_valid = False
-            log.debug("non valid video bounding rectangle")
             return
         
         # Fit video to view while maintaining aspect ratio
         video_rect = self.video_item.boundingRect()
         self.scene().setSceneRect(video_rect)
-        self.fitInView(self.scene().sceneRect(), Qt.KeepAspectRatio)
+        self.fitInView(self.scene().sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
         
         if not video_rect.isEmpty():
             log.debug(f"{video_rect=}")

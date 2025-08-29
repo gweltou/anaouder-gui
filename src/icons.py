@@ -21,6 +21,9 @@ icons = dict()
 def loadIcons():
     """This function must be called AFTER creating a QGuiApplication"""
     icons["anaouder"] = QIcon(resourcePath("icons/anaouder_256.png"))
+    icons["otile"] = QIcon(resourcePath("icons/OTilde.png"))
+    icons["dizale"] = QIcon(resourcePath("icons/logo_dizale_small.png"))
+    icons["rannvro"] = QIcon(resourcePath("icons/logo_rannvro_breizh.png"))
 
     icons["sparkles"] = QIcon(resourcePath("icons/sparkles-yellow.png"))
 

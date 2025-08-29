@@ -40,6 +40,9 @@ class MyTextBlockUserData(QTextBlockUserData):
         return MyTextBlockUserData(self.data)
 
 
+def color_yellow(text):
+    return f"\033[93m{text}\033[0m"
+
 
 def get_cache_directory(name: Optional[str] = None) -> Path:
     # Use XDG_CACHE_HOME if available, otherwise use default

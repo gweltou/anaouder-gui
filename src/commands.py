@@ -59,7 +59,8 @@ class DeleteTextCommand(QUndoCommand):
             size: int,
             direction: QTextCursor.MoveOperation
         ):
-        log.debug(f"Calling DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
+        # log.debug(f"Calling DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
+        
         super().__init__()
         self.text_edit = text_edit
         self.position = position
@@ -67,8 +68,6 @@ class DeleteTextCommand(QUndoCommand):
         self.direction = direction
         self.deleted_text = ""
         self.prev_cursor = self.text_edit.getCursorState()
-        print("DeleteUtterancesCommand INIT")
-        print(f"{self.prev_cursor=}")
 
     def undo(self):
         cursor: QTextCursor = self.text_edit.textCursor()
@@ -131,6 +130,8 @@ class InsertBlockCommand(QUndoCommand):
             seg_id: Optional[int] = None,
             after = False
         ):
+        log.debug(f"InsertBlockCommand.__init__({text_edit=}, {position=}, {text=}, {seg_id=}, {after=})")
+
         super().__init__()
         self.text_edit = text_edit
         self.prev_cursor = self.text_edit.getCursorState()
@@ -148,17 +149,27 @@ class InsertBlockCommand(QUndoCommand):
         self.after = after
     
     def undo(self):
+        log.debug("InsertBlockCommand UNDO")
+        print(f"{self.position=}")
+        print("before:")
+        self.text_edit.printDocumentStructure()
+
+        was_blocked = self.text_edit.signalsBlocked()
         self.text_edit.document().blockSignals(True)
+        self.text_edit.blockSignals(True)
 
         cursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
 
         if self.after:
-            # The block to delete is the next one
-            cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+            # We need to delete the next block
+            if not cursor.atEnd():
+                cursor.movePosition(QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor)
+
             cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+            if not cursor.atEnd():
+                cursor.movePosition(QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor)
             cursor.removeSelectedText()
-            cursor.deletePreviousChar()
         else:
             # The block to delete is the current one
             cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
@@ -166,10 +177,17 @@ class InsertBlockCommand(QUndoCommand):
             cursor.deleteChar()
 
         self.text_edit.setCursorState(self.prev_cursor)
-        self.text_edit.document().blockSignals(False)
+        self.text_edit.document().blockSignals(was_blocked)
+        self.text_edit.blockSignals(was_blocked)
+
+        print("after:")
+        self.text_edit.printDocumentStructure()
 
     def redo(self):
-        self.text_edit.document().blockSignals(True)
+        #log.debug("InsertBlockCommand REDO")
+
+        was_blocked = self.text_edit.signalsBlocked()
+        self.text_edit.blockSignals(True)
 
         cursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
@@ -199,7 +217,7 @@ class InsertBlockCommand(QUndoCommand):
                 cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
                 cursor.block().setUserData(MyTextBlockUserData(old_data))
 
-        self.text_edit.document().blockSignals(False)
+        self.text_edit.blockSignals(was_blocked)
     
     def id(self):
         return 2
@@ -279,9 +297,17 @@ class MoveTextCursor(QUndoCommand):
         self.prev_cursor = self.text_edit.getCursorState()
     
     def undo(self):
+        was_blocked = self.text_edit.blockSignals(True)
+
         self.text_edit.setCursorState(self.prev_cursor)
 
+        self.text_edit.blockSignals(was_blocked)
+
     def redo(self):
+        was_blocked = self.text_edit.blockSignals(True)
+
         cursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         self.text_edit.setTextCursor(cursor)
+
+        self.text_edit.blockSignals(was_blocked)

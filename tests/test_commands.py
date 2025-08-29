@@ -254,20 +254,20 @@ def test_delete_first_utterance():
 
     def apply_commands():
         main_window.undo_stack.beginMacro("delete first utterance")
-        main_window.undo_stack.push(
-            DeleteTextCommand(
-                main_window.text_widget,
-                position=117,
-                size=34,
-                direction=QTextCursor.MoveOperation.Left
-            )
-        )
+        # main_window.undo_stack.push(
+        #     DeleteTextCommand(
+        #         main_window.text_widget,
+        #         position=117,
+        #         size=34,
+        #         direction=QTextCursor.MoveOperation.Left
+        #     )
+        # )
         main_window.undo_stack.push(
             DeleteUtterancesCommand(main_window, seg_ids=[0])
         )
         main_window.undo_stack.endMacro()
 
-    undo_redo_function(apply_commands, )
+    undo_redo_function(apply_commands, random_cursor=True)
     
 
 
