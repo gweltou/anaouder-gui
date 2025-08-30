@@ -229,23 +229,12 @@ class InsertBlockCommand(QUndoCommand):
 
 
 class ReplaceTextCommand(QUndoCommand):
-    """Replace the content of a text block
-
-    Parameters:
-        cursor_pos_old (int):
-            position of cursor (relative to start of block) before modification
-        cursor_pos_new (int):
-            position of cursor (relative to start of block) after modification
-    
-    TODO: replace cursor pos parameters with global a document state
-    """
+    """Replace the content of a text block"""
     def __init__(
             self,
             text_edit: QTextEdit,
             block: QTextBlock,
             new_text: str,
-            cursor_pos_old: int,
-            cursor_pos_new: Optional[int] = None
         ):
         super().__init__()
         self.text_edit = text_edit
@@ -254,7 +243,6 @@ class ReplaceTextCommand(QUndoCommand):
         self.old_text = block.text()
         self.new_text = new_text
         self.prev_cursor = self.text_edit.getCursorState()
-        self.cursor_pos_new = cursor_pos_new or cursor_pos_old
     
     def undo(self):
         block = self.text_edit.document().findBlockByNumber(self.block_number)
@@ -270,7 +258,7 @@ class ReplaceTextCommand(QUndoCommand):
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
         cursor.insertText(self.new_text)
-        cursor.setPosition(self.block.position() + self.cursor_pos_new)
+        # cursor.setPosition(self.block.position() + self.cursor_pos_new)
         self.text_edit.setTextCursor(cursor)
     
     def id(self):
