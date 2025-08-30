@@ -591,8 +591,7 @@ class TextEditWidget(QTextEdit):
                 ReplaceTextCommand(
                     self,
                     cursor.block(),
-                    new_text,
-                    pos_in_block, pos_in_block
+                    new_text
                 )
             )
 
@@ -948,9 +947,7 @@ class TextEditWidget(QTextEdit):
                 ReplaceTextCommand(
                     self,
                     block,
-                    new_text,
-                    pos_in_block, pos_in_block+cursor_offset
-                )
+                    new_text                )
             )
             return
         
@@ -975,9 +972,9 @@ class TextEditWidget(QTextEdit):
                     ReplaceTextCommand(
                         self,
                         block,
-                        new_text,
-                        pos_in_block, len(left_part)+1)
+                        new_text
                     )
+                )
                 return
 
             last_letter_idx = len(text.rstrip())
@@ -1032,9 +1029,7 @@ class TextEditWidget(QTextEdit):
                         ReplaceTextCommand(
                             self,
                             block,
-                            left_part,
-                            pos_in_block,
-                            len(left_part)+1
+                            left_part
                         )
                     )
                     self.undo_stack.endMacro()
