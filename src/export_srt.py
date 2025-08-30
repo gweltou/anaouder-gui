@@ -59,46 +59,6 @@ class ExportSrtDialog(QDialog):
         # Export options section
         options_group = QGroupBox("Export Options")
         options_layout = QVBoxLayout()
-        
-        # Subtitles interval options
-        time_label = QLabel("Subtitles min. interval:")
-
-        # FPS options
-        fps_label = QLabel("FPS")
-        fps_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.fps_combo = QComboBox()
-        common_fps = ["23.976", "24", "25", "29.97", "30", "60"]
-        self.fps_combo.addItems(common_fps)
-        if fps:
-            self.fps_combo.setCurrentText(str(fps))
-            self.fps_combo.setEnabled(False)
-        else:
-            self.fps_combo.setCurrentText("24")
-            self.fps_combo.setEditable(True)
-        
-        # Min frames between subtitles
-        min_frames_label = QLabel("Frames")
-        min_frames_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.min_frames_spin = QSpinBox()
-        self.min_frames_spin.setRange(1, 8)
-        self.min_frames_spin.setValue(2)
-
-        self.fps_combo.currentTextChanged.connect(self.update_time_label)
-        self.min_frames_spin.valueChanged.connect(self.update_time_label)
-        
-        # Time calculation result
-        self.time_result_label = QLabel("")
-        self.time_result_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        
-        opt_layout = QHBoxLayout()
-        opt_layout.addWidget(time_label)
-        if not fps:
-            opt_layout.addWidget(fps_label)
-            opt_layout.addWidget(self.fps_combo)
-        opt_layout.addWidget(min_frames_label)
-        opt_layout.addWidget(self.min_frames_spin)
-        opt_layout.addWidget(self.time_result_label)
-        options_layout.addLayout(opt_layout)
 
         # Apostrophe normalization
         apostrophe_label = QLabel("Apostrophe normalization:")
@@ -142,12 +102,9 @@ class ExportSrtDialog(QDialog):
         main_layout.addLayout(button_layout)
         
         self.setLayout(main_layout)
-        
-        # Initial time gap calculation
-        self.update_time_label()
     
 
-    def browse_file(self, default_path:str=None):
+    def browse_file(self, default_path: str=None):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save SRT File",
@@ -157,20 +114,9 @@ class ExportSrtDialog(QDialog):
         
         if file_path:
             self.file_path.setText(file_path)
-    
-
-    def update_time_label(self):
-        try:
-            fps = float(self.fps_combo.currentText())
-            min_frames = self.min_frames_spin.value()
-            self.interval_time = min_frames / fps
-            self.time_result_label.setText(f"{self.interval_time:.3f} seconds")
-        except ValueError:
-            self.time_result_label.setText("Invalid FPS value")
 
 
-
-def exportSrt(parent, media_path, utterances, fps:float=None):
+def exportSrt(parent, media_path, utterances, fps: float=None):
     rm_special_tokens = True
 
     dir = os.path.split(media_path)[0] if media_path else os.path.expanduser('~')
@@ -180,7 +126,7 @@ def exportSrt(parent, media_path, utterances, fps:float=None):
     dialog = ExportSrtDialog(parent, os.path.join(dir, default_path), fps)
     result = dialog.exec()
 
-    if result == QDialog.Rejected:
+    if result == QDialog.DialogCode.Rejected:
         return
 
     file_path = dialog.file_path.text()
@@ -216,15 +162,6 @@ def exportSrt(parent, media_path, utterances, fps:float=None):
         text = '\n'.join(lines)
         
         utterances[i][0] = text
-
-    # Adjust minimal duration between two subtitles (>= 0.08s)
-    min_time = dialog.interval_time
-    for i in range(len(utterances) - 1):
-        text, (current_start, current_end) = utterances[i]
-        _, (next_start, _) = utterances[i+1]
-        if next_start - current_end < 0.08:
-            new_seg = (text, (current_start, next_start - min_time))
-            utterances[i] = new_seg
 
     try:
         with open(file_path, 'w') as _f:
