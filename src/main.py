@@ -797,7 +797,8 @@ class MainWindow(QMainWindow):
             self.updateWindowTitle()
             return
         
-        # self.text_edit.document().blockSignals(True)
+        # was_blocked = self.text_widget.document().blockSignals(True)
+
         if ext == ".ali":
             self.log.debug("Opening an ALI file...")
             with open(file_path, 'r', encoding="utf-8") as fr:
@@ -923,7 +924,7 @@ class MainWindow(QMainWindow):
         #     block = self.text_edit.getBlockById(first_utt_id)
         #     self.text_edit.setTextCursor(QTextCursor(block))
         
-        # self.text_edit.document().blockSignals(False)
+        # self.text_widget.document().blockSignals(was_blocked)
         
         # Scroll bar to top
         # scroll_bar = self.text_edit.verticalScrollBar()
@@ -969,13 +970,13 @@ class MainWindow(QMainWindow):
             audio_metadata = get_audiofile_info(file_path)
             if "r_frame_rate" in audio_metadata:
                 print(f"Stream {audio_metadata["r_frame_rate"]=}")
-                if match := re.match(r"(\d+)/1", audio_metadata["r_frame_rate"]):
-                    self.media_metadata["fps"] = int(match[1])
+                if match := re.match(r"(\d+)/(\d+)", audio_metadata["r_frame_rate"]):
+                    self.media_metadata["fps"] = int(match[1]) / int(match[2])
                     self.cache.update_media_metadata(self.media_path, self.media_metadata)
                 else:
                     self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
-            # if "avg_frame_rate" in metadata:
-            #     print(f"Stream {metadata["avg_frame_rate"]=}")
+            # if "avg_frame_rate" in audio_metadata:
+            #     print(f"Stream {audio_metadata["avg_frame_rate"]=}")
 
         if "fps" in self.media_metadata:
             self.waveform.fps = self.media_metadata["fps"]
@@ -1435,47 +1436,81 @@ class MainWindow(QMainWindow):
           * Setting the segments boundaries on frame positions
           * Adding line breaks if text is longer than the subtitle line limit
         """
+        from src.adapt_subtitles import AdaptDialog
+
+        def apply_subtitle_rules(self: MainWindow, start_block: QTextBlock, end_block: QTextBlock):
+            print("applying subs rules")
+            line_max_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
+            
+            block = start_block
+            while True:
+                seg_id = self.text_widget.getBlockId(block)
+                if seg_id >= 0:
+                    if (fps := self.media_metadata.get("fps", 0)) > 0:
+                        # Adjust segment boundaries on frame positions
+                        seg_start, seg_end = self.waveform.getSegment(seg_id)
+                        frame_start = floor(seg_start * fps) / fps
+                        frame_end = ceil(seg_end * fps) / fps
+                        if (prev_id := self.waveform.getPrevSegmentId(seg_id)) >= 0:
+                            prev_end = self.waveform.getSegment(prev_id)[1]
+                            if frame_start < prev_end:
+                                # The previous frame position overlaps the previous segment,
+                                # choose next frame
+                                frame_start = ceil(seg_start * fps) / fps
+                        if (next_id := self.waveform.getNextSegmentId(seg_id)) >= 0:
+                            next_start = self.waveform.getSegment(next_id)[0]
+                            right_boundary = floor(next_start * fps) / fps
+                            right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL) / fps
+                            if frame_end > right_boundary:
+                                # The next frame position overlaps the next segment,
+                                # choose previous frame
+                                frame_end = right_boundary
+                        self.undo_stack.push(ResizeSegmentCommand(self.waveform, seg_id, frame_start, frame_end))
+
+                    text = block.text()
+                    splits = splitForSubtitle(text, line_max_size)
+                    if len(splits) > 1:
+                        text = LINE_BREAK.join([ s.strip() for s in splits ])
+                        self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
+                    
+                if block == end_block:
+                    break
+                block = block.next()
+
+        def remove_fillers(self: MainWindow, start_block: QTextBlock, end_block: QTextBlock):
+            block = start_block
+            while block.isValid() and block != end_block.next():
+                text = block.text()
+                new_text = lang.removeVerbalFillers(text)
+                if text != new_text:
+                    print(text)
+                    print(new_text)
+                self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, new_text))
+
+                block = block.next()
+
+
+        dialog = AdaptDialog(self)
+        dialog.set_parameters(app_settings.value("adapt_to_subtitles/saved_parameters", {}))
+        if dialog.exec() == QDialog.DialogCode.Rejected:
+            return  # User cancelled
+
+        params = dialog.get_parameters()
+        app_settings.setValue("adapt_to_subtitles/saved_parameters", params)
+
+        print(params)
+
         # Get selected blocks
         cursor = self.text_widget.textCursor()
-        block = self.text_widget.document().findBlock(cursor.selectionStart())
+        start_block = self.text_widget.document().findBlock(cursor.selectionStart())
         end_block = self.text_widget.document().findBlock(cursor.selectionEnd())
 
-        line_max_size = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE)
 
         self.undo_stack.beginMacro("adapt to subtitles")
-        while True:
-            seg_id = self.text_widget.getBlockId(block)
-            if seg_id >= 0:
-                if (fps := self.media_metadata.get("fps", 0)) > 0:
-                    # Adjust segment boundaries on frame positions
-                    seg_start, seg_end = self.waveform.getSegment(seg_id)
-                    frame_start = floor(seg_start * fps) / fps
-                    frame_end = ceil(seg_end * fps) / fps
-                    if (prev_id := self.waveform.getPrevSegmentId(seg_id)) >= 0:
-                        prev_end = self.waveform.getSegment(prev_id)[1]
-                        if frame_start < prev_end:
-                            # The previous frame position overlaps the previous segment,
-                            # choose next frame
-                            frame_start = ceil(seg_start * fps) / fps
-                    if (next_id := self.waveform.getNextSegmentId(seg_id)) >= 0:
-                        next_start = self.waveform.getSegment(next_id)[0]
-                        right_boundary = floor(next_start * fps) / fps
-                        right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL) / fps
-                        if frame_end > right_boundary:
-                            # The next frame position overlaps the next segment,
-                            # choose previous frame
-                            frame_end = right_boundary
-                    self.undo_stack.push(ResizeSegmentCommand(self.waveform, seg_id, frame_start, frame_end))
-
-                text = block.text()
-                splits = splitForSubtitle(text, line_max_size)
-                if len(splits) > 1:
-                    text = LINE_BREAK.join([ s.strip() for s in splits ])
-                    self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text, 0, 0))
-                
-            if block == end_block:
-                break
-            block = block.next()
+        if params["apply_subtitle_rules"] == True:
+            apply_subtitle_rules(self, start_block, end_block)
+        if params["remove_verbal_fillers"] == True:
+            remove_fillers(self, start_block, end_block)
         self.undo_stack.endMacro()
 
 
@@ -1571,7 +1606,7 @@ class MainWindow(QMainWindow):
         block = self.text_widget.getBlockById(seg_id)
         text = self.onRecognizerOutput(tokens)
         text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
-        self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text, 0, 0))
+        self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
 
 
     @Slot(list)
@@ -1999,9 +2034,10 @@ class MainWindow(QMainWindow):
         num_chars = self.text_widget.getSentenceLength(block)
         start, end = self.waveform.segments[seg_id]
         dur = end - start
-        density = num_chars / dur
-        userData = block.userData().data
-        userData["density"] = density
+        if dur > 0.0:
+            density = num_chars / dur
+            userData = block.userData().data
+            userData["density"] = density
 
 
 
@@ -2303,7 +2339,7 @@ def main(argv: list):
         if ret == QMessageBox.StandardButton.Ok:
             window.showParameters()
 
-    sys.exit(app.exec())
+    return app.exec()
 
 
 if __name__ == "__main__":

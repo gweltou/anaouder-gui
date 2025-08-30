@@ -22,6 +22,7 @@ class Language:
     post_process_text:      Callable[[str, bool], str] | None = None
     pre_process_density:    Callable[[str], str] | None = None
     prepare_for_alignment:  Callable[[str], str] | None = None
+    remove_fillers:         Callable[[str], str] | None = None
 
     def __post_init__(self):
         self.model_dir = get_cache_directory(os.path.join("models", self.short_name))
@@ -39,6 +40,9 @@ class Language:
     def processTextForAlignment(self, text: str) -> str:
         return self.prepare_for_alignment(self, text)
     
+    def removeVerbalFillers(self, text: str) -> str:
+        return self.remove_fillers(text)
+
     def getCachedModelList(self) -> List[str]:
         """Return a list of cached models"""
         model_dirs = [subdir.name for subdir in self.model_dir.iterdir() if _is_valid_vosk_model(subdir)]
@@ -74,6 +78,7 @@ for lang in LANG_MODULES:
             get_model_dict = getattr(module, "get_model_dictionary"),
             post_process_text = getattr(module, "post_process_text", None),
             prepare_for_alignment = getattr(module, "process_word_for_alignment", None),
+            remove_fillers= getattr(module, "remove_fillers", None),
         )
     except:
         print("Wrong Language Type")
@@ -99,7 +104,11 @@ def postProcessText(text: str, normalize: bool) -> str:
 
 
 def prepWordForAlignment(text: str) -> str:
-    return _current_language.prepare_for_alignment(text)
+    return _current_language.processTextForAlignment(text)
+
+
+def removeVerbalFillers(text: str) -> str:
+    return _current_language.removeVerbalFillers(text)
 
 
 def getLanguages(long_name=False) -> List[str]:

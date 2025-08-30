@@ -7,6 +7,7 @@ from ostilhou.asr.post_processing import post_process_text as ostilhou_post_proc
 from ostilhou.text import (
     pre_process,
     sentence_stats, normalize_sentence,
+    tokenize, detokenize, TokenType
 )
 
 
@@ -73,3 +74,7 @@ def process_word_for_alignment(s: str) -> str:
             chars.append(c)
     s = ''.join(chars)
     return s
+
+
+def remove_fillers(text: str) -> str:
+    return detokenize(tokenize(text), filter_out={TokenType.FILLER})
