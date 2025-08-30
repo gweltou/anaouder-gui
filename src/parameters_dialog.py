@@ -502,7 +502,9 @@ class SubtitlesTab(QWidget):
         self.min_frames_spin = QSpinBox()
         self.min_frames_spin.setSuffix(' ' + self.tr("Frames"))
         self.min_frames_spin.setMinimum(1)
-        self.min_frames_spin.setValue(app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES))
+        self.min_frames_spin.setValue(
+            app_settings.value("subtitles/min_frames",SUBTITLES_MIN_FRAMES, type=int)
+        )
         self.min_frames_spin.valueChanged.connect(self.updateMinFrames)
         self.min_dur_label = QLabel()
         min_frames_layout = QHBoxLayout()
@@ -515,7 +517,9 @@ class SubtitlesTab(QWidget):
         self.max_frames_spin.setSuffix(' ' + self.tr("Frames"))
         self.max_frames_spin.setMinimum(1)
         self.max_frames_spin.setMaximum(250)
-        self.max_frames_spin.setValue(app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES))
+        self.max_frames_spin.setValue(
+            app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
+        )
         self.max_frames_spin.valueChanged.connect(self.updateMaxFrames)
         self.max_dur_label = QLabel()
         max_frames_layout = QHBoxLayout()
@@ -536,7 +540,7 @@ class SubtitlesTab(QWidget):
         self.min_interval_spin.setSuffix(' ' + self.tr("Frames"))
         self.min_interval_spin.setRange(0, 8)
         self.min_interval_spin.setValue(
-            app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL)
+            app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL, type=int)
         )
         self.min_interval_spin.valueChanged.connect(self.updateMinInterval)
         self.min_interval_time_label = QLabel()
@@ -549,7 +553,7 @@ class SubtitlesTab(QWidget):
         ## Auto extend subtitles for uniform gaps
         auto_extend_interval_checkbox = QCheckBox(self.tr("Auto extend"))
         auto_extend_interval_checkbox.setChecked(
-            app_settings.value("subtitles/auto_extend", SUBTITLES_AUTO_EXTEND)
+            app_settings.value("subtitles/auto_extend", SUBTITLES_AUTO_EXTEND, type=bool)
         )
         auto_extend_interval_checkbox.toggled.connect(
             lambda checked: app_settings.setValue("subtitles/auto_extend", checked)
@@ -558,7 +562,7 @@ class SubtitlesTab(QWidget):
         self.extend_max_gap_spin.setSuffix(' ' + self.tr("Frames"))
         self.extend_max_gap_spin.setMaximum(16)
         self.extend_max_gap_spin.setValue(
-            app_settings.value("subtitles/auto_extend_max_gap", SUBTITLES_AUTO_EXTEND_MAX_GAP)
+            app_settings.value("subtitles/auto_extend_max_gap", SUBTITLES_AUTO_EXTEND_MAX_GAP, type=int)
         )
         self.extend_max_gap_spin.valueChanged.connect(self.updateExtendMaxGap)
         self.extend_max_gap_time_label = QLabel()
@@ -578,7 +582,7 @@ class SubtitlesTab(QWidget):
         self.text_margin_spin = QSpinBox()
         self.text_margin_spin.setSuffix(' ' + self.tr("chars"))
         self.text_margin_spin.setValue(
-            app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE)
+            app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
         )
         self.text_margin_spin.valueChanged.connect(self.updateMarginSize)
         text_margin_layout = QHBoxLayout()
@@ -592,7 +596,7 @@ class SubtitlesTab(QWidget):
         self.text_density_spin.setDecimals(1)
         self.text_density_spin.setSingleStep(0.1)
         self.text_density_spin.setValue(
-            app_settings.value("subtitles/cps", SUBTITLES_CPS)
+            app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
         )
         self.text_density_spin.valueChanged.connect(self.updateDensity)
         text_density_layout = QHBoxLayout()
