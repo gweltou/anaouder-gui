@@ -27,12 +27,14 @@ SUBTITLES_CPS = 16.0
 _is_darwin = platform.system() == "Darwin"
 
 shortcuts: Dict[str, QKeySequence] = {
-    "transcribe":   QKeySequence("Ctrl+R"),
-    "play_stop":    QKeySequence("Alt+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
-    "play_next":    QKeySequence("Alt+Down") if _is_darwin else QKeySequence("Ctrl+Down"),
-    "play_prev":    QKeySequence("Alt+Up") if _is_darwin else QKeySequence("Ctrl+Up"),
-    "select":       QKeySequence("S"), #Qt.Key.Key_S,
-    "show_handles": Qt.Key_Control if _is_darwin else Qt.Key_Control,
+    "transcribe":      QKeySequence("Ctrl+R"),
+    "play_stop":       QKeySequence("Alt+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
+    "play_next":       QKeySequence("Alt+Down") if _is_darwin else QKeySequence("Ctrl+Down"),
+    "play_prev":       QKeySequence("Alt+Up") if _is_darwin else QKeySequence("Ctrl+Up"),
+    "select":          QKeySequence("S"), #Qt.Key.Key_S,
+    "show_handles":    Qt.Key_Control if _is_darwin else Qt.Key_Control,
+    "follow_playhead": QKeySequence("F"),
+    "dialog_char":     QKeySequence("Ctrl+D"),
 
     # This creates a segmentation fault, for some reason...
     # "zoom_in":      QKeySequence(QKeySequence.StandardKey.ZoomIn),

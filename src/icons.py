@@ -56,6 +56,7 @@ def loadIcons():
     icons["select"] = QIcon(resourcePath("icons/select_segment.png"))
     icons["add_segment"] = QIcon(resourcePath("icons/add_segment.png"))
     icons["del_segment"] = QIcon(resourcePath("icons/del_segment.png"))
+    icons["follow_playhead"] = QIcon(resourcePath("icons/follow_playhead.png"))
 
 
 class IconWidget(QLabel):

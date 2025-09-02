@@ -92,6 +92,7 @@ class WaveformWidget(QWidget):
     refresh_segment_info = Signal(int)
     refresh_segment_info_resizing = Signal(int, list, float)
     select_segments = Signal(list)
+    
 
     class ScaledWaveform():
         def __init__(self):
@@ -178,6 +179,7 @@ class WaveformWidget(QWidget):
         self.must_sort = False
         self._sorted_segments = []
 
+        self.follow_playhead = True
         self.snapping = True
         self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS)
 
@@ -323,7 +325,7 @@ class WaveformWidget(QWidget):
         return -1
 
 
-    def setActive(self, seg_ids: List[SegmentId] | None) -> None:
+    def setActive(self, seg_ids: List[SegmentId] | None, center_view=True) -> None:
         """Select the given segment(s) and adjust view in the waveform.
         This method is called from MainWindow only.
         """
@@ -339,22 +341,26 @@ class WaveformWidget(QWidget):
         self.active_segments = seg_ids
         self.active_segment_id = seg_ids[-1]
 
-        # re-center segment, if necessary
-        start, end = self.segments[self.active_segment_id]
-        segment_dur = end - start
-        window_dur = self.width() / self.ppsec
-        if segment_dur < window_dur * 0.9:
-            if start < self.t_left:
-                self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
-            elif end > self.getTimeRight():
-                t_right_goal = min(self.audio_len, end + 0.1 * window_dur)
-                self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
-        else:
-            # Choose a zoom level that will fit this segment in 80% of the window width
-            adapted_window_dur = segment_dur / 0.8
-            adapted_ppsec = self.width() / adapted_window_dur
-            self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
-            self.ppsec_goal = adapted_ppsec
+        if center_view:
+            start, end = self.segments[self.active_segment_id]
+            if self.follow_playhead:
+                self.t_left = max(0.0, start - self.width() * 0.5 / self.ppsec)
+            else:
+                # re-center segment, if necessary
+                segment_dur = end - start
+                window_dur = self.width() / self.ppsec
+                if segment_dur < window_dur * 0.9:
+                    if start < self.t_left:
+                        self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
+                    elif end > self.getTimeRight():
+                        t_right_goal = min(self.audio_len, end + 0.1 * window_dur)
+                        self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
+                else:
+                    # Choose a zoom level that will fit this segment in 80% of the window width
+                    adapted_window_dur = segment_dur / 0.8
+                    adapted_ppsec = self.width() / adapted_window_dur
+                    self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
+                    self.ppsec_goal = adapted_ppsec
 
         self.selection_is_active = False
         self.must_redraw = True
@@ -395,7 +401,11 @@ class WaveformWidget(QWidget):
         This method is called from MainWindow.
         """
         self.playhead = t
-        if (
+
+        if self.follow_playhead:
+            # Center the view 
+            self.t_left = max(0.0, t - self.width() * 0.5 / self.ppsec)
+        elif (
                 not self.active_segments
                 and (t < self.t_left or t > self.getTimeRight())
             ):
@@ -980,9 +990,17 @@ class WaveformWidget(QWidget):
 
 
     def toggleSnapping(self, checked:bool):
-        log.debug("toggle snapping on waveform")
+        log.debug("Toggle snapping")
         self.snapping = checked
 
+
+    def toggleFollowPlayHead(self, checked:bool):
+        log.debug(f"Toggle follow playhead: {checked=}")
+        self.follow_playhead = checked
+        if checked:
+            self.t_left = max(0.0, self.playhead - self.width() * 0.5 / self.ppsec)
+            self.must_redraw = True
+    
 
     def onTargetDensityChanged(self, cps=float):
         """Must be connected to the ParametersDialog's signal from MainWindow"""

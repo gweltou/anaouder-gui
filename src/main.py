@@ -206,6 +206,9 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.selectAll)
 
+        shortcut = QShortcut(shortcuts["follow_playhead"], self)
+        shortcut.activated.connect(self.toggleFollowPlayhead)
+
 
         # Signal connections
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
@@ -454,25 +457,25 @@ class MainWindow(QMainWindow):
         top_bar_layout.addLayout(format_buttons_layout)
 
         # Text zoom buttons
-        zoom_buttons_layout = QHBoxLayout()
-        zoom_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        zoom_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
-        zoom_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        view_buttons_layout = QHBoxLayout()
+        view_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        view_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        view_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        zoom_buttons_layout.addWidget(IconWidget(icons["font"], MainWindow.BUTTON_LABEL_SIZE))
+        view_buttons_layout.addWidget(IconWidget(icons["font"], MainWindow.BUTTON_LABEL_SIZE))
         text_zoom_out_button = QPushButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
         text_zoom_out_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
         text_zoom_out_button.clicked.connect(lambda: self.text_widget.zoomOut(1))
-        zoom_buttons_layout.addWidget(text_zoom_out_button)
+        view_buttons_layout.addWidget(text_zoom_out_button)
         text_zoom_in_button = QPushButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
         text_zoom_in_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
         text_zoom_in_button.clicked.connect(lambda: self.text_widget.zoomIn(1))
-        zoom_buttons_layout.addWidget(text_zoom_in_button)
+        view_buttons_layout.addWidget(text_zoom_in_button)
 
         top_bar_layout.addStretch(1)
-        top_bar_layout.addLayout(zoom_buttons_layout)
+        top_bar_layout.addLayout(view_buttons_layout)
 
         ########################
         #### MEDIA TOOL-BAR ####
@@ -615,29 +618,41 @@ class MainWindow(QMainWindow):
         dial_layout.addWidget(speed_dial)
         media_toolbar_layout.addLayout(dial_layout)
 
-        # Zoom buttons
-        zoom_buttons_layout = QHBoxLayout()
-        zoom_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        zoom_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
-        zoom_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        # View buttons
+        view_buttons_layout = QHBoxLayout()
+        view_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        view_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        view_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        zoom_buttons_layout.addWidget(IconWidget(icons["waveform"], MainWindow.BUTTON_LABEL_SIZE))
+        ## Follow playhead button
+        self.follow_playhead_button = QPushButton()
+        self.follow_playhead_button.setIcon(icons["follow_playhead"])
+        self.follow_playhead_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
+        self.follow_playhead_button.setCheckable(True)
+        self.follow_playhead_button.setToolTip(self.tr("View follow playhead"))
+        self.follow_playhead_button.toggled.connect(lambda checked: self.waveform.toggleFollowPlayHead(checked))
+        self.follow_playhead_button.setChecked(True)
+        view_buttons_layout.addWidget(self.follow_playhead_button)
+
+        ## Zoom out
+        view_buttons_layout.addWidget(IconWidget(icons["waveform"], MainWindow.BUTTON_LABEL_SIZE))
         wave_zoom_out_button = QPushButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
         wave_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         wave_zoom_out_button.setToolTip(self.tr("Zoom out") + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;")
         wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
-        zoom_buttons_layout.addWidget(wave_zoom_out_button)
+        view_buttons_layout.addWidget(wave_zoom_out_button)
+        
+        ## Zoom in
         wave_zoom_in_button = QPushButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
         wave_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         wave_zoom_in_button.setToolTip(self.tr("Zoom in") + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;")
         wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
-        zoom_buttons_layout.addWidget(wave_zoom_in_button)
+        view_buttons_layout.addWidget(wave_zoom_in_button)
         
-        # zoom_buttons_layout.addSpacing(8)
         media_toolbar_layout.addStretch(1)
-        media_toolbar_layout.addLayout(zoom_buttons_layout)
+        media_toolbar_layout.addLayout(view_buttons_layout)
 
 
         top_layout = QVBoxLayout()
@@ -971,8 +986,10 @@ class MainWindow(QMainWindow):
             if "r_frame_rate" in audio_metadata:
                 print(f"Stream {audio_metadata["r_frame_rate"]=}")
                 if match := re.match(r"(\d+)/(\d+)", audio_metadata["r_frame_rate"]):
-                    self.media_metadata["fps"] = int(match[1]) / int(match[2])
-                    self.cache.update_media_metadata(self.media_path, self.media_metadata)
+                    if int(match[1]) > 0:
+                        self.media_metadata["fps"] = int(match[1]) / int(match[2])
+                        self.cache.update_media_metadata(self.media_path, self.media_metadata)
+                    self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
                 else:
                     self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
             # if "avg_frame_rate" in audio_metadata:
@@ -1109,7 +1126,7 @@ class MainWindow(QMainWindow):
         <h4>Kod mammen</h4>
         <p>https://github.com/gweltou/anaouder-gui</p>
         <h4>Trugarekaat</h4>
-        <p>Anna Duval-Guennoc, Jean-Mari Ollivier, Jeanne Mégly, Karen Treguier, Léane Rumin, Mevena Guillouzic-Gouret, Samuel Julien</p>
+        <p>Anna Duval-Guennoc, Jean-Mari Ollivier, Jeanne Mégly, Karen Treguier, Léane Rumin, Marie Breton, Mevena Guillouzic-Gouret, Samuel Julien</p>
         """)
         content.setAlignment(Qt.AlignmentFlag.AlignCenter)
         content.setWordWrap(True)
@@ -1541,7 +1558,7 @@ class MainWindow(QMainWindow):
         if not seg_ids:
             seg_ids = None
         
-        self.waveform.setActive(seg_ids)
+        self.waveform.setActive(seg_ids, center_view=not self.player.isPlaying())
         
         if seg_ids == None:
             return
@@ -1847,6 +1864,10 @@ class MainWindow(QMainWindow):
         print("search tool")
 
 
+    def toggleFollowPlayhead(self):
+        self.follow_playhead_button.toggle()
+
+
     def undo(self):
         self.undo_stack.undo()
 
@@ -1960,12 +1981,12 @@ class MainWindow(QMainWindow):
         """Scroll the text widget to display the sentence
         
         Parameters:
-            seg_id (int):
-                ID of selected segment or -1 if no segment is selected
+            seg_ids (list):
+                ID of selected segments or None
         """
         seg_ids = seg_ids if seg_ids else None
 
-        self.waveform.setActive(seg_ids)
+        self.waveform.setActive(seg_ids, center_view=not self.player.isPlaying())
         
         if seg_ids == None:
             self.playing_segment = -1
