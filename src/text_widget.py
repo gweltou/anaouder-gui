@@ -18,7 +18,7 @@ from PySide6.QtGui import (
     QSyntaxHighlighter,
     QPainter, QPaintEvent,
     QClipboard, QEnterEvent, QDragMoveEvent, QDropEvent,
-    QUndoStack
+    QUndoStack, QShortcut
 )
 
 from ostilhou.asr import extract_metadata
@@ -38,7 +38,7 @@ from src.utils import (
     MEDIA_FORMATS, ALL_COMPATIBLE_FORMATS,
     color_yellow,
 )
-from src.settings import app_settings, SUBTITLES_MARGIN_SIZE
+from src.settings import app_settings, shortcuts, SUBTITLES_MARGIN_SIZE
 
 
 log = logging.getLogger(__name__)
@@ -291,6 +291,9 @@ class TextEditWidget(QTextEdit):
         # Used to handle double and triple-clicks
         self._click_count = 0
         self._last_click = None
+
+        shortcut = QShortcut(shortcuts["dialog_char"], self)
+        shortcut.activated.connect(self.insertDialogChar)
 
 
     def updateThemeColors(self):        
@@ -883,6 +886,37 @@ class TextEditWidget(QTextEdit):
             self.undo_stack.push(InsertTextCommand(self, char, pos))
 
 
+    def insertDialogChar(self):
+        cursor = self.textCursor()
+        pos_in_block = cursor.positionInBlock()
+        block = cursor.block()
+        text = block.text()            
+        
+        cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
+        cursor_offset = 0
+        lines = []
+        for i, l in enumerate(text.split(LINE_BREAK)):
+            if not l.strip().startswith(DIALOG_CHAR):
+                lines.append(DIALOG_CHAR + ' ' + l.strip())
+            else:
+                lines.append(l)
+            if i <= cursor_line_n:
+                cursor_offset += len(lines[-1]) - len(l)
+        new_text = LINE_BREAK.join(lines)
+
+        if new_text == text:
+            return
+
+        self.undo_stack.push(
+            ReplaceTextCommand(
+                self,
+                block,
+                new_text                )
+        )
+        return
+
+    
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
         print("keyPressEvent", event.key())
 
@@ -925,31 +959,31 @@ class TextEditWidget(QTextEdit):
         block_len = block.length()
         
         # Dialog hyphen for subtitles (U+2013)
-        if event.matches(QKeySequence.StandardKey.AddTab):
-            text = block.text()            
+        # if event.matches(shortcuts["dialog_char"].StandardKey):
+        #     text = block.text()            
             
-            cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
-            cursor_offset = 0
-            lines = []
-            for i, l in enumerate(text.split(LINE_BREAK)):
-                if not l.strip().startswith(DIALOG_CHAR):
-                    lines.append(DIALOG_CHAR + ' ' + l.strip())
-                else:
-                    lines.append(l)
-                if i <= cursor_line_n:
-                    cursor_offset += len(lines[-1]) - len(l)
-            new_text = LINE_BREAK.join(lines)
+        #     cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
+        #     cursor_offset = 0
+        #     lines = []
+        #     for i, l in enumerate(text.split(LINE_BREAK)):
+        #         if not l.strip().startswith(DIALOG_CHAR):
+        #             lines.append(DIALOG_CHAR + ' ' + l.strip())
+        #         else:
+        #             lines.append(l)
+        #         if i <= cursor_line_n:
+        #             cursor_offset += len(lines[-1]) - len(l)
+        #     new_text = LINE_BREAK.join(lines)
 
-            if new_text == text:
-                return
+        #     if new_text == text:
+        #         return
 
-            self.undo_stack.push(
-                ReplaceTextCommand(
-                    self,
-                    block,
-                    new_text                )
-            )
-            return
+        #     self.undo_stack.push(
+        #         ReplaceTextCommand(
+        #             self,
+        #             block,
+        #             new_text                )
+        #     )
+        #     return
         
         # ENTER
         if event.key() == Qt.Key.Key_Return:

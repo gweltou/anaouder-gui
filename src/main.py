@@ -920,18 +920,23 @@ class MainWindow(QMainWindow):
             cursor.setPosition(doc_metadata["cursor_pos"])
             self.text_widget.setTextCursor(cursor)
         if "scroll_pos" in doc_metadata:
+            # This doesn't work. I don't know why !
+            # I tried called text_widget.update(), text_widget.updateGeometry(), 
+            # and text_widget.verticalScrollBar().update() but it changes nothing.
             self.text_widget.verticalScrollBar().setValue(doc_metadata["scroll_pos"])
         if "waveform_pos" in doc_metadata:
             self.waveform.t_left = doc_metadata["waveform_pos"]
+            self.waveform.scroll_goal = -1
             self.waveform.must_redraw = True
         if "waveform_pps" in doc_metadata:
             self.waveform.ppsec = doc_metadata["waveform_pps"]
+            self.waveform.ppsec_goal = doc_metadata["waveform_pps"]
             self.waveform.waveform.ppsec = doc_metadata["waveform_pps"]
         if "show_scenes" in doc_metadata and doc_metadata["show_scenes"] == True:
             self.scene_detect_action.setChecked(True)
         if "show_margin" in doc_metadata:
             self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
-        
+
         self.updateWindowTitle()
 
         # Select the first utterance

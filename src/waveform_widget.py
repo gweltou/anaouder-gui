@@ -93,6 +93,8 @@ class WaveformWidget(QWidget):
     refresh_segment_info_resizing = Signal(int, list, float)
     select_segments = Signal(list)
     
+    HANDLE_SELECT_RADIUS = 10
+
 
     class ScaledWaveform():
         def __init__(self):
@@ -180,6 +182,7 @@ class WaveformWidget(QWidget):
         self._sorted_segments = []
 
         self.follow_playhead = True
+        self.was_following = False
         self.snapping = True
         self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS)
 
@@ -847,12 +850,23 @@ class WaveformWidget(QWidget):
                     event.y() >= self.inactive_top
                     and event.y() < self.inactive_top + self.inactive_height
                 ):
-                    self.handle_state[0] = abs((start-time_position) * self.ppsec) < 8
-                    self.handle_state[2] = abs((end-time_position) * self.ppsec) < 8
+                    self.handle_state[0] = abs((start-time_position) * self.ppsec) < WaveformWidget.HANDLE_SELECT_RADIUS
+                    self.handle_state[2] = abs((end-time_position) * self.ppsec) < WaveformWidget.HANDLE_SELECT_RADIUS
                     middle_t = start + (end-start) / 2
-                    self.handle_state[1] = abs((middle_t-time_position) * self.ppsec) < 8
+                    self.handle_state[1] = abs((middle_t-time_position) * self.ppsec) < WaveformWidget.HANDLE_SELECT_RADIUS
+
+                    # Lock view
+                    if any(self.handle_state) and self.follow_playhead:
+                        self.was_following = True
+                        self.follow_playhead = False
+
             if self.handle_state != self.last_handle_state:
                 self.must_redraw = True
+            
+            if self.resizing_handle == None and not any(self.handle_state):
+                # Restore following playhead
+                self.follow_playhead |= self.was_following
+                self.was_following = False 
 
         # Calculate mouse direction
         if self.mouse_prev_pos:
@@ -860,7 +874,7 @@ class WaveformWidget(QWidget):
             if mouse_dpos != 0.0:
                 self.mouse_dir = mouse_dpos / abs(mouse_dpos)
 
-        # Scrolling
+        # Time scrolling
         if (event.buttons() == Qt.MouseButton.LeftButton
                 and self.resizing_handle == None
                 and self.mouse_prev_pos
