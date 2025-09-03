@@ -45,7 +45,7 @@ def pre_process_density(text: str) -> str:
     return text
 
 
-def process_word_for_alignment(s: str) -> str:
+def process_text_for_alignment(s: str) -> str:
     """
     Process sentence for alignment matching used for 'smart splitting'
     Special tokens and metadata are already accounted for.

@@ -21,7 +21,7 @@ class Language:
     get_model_dict:         Callable[[], List[dict]]
     post_process_text:      Callable[[str, bool], str] | None = None
     pre_process_density:    Callable[[str], str] | None = None
-    prepare_for_alignment:  Callable[[str], str] | None = None
+    pre_process_alignment:  Callable[[str], str] | None = None
     remove_fillers:         Callable[[str], str] | None = None
 
     def __post_init__(self):
@@ -38,7 +38,7 @@ class Language:
         return self.pre_process_density(text)
     
     def processTextForAlignment(self, text: str) -> str:
-        return self.prepare_for_alignment(self, text)
+        return self.pre_process_alignment(text)
     
     def removeVerbalFillers(self, text: str) -> str:
         return self.remove_fillers(text)
@@ -77,7 +77,7 @@ for lang in LANG_MODULES:
             short_name = getattr(module, "SHORT_NAME").lower(),
             get_model_dict = getattr(module, "get_model_dictionary"),
             post_process_text = getattr(module, "post_process_text", None),
-            prepare_for_alignment = getattr(module, "process_word_for_alignment", None),
+            pre_process_alignment = getattr(module, "process_text_for_alignment", None),
             remove_fillers= getattr(module, "remove_fillers", None),
         )
     except:

@@ -202,12 +202,13 @@ class WaveformWidget(QWidget):
         self.mouse_prev_pos = None
         self.mouse_dir = 1 # 1 when going right, -1 when going left
 
-        self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
+        self.wavepen = QPen(QColor(0, 162, 180))  # Blue cohandlepen_inactivelor
         self.segpen = QPen(QColor(180, 150, 50, 180), 1)
         self.segbrush = QBrush(QColor(180, 170, 50, 50))
 
         self.handlepen = QPen(QColor(240, 220, 60, 255), 2)
         self.handlepen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        self.handlepen_inactive = QPen(QColor(200, 200, 200), 1.5)
         self.handlepen_shadow = QPen(QColor(240, 220, 60, 50), 5)
         self.handlepen_shadow.setCapStyle(Qt.PenCapStyle.RoundCap)
         self.handle_active_pen = QPen(QColor(255, 250, 80, 150), 2)
@@ -290,7 +291,7 @@ class WaveformWidget(QWidget):
         return seg_id
     
 
-    def addSegment(self, segment, seg_id: Optional[SegmentId]=None) -> SegmentId:
+    def addSegment(self, segment: Segment, seg_id: Optional[SegmentId]=None) -> SegmentId:
         log.debug("addSegment")
         if seg_id == None:
             seg_id = self.getNewId()
@@ -1042,15 +1043,39 @@ class WaveformWidget(QWidget):
             self.painter.drawLine(pos, handle_top, pos + 3, handle_top)
             self.painter.drawLine(pos, handle_down, pos + 3, handle_down)
         elif handle == Handle.MIDDLE:
-            radius = 10
-            lines = radius + 6
-            middle_y = round(self.timecode_margin + (self.height() - self.timecode_margin) * 0.5)
+            self._drawMiddleHandle(pos, True)
+
+
+    def _drawMiddleHandle(self, pos: int, active=False):
+        middle_y = round(self.timecode_margin + (self.height() - self.timecode_margin) * 0.5)
+        
+        if active:
+            radius = 12
             self.painter.setPen(self.handlepen)
-            self.painter.drawEllipse(QPoint(pos, middle_y), radius, radius)
-            self.painter.drawLine(pos + radius, middle_y, pos + lines, middle_y)
-            self.painter.drawLine(pos - radius, middle_y, pos - lines, middle_y)
-            self.painter.drawLine(pos, middle_y+radius, pos, middle_y+lines)
-            self.painter.drawLine(pos, middle_y-radius, pos, middle_y-lines)
+        else:
+            radius = 10
+            self.painter.setPen(self.handlepen_inactive)
+        
+        self.painter.drawEllipse(QPoint(pos, middle_y), radius, radius)
+        if active:
+            # Left arrow
+            self.painter.drawLine(
+                pos - round(1.5 * radius), middle_y - radius // 2,
+                pos - round(1.5 * radius) - radius // 2, middle_y
+            )
+            self.painter.drawLine(
+                pos - round(1.5 * radius), middle_y + radius // 2,
+                pos - round(1.5 * radius) - radius // 2, middle_y
+            )
+            # Right arrow
+            self.painter.drawLine(
+                pos + round(1.5 * radius), middle_y - radius // 2,
+                pos + round(1.5 * radius) + radius // 2, middle_y
+            )
+            self.painter.drawLine(
+                pos + round(1.5 * radius), middle_y + radius // 2,
+                pos + round(1.5 * radius) + radius // 2, middle_y
+            )
 
 
     def _drawSegments(self, t_right: float):
@@ -1107,7 +1132,11 @@ class WaveformWidget(QWidget):
                     elif self.handle_state[1] or self.resizing_handle == Handle.MIDDLE:
                         middle_t = start + (end - start) / 2
                         middle_x = round((middle_t - self.t_left) * self.ppsec)
-                        self._drawHandle(middle_x, Handle.MIDDLE)
+                        self._drawMiddleHandle(middle_x, True)
+                    else:
+                        middle_t = start + (end - start) / 2
+                        middle_x = round((middle_t - self.t_left) * self.ppsec)
+                        self._drawMiddleHandle(middle_x, False)
                 else:
                     self.painter.setBrush(QBrush(QColor(110, 180, 240, 40)))
                     self.painter.setPen(QPen(QColor(110, 180, 240), 1))
@@ -1151,7 +1180,11 @@ class WaveformWidget(QWidget):
                 if self.handle_state[1] or self.resizing_handle == Handle.MIDDLE:
                     middle_t = start + (end - start) / 2
                     middle_x = round((middle_t - self.t_left) * self.ppsec)
-                    self._drawHandle(middle_x, Handle.MIDDLE)
+                    self._drawMiddleHandle(middle_x, True)
+                else:
+                    middle_t = start + (end - start) / 2
+                    middle_x = round((middle_t - self.t_left) * self.ppsec)
+                    self._drawMiddleHandle(middle_x)
                 
                 # Draw snapping markers for video media
                 if self.resizing_handle == Handle.RIGHT and self.fps > 0:

@@ -63,20 +63,20 @@ class Highlighter(QSyntaxHighlighter):
         self.hunspell = None
         self.show_misspelling = False
 
-        self.metadataFormat = QTextCharFormat()
-        self.metadataFormat.setForeground(QColor(165, 0, 165)) # semi-dark magenta
-        self.metadataFormat.setFontWeight(QFont.Weight.DemiBold)
+        self.metadata_format = QTextCharFormat()
+        self.metadata_format.setForeground(QColor(165, 0, 165)) # semi-dark magenta
+        self.metadata_format.setFontWeight(QFont.Weight.DemiBold)
 
-        self.commentFormat = QTextCharFormat()
-        self.commentFormat.setForeground(Qt.GlobalColor.gray)
+        self.comment_format = QTextCharFormat()
+        self.comment_format.setForeground(Qt.GlobalColor.gray)
 
-        self.sp_tokenFormat = QTextCharFormat()
-        self.sp_tokenFormat.setForeground(QColor(220, 180, 0))
-        self.sp_tokenFormat.setFontWeight(QFont.Weight.Bold)
+        self.special_token_format = QTextCharFormat()
+        self.special_token_format.setForeground(QColor(220, 180, 0))
+        self.special_token_format.setFontWeight(QFont.Weight.Bold)
         
-        self.mispellformat = QTextCharFormat()
-        self.mispellformat.setUnderlineColor(QColor("red"))
-        self.mispellformat.setUnderlineStyle(QTextCharFormat.UnderlineStyle.SpellCheckUnderline)
+        self.mispell_format = QTextCharFormat()
+        self.mispell_format.setUnderlineColor(QColor("red"))
+        self.mispell_format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.SpellCheckUnderline)
 
         self.aligned_block_format = QTextBlockFormat()
         self.aligned_block_format.setTopMargin(self.utt_block_margin)
@@ -137,12 +137,13 @@ class Highlighter(QSyntaxHighlighter):
                 else:
                     cursor.setBlockFormat(self.green_block_format)
             else:
-                cursor.setBlockFormat(self.red_block_format)
-        else:
-            if sentence_splits:
-                cursor.setBlockFormat(self.red_block_format)
-            else:
                 cursor.setBlockFormat(QTextBlockFormat())
+        else:
+            # print(f"{sentence_splits=}")
+            # if sentence_splits:
+            #     cursor.setBlockFormat(self.red_block_format)
+            # else:
+            cursor.setBlockFormat(QTextBlockFormat())
 
 
     def highlightDensity(self):
@@ -175,29 +176,29 @@ class Highlighter(QSyntaxHighlighter):
         # Find and crop comments
         i = text.find('#')
         if i >= 0:
-            self.setFormat(i, len(text)-i, self.commentFormat)
+            self.setFormat(i, len(text)-i, self.comment_format)
             text = text[:i]
         
-        if not text.strip():
-            block = self.currentBlock()
-            cursor = QTextCursor(block)
-            cursor.setBlockFormat(QTextBlockFormat())
-            self.text_edit.document().blockSignals(was_blocked)
-            return
+        # if not text.strip():
+        #     block = self.currentBlock()
+        #     cursor = QTextCursor(block)
+        #     cursor.setBlockFormat(QTextBlockFormat())
+        #     self.text_edit.document().blockSignals(was_blocked)
+        #     return
 
         # Metadata  
         expression = QRegularExpression(r"{\s*(.+?)\s*}")
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
-            self.setFormat(match.capturedStart(), match.capturedLength(), self.metadataFormat)
+            self.setFormat(match.capturedStart(), match.capturedLength(), self.metadata_format)
         
         # Special tokens
         expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
-            self.setFormat(match.capturedStart(), match.capturedLength(), self.sp_tokenFormat)
+            self.setFormat(match.capturedStart(), match.capturedLength(), self.special_token_format)
 
         sentence_splits = getSentenceSplits(text)
 
@@ -221,7 +222,7 @@ class Highlighter(QSyntaxHighlighter):
                 continue
             word = match.captured().replace('’', "'")
             if not self.hunspell.lookup(word):
-                self.setFormat(match.capturedStart(), match.capturedLength(), self.mispellformat)
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.mispell_format)
 
 
     def toggleMisspelling(self, checked):
@@ -958,33 +959,6 @@ class TextEditWidget(QTextEdit):
         block_data: MyTextBlockUserData = block.userData()
         block_len = block.length()
         
-        # Dialog hyphen for subtitles (U+2013)
-        # if event.matches(shortcuts["dialog_char"].StandardKey):
-        #     text = block.text()            
-            
-        #     cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
-        #     cursor_offset = 0
-        #     lines = []
-        #     for i, l in enumerate(text.split(LINE_BREAK)):
-        #         if not l.strip().startswith(DIALOG_CHAR):
-        #             lines.append(DIALOG_CHAR + ' ' + l.strip())
-        #         else:
-        #             lines.append(l)
-        #         if i <= cursor_line_n:
-        #             cursor_offset += len(lines[-1]) - len(l)
-        #     new_text = LINE_BREAK.join(lines)
-
-        #     if new_text == text:
-        #         return
-
-        #     self.undo_stack.push(
-        #         ReplaceTextCommand(
-        #             self,
-        #             block,
-        #             new_text                )
-        #     )
-        #     return
-        
         # ENTER
         if event.key() == Qt.Key.Key_Return:
             if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
@@ -1189,6 +1163,7 @@ class TextEditWidget(QTextEdit):
                     # Empty aligned block, remove it
                     seg_id = block_data.data["seg_id"]
                     self.delete_utterances.emit([seg_id])
+                    return
                 elif (
                     block.previous().isValid()
                     and self.isAligned(block.previous())

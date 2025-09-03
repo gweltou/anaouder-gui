@@ -59,11 +59,6 @@ from PySide6.QtMultimedia import (
     QMediaDevices, QAudioOutput, QMediaMetaData
 )
 
-from src.settings import (
-    APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
-    app_settings, shortcuts,
-    SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL,
-)
 from src.utils import (
     sec2hms, splitForSubtitle,
     ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS,
@@ -72,7 +67,7 @@ from src.cache_system import CacheSystem
 from src.version import __version__
 from src.theme import theme
 from src.icons import icons, loadIcons, IconWidget
-from src.waveform_widget import WaveformWidget, ResizeSegmentCommand, Handle
+from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
 from src.text_widget import (
     TextEditWidget, MyTextBlockUserData,
     BlockType, Highlighter,
@@ -87,15 +82,19 @@ from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
 from src.export_txt import exportTxt, exportTxtSignals
 from src.levenshtein_aligner import smart_split
+from src.settings import (
+    APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
+    app_settings, shortcuts,
+    SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL,
+    WAVEFORM_SAMPLERATE,
+)
 import src.lang as lang
 
 
 
 # Config
-WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
 AUTOSEG_MAX_LENGTH = 15
 AUTOSEG_MIN_LENGTH = 3
-STATUS_BAR_TIMEOUT = 4000
 
 
 type Segment = List[float]
@@ -120,6 +119,8 @@ class MainWindow(QMainWindow):
     BUTTON_MARGIN = 4
     BUTTON_LABEL_SIZE = 15
     DIAL_SIZE = 30
+
+    STATUS_BAR_TIMEOUT = 4000
     
     transcribe_file_signal = Signal(str, float)    # Signals are needed for communication between threads
     transcribe_segments_signal = Signal(str, list)
@@ -686,7 +687,7 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def setStatusMessage(self, message: str):
-        self.status_bar.showMessage(message, STATUS_BAR_TIMEOUT)
+        self.status_bar.showMessage(message, MainWindow.STATUS_BAR_TIMEOUT)
 
 
     def updateWindowTitle(self):
@@ -1430,6 +1431,8 @@ class MainWindow(QMainWindow):
 
     def autoSegment(self):
         log.info("Finding segments...")
+        if self.audio_samples is None:
+            return
         
         # Check if there is an active selection
         start_frame = 0
@@ -1447,9 +1450,18 @@ class MainWindow(QMainWindow):
         ]
         log.debug("Segments found:", segments)
         self.setStatusMessage(self.tr("{n} segments found").format(n=len(segments)))
+
+        self.undo_stack.beginMacro("Auto segment")
         for start, end in segments:
-            segment_id = self.waveform.addSegment([start, end])
-            self.text_widget.insertSentenceWithId('*', segment_id)
+            self.undo_stack.push(
+                CreateNewUtteranceCommand(
+                    self,
+                    [start, end],
+                    None
+                )
+            )
+        self.undo_stack.endMacro()
+
     
 
     def adaptToSubtitle(self):
@@ -2075,11 +2087,12 @@ class MainWindow(QMainWindow):
 
 
 class AddSegmentCommand(QUndoCommand):
+    """Define a new audio segment"""
     def __init__(
             self,
             waveform_widget: WaveformWidget,
-            segment: list,
-            seg_id: Optional[int]=None
+            segment: Segment,
+            seg_id: Optional[SegmentId]=None
         ):
         super().__init__()
         self.waveform_widget = waveform_widget
@@ -2100,8 +2113,17 @@ class AddSegmentCommand(QUndoCommand):
 
 
 class CreateNewUtteranceCommand(QUndoCommand):
-    """Create a new utterance with empty text"""
-    def __init__(self, parent, segment:Segment, seg_id:Optional[SegmentId]=None):
+    """
+    Create a new utterance with empty text,
+    the segment will be added to the waveform.
+    """
+
+    def __init__(
+            self,
+            parent,
+            segment: Segment,
+            seg_id: Optional[SegmentId]=None
+        ):
         log.debug(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {seg_id=})")
         print(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {seg_id=})")
 
@@ -2114,8 +2136,8 @@ class CreateNewUtteranceCommand(QUndoCommand):
         self.parent.text_widget.printDocumentStructure()
     
     def undo(self):
-        print("Before undo")
-        self.parent.text_widget.printDocumentStructure()
+        # print("Before undo")
+        # self.parent.text_widget.printDocumentStructure()
 
         if self.parent.playing_segment == self.seg_id:
             self.parent.playing_segment = -1
@@ -2127,20 +2149,19 @@ class CreateNewUtteranceCommand(QUndoCommand):
         self.parent.waveform.must_redraw = True
         self.parent.text_widget.setCursorState(self.prev_cursor)
 
-        print("After undo")
-        self.parent.text_widget.printDocumentStructure()
+        # print("After undo")
+        # self.parent.text_widget.printDocumentStructure()
 
     def redo(self):
-        print("Before redo")
-        self.parent.text_widget.printDocumentStructure()
+        # print("Before redo")
+        # self.parent.text_widget.printDocumentStructure()
 
         self.parent.waveform.addSegment(self.segment, self.seg_id)
-        print(f"{self.parent.waveform.segments=}")
         self.parent.text_widget.insertSentenceWithId('*', self.seg_id)
         self.parent.text_widget.highlightUtterance(self.seg_id)
 
-        print("After redo")
-        self.parent.text_widget.printDocumentStructure()
+        # print("After redo")
+        # self.parent.text_widget.printDocumentStructure()
 
 
 

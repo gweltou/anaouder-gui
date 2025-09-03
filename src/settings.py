@@ -13,6 +13,8 @@ MULTI_LANG = False
 app_settings = QSettings("OTilde", APP_NAME)
 
 
+WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
+
 # Default values for subtitles
 SUBTITLES_MIN_FRAMES = 16
 SUBTITLES_MAX_FRAMES = 125

@@ -107,48 +107,52 @@ def download(url: str, root: str) -> str:
 
 
 def getSentenceSplits(text: str) -> List[tuple]:
-        sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
+    """
+    Return a list of text regions,
+    stripped of their metadata and special tokens
+    """
+    sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
 
-        # Metadata  
-        expression = QRegularExpression(r"{\s*(.+?)\s*}")
-        matches = expression.globalMatch(text)
-        while matches.hasNext():
-            match = matches.next()
-            sentence_splits = _cutSentence(
-                sentence_splits,
-                match.capturedStart(),
-                match.capturedStart()+match.capturedLength()
-            )
-        
-        # Special tokens
-        expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
-        matches = expression.globalMatch(text)
-        while matches.hasNext():
-            match = matches.next()
-            sentence_splits = _cutSentence(
-                sentence_splits, match.capturedStart(),
-                match.capturedStart()+match.capturedLength()
-            )
-        return sentence_splits
+    # Metadata  
+    expression = QRegularExpression(r"{\s*(.+?)\s*}")
+    matches = expression.globalMatch(text)
+    while matches.hasNext():
+        match = matches.next()
+        sentence_splits = _cutSentence(
+            sentence_splits,
+            match.capturedStart(),
+            match.capturedStart()+match.capturedLength()
+        )
+    
+    # Special tokens
+    expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
+    matches = expression.globalMatch(text)
+    while matches.hasNext():
+        match = matches.next()
+        sentence_splits = _cutSentence(
+            sentence_splits, match.capturedStart(),
+            match.capturedStart()+match.capturedLength()
+        )
+    return sentence_splits
 
 
 
 def _cutSentence(segments: list, start: int, end: int) -> list:
-        """Subdivide a list of segments further, given a pair of indices"""
-        assert start < end
-        splitted = []
-        for seg_start, seg_end in segments:
-            if start >= seg_start and end <= seg_end:
-                # Split this segment
-                if start > seg_start:
-                    pre_segment = (seg_start, start)
-                    splitted.append(pre_segment)
-                if end < seg_end:
-                    post_segment = (end, seg_end)
-                    splitted.append(post_segment)
-            else:
-                splitted.append((seg_start, seg_end))
-        return splitted
+    """Subdivide a list of segments further, given a pair of indices"""
+    assert start < end
+    splitted = []
+    for seg_start, seg_end in segments:
+        if start >= seg_start and end <= seg_end:
+            # Split this segment
+            if start > seg_start:
+                pre_segment = (seg_start, start)
+                splitted.append(pre_segment)
+            if end < seg_end:
+                post_segment = (end, seg_end)
+                splitted.append(post_segment)
+        else:
+            splitted.append((seg_start, seg_end))
+    return splitted
 
 
 
