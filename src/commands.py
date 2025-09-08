@@ -235,34 +235,42 @@ class ReplaceTextCommand(QUndoCommand):
             text_edit: QTextEdit,
             block: QTextBlock,
             new_text: str,
+            html=False
         ):
         super().__init__()
         self.text_edit = text_edit
         self.block = block
         self.block_number = text_edit.getBlockNumber(block.position())
-        self.old_text = block.text()
+        self.old_text = text_edit.getBlockHtml(block)[0]
         self.new_text = new_text
         self.prev_cursor = self.text_edit.getCursorState()
+        self.html = html
     
     def undo(self):
+        print("replaceTextCommand undo")
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-        cursor.insertText(self.old_text)
+        cursor.insertHtml(self.old_text)
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
+        print("replaceTextCommand redo")
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-        cursor.insertText(self.new_text)
+        cursor.insertHtml(self.new_text)
         # cursor.setPosition(self.block.position() + self.cursor_pos_new)
-        self.text_edit.setTextCursor(cursor)
+        # self.text_edit.setTextCursor(cursor)
+        # self.text_edit.setCursorState(self.prev_cursor)
     
     def id(self):
         return 3
+    
+    def mergeWith(self, other: QUndoCommand) -> bool:
+        return False
 
 
 

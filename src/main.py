@@ -69,8 +69,7 @@ from src.theme import theme
 from src.icons import icons, loadIcons, IconWidget
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
 from src.text_widget import (
-    TextEditWidget, MyTextBlockUserData,
-    BlockType, Highlighter,
+    TextEditWidget, MyTextBlockUserData, Highlighter,
     LINE_BREAK
 )
 from src.video_widget import VideoWidget
@@ -307,12 +306,12 @@ class MainWindow(QMainWindow):
 
         # Display Menu
         display_menu = menu_bar.addMenu(self.tr("&Display"))
-        toggle_video = QAction(self.tr("&Video"), self)
-        toggle_video.setCheckable(True)
-        toggle_video.setChecked(True)
-        toggle_video.toggled.connect(
+        self.toggle_video_action = QAction(self.tr("&Video"), self)
+        self.toggle_video_action.setCheckable(True)
+        self.toggle_video_action.setChecked(True)
+        self.toggle_video_action.toggled.connect(
             lambda checked: self.toggleVideo(checked))
-        display_menu.addAction(toggle_video)
+        display_menu.addAction(self.toggle_video_action)
 
         toggle_misspelling = QAction(self.tr("&Misspelling"), self)
         toggle_misspelling.setCheckable(True)
@@ -428,6 +427,11 @@ class MainWindow(QMainWindow):
         undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
         undo_button.clicked.connect(self.undo)
         undo_redo_layout.addWidget(undo_button)
+        undo_action = QAction("Undo", self)
+        undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        # undo_action.triggered.connect(self.undo)
+        undo_action.triggered.connect(undo_button.animateClick)
+        self.addAction(undo_action)
 
         redo_button = QPushButton()
         redo_button.setIcon(icons["redo"])
@@ -435,6 +439,11 @@ class MainWindow(QMainWindow):
         redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
         redo_button.clicked.connect(self.redo)
         undo_redo_layout.addWidget(redo_button)
+        redo_action = QAction("Redo", self)
+        redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        # redo_action.triggered.connect(self.redo)
+        redo_action.triggered.connect(redo_button.animateClick)
+        self.addAction(redo_action)
 
         top_bar_layout.addLayout(undo_redo_layout)
 
@@ -447,12 +456,17 @@ class MainWindow(QMainWindow):
         italic_button = QPushButton()
         italic_button.setIcon(icons["italic"])
         italic_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
-        italic_button.setEnabled(False) # TODO
+        italic_button.setToolTip(self.tr("Italic") + f" <{QKeySequence(QKeySequence.StandardKey.Italic).toString()}>")
+        italic_button.setShortcut(QKeySequence.StandardKey.Italic)
+        italic_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.ITALIC))
         format_buttons_layout.addWidget(italic_button)
+
         bold_button = QPushButton()
         bold_button.setIcon(icons["bold"])
         bold_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
-        bold_button.setEnabled(False) # TODO
+        italic_button.setToolTip(self.tr("Bold") + f" <{QKeySequence(QKeySequence.StandardKey.Bold).toString()}>")
+        bold_button.setShortcut(QKeySequence.StandardKey.Bold)
+        bold_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.BOLD))
         format_buttons_layout.addWidget(bold_button)
 
         top_bar_layout.addLayout(format_buttons_layout)
@@ -469,6 +483,7 @@ class MainWindow(QMainWindow):
         text_zoom_out_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
         text_zoom_out_button.clicked.connect(lambda: self.text_widget.zoomOut(1))
         view_buttons_layout.addWidget(text_zoom_out_button)
+
         text_zoom_in_button = QPushButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
         text_zoom_in_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
@@ -730,7 +745,8 @@ class MainWindow(QMainWindow):
             for blockIndex in range(doc.blockCount()):
                 try:
                     block = doc.findBlockByNumber(blockIndex)
-                    text = block.text().strip()
+                    # text = block.text().strip()
+                    text = self.text_widget.getBlockHtml(block)[0]
                     if block.userData():
                         userData = block.userData().data
                         if "seg_id" in userData:
@@ -937,6 +953,8 @@ class MainWindow(QMainWindow):
             self.scene_detect_action.setChecked(True)
         if "show_margin" in doc_metadata:
             self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
+        if "video_open" in doc_metadata:
+            self.toggle_video_action.setChecked(doc_metadata["video_open"])
 
         self.updateWindowTitle()
 
@@ -1019,7 +1037,7 @@ class MainWindow(QMainWindow):
         utterances = []
         block = self.text_widget.document().firstBlock()
         while block.isValid():            
-            if self.text_widget.getBlockType(block) == BlockType.ALIGNED:
+            if self.text_widget.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
                 text = block.text()
 
                 # Remove extra spaces
@@ -1532,13 +1550,15 @@ class MainWindow(QMainWindow):
         params = dialog.get_parameters()
         app_settings.setValue("adapt_to_subtitles/saved_parameters", params)
 
-        print(params)
-
-        # Get selected blocks
-        cursor = self.text_widget.textCursor()
-        start_block = self.text_widget.document().findBlock(cursor.selectionStart())
-        end_block = self.text_widget.document().findBlock(cursor.selectionEnd())
-
+        if params["apply_to_all"] == True:
+            # Get all blocks
+            start_block = self.text_widget.document().firstBlock()
+            end_block = self.text_widget.document().lastBlock()
+        else:
+            # Get selected blocks
+            cursor = self.text_widget.textCursor()
+            start_block = self.text_widget.document().findBlock(cursor.selectionStart())
+            end_block = self.text_widget.document().findBlock(cursor.selectionEnd())
 
         self.undo_stack.beginMacro("adapt to subtitles")
         if params["apply_subtitle_rules"] == True:
@@ -1638,9 +1658,10 @@ class MainWindow(QMainWindow):
             self.undo_stack.push(CreateNewUtteranceCommand(self, segment, seg_id))
             
         block = self.text_widget.getBlockById(seg_id)
-        text = self.onRecognizerOutput(tokens)
-        text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
-        self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
+        if block:
+            text = self.onRecognizerOutput(tokens)
+            text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
+            self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
 
 
     @Slot(list)
@@ -1886,17 +1907,19 @@ class MainWindow(QMainWindow):
 
 
     def undo(self):
+        print("main undo")
         self.undo_stack.undo()
 
     def redo(self):
+        print("main redo")
         self.undo_stack.redo()
 
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.matches(QKeySequence.StandardKey.Undo):
-            self.undo()
-        elif event.matches(QKeySequence.StandardKey.Redo):
-            self.redo()
+    # def keyPressEvent(self, event: QKeyEvent) -> None:
+    #     if event.matches(QKeySequence.StandardKey.Undo):
+    #         self.undo()
+    #     elif event.matches(QKeySequence.StandardKey.Redo):
+    #         self.redo()
 
 
     # Drag and drop event handlers
@@ -1979,6 +2002,7 @@ class MainWindow(QMainWindow):
                 "waveform_pps": self.waveform.ppsec,
                 "show_scenes": self.scene_detect_action.isChecked(),
                 "show_margin": self.toggle_margin_action.isChecked(),
+                "video_open": self.toggle_video_action.isChecked()
             }
             self.cache.update_doc_metadata(self.file_path, doc_metadata)
         

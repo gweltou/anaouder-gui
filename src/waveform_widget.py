@@ -202,13 +202,13 @@ class WaveformWidget(QWidget):
         self.mouse_prev_pos = None
         self.mouse_dir = 1 # 1 when going right, -1 when going left
 
-        self.wavepen = QPen(QColor(0, 162, 180))  # Blue cohandlepen_inactivelor
+        self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
         self.segpen = QPen(QColor(180, 150, 50, 180), 1)
         self.segbrush = QBrush(QColor(180, 170, 50, 50))
 
         self.handlepen = QPen(QColor(240, 220, 60, 255), 2)
         self.handlepen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        self.handlepen_inactive = QPen(QColor(200, 200, 200), 1.5)
+        self.handlepen_inactive = QPen(QColor(0, 255, 80), 2)
         self.handlepen_shadow = QPen(QColor(240, 220, 60, 50), 5)
         self.handlepen_shadow.setCapStyle(Qt.PenCapStyle.RoundCap)
         self.handle_active_pen = QPen(QColor(255, 250, 80, 150), 2)
