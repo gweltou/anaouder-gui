@@ -247,7 +247,6 @@ class ReplaceTextCommand(QUndoCommand):
         self.html = html
     
     def undo(self):
-        print("replaceTextCommand undo")
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
@@ -256,7 +255,6 @@ class ReplaceTextCommand(QUndoCommand):
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
-        print("replaceTextCommand redo")
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)

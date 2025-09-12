@@ -738,9 +738,6 @@ class TextEditWidget(QTextEdit):
             else:
                 formats.add(format)
             new_fragments = fragments[:frag_i] + [(text, formats)] + fragments[frag_i+1:]
-            
-            print(new_fragments)
-            print(self.fragmentsToHtml(new_fragments))
 
             self.undo_stack.push(
                 ReplaceTextCommand(
@@ -770,7 +767,7 @@ class TextEditWidget(QTextEdit):
                 f"</{format.value}>",
                 html[selection_end_mask:]
             ])
-            print(f"{new_text=}")
+            
             self.undo_stack.push(
                 ReplaceTextCommand(
                     self,
@@ -1338,7 +1335,6 @@ class TextEditWidget(QTextEdit):
                             cursor_pos
                         )
                     )
-                    self.printDocumentStructure()
                     self.undo_stack.push(
                         DeleteTextCommand(
                             self,
@@ -1347,7 +1343,6 @@ class TextEditWidget(QTextEdit):
                             QTextCursor.MoveOperation.Right
                         )
                     )
-                    self.printDocumentStructure()
                     self.undo_stack.endMacro()
                     return
             else:

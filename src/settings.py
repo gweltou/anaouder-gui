@@ -36,6 +36,9 @@ shortcuts: Dict[str, QKeySequence] = {
     "select":          QKeySequence("S"), #Qt.Key.Key_S,
     "follow_playhead": QKeySequence("F"),
     "dialog_char":     QKeySequence("Ctrl+D"),
+    "crop_head":        QKeySequence("Ctrl+H"),
+    "crop_tail":        QKeySequence("Ctrl+T"),
+    "segment_from_selection": QKeySequence("A"),
 
     # This creates a segmentation fault, for some reason...
     # "zoom_in":      QKeySequence(QKeySequence.StandardKey.ZoomIn),
