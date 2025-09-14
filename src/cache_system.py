@@ -167,11 +167,18 @@ class CacheSystem:
         if fingerprint in self.media_cache:
             metadata = self.media_cache[fingerprint]
             metadata["last_access"] = datetime.now().timestamp()
-            self._media_cache_dirty = True
-            self._save_root_cache_to_disk()
 
             transcription = self._get_transcription_from_disk(fingerprint)
+            if transcription == None:
+                # No transcription exists on disk
+                transcription = []
+                metadata["transcription_completed"] = False
+                metadata["transcription_progress"] = 0.0
             scenes = self._get_scenes_from_disk(fingerprint)
+
+            # Update media cache on disk
+            self._media_cache_dirty = True
+            self._save_root_cache_to_disk()
 
             # We keep a copy of the loaded transcription and scenes in cache
             self.media_metadata_cache[fingerprint] = {
@@ -294,11 +301,14 @@ class CacheSystem:
         self._media_cache_dirty = True
 
 
-    def _get_transcription_from_disk(self, fingerprint: str) -> List[tuple]:
-        """Return the cached transcription for this media file"""
+    def _get_transcription_from_disk(self, fingerprint: str) -> Optional[List[tuple]]:
+        """
+        Return the cached transcription for this media file.
+        Return None if no transcription exists on disk
+        """
         filepath = self._get_transcription_path(fingerprint)
         if not os.path.exists(filepath):
-            return []
+            return None
         try:
             tokens = []
             with open(filepath, 'r') as _f:
@@ -315,7 +325,7 @@ class CacheSystem:
             return tokens
         except Exception as e:
             print(f"Error reading transcription file: {e}")
-            return []
+            return None
 
 
     def _save_transcription_to_disk(self, fingerprint: str, tokens: List[tuple]):
