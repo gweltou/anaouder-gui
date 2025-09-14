@@ -8,7 +8,7 @@ from src.utils import PUNCTUATION
 SPLIT_TOKEN = '|'
 
 
-def smart_split(text, position, vosk_tokens):
+def smart_split(text: str, position: int, vosk_tokens: list) -> tuple:
     """
     Split a text at a given character position
     while trying to keep it aligned with timecoded tokens
@@ -70,6 +70,30 @@ def smart_split(text, position, vosk_tokens):
     return left_seg, right_seg
 
 
+def smart_split_idx(text: str, idx: int, vosk_tokens: list) -> tuple:
+    """
+    Split a text based on a gap index from a hypotheses token list
+    
+    Args:
+        text: text to be splitted
+        idx: gap index between two tokens
+        vosk_tokens: list of timecoded tokens of the format
+            (start_time, end_time, word, confidence, language)
+
+    Returns:
+        A 2-tuple consisting of the left text and the right text
+    """
+
+    # Add a split token in the list of transcribed tokens
+    vosk_tokens = vosk_tokens[:idx] + [(None, None, '|')] + vosk_tokens[idx:]
+    result = align_texts_with_vosk_tokens(text, vosk_tokens)
+
+    for t in result:
+        print(t)
+    
+    raise NotImplementedError("Method is not yet implemented")
+
+
 def prep_word(word: str) -> str:
     return prepWordForAlignment(word)  # Language dependent pre-processing
 
@@ -91,7 +115,7 @@ def align_texts_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
     text = re.sub(r"{.+?}", '', text)        # Ignore metadata
     text = re.sub(r"<[A-Z\']+?>", '¤', text) # Replace special tokens
     text = text.replace('*', '')
-    text = text.replace('-', ' ')            # Needed for Breton, but how does it impact other languages ?
+    text = text.replace('-', ' ')            # Needed for Breton, but how does it impact other languages?
     text = text.replace('.', ' ')
     text = filter_out_chars(text, PUNCTUATION + "'")
 

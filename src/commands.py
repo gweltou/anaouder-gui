@@ -52,7 +52,13 @@ class InsertTextCommand(QUndoCommand):
 
 
 class DeleteTextCommand(QUndoCommand):
-    """Delete characters at a given position in the document"""
+    """
+    Delete characters at a given position in the document
+    
+    Arguments:
+        direction:
+            Delete direction from the cursor
+    """
     def __init__(
             self,
             text_edit: QTextEdit,
@@ -120,8 +126,8 @@ class InsertBlockCommand(QUndoCommand):
         seg_id (int, optional):
             A segment ID to be linked to the new block
         after (bool, optional):
-            Must be set to True if new block was inserted
-            at the end of parent block
+            Must be set to True if new block is to be inserted
+            after the block at the given position
     """
     def __init__(
             self,
@@ -151,13 +157,10 @@ class InsertBlockCommand(QUndoCommand):
     
     def undo(self):
         log.debug("InsertBlockCommand UNDO")
-        print(f"{self.position=}")
-        print("before:")
-        self.text_edit.printDocumentStructure()
 
         was_blocked = self.text_edit.signalsBlocked()
-        self.text_edit.document().blockSignals(True)
         self.text_edit.blockSignals(True)
+        # self.text_edit.document().blockSignals(True)
 
         cursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
@@ -165,12 +168,16 @@ class InsertBlockCommand(QUndoCommand):
         if self.after:
             # We need to delete the next block
             if not cursor.atEnd():
-                cursor.movePosition(QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor)
+                # Go to next block
+                cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
 
             cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-            if not cursor.atEnd():
+            if cursor.atEnd():
+                cursor.removeSelectedText()
+                cursor.deletePreviousChar()
+            else:
                 cursor.movePosition(QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor)
-            cursor.removeSelectedText()
+                cursor.removeSelectedText()
         else:
             # The block to delete is the current one
             cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
@@ -181,8 +188,8 @@ class InsertBlockCommand(QUndoCommand):
         self.text_edit.document().blockSignals(was_blocked)
         self.text_edit.blockSignals(was_blocked)
 
-        print("after:")
-        self.text_edit.printDocumentStructure()
+        self.text_edit.highlighter.rehighlightBlock(cursor.block())
+
 
     def redo(self):
         #log.debug("InsertBlockCommand REDO")
@@ -209,16 +216,22 @@ class InsertBlockCommand(QUndoCommand):
         else:
             # Block has been inserted before
             cursor.movePosition(QTextCursor.MoveOperation.PreviousBlock)
+
             if self.inserted_text:
                 cursor.insertText(self.inserted_text)
             if self.seg_id:
                 cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
+            else:
+                cursor.block().setUserData(None)
             self.text_edit.highlighter.rehighlightBlock(cursor.block())
+
             if old_data:
                 cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
                 cursor.block().setUserData(MyTextBlockUserData(old_data))
+            self.text_edit.highlighter.rehighlightBlock(cursor.block())
 
         self.text_edit.blockSignals(was_blocked)
+
     
     def id(self):
         return 2

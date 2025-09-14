@@ -249,6 +249,7 @@ class TextEditWidget(QTextEdit):
     cursor_changed_signal = Signal(list)
     join_utterances = Signal(list)
     delete_utterances = Signal(list)
+    split_utterance = Signal(int, int)
 
 
     def __init__(self, parent=None):
@@ -532,6 +533,9 @@ class TextEditWidget(QTextEdit):
         new_block = cursor.block()
         if not new_block.text():
             new_block.setUserData(None)
+        
+        print("cursor set")
+        self.setTextCursor(cursor)
         
         self.document().blockSignals(False)
         self.highlighted_sentence_id = -1
@@ -1113,9 +1117,9 @@ class TextEditWidget(QTextEdit):
             if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
                 # Prevent Ctrl + ENTER
                 return
-            print("ENTER")
 
             if cursor.hasSelection():
+                # TODO: Unintuitive behaviour
                 self.deleteSelectedText(cursor)
                 return
 
@@ -1124,7 +1128,7 @@ class TextEditWidget(QTextEdit):
             if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
                 left_part = text[:pos_in_block].rstrip()
                 right_part = text[pos_in_block:].lstrip()
-                new_text = left_part + LINE_BREAK + right_part
+                new_text = left_part + "<BR>" + right_part
                 self.undo_stack.push(
                     ReplaceTextCommand(
                         self,
@@ -1160,7 +1164,7 @@ class TextEditWidget(QTextEdit):
                 # Check if current block has an associated segment
                 if self.isAligned(block):
                     seg_id = block_data.data["seg_id"]
-                    self.main_window.splitUtterance(seg_id, pos_in_block)
+                    self.split_utterance.emit(seg_id, pos_in_block)
                     return
                 else:
                     # Unaligned block
@@ -1335,10 +1339,12 @@ class TextEditWidget(QTextEdit):
                             cursor_pos
                         )
                     )
+                    # We need to delete from pos-1 so that the metadata doesn't get shifted
+                    # But this doesn't work to remove the first block
                     self.undo_stack.push(
                         DeleteTextCommand(
                             self,
-                            prev_block.position() - 1, # We need to delete from pos-1 so that the metadata doens't get shifted
+                            prev_block.position() - 1,
                             prev_block.length(),
                             QTextCursor.MoveOperation.Right
                         )

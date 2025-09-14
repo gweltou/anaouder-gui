@@ -161,7 +161,6 @@ def splitForSubtitle(text: str, size: int):
     Split a single subtitle from a string
     or return original string in a tuple
 
-
     Returns:
         tuple (str, str)
             First split and rest of string

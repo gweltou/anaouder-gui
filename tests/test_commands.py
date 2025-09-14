@@ -30,7 +30,6 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(levelname)s %(asctime)s %(name)s %(filename)s:%(lineno)d %(message)s',
     handlers=[
-        logging.FileHandler('anaouder_app.log'),
         logging.StreamHandler()
     ]
 )
@@ -109,7 +108,7 @@ def undo_redo_command(command: QUndoCommand, random_cursor=False):
     assert state4 == state2
 
 
-def undo_redo_function(function: callable, *args: list, random_cursor=False):
+def undo_redo_function(function: callable, *args, random_cursor=False):
     state1 = getDocumentState()
     function(*args)
     state2 = getDocumentState()
@@ -157,7 +156,8 @@ def test_delete_utterances():
 
 def test_split_utterance():
     load_document()
-    undo_redo_function(main_window.splitUtterance, 1, 8)
+    undo_redo_function(main_window.splitFromText, 1, 8)
+    undo_redo_function(main_window.splitFromText, 2, 6)
 
 
 def test_join_utterances():
@@ -269,8 +269,6 @@ def test_delete_first_utterance():
 
     undo_redo_function(apply_commands, random_cursor=True)
     
-
-
 
 if main_window.recognizer_thread.isRunning():
     main_window.recognizer_worker.must_stop = True

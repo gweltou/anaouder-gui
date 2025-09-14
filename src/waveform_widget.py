@@ -94,6 +94,7 @@ class WaveformWidget(QWidget):
     refresh_segment_info_resizing = Signal(int, list, float)
     select_segments = Signal(list)
     stop_follow = Signal()
+    split_utterance = Signal(int, float)
     
     HANDLE_SELECT_RADIUS = 10
 
@@ -264,6 +265,11 @@ class WaveformWidget(QWidget):
         self.crop_tail_action.triggered.connect(self.cropTail)
         self.addAction(self.crop_tail_action)
 
+        self.split_here_action = QAction(self.tr("Split here"))
+        # self.split_here_action.setShortcut(shortcuts["crop_tail"])
+        self.split_here_action.triggered.connect(self.splitHere)
+        self.addAction(self.split_here_action)
+
         self.clear()
 
 
@@ -365,6 +371,14 @@ class WaveformWidget(QWidget):
                         self.playhead
                     )
                 )
+    
+
+    def splitHere(self):
+        log.debug("splitHere")
+        if self.active_segment_id >= 0:
+            segment = self.segments[self.active_segment_id]
+            if segment[0] <= self.playhead <= segment[1]:
+                self.split_utterance.emit(self.active_segment_id, self.playhead)
 
 
     def getPrevSegmentId(self, seg_id: Optional[SegmentId]=None) -> SegmentId:
@@ -1051,6 +1065,7 @@ class WaveformWidget(QWidget):
             # Context menu for regular segment(s)
             context.addAction(self.crop_head_action)
             context.addAction(self.crop_tail_action)
+            context.addAction(self.split_here_action)
             context.addSeparator()
 
             context.addAction(self.transcribe_action)

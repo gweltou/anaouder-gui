@@ -80,7 +80,7 @@ from src.parameters_dialog import ParametersDialog
 from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
 from src.export_txt import exportTxt, exportTxtSignals
-from src.levenshtein_aligner import smart_split
+from src.levenshtein_aligner import smart_split, smart_split_idx
 from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
     app_settings, shortcuts,
@@ -218,6 +218,7 @@ class MainWindow(QMainWindow):
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
+        self.text_widget.split_utterance.connect(self.splitFromText)
 
         # self.waveform.selection_started.connect(lambda: self.select_button.setChecked(True))
         # self.waveform.selection_ended.connect(lambda: self.select_button.setChecked(False))
@@ -231,6 +232,7 @@ class MainWindow(QMainWindow):
         self.waveform.refresh_segment_info_resizing.connect(self.updateSegmentInfoResizing)
         self.waveform.select_segments.connect(self.selectFromWaveform)
         self.waveform.stop_follow.connect(self.toggleFollowPlayhead)
+        self.waveform.split_utterance.connect(self.splitFromWaveform)
 
         # Restore window geometry and state
         self.restoreGeometry(app_settings.value("main/geometry"))
@@ -1702,7 +1704,15 @@ class MainWindow(QMainWindow):
         if not tokens:
             return '*'
         
-        tokens = [ (t["start"], t["end"], t["word"], t["conf"], t["lang"]) for t in tokens ]
+        tokens = [
+            (
+                round(t["start"], 3),
+                round(t["end"], 3),
+                t["word"],
+                round(t["conf"], 3),
+                t["lang"]
+            ) for t in tokens
+        ]
 
         # Update backend transcription with new tokens
         old_tokens = self.media_metadata.get("transcription", [])
@@ -1737,7 +1747,8 @@ class MainWindow(QMainWindow):
     @Slot()
     def onRecognizerEOF(self):
         self.media_metadata["transcription_completed"] = True
-        self.cache.update_media_metadata(self.media_path, self.media_metadata)
+        if self.media_path != None:
+            self.cache.update_media_metadata(self.media_path, self.media_metadata)
 
 
     @Slot(float)
@@ -1787,19 +1798,19 @@ class MainWindow(QMainWindow):
             self.transcribe_file_signal.emit(self.media_path, transcription_progress)
 
 
-    def splitUtterance(self, id:int, position:int):
+    def splitFromText(self, seg_id: SegmentId, position: int):
         """
         Split audio segment, given a char relative position in sentence
-        Called from the text edit widget
+        Called from the textEdit widget
         """
-        log.debug(f"splitUtterance {id=} {position=}")
-        
-        block = self.text_widget.getBlockById(id)
+        log.debug(f"splitFromText({seg_id=}, {position=})")
+
+        block = self.text_widget.getBlockById(seg_id)
         if block == None:
             return
         
         text = block.text()
-        seg_start, seg_end = self.waveform.segments[id]
+        seg_start, seg_end = self.waveform.segments[seg_id]
 
         left_text = text[:position].rstrip()
         right_text = text[position:].lstrip()
@@ -1836,12 +1847,78 @@ class MainWindow(QMainWindow):
             right_seg = [seg_start + dur*pc + 0.05, seg_end]
             log.info("ratio splitting")
         
+        self.splitUtterance(seg_id, left_text, right_text, left_seg, right_seg)
+    
+
+    def splitFromWaveform(self, seg_id: SegmentId, timepos: float):
+        block = self.text_widget.getBlockById(seg_id)
+        if block == None:
+            return
+        if seg_id not in self.waveform.segments:
+            return
+        
+        text = block.text()
+        seg_start, seg_end = self.waveform.segments[seg_id]
+
+        left_seg = [seg_start, timepos]
+        right_seg = [timepos, seg_end]
+        left_text = None
+        right_text = None
+
+        # Check if we can "smart split"
+        cached_transcription = self.media_metadata.get("transcription", [])
+        if cached_transcription:
+            if seg_end <= cached_transcription[-1][1]:
+                tr_len = len(cached_transcription)
+                # Get tokens range corresponding to current segment
+                i = 0
+                while i < tr_len and cached_transcription[i][1] < seg_start:
+                    i += 1
+                j = i
+                while j < tr_len and cached_transcription[j][0] < seg_end:
+                    j += 1
+                tokens_range = cached_transcription[i:j]
+
+                # Find the best location to split the transcribed sentence
+                idx = 0
+                for t_start, t_end, word, _, _ in tokens_range:
+                    if timepos < t_start + (t_end - t_start) * 0.5:
+                        break
+                    idx += 1
+
+                try:
+                    log.info("smart splitting")
+                    # left_seg, right_seg = smart_split(text, position, tokens_range)
+                    left_text, right_text = smart_split_idx(text, idx, tokens_range)
+                    # left_seg[0] = seg_start
+                    # right_seg[1] = seg_end
+                except Exception as e:
+                    log.error(f"Could not smart split: {e}")
+
+        if left_text == None or right_text == None:
+            # Add en empty sentence after
+            left_text = text[:]
+            right_text = ""
+
+        self.splitUtterance(seg_id, left_text, right_text, left_seg, right_seg)
+        
+
+    def splitUtterance(
+            self,
+            seg_id: SegmentId,
+            left_text: str, right_text: str,
+            left_seg: list, right_seg: list
+        ):
         left_id = self.waveform.getNewId()
         right_id = self.waveform.getNewId()
+        
+        position = self.text_widget.textCursor().position()
+        text_len = len(self.text_widget.getBlockById(seg_id).text())
 
         self.undo_stack.beginMacro("split utterance")
-        self.undo_stack.push(DeleteUtterancesCommand(self, [id]))
+        self.undo_stack.push(DeleteUtterancesCommand(self, [seg_id]))
         self.undo_stack.push(AddSegmentCommand(self.waveform, left_seg, left_id))
+        print(f"{self.text_widget.textCursor().position()=}")
         self.undo_stack.push(
             InsertBlockCommand(
                 self.text_widget,
@@ -1852,6 +1929,7 @@ class MainWindow(QMainWindow):
             )
         )
         self.undo_stack.push(AddSegmentCommand(self.waveform, right_seg, right_id))
+        print(f"{self.text_widget.textCursor().position()=}")
         self.undo_stack.push(
             InsertBlockCommand(
                 self.text_widget,
@@ -1861,6 +1939,7 @@ class MainWindow(QMainWindow):
                 after=True
             )
         )
+        print(f"{self.text_widget.textCursor().position()=}")
         # Set cursor at the beggining of the right utterance
         cursor = self.text_widget.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
@@ -1921,11 +2000,9 @@ class MainWindow(QMainWindow):
 
 
     def undo(self):
-        print("main undo")
         self.undo_stack.undo()
 
     def redo(self):
-        print("main redo")
         self.undo_stack.redo()
 
 
@@ -2318,9 +2395,7 @@ class DeleteUtterancesCommand(QUndoCommand):
         log.debug("DeleteUtterancesCommand UNDO")
 
         for segment, text, seg_id, data, pos in zip(self.segments, self.texts, self.seg_ids, self.datas, self.positions):
-            print(f"{segment=} {text=} {seg_id=}")
             seg_id = self.waveform.addSegment(segment, seg_id)
-            #self.text_edit.insertSentenceWithId(text, seg_id)
             self.text_edit.insertBlock(text, data, pos - 1)
         self.waveform.must_redraw = True
         # self.waveform.refreshSegmentInfo()
@@ -2331,7 +2406,6 @@ class DeleteUtterancesCommand(QUndoCommand):
         log.debug("DeleteUtterancesCommand REDO")
 
         self.text_edit.document().blockSignals(True)
-
         self.text_edit.setCursorState(self.prev_cursor)
         
         for seg_id in self.seg_ids:
