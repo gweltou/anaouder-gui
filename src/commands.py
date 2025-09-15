@@ -66,7 +66,7 @@ class DeleteTextCommand(QUndoCommand):
             size: int,
             direction: QTextCursor.MoveOperation
         ):
-        # log.debug(f"Calling DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
+        # log.debug(f"DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
         
         super().__init__()
         self.text_edit = text_edit
