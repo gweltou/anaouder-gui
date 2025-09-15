@@ -856,7 +856,7 @@ class MainWindow(QMainWindow):
                         line = line[:match.start()] + line[match.end():]
                         line = line.strip()
                         # line = re.sub(r"<br>", '\u2028', line, count=0, flags=re.IGNORECASE)
-                        line = line.replace('\u2028', "<br>")
+                        line = line.replace(LINE_BREAK, "<br>")
                         self.text_widget.appendSentence(line, seg_id)
                     else:
                         # Regular text or comments or metadata only
@@ -1050,8 +1050,8 @@ class MainWindow(QMainWindow):
                 text = block.text()
 
                 # Remove extra spaces
-                lines = [' '.join(l.split()) for l in text.split('\u2028')]
-                text = '\u2028'.join(lines)
+                lines = [' '.join(l.split()) for l in text.split(LINE_BREAK)]
+                text = LINE_BREAK.join(lines)
             
                 block_id = self.text_widget.getBlockId(block)
                 start, end = self.waveform.segments[block_id]
@@ -1222,8 +1222,14 @@ class MainWindow(QMainWindow):
 
 
     def getSubtitleAtPosition(self, time) -> Tuple[int, str]:
-        """return (seg_id, sentence) or None
-        if there is any utterance at that time position"""
+        """
+        Return (seg_id, sentence) or None
+        if there is any utterance at that time position
+        
+        Return:
+            seg_id, sentence (tuple):
+                Segment ID and HTML formatted sentence
+        """
 
         seg_id = self.waveform.getSegmentAtTime(time)
         if seg_id < 0:
@@ -1231,9 +1237,10 @@ class MainWindow(QMainWindow):
         
         # Remove metadata from subtitle text
         block = self.text_widget.getBlockById(seg_id)
-        text = extract_metadata(block.text())[0] if block else ""
+        html, _ = self.text_widget.getBlockHtml(block)
+        html = extract_metadata(html)[0] if block else ""
 
-        return (seg_id, text)
+        return (seg_id, html)
     
 
     def updateSubtitle(self, time: float):

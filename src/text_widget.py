@@ -243,8 +243,8 @@ class Highlighter(QSyntaxHighlighter):
 class TextEditWidget(QTextEdit):
 
     class TextFormat(Enum):
-        BOLD = 'b'
-        ITALIC = 'i'
+        BOLD = 'B'
+        ITALIC = 'I'
     
 
     class BlockType(Enum):
@@ -659,7 +659,7 @@ class TextEditWidget(QTextEdit):
     
 
     def fragmentsToHtml(self, fragments: list) -> Tuple[str, List[bool]]:
-        # Convert list of fragments to an html string 
+        # Convert list of fragments to an html string
         html_text = ""
         mask = []
         last_format = set()
@@ -674,8 +674,16 @@ class TextEditWidget(QTextEdit):
                 format_element = f"<{f.value}>"
                 html_text += format_element
                 mask.extend( [False] * len(format_element) )
-            html_text += text
-            mask.extend( [True] * len(text) )
+            
+            # Convert line breaks
+            sub_lines = text.split(LINE_BREAK)
+            html_text += sub_lines[0]
+            mask.extend( [True] * len(sub_lines[0]) )
+            for l in sub_lines[1:]:
+                html_text += "<BR>" + l
+                mask.extend( [False] * len("<BR>") )
+                mask.extend( [True] * len(l) )
+            
             last_format = formats
         
         # closing_formats = last_format.difference(set())
@@ -740,14 +748,14 @@ class TextEditWidget(QTextEdit):
 
 
     def changeTextFormat(self, format: TextFormat):
+
         def find_masked_index(index: int, mask: list):
-            i = 0
-            for j, val in enumerate(mask):
-                if val:
-                    if i == index:
-                        break
-                    i += 1
-            return j
+            i, j = 0, 0
+            while j < index:
+                if mask[i]:
+                    j += 1
+                i += 1
+            return i
         
         log.debug(f"Set text formatting to {format}")
 
@@ -789,6 +797,10 @@ class TextEditWidget(QTextEdit):
             selection_end = cursor.selectionEnd() - end_block.position()
             html, mask = self.getBlockHtml(cursor.block())
 
+            # Hack to account for line-breaks that count for 2 chars
+            selection_start -= start_block.text()[:cursor.selectionStart()].count('\u2028')
+            selection_end -= start_block.text()[:cursor.selectionEnd()].count('\u2028')
+            
             # Find corresponding index of 'selection_start' in html string
             selection_start_mask = find_masked_index(selection_start, mask)
             selection_end_mask = find_masked_index(selection_end, mask)
@@ -808,6 +820,8 @@ class TextEditWidget(QTextEdit):
                     new_text,
                 )
             )
+
+            html, mask = self.getBlockHtml(cursor.block())
 
         else:
             # Selection spreads over many blocks
@@ -1078,7 +1092,8 @@ class TextEditWidget(QTextEdit):
             ReplaceTextCommand(
                 self,
                 block,
-                new_text                )
+                new_text
+            )
         )
         return
 
@@ -1155,8 +1170,21 @@ class TextEditWidget(QTextEdit):
             text = block.text()
 
             if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                left_part = text[:pos_in_block].rstrip()
-                right_part = text[pos_in_block:].lstrip()
+                html, mask = self.getBlockHtml(block)
+                
+                # Hack to account for line-breaks that count for 2 chars
+                pos_in_block -= text[:pos_in_block].count('\u2028')
+                
+                # Find position in html string
+                html_idx = 0
+                mask_idx = 0
+                while mask_idx < pos_in_block:
+                    if mask[html_idx] == True:
+                        mask_idx += 1
+                    html_idx += 1
+                
+                left_part = html[:html_idx].rstrip()
+                right_part = html[html_idx:].lstrip()
                 new_text = left_part + "<BR>" + right_part
                 self.undo_stack.push(
                     ReplaceTextCommand(
