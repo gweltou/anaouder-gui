@@ -385,7 +385,7 @@ class ModelsTab(QWidget):
 
         if MULTI_LANG:
             lang_group = QGroupBox(self.tr("Language"))
-            lang_layout = QHBoxLayout()
+            lang_layout = QHBoxLayout(lang_group)
             lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
             # lang_label = QLabel("Lang")
             self.lang_selection = QComboBox()
@@ -397,14 +397,13 @@ class ModelsTab(QWidget):
             self.lang_selection.currentIndexChanged.connect(self.updateLanguage)
             # lang_layout.addWidget(lang_label)
             lang_layout.addWidget(self.lang_selection)
-            lang_group.setLayout(lang_layout)
         
         # Model lists section
         models_layout = QHBoxLayout()
         
         # Online available models (left side)
         online_group = QGroupBox(self.tr("Online Models"))
-        online_layout = QVBoxLayout()
+        online_layout = QVBoxLayout(online_group)
         
         self.online_models_list = QListWidget()
         self.online_models_list.addItems(lang.getDownloadableModelList())
@@ -415,11 +414,10 @@ class ModelsTab(QWidget):
         
         online_layout.addWidget(self.online_models_list)
         online_layout.addWidget(self.download_button)
-        online_group.setLayout(online_layout)
         
         # Local downloaded models (right side)
         local_group = QGroupBox(self.tr("Local Models"))
-        local_layout = QVBoxLayout()
+        local_layout = QVBoxLayout(local_group)
         
         self.local_models_list = QListWidget()
         # self.local_models_list.setSelectionMode(QAbstractItemView.MultiSelection)
@@ -432,7 +430,6 @@ class ModelsTab(QWidget):
         
         local_layout.addWidget(self.local_models_list)
         local_layout.addWidget(self.delete_button)
-        local_group.setLayout(local_layout)
         
         models_layout.addWidget(online_group)
         models_layout.addWidget(local_group)
@@ -489,59 +486,88 @@ class SubtitlesTab(QWidget):
     def __init__(self, parent: ParametersDialog, fps: int, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.my_parent = parent
-        self.fps = fps if fps > 0 else 25 # Default to 25 fps
-    
+        self.fps = fps if fps > 0 else 25 # Default to 25 fps even if irrevelant
+
+        self.default_params_lock = False
+
+        # self.default_params = app_settings.value(
+        #     "subtitles/default",
+        #     {
+        #         "min_frames": SUBTITLES_MIN_FRAMES,
+        #         "max_frames": SUBTITLES_MAX_FRAMES,
+        #         "min_interval": SUBTITLES_MIN_INTERVAL,
+        #         "auto_extend": SUBTITLES_AUTO_EXTEND,
+        #         "text_margin": SUBTITLES_MARGIN_SIZE,
+        #         "text_density": SUBTITLES_CPS
+        #     },
+        #     type=dict
+        # )
+
+        self.user_params: dict = app_settings.value(
+            "subtitles/user",
+            {
+                "min_frames": SUBTITLES_MIN_FRAMES,
+                "max_frames": SUBTITLES_MAX_FRAMES,
+                "min_interval": SUBTITLES_MIN_INTERVAL,
+                "auto_extend": SUBTITLES_AUTO_EXTEND,
+                "text_margin": SUBTITLES_MARGIN_SIZE,
+                "text_density": SUBTITLES_CPS
+            },
+        )
+
         main_layout = QVBoxLayout()
+
+        preference_group = QGroupBox(self.tr("Preferences"))
+        preference_layout = QHBoxLayout(preference_group)
+        preference_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.pref_selector = QComboBox()
+        self.pref_selector.addItem(self.tr("Netflix default"), "default_params")
+        self.pref_selector.addItem(self.tr("Custom"), "user_params_1")
+        # self.pref_selector.insertSeparator(1)
+        self.pref_selector.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        self.pref_selector.currentIndexChanged.connect(self.updateParameters)
+        preference_layout.addWidget(self.pref_selector)
+        main_layout.addWidget(preference_group)        
 
         # Subtitles duration
         duration_group = QGroupBox(self.tr("Subtitles duration"))
-        duration_layout = QVBoxLayout()
-        duration_group.setLayout(duration_layout)
+        duration_layout = QVBoxLayout(duration_group)
 
         ## Minimum duration for a subtitle
         self.min_frames_spin = QSpinBox()
         self.min_frames_spin.setSuffix(' ' + self.tr("Frames"))
         self.min_frames_spin.setMinimum(1)
-        self.min_frames_spin.setValue(
-            app_settings.value("subtitles/min_frames",SUBTITLES_MIN_FRAMES, type=int)
-        )
         self.min_frames_spin.valueChanged.connect(self.updateMinFrames)
         self.min_dur_label = QLabel()
         min_frames_layout = QHBoxLayout()
         min_frames_layout.addWidget(QLabel(self.tr("Minimum")))
         min_frames_layout.addWidget(self.min_frames_spin)
         min_frames_layout.addWidget(self.min_dur_label)
+        duration_layout.addLayout(min_frames_layout)
 
         ## Maximum duration for a subtitle
         self.max_frames_spin = QSpinBox()
         self.max_frames_spin.setSuffix(' ' + self.tr("Frames"))
         self.max_frames_spin.setMinimum(1)
         self.max_frames_spin.setMaximum(250)
-        self.max_frames_spin.setValue(
-            app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
-        )
         self.max_frames_spin.valueChanged.connect(self.updateMaxFrames)
         self.max_dur_label = QLabel()
         max_frames_layout = QHBoxLayout()
         max_frames_layout.addWidget(QLabel(self.tr("Maximum")))
         max_frames_layout.addWidget(self.max_frames_spin)
         max_frames_layout.addWidget(self.max_dur_label)
-
-        duration_layout.addLayout(min_frames_layout)
         duration_layout.addLayout(max_frames_layout)
 
         # Subtitles interval
         interval_group = QGroupBox(self.tr("Time gap between subtitles"))
-        interval_layout = QVBoxLayout()
-        interval_group.setLayout(interval_layout)
+        interval_layout = QVBoxLayout(interval_group)
 
         ## Minimum time interval between two subtitles
         self.min_interval_spin = QSpinBox()
         self.min_interval_spin.setSuffix(' ' + self.tr("Frames"))
         self.min_interval_spin.setRange(0, 8)
-        self.min_interval_spin.setValue(
-            app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL, type=int)
-        )
         self.min_interval_spin.valueChanged.connect(self.updateMinInterval)
         self.min_interval_time_label = QLabel()
         min_interval_layout = QHBoxLayout()
@@ -552,18 +578,15 @@ class SubtitlesTab(QWidget):
 
         ## Auto extend subtitles for uniform gaps
         auto_extend_interval_checkbox = QCheckBox(self.tr("Auto extend"))
-        auto_extend_interval_checkbox.setChecked(
-            app_settings.value("subtitles/auto_extend", SUBTITLES_AUTO_EXTEND, type=bool)
-        )
+        # auto_extend_interval_checkbox.setChecked(
+        #     app_settings.value("subtitles/auto_extend", SUBTITLES_AUTO_EXTEND, type=bool)
+        # )
         auto_extend_interval_checkbox.toggled.connect(
             lambda checked: app_settings.setValue("subtitles/auto_extend", checked)
         )
         self.extend_max_gap_spin = QSpinBox()
         self.extend_max_gap_spin.setSuffix(' ' + self.tr("Frames"))
         self.extend_max_gap_spin.setMaximum(16)
-        self.extend_max_gap_spin.setValue(
-            app_settings.value("subtitles/auto_extend_max_gap", SUBTITLES_AUTO_EXTEND_MAX_GAP, type=int)
-        )
         self.extend_max_gap_spin.valueChanged.connect(self.updateExtendMaxGap)
         self.extend_max_gap_time_label = QLabel()
         auto_extend_layout = QHBoxLayout()
@@ -575,15 +598,11 @@ class SubtitlesTab(QWidget):
 
         # Subtitles text length
         text_group = QGroupBox(self.tr("Text length and density"))
-        text_layout = QVBoxLayout()
-        text_group.setLayout(text_layout)
+        text_layout = QVBoxLayout(text_group)
 
         ## Text margin
         self.text_margin_spin = QSpinBox()
         self.text_margin_spin.setSuffix(' ' + self.tr("chars"))
-        self.text_margin_spin.setValue(
-            app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
-        )
         self.text_margin_spin.valueChanged.connect(self.updateMarginSize)
         text_margin_layout = QHBoxLayout()
         text_margin_layout.addWidget(QLabel(self.tr("Text margin size")))
@@ -595,16 +614,11 @@ class SubtitlesTab(QWidget):
         self.text_density_spin.setSuffix(' ' + self.tr("c/s"))
         self.text_density_spin.setDecimals(1)
         self.text_density_spin.setSingleStep(0.1)
-        self.text_density_spin.setValue(
-            app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
-        )
         self.text_density_spin.valueChanged.connect(self.updateDensity)
         text_density_layout = QHBoxLayout()
         text_density_layout.addWidget(QLabel(self.tr("Characters per second")))
         text_density_layout.addWidget(self.text_density_spin)
         text_layout.addLayout(text_density_layout)
-
-        ####
 
         main_layout.addWidget(duration_group)
         main_layout.addWidget(interval_group)
@@ -613,25 +627,35 @@ class SubtitlesTab(QWidget):
 
         self.setLayout(main_layout)
 
-        self.updateMinFrames()
-        self.updateMaxFrames()
-        self.updateMinInterval()
-        self.updateExtendMaxGap()
+        if app_settings.value("subtitles/use_default", True, type=bool):
+            print("should set to default")
+            if self.pref_selector.currentIndex() == 0:
+                self.updateParameters(0)
+            else:
+                self.pref_selector.setCurrentIndex(0)
+        else:
+            print("should set to user pref")
+            self.pref_selector.setCurrentIndex(1)
     
-
     def updateMinFrames(self):
         min_frames = self.min_frames_spin.value()
         app_settings.setValue("subtitles/min_frames", min_frames)
         t = min_frames / self.fps
         self.min_dur_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
-
+        if not self.default_params_lock:
+            self.user_params["min_frames"] = min_frames
+            self.switchToUserParams()
+    
     def updateMaxFrames(self):
         max_frames = self.max_frames_spin.value()
         app_settings.setValue("subtitles/max_frames", max_frames)
         t = max_frames / self.fps
         self.max_dur_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
+        if not self.default_params_lock:
+            self.user_params["max_frames"] = max_frames
+            self.switchToUserParams()
 
     def updateMinInterval(self):
         min_interval = self.min_interval_spin.value()
@@ -640,6 +664,9 @@ class SubtitlesTab(QWidget):
         self.min_interval_time_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         self.extend_max_gap_spin.setMinimum(min_interval + 1)
+        if not self.default_params_lock:
+            self.user_params["min_interval"] = min_interval
+            self.switchToUserParams()
     
     def updateExtendMaxGap(self):
         max_gap = self.extend_max_gap_spin.value()
@@ -647,16 +674,53 @@ class SubtitlesTab(QWidget):
         t = max_gap / self.fps
         self.extend_max_gap_time_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
+        if not self.default_params_lock:
+            self.user_params["auto_extend_max_gap"] = max_gap
+            self.switchToUserParams()
     
     def updateMarginSize(self):
         margin_size = self.text_margin_spin.value()
         app_settings.setValue("subtitles/margin_size", margin_size)
         self.my_parent.signals.subtitles_margin_size_changed.emit(margin_size)
+        if not self.default_params_lock:
+            self.user_params["text_margin"] = margin_size
+            self.switchToUserParams()
     
     def updateDensity(self):
         density = self.text_density_spin.value()
         app_settings.setValue("subtitles/cps", density)
         self.my_parent.signals.subtitles_cps_changed.emit(density)
+        if not self.default_params_lock:
+            self.user_params["text_density"] = density
+            self.switchToUserParams()
+    
+    def updateParameters(self, idx):
+        if idx == 0:
+            # Set back to default parameters
+            self.default_params_lock = True
+            self.min_frames_spin.setValue(SUBTITLES_MIN_FRAMES)
+            self.max_frames_spin.setValue(SUBTITLES_MAX_FRAMES)
+            self.min_interval_spin.setValue(SUBTITLES_MIN_INTERVAL)
+            self.extend_max_gap_spin.setValue(SUBTITLES_AUTO_EXTEND_MAX_GAP)
+            self.text_margin_spin.setValue(SUBTITLES_MARGIN_SIZE)
+            self.text_density_spin.setValue(SUBTITLES_CPS)
+            self.default_params_lock = False
+            app_settings.setValue("subtitles/use_default", True)
+        elif idx == 1:
+            self.min_frames_spin.setValue(self.user_params["min_frames"])
+            self.max_frames_spin.setValue(self.user_params["max_frames"])
+            self.min_interval_spin.setValue(self.user_params["min_interval"])
+            self.extend_max_gap_spin.setValue(self.user_params["auto_extend_max_gap"])
+            self.text_margin_spin.setValue(self.user_params["text_margin"])
+            self.text_density_spin.setValue(self.user_params["text_density"])
+            app_settings.setValue("subtitles/use_default", False)
+    
+    def switchToUserParams(self):
+        if self.pref_selector.currentIndex() == 0:
+            self.pref_selector.setCurrentIndex(1)
+        app_settings.setValue("subtitles/use_default", False)
+        # Saving user preferences
+        app_settings.setValue("subtitles/user", self.user_params)
 
 
 
@@ -667,12 +731,6 @@ class UITab(QWidget):
         self.video_widget = video_widget
 
         main_layout = QVBoxLayout()
-
-        # main_layout.addWidget(lang_label)
-        
-        # self.lang_selection = QComboBox()
-        # self.lang_selection.addItems(["Brezhoneg", "Français", "English", "Cymbraeg"])
-        # main_layout.addWidget(self.lang_selection)
 
         ui_lang_group = QGroupBox(self.tr("Language of user interface"))
         lang_layout = QHBoxLayout()
