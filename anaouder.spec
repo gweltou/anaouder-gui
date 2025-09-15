@@ -28,8 +28,8 @@ def get_binaries():
         binaries = [
             (get_lib_path("vosk/libvosk.dyld"), "vosk"),
             (get_lib_path("static_ffmpeg/bin/darwin/*"), "static_ffmpeg/bin/darwin"),
-            (get_lib_path("PySide6/Qt/lib/*.dylib"), "."),
-            (get_lib_path("PySide6/Qt/plugins/*"), "PySide6/Qt/plugins"),
+            #(get_lib_path("PySide6/Qt/lib/*.dylib"), "."),
+            #(get_lib_path("PySide6/Qt/plugins/*"), "PySide6/Qt/plugins"),
         ]
     elif platform.system() == "Windows":
         binaries = [
@@ -75,6 +75,7 @@ a = Analysis(
         ("./icons/select_segment.png", "icons/"),
         ("./icons/add_segment.png", "icons/"),
         ("./icons/del_segment.png", "icons/"),
+        ("./icons/follow_playhead.png", "icons/"),
 
         ("./icons/anaouder_256.png", "icons/"),
         ("./icons/OTilde.png", "icons/"),
@@ -141,7 +142,7 @@ exe = EXE(
 app = BUNDLE(
     exe,
     name='Anaouder.app',
-    icon=None,
+    icon='icons/icon.icns',
     bundle_identifier='com.OTilde.Anaouder',
     info_plist={
         'CFBundleExecutable': 'Anaouder',

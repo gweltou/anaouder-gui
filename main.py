@@ -9,7 +9,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(levelname)s %(asctime)s %(name)s:%(lineno)d %(message)s',
     handlers=[
-        logging.FileHandler('anaouder_app.log'),
+        # logging.FileHandler('anaouder_app.log'),
         logging.StreamHandler()
     ]
 )
