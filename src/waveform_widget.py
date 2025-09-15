@@ -193,7 +193,7 @@ class WaveformWidget(QWidget):
         self.follow_playhead = True
         self.was_following = False
         self.snapping = True
-        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS)
+        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
 
         self.timecode_margin = 20
 

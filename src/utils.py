@@ -106,7 +106,7 @@ def download(url: str, root: str) -> str:
 
 
 
-def getSentenceSplits(text: str) -> List[tuple]:
+def getSentenceRegions(text: str) -> List[tuple]:
     """
     Return a list of text regions,
     stripped of their metadata and special tokens
@@ -175,7 +175,7 @@ def splitForSubtitle(text: str, size: int):
         idx = text.find(DIALOG_CHAR, idx+1)
         return (text[:idx], text[idx:])
 
-    text_segs = getSentenceSplits(text)
+    text_segs = getSentenceRegions(text)
     text_len = sum([e-s for s, e in text_segs])
     if text_len > size:
         

@@ -855,7 +855,8 @@ class MainWindow(QMainWindow):
                             first_utt_id = seg_id
                         line = line[:match.start()] + line[match.end():]
                         line = line.strip()
-                        line = re.sub(r"<br>", '\u2028', line, count=0, flags=re.IGNORECASE)
+                        # line = re.sub(r"<br>", '\u2028', line, count=0, flags=re.IGNORECASE)
+                        line = line.replace('\u2028', "<br>")
                         self.text_widget.appendSentence(line, seg_id)
                     else:
                         # Regular text or comments or metadata only

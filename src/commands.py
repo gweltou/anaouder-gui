@@ -248,7 +248,7 @@ class ReplaceTextCommand(QUndoCommand):
             text_edit: QTextEdit,
             block: QTextBlock,
             new_text: str,
-            html=False
+            # html=False
         ):
         super().__init__()
         self.text_edit = text_edit
@@ -257,14 +257,14 @@ class ReplaceTextCommand(QUndoCommand):
         self.old_text = text_edit.getBlockHtml(block)[0]
         self.new_text = new_text
         self.prev_cursor = self.text_edit.getCursorState()
-        self.html = html
+        # self.html = html
     
     def undo(self):
         block = self.text_edit.document().findBlockByNumber(self.block_number)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-        cursor.insertHtml(self.old_text)
+        cursor.insertHtml(self.old_text.replace('\u2028', "<br>"))
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
@@ -272,7 +272,7 @@ class ReplaceTextCommand(QUndoCommand):
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-        cursor.insertHtml(self.new_text)
+        cursor.insertHtml(self.new_text.replace('\u2028', "<br>"))
         # cursor.setPosition(self.block.position() + self.cursor_pos_new)
         # self.text_edit.setTextCursor(cursor)
         # self.text_edit.setCursorState(self.prev_cursor)

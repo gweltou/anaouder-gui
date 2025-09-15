@@ -32,7 +32,7 @@ from src.commands import (
 )
 from src.theme import theme
 from src.utils import (
-    getSentenceSplits,
+    getSentenceRegions,
     MyTextBlockUserData,
     LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
     MEDIA_FORMATS, ALL_COMPATIBLE_FORMATS,
@@ -58,7 +58,7 @@ class Highlighter(QSyntaxHighlighter):
 
     def __init__(self, parent, text_edit):
         super().__init__(parent)
-        self.text_edit : TextEditWidget = text_edit
+        self.text_edit: TextEditWidget = text_edit
         self.mode = self.ColorMode.ALIGNMENT
         self.hunspell = None
         self.show_misspelling = False
@@ -106,7 +106,9 @@ class Highlighter(QSyntaxHighlighter):
     def setMode(self, mode: ColorMode):
         log.info(f"Set highlighter to {mode}")
         self.mode = mode
+        was_blocked = self.text_edit.document().blockSignals(True)
         self.rehighlight()
+        self.text_edit.document().blockSignals(was_blocked)
 
 
     def updateThemeColors(self):
@@ -153,7 +155,7 @@ class Highlighter(QSyntaxHighlighter):
         if self.currentBlockUserData():
             if self.text_edit.isAligned(block):
                 utt_id = self.text_edit.getBlockId(block)
-                density = self.text_edit.parent.getUtteranceDensity(utt_id)
+                density = self.text_edit.main_window.getUtteranceDensity(utt_id)
                 if density < 17.0:
                     if self.text_edit.highlighted_sentence_id == self.text_edit.getBlockId(block):
                         cursor.setBlockFormat(self.active_green_block_format)
@@ -171,7 +173,8 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def highlightBlock(self, text):
-        was_blocked = self.text_edit.document().blockSignals(True)
+        doc_was_blocked = self.text_edit.document().blockSignals(True)
+        was_blocked = self.text_edit.blockSignals(True)
 
         # Find and crop comments
         i = text.find('#')
@@ -200,7 +203,7 @@ class Highlighter(QSyntaxHighlighter):
             match = matches.next()
             self.setFormat(match.capturedStart(), match.capturedLength(), self.special_token_format)
 
-        sentence_splits = getSentenceSplits(text)
+        sentence_splits = getSentenceRegions(text)
 
         # Background color
         if self.mode == self.ColorMode.ALIGNMENT:
@@ -208,10 +211,11 @@ class Highlighter(QSyntaxHighlighter):
         elif self.mode == self.ColorMode.DENSITY:
             self.highlightDensity()
         
-        self.text_edit.document().blockSignals(was_blocked)
 
         # Check misspelled words
         if not self.show_misspelling:
+            self.text_edit.document().blockSignals(doc_was_blocked)
+            self.text_edit.blockSignals(was_blocked)
             return
         
         expression = QRegularExpression(r'\b([\w’\']+)\b', QRegularExpression.PatternOption.UseUnicodePropertiesOption)
@@ -223,6 +227,9 @@ class Highlighter(QSyntaxHighlighter):
             word = match.captured().replace('’', "'")
             if not self.hunspell.lookup(word):
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.mispell_format)
+        
+        self.text_edit.document().blockSignals(doc_was_blocked)
+        self.text_edit.blockSignals(was_blocked)
 
 
     def toggleMisspelling(self, checked):
@@ -252,7 +259,7 @@ class TextEditWidget(QTextEdit):
     split_utterance = Signal(int, int)
 
 
-    def __init__(self, parent=None):
+    def __init__(self, parent):
         super().__init__(parent)
         self.main_window = parent
 
@@ -397,7 +404,7 @@ class TextEditWidget(QTextEdit):
         """Returns length of sentence, stripped of metadata and comments"""
         if not block:
             return 0.0
-        sentence_splits = getSentenceSplits(block.text())
+        sentence_splits = getSentenceRegions(block.text())
         return sum([ e-s for s, e in sentence_splits ], 0)
 
 
@@ -771,7 +778,6 @@ class TextEditWidget(QTextEdit):
                     self,
                     cursor.block(),
                     self.fragmentsToHtml(new_fragments)[0],
-                    html=True
                 )
             )
             return
@@ -800,7 +806,6 @@ class TextEditWidget(QTextEdit):
                     self,
                     cursor.block(),
                     new_text,
-                    html=True
                 )
             )
 
