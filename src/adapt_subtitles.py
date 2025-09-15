@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, 
-    QCheckBox, QPushButton, QDialogButtonBox
+    QCheckBox, QPushButton, QDialogButtonBox, QRadioButton,
 )
 from PySide6.QtCore import Qt
 
@@ -17,36 +17,35 @@ class AdaptDialog(QDialog):
         layout = QVBoxLayout(self)
         
         # Segment options group
-        segment_group = QGroupBox(self.tr("Segments options"))
-        segment_layout = QVBoxLayout(segment_group)
-        
-        self.split_chars_checkbox = QCheckBox(self.tr("Split after X chars"))
-        self.split_chars_checkbox.setChecked(
-            app_settings.value("adapt_params/auto_split", True)
-        )
+        options_group = QGroupBox(self.tr("Options"))
+        options_layout = QVBoxLayout(options_group)
 
         self.subtitle_rules_checkbox = QCheckBox(self.tr("Apply subtitles length and interval rules"))
         self.subtitle_rules_checkbox.setChecked(
             app_settings.value("adapt_params/apply_subtitles_rules", True)
         )
-
-        segment_layout.addWidget(self.split_chars_checkbox)
-        segment_layout.addWidget(self.subtitle_rules_checkbox)
-        
-        layout.addWidget(segment_group)
-        
-        # Text options group
-        text_group = QGroupBox(self.tr("Text options"))
-        text_layout = QVBoxLayout(text_group)
+        options_layout.addWidget(self.subtitle_rules_checkbox)
         
         self.remove_fillers_checkbox = QCheckBox(self.tr('Remove verbal fillers ("hum", "err"...)'))
         self.remove_fillers_checkbox.setChecked(
             app_settings.value("adapt_params/remove_fillers", True)
         )
 
-        text_layout.addWidget(self.remove_fillers_checkbox)
+        options_layout.addWidget(self.remove_fillers_checkbox)
         
-        layout.addWidget(text_group)
+        layout.addWidget(options_group)
+
+        # "Apply to" group
+        apply_to_group = QGroupBox(self.tr("Apply to"))
+        apply_to_layout = QHBoxLayout(apply_to_group)
+
+        self.selected_radio_button = QRadioButton(self.tr("Selected segments"), apply_to_group)
+        self.selected_radio_button.setChecked(True)
+        apply_to_layout.addWidget(self.selected_radio_button)
+        self.all_radio_button = QRadioButton(self.tr("All segments"), apply_to_group)
+        apply_to_layout.addWidget(self.all_radio_button)
+
+        layout.addWidget(apply_to_group)
         
         # Add stretch to push buttons to bottom
         layout.addStretch()
@@ -59,16 +58,16 @@ class AdaptDialog(QDialog):
         
         layout.addWidget(button_box)
     
-    def get_parameters(self):
-        """Return the selected parameters as a dictionary"""
+
+    def get_parameters(self) -> dict:
         return {
-            'split_after_chars': self.split_chars_checkbox.isChecked(),
-            'apply_subtitle_rules': self.subtitle_rules_checkbox.isChecked(),
-            'remove_verbal_fillers': self.remove_fillers_checkbox.isChecked()
+            "apply_subtitle_rules": self.subtitle_rules_checkbox.isChecked(),
+            "remove_verbal_fillers": self.remove_fillers_checkbox.isChecked(),
+            "apply_to_all": self.all_radio_button.isChecked(),
         }
     
-    def set_parameters(self, params):
-        """Set the checkbox states from a parameters dictionary"""
-        self.split_chars_checkbox.setChecked(params.get('split_after_chars', False))
-        self.subtitle_rules_checkbox.setChecked(params.get('apply_subtitle_rules', False))
-        self.remove_fillers_checkbox.setChecked(params.get('remove_verbal_fillers', False))
+
+    def set_parameters(self, params: dict):
+        self.subtitle_rules_checkbox.setChecked(params.get("apply_subtitle_rules", False))
+        self.remove_fillers_checkbox.setChecked(params.get("remove_verbal_fillers", False))
+        self.all_radio_button.setChecked(params.get("apply_to_all", False))
