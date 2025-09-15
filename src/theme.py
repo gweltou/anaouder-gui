@@ -4,6 +4,7 @@ from PySide6.QtGui import QColor
 
 
 class Theme():
+    # Text background colors
     green_light = QColor(210, 255, 230)
     green_dark = QColor(150, 255, 180, 24)
     green = green_light
@@ -19,6 +20,10 @@ class Theme():
     margin_light = QColor(0, 0, 0, 14)
     margin_dark = QColor(255, 255, 255, 14)
     margin = margin_light
+
+    # Waveform colors
+    segment_green = QColor(0, 255, 80)
+    selection_blue = QColor(110, 180, 240)
 
     wf_bg_color_light = QColor(245, 245, 245)
     wf_bg_color_dark = QColor(30, 30, 30)

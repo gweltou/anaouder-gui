@@ -274,7 +274,7 @@ class TextEditWidget(QTextEdit):
 
         # Subtitles margin
         self._text_margin = False
-        self._margin_size = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE)
+        self._margin_size = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
         self._char_width = -1
         self.margin_color = theme.margin
 
@@ -511,7 +511,10 @@ class TextEditWidget(QTextEdit):
             
 
     def deleteSentence(self, utt_id: int) -> None:
-        """Delete the sentence of an utterance, and its metadata"""
+        """
+        Delete the sentence of an utterance, and its metadata.
+        This is not a undoable command.
+        """
         # TODO: fix this (userData aren't deleted)
         block = self.getBlockById(utt_id)
         if not block:
@@ -544,17 +547,37 @@ class TextEditWidget(QTextEdit):
     def deleteSelectedText(self, cursor: QTextCursor):
         """Delete a selected portion of text, using an undoable command"""
         pos = cursor.selectionEnd()
-        start_block_number = self.getBlockNumber(cursor.selectionStart())
-        end_block_number = self.getBlockNumber(cursor.selectionEnd())
-        if start_block_number == end_block_number:
-            # Deletion in a single utterance
+        start_block = self.document().findBlock(cursor.selectionStart())
+        end_block = self.document().findBlock(cursor.selectionEnd())
+        if start_block == end_block:
+            # Deletion in a single utterance or sentence
             size = cursor.selectionEnd() - cursor.selectionStart()
             self.undo_stack.push(
                 DeleteTextCommand(self, pos, size, QTextCursor.MoveOperation.Left)
             )
         else:
+            # raise NotImplementedError("Deleting text over many blocks is not permitted")
             # Deletion over many blocks
-            raise NotImplementedError("Deleting text over many blocks is not permitted")
+            self.undo_stack.beginMacro("Delete many lines")
+            block = end_block
+            while block.isValid():
+                utt_id = self.getBlockId(block)
+                print("deleting", block.text())
+                if utt_id >= 0:
+                    # Delete this utterance
+                    self.delete_utterances.emit([utt_id])
+                else:
+                    # Delete this raw text block
+                    pos = block.position() + block.length() - 1
+                    size = block.length()
+                    self.undo_stack.push(
+                        DeleteTextCommand(self, pos, size, QTextCursor.MoveOperation.Left)
+                    )
+                if block == start_block:
+                    break
+                block = block.previous()
+            
+            self.undo_stack.endMacro()
 
 
     def setText(self, text: str):
@@ -934,6 +957,37 @@ class TextEditWidget(QTextEdit):
         # context = self.createStandardContextMenu(event.pos())
         context_menu = QMenu(self)
 
+        if block_type == TextEditWidget.BlockType.ALIGNED:
+            auto_transcribe = context_menu.addAction("Auto transcribe")
+            auto_transcribe.triggered.connect(lambda: self.main_window.transcribe_button.setChecked(True))
+            context_menu.addSeparator()
+
+        elif block_type == TextEditWidget.BlockType.NOT_ALIGNED:
+            align_action = context_menu.addAction("Align with selection")
+            align_action.setEnabled(False)
+
+            selection = self.main_window.waveform.getSelection()
+            if selection:
+                # Check if the selection is between the previous aligned
+                # block's segment and the next aligned block's segment
+                left_time_boundary = 0.0
+                prev_aligned_block = self.getPrevAlignedBlock(block)
+                if prev_aligned_block:
+                    id = self.getBlockId(prev_aligned_block)
+                    left_time_boundary = self.main_window.waveform.segments[id][1]
+
+                right_time_boundary = self.main_window.waveform.audio_len
+                next_aligned_block = self.getNextAlignedBlock(block)
+                if next_aligned_block:
+                    id = self.getBlockId(next_aligned_block)
+                    right_time_boundary = self.main_window.waveform.segments[id][0]
+            
+                if selection[0] >= left_time_boundary and selection[1] <= right_time_boundary:
+                    align_action.setEnabled(True)
+                    align_action.triggered.connect(lambda _, b=block: self.main_window.alignUtterance(b))
+                context_menu.addSeparator()
+                
+
         # Propose spellchecker's suggestions
         if misspelled_word:
             cursor = self.cursorForPosition(event.pos())
@@ -972,36 +1026,6 @@ class TextEditWidget(QTextEdit):
         select_all_action.triggered.connect(self.selectAll)
         context_menu.addAction(select_all_action)
 
-        if block_type == TextEditWidget.BlockType.ALIGNED:
-            context_menu.addSeparator()
-            auto_transcribe = context_menu.addAction("Auto transcribe")
-            auto_transcribe.triggered.connect(lambda: self.main_window.transcribe_button.setChecked(True))
-
-        elif block_type == TextEditWidget.BlockType.NOT_ALIGNED:
-            context_menu.addSeparator()
-            align_action = context_menu.addAction("Align with selection")
-            align_action.setEnabled(False)
-
-            selection = self.main_window.waveform.getSelection()
-            if selection:
-                # Check if the selection is between the previous aligned
-                # block's segment and the next aligned block's segment
-                left_time_boundary = 0.0
-                prev_aligned_block = self.getPrevAlignedBlock(block)
-                if prev_aligned_block:
-                    id = self.getBlockId(prev_aligned_block)
-                    left_time_boundary = self.main_window.waveform.segments[id][1]
-
-                right_time_boundary = self.main_window.waveform.audio_len
-                next_aligned_block = self.getNextAlignedBlock(block)
-                if next_aligned_block:
-                    id = self.getBlockId(next_aligned_block)
-                    right_time_boundary = self.main_window.waveform.segments[id][0]
-            
-                if selection[0] >= left_time_boundary and selection[1] <= right_time_boundary:
-                    align_action.setEnabled(True)
-                    align_action.triggered.connect(lambda checked, b=block: self.main_window.alignUtterance(b))
-                
         action = context_menu.exec(event.globalPos())
         
 
@@ -1445,18 +1469,30 @@ class TextEditWidget(QTextEdit):
         self.setFocus()
         super().enterEvent(event)
 
-
+    
     def paintEvent(self, event: QPaintEvent):
         super().paintEvent(event)
 
-        if self._text_margin:
-            painter = QPainter(self.viewport())
+        if not self._text_margin:
+            return
+        
+        if self._char_width <= 0:
+            return
+
+        viewport = self.viewport()
+        painter = QPainter(viewport)
+        
+        try:
             gray_start_x = int(self._char_width * self._margin_size)
+            viewport_rect = viewport.rect()
+            
             painter.fillRect(
-                QRect(gray_start_x, 0, self.width() - gray_start_x, self.height()), 
+                QRect(gray_start_x, 0, viewport_rect.width() - gray_start_x, viewport_rect.height()), 
                 self.margin_color
             )
-    
+        finally:
+            painter.end()
+
 
     def printDocumentStructure(self):
         """For debug purposes"""
