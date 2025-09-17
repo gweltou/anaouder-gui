@@ -337,7 +337,7 @@ class WaveformWidget(QWidget):
     
 
     def addSegment(self, segment: Segment, seg_id: Optional[SegmentId]=None) -> SegmentId:
-        log.debug("addSegment")
+        log.debug(f"addSegment({segment=}, {seg_id=})")
         if seg_id == None:
             seg_id = self.getNewId()
         self.segments[seg_id] = segment
@@ -510,6 +510,7 @@ class WaveformWidget(QWidget):
     
 
     def deselect(self):
+        log.debug("deselect()")
         self.selection_is_active = False
         self._selection = None
         self.must_redraw = True
@@ -668,15 +669,10 @@ class WaveformWidget(QWidget):
         self.anchor = -1
 
         if checked:
+            self.deselect()
             self.setCursor(Qt.CursorShape.SplitHCursor)
         else:
-            self.unsetCursor()
-            self.deselect()
-
-        # if checked:
-        #     self.setCursor(Qt.SplitHCursor)
-        # else:
-        #     self.unsetCursor()
+            self.unsetCursor() # Change mouse cursor shape to default
 
 
     def zoomIn(self, factor=1.333, position=0.5):
@@ -836,10 +832,7 @@ class WaveformWidget(QWidget):
     
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:       
-        if event.key() == shortcuts["select"]:
-            self.selection_ended.emit()
-
-        elif event.key() == Qt.Key.Key_Shift:
+        if event.key() == Qt.Key.Key_Shift:
             self.shift_pressed = False
 
         return super().keyReleaseEvent(event)

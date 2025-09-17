@@ -257,6 +257,8 @@ class TextEditWidget(QTextEdit):
     join_utterances = Signal(list)
     delete_utterances = Signal(list)
     split_utterance = Signal(int, int)
+    align_with_selection = Signal(QTextBlock)
+    auto_transcribe = Signal()
 
 
     def __init__(self, parent):
@@ -358,6 +360,7 @@ class TextEditWidget(QTextEdit):
 
 
     def setBlockId(self, block: QTextBlock, id: int):
+        log.debug(f"setBlockId({block=}, {id=})")
         if not block.userData():
             block.setUserData(MyTextBlockUserData({"seg_id": id}))
         else:
@@ -977,8 +980,9 @@ class TextEditWidget(QTextEdit):
         context_menu = QMenu(self)
 
         if block_type == TextEditWidget.BlockType.ALIGNED:
-            auto_transcribe = context_menu.addAction("Auto transcribe")
-            auto_transcribe.triggered.connect(lambda: self.main_window.transcribe_button.setChecked(True))
+            auto_transcribe_action = context_menu.addAction("Auto transcribe")
+            # auto_transcribe.triggered.connect(lambda: self.main_window.transcribe_button.setChecked(True))
+            auto_transcribe_action.triggered.connect(self.auto_transcribe.emit)
             context_menu.addSeparator()
 
         elif block_type == TextEditWidget.BlockType.NOT_ALIGNED:
@@ -1003,7 +1007,7 @@ class TextEditWidget(QTextEdit):
             
                 if selection[0] >= left_time_boundary and selection[1] <= right_time_boundary:
                     align_action.setEnabled(True)
-                    align_action.triggered.connect(lambda _, b=block: self.main_window.alignUtterance(b))
+                    align_action.triggered.connect(lambda checked, b=block: self.align_with_selection.emit(b))
                 context_menu.addSeparator()
                 
 

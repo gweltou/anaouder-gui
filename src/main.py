@@ -219,9 +219,11 @@ class MainWindow(QMainWindow):
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
         self.text_widget.split_utterance.connect(self.splitFromText)
+        self.text_widget.auto_transcribe.connect(self.transcribe_button.toggle)
+        self.text_widget.align_with_selection.connect(self.alignWithSelection)
 
         # self.waveform.selection_started.connect(lambda: self.select_button.setChecked(True))
-        # self.waveform.selection_ended.connect(lambda: self.select_button.setChecked(False))
+        self.waveform.selection_ended.connect(lambda: self.selection_button.setChecked(False))
         self.waveform.toggle_selection.connect(self.selection_button.toggle)
         self.waveform.join_utterances.connect(self.joinUtterances)
         self.waveform.delete_utterances.connect(self.deleteUtterances)
@@ -1237,6 +1239,9 @@ class MainWindow(QMainWindow):
         
         # Remove metadata from subtitle text
         block = self.text_widget.getBlockById(seg_id)
+        if block == None:
+            return (-1, "")
+
         html, _ = self.text_widget.getBlockHtml(block)
         html = extract_metadata(html)[0] if block else ""
 
@@ -1937,7 +1942,6 @@ class MainWindow(QMainWindow):
             )
         )
         self.undo_stack.push(AddSegmentCommand(self.waveform, right_seg, right_id))
-        print(f"{self.text_widget.textCursor().position()=}")
         self.undo_stack.push(
             InsertBlockCommand(
                 self.text_widget,
@@ -1947,7 +1951,6 @@ class MainWindow(QMainWindow):
                 after=True
             )
         )
-        print(f"{self.text_widget.textCursor().position()=}")
         # Set cursor at the beggining of the right utterance
         cursor = self.text_widget.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
@@ -1969,8 +1972,11 @@ class MainWindow(QMainWindow):
         self.undo_stack.push(JoinUtterancesCommand(self, segments_id))
 
 
-    def alignUtterance(self, block:QTextBlock):
+    @Slot(QTextBlock)
+    def alignWithSelection(self, block:QTextBlock):
         self.undo_stack.push(AlignWithSelectionCommand(self, block))
+        if self.selection_button.isChecked():
+            self.selection_button.setChecked(False)
 
 
     @Slot(list)
@@ -2190,8 +2196,12 @@ class MainWindow(QMainWindow):
 
     def updateUtteranceDensity(self, seg_id:SegmentId) -> None:
         """Update the density (chars/s) field of an utterance"""
+        log.debug(f"updateUtteranceDensity({seg_id=})")
         # Count the number of characters in sentence
         block = self.text_widget.getBlockById(seg_id)
+        if block == None:
+            return
+
         num_chars = self.text_widget.getSentenceLength(block)
         start, end = self.waveform.segments[seg_id]
         dur = end - start
@@ -2353,6 +2363,7 @@ class AlignWithSelectionCommand(QUndoCommand):
 
     def __init__(self, parent, block):
         log.debug(f"AlignWithSelectionCommand.__init__(parent, {block=})")
+        print(f"{block.text()=}")
         super().__init__()
         self.parent: MainWindow = parent
         self.block: QTextBlock = block
