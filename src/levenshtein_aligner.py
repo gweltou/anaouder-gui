@@ -70,7 +70,7 @@ def smart_split(text: str, position: int, vosk_tokens: list) -> tuple:
     return left_seg, right_seg
 
 
-def smart_split_idx(text: str, idx: int, vosk_tokens: list) -> tuple:
+def smart_split_time(text: str, timepos: float, vosk_tokens: list) -> tuple:
     """
     Split a text based on a gap index from a hypotheses token list
     
@@ -83,13 +83,20 @@ def smart_split_idx(text: str, idx: int, vosk_tokens: list) -> tuple:
     Returns:
         A 2-tuple consisting of the left text and the right text
     """
+    # Find the best location to split the transcribed sentence
+    idx = 0
+    for t_start, t_end, word, _, _ in vosk_tokens:
+        if timepos < t_start + (t_end - t_start) * 0.5:
+            break
+        idx += 1
 
     # Add a split token in the list of transcribed tokens
-    vosk_tokens = vosk_tokens[:idx] + [(None, None, '|')] + vosk_tokens[idx:]
-    result = align_texts_with_vosk_tokens(text, vosk_tokens)
+    left_tokens = vosk_tokens[:idx]
+    right_tokens = vosk_tokens[idx:]
 
-    for t in result:
-        print(t)
+    # result = align_texts_with_vosk_tokens(text, vosk_tokens)
+    # for t in result:
+    #     print(t)
     
     raise NotImplementedError("Method is not yet implemented")
 

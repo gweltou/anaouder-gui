@@ -80,7 +80,7 @@ from src.parameters_dialog import ParametersDialog
 from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
 from src.export_txt import exportTxt, exportTxtSignals
-from src.levenshtein_aligner import smart_split, smart_split_idx
+from src.levenshtein_aligner import smart_split, smart_split_time
 from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
     app_settings, shortcuts,
@@ -112,11 +112,11 @@ log = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    BUTTON_SIZE = 28
-    BUTTON_MEDIA_SIZE = 28
-    BUTTON_SPACING = 3
-    BUTTON_MARGIN = 4
-    BUTTON_LABEL_SIZE = 15
+    BUTTON_SIZE = 30
+    BUTTON_MEDIA_SIZE = 30
+    BUTTON_SPACING = 4
+    BUTTON_MARGIN = 8
+    BUTTON_LABEL_SIZE = 16
     DIAL_SIZE = 30
 
     STATUS_BAR_TIMEOUT = 4000
@@ -379,10 +379,54 @@ class MainWindow(QMainWindow):
         top_bar_layout.setSpacing(MainWindow.BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
+        # Undo/Redo buttons
+        undo_redo_layout = QHBoxLayout()
+        undo_redo_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
+        undo_redo_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        undo_redo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        undo_button = QPushButton()
+        undo_button.setIcon(icons["undo"])
+        undo_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
+        undo_button.clicked.connect(self.undo)
+        undo_redo_layout.addWidget(undo_button)
+        undo_action = QAction("Undo", self)
+        undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        undo_action.triggered.connect(undo_button.animateClick)
+        self.addAction(undo_action)
+
+        redo_button = QPushButton()
+        redo_button.setIcon(icons["redo"])
+        redo_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
+        redo_button.clicked.connect(self.redo)
+        undo_redo_layout.addWidget(redo_button)
+        redo_action = QAction("Redo", self)
+        redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        redo_action.triggered.connect(redo_button.animateClick)
+        self.addAction(redo_action)
+
+        top_bar_layout.addLayout(undo_redo_layout)
+        # top_bar_layout.addStretch(1)
+
+        # Transcription buttons
         transcription_buttons_layout = QHBoxLayout()
         transcription_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
         transcription_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
         transcription_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.transcribe_button = QPushButton()
+        self.transcribe_button.setIcon(icons["sparkles"])
+        self.transcribe_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        self.transcribe_button.setCheckable(True)
+        self.transcribe_button.setToolTip(self.tr("Transcribe") + f" <{shortcuts["transcribe"].toString()}>")
+        self.transcribe_button.setShortcut(shortcuts["transcribe"])
+        self.transcribe_button.setEnabled(False)
+        self.transcribe_button.toggled.connect(self.toggleTranscribe)
+        self.recognizer_worker.finished.connect(self.transcribe_button.toggle)
+        transcription_buttons_layout.addSpacing(4)
+        transcription_buttons_layout.addWidget(self.transcribe_button)
 
         self.language_selection = QComboBox()
         self.language_selection.addItems(self.languages)
@@ -410,52 +454,10 @@ class MainWindow(QMainWindow):
         self.normalization_checkbox.setChecked(True)
         self.normalization_checkbox.setToolTip(self.tr("Normalize numbers"))
         transcription_buttons_layout.addWidget(self.normalization_checkbox)
-
-        self.transcribe_button = QPushButton()
-        self.transcribe_button.setIcon(icons["sparkles"])
-        self.transcribe_button.setFixedWidth(MainWindow.BUTTON_SIZE)
-        self.transcribe_button.setCheckable(True)
-        self.transcribe_button.setToolTip(self.tr("Transcribe") + f" <{shortcuts["transcribe"].toString()}>")
-        self.transcribe_button.setShortcut(shortcuts["transcribe"])
-        self.transcribe_button.setEnabled(False)
-        self.transcribe_button.toggled.connect(self.toggleTranscribe)
-        self.recognizer_worker.finished.connect(self.transcribe_button.toggle)
         transcription_buttons_layout.addSpacing(4)
-        transcription_buttons_layout.addWidget(self.transcribe_button)
 
         top_bar_layout.addLayout(transcription_buttons_layout)
-
-        # Undo/Redo buttons
-        undo_redo_layout = QHBoxLayout()
-        undo_redo_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        undo_redo_layout.setSpacing(MainWindow.BUTTON_SPACING)
-        undo_redo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        undo_button = QPushButton()
-        undo_button.setIcon(icons["undo"])
-        undo_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
-        undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
-        undo_button.clicked.connect(self.undo)
-        undo_redo_layout.addWidget(undo_button)
-        undo_action = QAction("Undo", self)
-        undo_action.setShortcut(QKeySequence.StandardKey.Undo)
-        # undo_action.triggered.connect(self.undo)
-        undo_action.triggered.connect(undo_button.animateClick)
-        self.addAction(undo_action)
-
-        redo_button = QPushButton()
-        redo_button.setIcon(icons["redo"])
-        redo_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
-        redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
-        redo_button.clicked.connect(self.redo)
-        undo_redo_layout.addWidget(redo_button)
-        redo_action = QAction("Redo", self)
-        redo_action.setShortcut(QKeySequence.StandardKey.Redo)
-        # redo_action.triggered.connect(self.redo)
-        redo_action.triggered.connect(redo_button.animateClick)
-        self.addAction(redo_action)
-
-        top_bar_layout.addLayout(undo_redo_layout)
+        # top_bar_layout.addStretch(1)
 
         # Text format buttons
         format_buttons_layout = QHBoxLayout()
@@ -465,7 +467,7 @@ class MainWindow(QMainWindow):
 
         italic_button = QPushButton()
         italic_button.setIcon(icons["italic"])
-        italic_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
+        italic_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         italic_button.setToolTip(self.tr("Italic") + f" <{QKeySequence(QKeySequence.StandardKey.Italic).toString()}>")
         italic_button.setShortcut(QKeySequence.StandardKey.Italic)
         italic_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.ITALIC))
@@ -473,13 +475,14 @@ class MainWindow(QMainWindow):
 
         bold_button = QPushButton()
         bold_button.setIcon(icons["bold"])
-        bold_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
+        bold_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         bold_button.setToolTip(self.tr("Bold") + f" <{QKeySequence(QKeySequence.StandardKey.Bold).toString()}>")
         bold_button.setShortcut(QKeySequence.StandardKey.Bold)
         bold_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.BOLD))
         format_buttons_layout.addWidget(bold_button)
 
         top_bar_layout.addLayout(format_buttons_layout)
+        top_bar_layout.addStretch(1)
 
         # Text zoom buttons
         view_buttons_layout = QHBoxLayout()
@@ -490,17 +493,18 @@ class MainWindow(QMainWindow):
         view_buttons_layout.addWidget(IconWidget(icons["font"], MainWindow.BUTTON_LABEL_SIZE))
         text_zoom_out_button = QPushButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
-        text_zoom_out_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
+        text_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        text_zoom_out_button.setToolTip(self.tr("Zoom out"))
         text_zoom_out_button.clicked.connect(lambda: self.text_widget.zoomOut(1))
         view_buttons_layout.addWidget(text_zoom_out_button)
 
         text_zoom_in_button = QPushButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
-        text_zoom_in_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
+        text_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        text_zoom_out_button.setToolTip(self.tr("Zoom in"))
         text_zoom_in_button.clicked.connect(lambda: self.text_widget.zoomIn(1))
         view_buttons_layout.addWidget(text_zoom_in_button)
 
-        top_bar_layout.addStretch(1)
         top_bar_layout.addLayout(view_buttons_layout)
 
         ########################
@@ -520,7 +524,7 @@ class MainWindow(QMainWindow):
         self.selection_button = QPushButton()
         self.selection_button.setIcon(icons["select"])
         # self.select_button.setIconSize(QSize(28*0.8, 28*0.8))
-        self.selection_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE, MainWindow.BUTTON_MEDIA_SIZE)
+        self.selection_button.setFixedWidth(MainWindow.BUTTON_MEDIA_SIZE)
         self.selection_button.setToolTip(self.tr("Create a selection") + f" &lt;{shortcuts["select"].toString()}&gt;")
         self.selection_button.setCheckable(True)
         self.selection_button.toggled.connect(self.toggleCreateSelection)
@@ -528,14 +532,14 @@ class MainWindow(QMainWindow):
 
         self.add_segment_button = QPushButton()
         self.add_segment_button.setIcon(icons["add_segment"])
-        self.add_segment_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE, MainWindow.BUTTON_MEDIA_SIZE)
+        self.add_segment_button.setFixedWidth(MainWindow.BUTTON_MEDIA_SIZE)
         self.add_segment_button.setToolTip(self.tr("Create segment from selection") + f" &lt;A&gt;")
         self.add_segment_button.clicked.connect(self.newUtteranceFromSelection)
         segment_buttons_layout.addWidget(self.add_segment_button)
 
         self.del_segment_button = QPushButton()
         self.del_segment_button.setIcon(icons["del_segment"])
-        self.del_segment_button.setFixedSize(MainWindow.BUTTON_MEDIA_SIZE, MainWindow.BUTTON_MEDIA_SIZE)
+        self.del_segment_button.setFixedWidth(MainWindow.BUTTON_MEDIA_SIZE)
         self.del_segment_button.setToolTip(
             self.tr("Delete segment") + f" &lt;{QKeySequence(Qt.Key.Key_Delete).toString()}&gt;/&lt;{QKeySequence(Qt.Key.Key_Backspace).toString()}&gt;"
         )
@@ -561,10 +565,7 @@ class MainWindow(QMainWindow):
 
         back_button = QPushButton()
         back_button.setIcon(icons["back"])
-        back_button.setFixedSize(
-            round(MainWindow.BUTTON_MEDIA_SIZE * 1.2),
-            MainWindow.BUTTON_MEDIA_SIZE
-        )
+        back_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
         back_button.setToolTip(self.tr("Go to first utterance"))
         back_button.clicked.connect(self.backAction)
         play_buttons_layout.addWidget(back_button)
@@ -572,30 +573,21 @@ class MainWindow(QMainWindow):
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prev_button = QPushButton()
         prev_button.setIcon(icons["previous"])
-        prev_button.setFixedSize(
-            round(MainWindow.BUTTON_MEDIA_SIZE * 1.2),
-            MainWindow.BUTTON_MEDIA_SIZE
-        )
+        prev_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
         prev_button.setToolTip(self.tr("Previous utterance") + f" &lt;{shortcuts["play_prev"].toString()}&gt;")
         prev_button.clicked.connect(self.playPrevAction)
         play_buttons_layout.addWidget(prev_button)
 
         self.play_button = QPushButton()
         self.play_button.setIcon(icons["play"])
-        self.play_button.setFixedSize(
-            round(MainWindow.BUTTON_MEDIA_SIZE * 1.2),
-            MainWindow.BUTTON_MEDIA_SIZE
-        )
+        self.play_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
         self.play_button.setToolTip(self.tr("Play current utterance") + f" &lt;{shortcuts["play_stop"].toString()}&gt;")
         self.play_button.clicked.connect(self.playAction)
         play_buttons_layout.addWidget(self.play_button)
 
         next_button = QPushButton()
         next_button.setIcon(icons["next"])
-        next_button.setFixedSize(
-            round(MainWindow.BUTTON_MEDIA_SIZE * 1.3),
-            MainWindow.BUTTON_MEDIA_SIZE
-        )
+        next_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
         next_button.setToolTip(self.tr("Next utterance") + f" &lt;{shortcuts["play_next"].toString()}&gt;")
         next_button.clicked.connect(self.playNextAction)
         play_buttons_layout.addWidget(next_button)
@@ -603,10 +595,7 @@ class MainWindow(QMainWindow):
         loop_button = QPushButton()
         loop_button.setCheckable(True)
         loop_button.setIcon(icons["loop"])
-        loop_button.setFixedSize(
-            round(MainWindow.BUTTON_MEDIA_SIZE * 1.1),
-            MainWindow.BUTTON_MEDIA_SIZE
-        )
+        loop_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
         loop_button.setToolTip(self.tr("Loop"))
         loop_button.toggled.connect(self.setLooping)
         play_buttons_layout.addWidget(loop_button)
@@ -653,7 +642,7 @@ class MainWindow(QMainWindow):
         ## Follow playhead button
         self.follow_playhead_button = QPushButton()
         self.follow_playhead_button.setIcon(icons["follow_playhead"])
-        self.follow_playhead_button.setFixedSize(MainWindow.BUTTON_SIZE, MainWindow.BUTTON_SIZE)
+        self.follow_playhead_button.setFixedWidth(MainWindow.BUTTON_SIZE)
         self.follow_playhead_button.setCheckable(True)
         self.follow_playhead_button.setToolTip(self.tr("View follow playhead"))
         self.follow_playhead_button.setChecked(self.waveform.follow_playhead)
@@ -661,6 +650,7 @@ class MainWindow(QMainWindow):
         view_buttons_layout.addWidget(self.follow_playhead_button)
 
         ## Zoom out
+        view_buttons_layout.addSpacing(8)
         view_buttons_layout.addWidget(IconWidget(icons["waveform"], MainWindow.BUTTON_LABEL_SIZE))
         wave_zoom_out_button = QPushButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
@@ -1892,17 +1882,10 @@ class MainWindow(QMainWindow):
                     j += 1
                 tokens_range = cached_transcription[i:j]
 
-                # Find the best location to split the transcribed sentence
-                idx = 0
-                for t_start, t_end, word, _, _ in tokens_range:
-                    if timepos < t_start + (t_end - t_start) * 0.5:
-                        break
-                    idx += 1
-
                 try:
                     log.info("smart splitting")
                     # left_seg, right_seg = smart_split(text, position, tokens_range)
-                    left_text, right_text = smart_split_idx(text, idx, tokens_range)
+                    left_text, right_text = smart_split_time(text, timepos, tokens_range)
                     # left_seg[0] = seg_start
                     # right_seg[1] = seg_end
                 except Exception as e:
