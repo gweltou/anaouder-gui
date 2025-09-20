@@ -97,14 +97,9 @@ def smart_split_time(text: str, timepos: float, vosk_tokens: list) -> tuple:
     left_hyp = ' '.join([ t[2] for t in left_tokens ])
     right_hyp = ' '.join([ t[2] for t in right_tokens ])
 
-    print(left_hyp)
-    print(right_hyp)
-
     words = text.split()
-    print(words)
 
     # Iterate to find the best sentence split candidate
-    word_idx = 0
     best_idx, best_score = -1, inf
     for i in range(len(words) + 1):
         left_split = prep_sentence(' '.join(words[:i]))
@@ -113,13 +108,9 @@ def smart_split_time(text: str, timepos: float, vosk_tokens: list) -> tuple:
             0.5 * jiwer.cer(left_hyp, left_split)
             + 0.5 * jiwer.cer(right_hyp, right_split)
         )
-        print(i, left_split, right_split, score)
         if score < best_score:
             best_idx = i
             best_score = score
-    
-    print("Best candidate:")
-    print(' '.join(words[:best_idx]) + ' | ' + ' '.join(words[best_idx:]))
 
     return (' '.join(words[:best_idx]), ' '.join(words[best_idx:]))
 
