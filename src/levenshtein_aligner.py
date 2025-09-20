@@ -1,7 +1,8 @@
 import re
 import jiwer
+from math import inf
 
-from src.lang import prepWordForAlignment
+from src.lang import prepTextForAlignment
 from src.utils import PUNCTUATION
 
 
@@ -93,16 +94,56 @@ def smart_split_time(text: str, timepos: float, vosk_tokens: list) -> tuple:
     # Add a split token in the list of transcribed tokens
     left_tokens = vosk_tokens[:idx]
     right_tokens = vosk_tokens[idx:]
+    left_hyp = ' '.join([ t[2] for t in left_tokens ])
+    right_hyp = ' '.join([ t[2] for t in right_tokens ])
 
-    # result = align_texts_with_vosk_tokens(text, vosk_tokens)
-    # for t in result:
-    #     print(t)
+    print(left_hyp)
+    print(right_hyp)
+
+    words = text.split()
+    print(words)
+
+    # Iterate to find the best sentence split candidate
+    word_idx = 0
+    best_idx, best_score = -1, inf
+    for i in range(len(words) + 1):
+        left_split = prep_sentence(' '.join(words[:i]))
+        right_split = prep_sentence(' '.join(words[i:]))
+        score = (
+            0.5 * jiwer.cer(left_hyp, left_split)
+            + 0.5 * jiwer.cer(right_hyp, right_split)
+        )
+        print(i, left_split, right_split, score)
+        if score < best_score:
+            best_idx = i
+            best_score = score
     
-    raise NotImplementedError("Method is not yet implemented")
+    print("Best candidate:")
+    print(' '.join(words[:best_idx]) + ' | ' + ' '.join(words[best_idx:]))
+
+    return (' '.join(words[:best_idx]), ' '.join(words[best_idx:]))
 
 
 def prep_word(word: str) -> str:
-    return prepWordForAlignment(word)  # Language dependent pre-processing
+    return prepTextForAlignment(word)  # Language dependent pre-processing
+
+
+def prep_sentence(sentence: str) -> str:
+    """
+    Return a simplified representation of the given sentence,
+    for more better alignment
+    """
+    sentence = sentence.lower()
+    sentence = sentence.replace('\n', ' ')
+    sentence = re.sub(r"{.+?}", '', sentence)        # Ignore metadata
+    sentence = re.sub(r"<[A-Z\']+?>", '¤', sentence) # Replace special tokens
+    sentence = sentence.replace('*', '')
+    sentence = sentence.replace('-', ' ')            # Needed for Breton, but how does it impact other languages?
+    sentence = sentence.replace('.', ' ')
+    sentence = filter_out_chars(sentence, PUNCTUATION + "' ")
+
+    simplified = prepTextForAlignment(sentence)
+    return simplified
 
 
 def align_texts_with_vosk_tokens(text: str, vosk_tokens: list) -> list:

@@ -103,7 +103,7 @@ def postProcessText(text: str, normalize: bool) -> str:
     return _current_language.postProcessText(text, normalize)
 
 
-def prepWordForAlignment(text: str) -> str:
+def prepTextForAlignment(text: str) -> str:
     return _current_language.processTextForAlignment(text)
 
 

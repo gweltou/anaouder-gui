@@ -1884,10 +1884,7 @@ class MainWindow(QMainWindow):
 
                 try:
                     log.info("smart splitting")
-                    # left_seg, right_seg = smart_split(text, position, tokens_range)
                     left_text, right_text = smart_split_time(text, timepos, tokens_range)
-                    # left_seg[0] = seg_start
-                    # right_seg[1] = seg_end
                 except Exception as e:
                     log.error(f"Could not smart split: {e}")
 
