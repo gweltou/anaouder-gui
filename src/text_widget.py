@@ -1106,6 +1106,10 @@ class TextEditWidget(QTextEdit):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         print("keyPressEvent", event.key())
 
+        # Block TAB
+        if event.key() == Qt.Key.Key_Tab:
+            return
+
         if (event.matches(QKeySequence.StandardKey.Undo) or
             event.matches(QKeySequence.StandardKey.Redo)):
             # Handle by parent widget
