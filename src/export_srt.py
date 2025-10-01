@@ -164,7 +164,7 @@ def exportSrt(parent, media_path, utterances, fps: float=None):
         utterances[i][0] = text
 
     try:
-        with open(file_path, 'w') as _f:
+        with open(file_path, 'w', encoding='utf-8') as _f:
             subs = [
                 srt.Subtitle(
                     index=i,
