@@ -1194,6 +1194,7 @@ class TextEditWidget(QTextEdit):
                 left_part = html[:html_idx].rstrip()
                 right_part = html[html_idx:].lstrip()
                 new_text = left_part + "<BR>" + right_part
+                
                 self.undo_stack.push(
                     ReplaceTextCommand(
                         self,

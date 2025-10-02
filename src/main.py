@@ -124,7 +124,7 @@ class MainWindow(QMainWindow):
     transcribe_file_signal = Signal(str, float)    # Signals are needed for communication between threads
     transcribe_segments_signal = Signal(str, list)
 
-    def __init__(self, file_path=""):
+    def __init__(self, filepath=""):
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         super().__init__()
@@ -153,7 +153,7 @@ class MainWindow(QMainWindow):
         self.scene_detector = None
 
         # Current opened file info
-        self.file_path = file_path
+        self.filepath = filepath
         self.media_path = None
         self.media_metadata = dict()
         self.hidden_transcription = False
@@ -188,6 +188,7 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
 
         self.initUI()
+        self.updateRecentMenu()
 
         # Keyboard shortcuts
         ## Search
@@ -209,7 +210,6 @@ class MainWindow(QMainWindow):
         self.follow_playhead_action = QAction(self.tr("Follow playhead"))
         self.follow_playhead_action.setCheckable(True)
         self.follow_playhead_action.setChecked(self.follow_playhead_button.isChecked())
-        self.follow_playhead_action.setStatusTip(self.tr("Follow playhead"))
         self.follow_playhead_action.setShortcut(shortcuts["follow_playhead"])
         self.follow_playhead_action.triggered.connect(self.toggleFollowPlayhead)
         self.addAction(self.follow_playhead_action)
@@ -240,8 +240,8 @@ class MainWindow(QMainWindow):
         self.restoreGeometry(app_settings.value("main/geometry"))
         self.restoreState(app_settings.value("main/window_state"))
 
-        if file_path:
-            self.openFile(file_path)
+        if filepath:
+            self.openFile(filepath)
 
         self.changeLanguage(DEFAULT_LANGUAGE)
 
@@ -262,6 +262,11 @@ class MainWindow(QMainWindow):
         open_action.setShortcut(QKeySequence.StandardKey.Open)
         open_action.triggered.connect(self.openFile)
         file_menu.addAction(open_action)
+
+        # Recent files
+        self.recent_menu = file_menu.addMenu(self.tr("&Open recent..."))
+        file_menu.addSeparator()
+
         ## Save
         save_action = QAction(self.tr("&Save"), self)
         save_action.setShortcut(QKeySequence.StandardKey.Save)
@@ -277,6 +282,7 @@ class MainWindow(QMainWindow):
         export_subMenu = file_menu.addMenu(self.tr("&Export as..."))
         
         export_srt_action = QAction("&SubRip (.srt)", self)
+        export_srt_action.setStatusTip(self.tr("Subtitle file"))
         export_srt_action.triggered.connect(self.exportSrt)
         export_subMenu.addAction(export_srt_action)
 
@@ -285,6 +291,7 @@ class MainWindow(QMainWindow):
         export_subMenu.addAction(export_eaf_action)
 
         export_txt_action = QAction(self.tr("Raw &text (.txt)"), self)
+        export_txt_action.setStatusTip(self.tr("Simple text document"))
         export_txt_action.triggered.connect(self.exportTxt)
         export_subMenu.addAction(export_txt_action)
 
@@ -306,10 +313,12 @@ class MainWindow(QMainWindow):
         operation_menu = menu_bar.addMenu(self.tr("&Operations"))
         ## Auto Segment
         auto_segment_action = QAction(self.tr("Auto segment"), self)
+        auto_segment_action.setStatusTip(self.tr("Find segments based on sound activity"))
         auto_segment_action.triggered.connect(self.autoSegment)
         operation_menu.addAction(auto_segment_action)
         ## Adapt to subtitle
         adapt_to_subtitle_action = QAction(self.tr("Adapt to subtitles"), self)
+        adapt_to_subtitle_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
         adapt_to_subtitle_action.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adapt_to_subtitle_action)
 
@@ -710,9 +719,9 @@ class MainWindow(QMainWindow):
         if not self.undo_stack.isClean():
             title_parts.append("●")
         title_parts.append(APP_NAME)
-        if self.file_path:
+        if self.filepath:
             title_parts.append('-')
-            title_parts.append(os.path.split(self.file_path)[1])
+            title_parts.append(os.path.split(self.filepath)[1])
         self.setWindowTitle(' '.join(title_parts))
 
 
@@ -727,8 +736,14 @@ class MainWindow(QMainWindow):
         self.model_selection.addItems(self.available_models)
 
 
-    def _saveFile(self, filepath):
-        """Save file to disk"""
+    def _saveFile(self, filepath, audio_path=None):
+        """
+        Save ALI file to disk
+
+        Parameters:
+            filepath (str): File path to write to
+            audio_path (str): overwrite the audio_path if provided
+        """
 
         filepath = os.path.abspath(filepath)
         self.log.info(f"Saving file to {filepath}")
@@ -741,24 +756,35 @@ class MainWindow(QMainWindow):
 
         error = False
         with open(filepath, 'w', encoding="utf-8") as _fout:
+            if audio_path:
+                # Add the audio-path metadata at the beggining of the document
+                _fout.write(f"{{audio-path: {audio_path}}}\n")
+
             doc = self.text_widget.document()
-            for blockIndex in range(doc.blockCount()):
+            block = doc.firstBlock()
+            while block.isValid():
                 try:
-                    block = doc.findBlockByNumber(blockIndex)
-                    # text = block.text().strip()
                     text = self.text_widget.getBlockHtml(block)[0]
-                    if block.userData():
-                        userData = block.userData().data
-                        if "seg_id" in userData:
-                            seg_id = userData["seg_id"]
-                            if seg_id in self.waveform.segments:
-                                start, end = self.waveform.segments[seg_id]
-                                text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
+                    # Replace the audio-source metadata if necessary
+                    if audio_path:
+                        match = re.search(r"{\s*audio\-path\s*:\s*(.*?)\s*}", text)
+                        if match:
+                            # Strip the audio-path metadata from the rest of the string
+                            text = text[:match.start()] + text[match.end():]
+                            audio_path = None
+                            if not text.strip():
+                                block = block.next()
+                                continue
+                    utt_id = self.text_widget.getBlockId(block)
+                    if utt_id >= 0 and utt_id in self.waveform.segments:
+                        start, end = self.waveform.segments[utt_id]
+                        text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
                 except Exception:
-                    self.log.error(f"Error writing file, block {blockIndex}: {text}")
+                    self.log.error(f"Error writing file, block {self.text_widget.getBlockNumber(block.position())}: {text}")
                     error = True
                 else:
                     _fout.write(text + '\n')
+                block = block.next()
         
         if error and backup:
             # Create a backup copy of the previous version of the file
@@ -771,39 +797,49 @@ class MainWindow(QMainWindow):
 
 
     def saveFile(self):
-        if self.file_path and self.file_path.endswith(".ali"):
-            self._saveFile(self.file_path)
+        if self.filepath and self.filepath.endswith(".ali"):
+            self._saveFile(self.filepath)
         else:
             # Open a file dialog
             self.saveFileAs()
         self.undo_stack.setClean()
         self.updateWindowTitle()
 
+
     def saveFileAs(self):
-        basename = os.path.basename(self.file_path)
+        basename = os.path.basename(self.filepath)
         basename, ext = os.path.splitext(basename)
         if ext.lower() == ".ali":
             basename += ext
-            dir = app_settings.value("main/last_opened_folder", "")
+            dir = os.path.split(self.filepath)[0]
+            # dir = app_settings.value("main/last_opened_folder", "")
         else:
             basename += ".ali"
-            dir = os.path.split(self.file_path)[0]
+            dir = os.path.split(self.filepath)[0]
         
-        filepath, _ = QFileDialog.getSaveFileName(self, self.tr("Save File"), os.path.join(dir, basename))
-        self.waveform.is_resizing = False
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Save File"),
+            os.path.join(dir, basename),
+            self.tr("ALI files ({ext})").format(ext="*.ali")
+        )
+        
         if not filepath:
             return
         
-        self.file_path = filepath
+        self.filepath = filepath
         self._saveFile(filepath)
+        self.addRecentFile(filepath)
         self.updateWindowTitle()
 
 
     def openFile(self, file_path="", keep_text=False, keep_audio=False):
+        self.log.info(f"Opening file {file_path}")
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
 
         if not file_path:
+            # Open a File dialog window
             dir = app_settings.value("main/last_opened_folder", "")
             file_path, _ = QFileDialog.getOpenFileName(self, "Open File", dir, ";;".join([supported_filter, audio_filter]))
             if not file_path:
@@ -815,7 +851,7 @@ class MainWindow(QMainWindow):
         if not keep_text:
             self.text_widget.clear()
 
-        self.file_path = file_path
+        self.filepath = file_path
         folder, filename = os.path.split(file_path)
         basename, ext = os.path.splitext(filename)
         ext = ext.lower()
@@ -863,14 +899,48 @@ class MainWindow(QMainWindow):
             if not media_path:
                 # Check for an audio file with the same basename
                 for audio_ext in MEDIA_FORMATS:
-                    media_path = basename + audio_ext
-                    media_path = os.path.join(folder, media_path)
-                    if os.path.exists(media_path):
+                    tmp_media_path = basename + audio_ext
+                    tmp_media_path = os.path.join(folder, tmp_media_path)
+                    if os.path.exists(tmp_media_path):
                         self.log.debug(f"Found same name audio file {file_path}")
+                        media_path = tmp_media_path
                         break
             
             if media_path and os.path.exists(media_path):
                 self.loadMediaFile(media_path)
+            else:
+                # No media file for this ALI file
+                log.warning("No associated media file found")
+                msg_box = QMessageBox(
+                    QMessageBox.Icon.Warning, self.tr("No media file"),
+                    self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
+                    # QMessageBox.StandardButton.NoButton, self
+                )
+                if media_path:
+                    m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
+                    msg_box.setInformativeText(m)
+
+                msg_box.addButton(self.tr("&Open media"), QMessageBox.ButtonRole.AcceptRole)
+                msg_box.addButton(self.tr("&Cancel"), QMessageBox.ButtonRole.RejectRole)
+
+                if msg_box.exec() == 0x2:
+                    audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+                    media_file_path, _ = QFileDialog.getOpenFileName(
+                        self,
+                        self.tr("Open Media File"),
+                        folder,
+                        audio_filter
+                    )
+                    if media_file_path and os.path.exists(media_file_path):
+                        self._saveFile(self.filepath, media_file_path)
+                        # Re-open the updated file
+                        self.openFile(self.filepath)
+                else:
+                    # Cancelled
+                    pass
+            
+            # Add file to recent files
+            self.addRecentFile(file_path)
 
         if ext in (".seg", ".split"):
             segments = load_segments_data(file_path)
@@ -972,14 +1042,66 @@ class MainWindow(QMainWindow):
         # scroll_bar.setValue(scroll_bar.minimum())
 
 
-    def loadMediaFile(self, file_path):
+    def addRecentFile(self, filepath):
+        """Add a file to the recent files list"""
+        # Add file to recent files
+        recent_files: list = app_settings.value("recent_files", [], type=list)
+        if filepath in recent_files:
+            recent_files.remove(filepath)
+
+        recent_files.insert(0, filepath)
+        recent_files = [f for f in recent_files if os.path.exists(f)]
+        recent_files = recent_files[:5] # Limit size
+
+        app_settings.setValue("recent_files", recent_files)
+
+        self.updateRecentMenu()
+    
+
+    def updateRecentMenu(self):
+        """Update the recent files submenu"""
+        self.recent_menu.clear()
+        
+        recent_files: list = app_settings.value("recent_files", [], type=list)
+        
+        if not recent_files:
+            # Show "No recent files" when list is empty
+            no_files_action = QAction(self.tr("No recent files"), self)
+            no_files_action.setEnabled(False)
+            self.recent_menu.addAction(no_files_action)
+        else:
+            for i, filepath in enumerate(recent_files):
+                if not os.path.exists(filepath):
+                    continue
+                    
+                display_name = os.path.split(filepath)[1]
+
+                action = QAction(display_name, self)
+                action.setStatusTip(filepath)  # Show full path in status bar
+                action.triggered.connect(lambda checked, f=filepath: self.openFile(f))
+                self.recent_menu.addAction(action)
+            
+            # Add "Clear Recent" option
+            if recent_files:
+                self.recent_menu.addSeparator()
+                clear_action = QAction(self.tr("Clear Recent Files"), self)
+                clear_action.triggered.connect(self.clearRecentFiles)
+                self.recent_menu.addAction(clear_action)
+    
+
+    def clearRecentFiles(self):
+        app_settings.setValue("recent_files", [])
+        self.updateRecentMenu()
+
+
+    def loadMediaFile(self, filepath):
         ## XXX: Use QAudioDecoder instead maybe ?
 
         self.toggleSceneDetect(False)
 
         self.stop()
-        self.player.setSource(QUrl.fromLocalFile(file_path))
-        self.media_path = file_path
+        self.player.setSource(QUrl.fromLocalFile(filepath))
+        self.media_path = filepath
 
         # Convert to MP3 in case of MKV file
         # (problems with PyDub)
@@ -1003,11 +1125,11 @@ class MainWindow(QMainWindow):
         self.log.info(f"Loaded {len(self.audio_samples)} audio samples")
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
 
-        self.media_metadata = self.cache.get_media_metadata(file_path)
+        self.media_metadata = self.cache.get_media_metadata(filepath)
 
         if not "fps" in self.media_metadata:
             # Check video framerate
-            audio_metadata = get_audiofile_info(file_path)
+            audio_metadata = get_audiofile_info(filepath)
             if "r_frame_rate" in audio_metadata:
                 print(f"Stream {audio_metadata["r_frame_rate"]=}")
                 if match := re.match(r"(\d+)/(\d+)", audio_metadata["r_frame_rate"]):
@@ -2014,10 +2136,10 @@ class MainWindow(QMainWindow):
         # Accept the event only if it contains a URL pointing to a text file
         if mime_data.hasUrls():
             for url in mime_data.urls():
-                file_path = url.toLocalFile()
-                if file_path.lower().endswith(ALL_COMPATIBLE_FORMATS):
+                filepath = url.toLocalFile()
+                if filepath.lower().endswith(ALL_COMPATIBLE_FORMATS):
                     event.acceptProposedAction()
-                    self.setStatusMessage(self.tr("Drop to open: {}").format(file_path))
+                    self.setStatusMessage(self.tr("Drop to open: {}").format(filepath))
                     return
 
         self.setStatusMessage(self.tr("Cannot open this file type"))
@@ -2033,17 +2155,17 @@ class MainWindow(QMainWindow):
         
         if mime_data.hasUrls():
             for url in mime_data.urls():
-                file_path = url.toLocalFile()
-                basename, ext = os.path.splitext(file_path)
+                filepath = url.toLocalFile()
+                basename, ext = os.path.splitext(filepath)
                 ext = ext.lower()
                 if ext == ".ali":
-                    self.openFile(file_path)
+                    self.openFile(filepath)
                 elif ext == ".srt":
-                    self.openFile(file_path, keep_audio=True)
+                    self.openFile(filepath, keep_audio=True)
                 elif ext in MEDIA_FORMATS:
-                    self.openFile(file_path)
+                    self.openFile(filepath)
                 else:
-                    print(f"Wrong file type {file_path}")
+                    print(f"Wrong file type {filepath}")
                     return
                 event.acceptProposedAction()
                 return  # Only load the first file
@@ -2053,8 +2175,8 @@ class MainWindow(QMainWindow):
         if not self.undo_stack.isClean():
             reply = QMessageBox.warning(
                 self, 
-                "Unsaved work", 
-                "Do you want to save your changes?",
+                self.tr("Unsaved work"), 
+                self.tr("Do you want to save your changes?"),
                 QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Save,
             )
@@ -2079,7 +2201,7 @@ class MainWindow(QMainWindow):
             self.scene_detector.wait()
         
         # Save document state to cache
-        if self.file_path.lower().endswith(".ali"):
+        if self.filepath.lower().endswith(".ali"):
             doc_metadata = {
                 "cursor_pos": self.text_widget.textCursor().position(),
                 "scroll_pos": self.text_widget.verticalScrollBar().value(),
@@ -2089,7 +2211,7 @@ class MainWindow(QMainWindow):
                 "show_margin": self.toggle_margin_action.isChecked(),
                 "video_open": self.toggle_video_action.isChecked()
             }
-            self.cache.update_doc_metadata(self.file_path, doc_metadata)
+            self.cache.update_doc_metadata(self.filepath, doc_metadata)
         
         # Save media cache
         if self.media_path:

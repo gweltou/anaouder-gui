@@ -275,7 +275,7 @@ class ReplaceTextCommand(QUndoCommand):
         cursor.insertHtml(self.new_text.replace('\u2028', "<br>"))
         # cursor.setPosition(self.block.position() + self.cursor_pos_new)
         # self.text_edit.setTextCursor(cursor)
-        # self.text_edit.setCursorState(self.prev_cursor)
+        self.text_edit.setCursorState(self.prev_cursor)
     
     def id(self):
         return 3
