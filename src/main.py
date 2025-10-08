@@ -190,8 +190,10 @@ class MainWindow(QMainWindow):
         # For file drag&drops
         self.setAcceptDrops(True)
 
+        # INITIALIZE UI
         self.initUI()
         self.updateRecentMenu()
+        self.video_widget.setVisible(False)
 
         # Keyboard shortcuts
         ## Search
@@ -330,7 +332,7 @@ class MainWindow(QMainWindow):
         display_menu = menu_bar.addMenu(self.tr("&Display"))
         self.toggle_video_action = QAction(self.tr("&Video"), self)
         self.toggle_video_action.setCheckable(True)
-        self.toggle_video_action.setChecked(True)
+        self.toggle_video_action.setChecked(False)
         self.toggle_video_action.toggled.connect(
             lambda checked: self.toggleVideo(checked))
         display_menu.addAction(self.toggle_video_action)
@@ -1007,6 +1009,7 @@ class MainWindow(QMainWindow):
             self.waveform.must_redraw = True
 
         doc_metadata = self.cache.get_doc_metadata(file_path)
+        print(f"{doc_metadata=}")
         if "cursor_pos" in doc_metadata:
             cursor = self.text_widget.textCursor()
             cursor.setPosition(doc_metadata["cursor_pos"])
@@ -1030,6 +1033,8 @@ class MainWindow(QMainWindow):
             self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
+        else:
+            self.toggle_video_action.setChecked(False)
 
         self.updateWindowTitle()
 
