@@ -10,9 +10,6 @@ APP_NAME = "Anaouder"
 DEFAULT_LANGUAGE = 'br'
 MULTI_LANG = False
 
-app_settings = QSettings("OTilde", APP_NAME)
-
-
 WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
 
 # Default values for subtitles
@@ -24,6 +21,13 @@ SUBTITLES_AUTO_EXTEND_MAX_GAP = 12
 SUBTITLES_MARGIN_SIZE = 42
 SUBTITLES_CPS = 16.0
 
+UI_LANGUAGES = [
+    ("br", "brezhoneg"),
+    ("en", "english"),
+    ("fr", "français")
+]
+
+app_settings = QSettings("OTilde", APP_NAME)
 
 
 _is_darwin = platform.system() == "Darwin"

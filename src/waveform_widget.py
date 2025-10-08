@@ -1377,7 +1377,7 @@ class WaveformWidget(QWidget):
 
 
     def draw(self):
-        log.debug("Redraw waveform canvas")
+        # log.debug("Redraw waveform canvas")
 
         if not self.pixmap:
             return

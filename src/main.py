@@ -44,7 +44,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import (
     Qt, QSize, QUrl,
     Signal, Slot, QThread,
-    QSettings, 
+    QSettings,
+    QTranslator, QLocale, 
+    QEvent,
 )
 from PySide6.QtGui import (
     QAction, QActionGroup,
@@ -60,6 +62,7 @@ from PySide6.QtMultimedia import (
 )
 
 from src.utils import (
+    get_resource_path,
     sec2hms, splitForSubtitle,
     ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS,
 )
@@ -229,7 +232,7 @@ class MainWindow(QMainWindow):
         self.waveform.delete_utterances.connect(self.deleteUtterances)
         self.waveform.delete_segments.connect(self.deleteSegments)
         self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
-        self.waveform.playhead_moved.connect(self.onWaveformPlayHeadMoved)
+        self.waveform.playhead_moved.connect(self.onWaveformPlayheadMoved)
         self.waveform.refresh_segment_info.connect(self.updateSegmentInfo)
         self.waveform.refresh_segment_info_resizing.connect(self.updateSegmentInfoResizing)
         self.waveform.select_segments.connect(self.selectFromWaveform)
@@ -912,7 +915,8 @@ class MainWindow(QMainWindow):
                 # No media file for this ALI file
                 log.warning("No associated media file found")
                 msg_box = QMessageBox(
-                    QMessageBox.Icon.Warning, self.tr("No media file"),
+                    QMessageBox.Icon.Warning,
+                    self.tr("No media file"),
                     self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
                     # QMessageBox.StandardButton.NoButton, self
                 )
@@ -1525,9 +1529,12 @@ class MainWindow(QMainWindow):
 
 
     @Slot(float)
-    def onWaveformPlayHeadMoved(self, t: float):
+    def onWaveformPlayheadMoved(self, t: float):
         self.waveform.updatePlayHead(t, self.player.isPlaying())
         self.player.setPosition(int(self.waveform.playhead * 1000))
+        # if (seg_id := self.waveform.getSegmentAtTime(t)) >= 0:
+        #     self.text_widget.highlightUtterance(seg_id)
+
 
 
     def toggleVideo(self, checked):
@@ -1726,8 +1733,7 @@ class MainWindow(QMainWindow):
         """
         log.debug(f"onTextCursorChanged({seg_ids=})")
 
-        if not seg_ids:
-            seg_ids = None
+        seg_ids = seg_ids or None
         
         self.waveform.setActive(seg_ids, self.player.isPlaying())
         
@@ -1741,7 +1747,8 @@ class MainWindow(QMainWindow):
             # Set the play head at the beggining of the segment
             segment = self.waveform.getSegment(seg_id)
             if segment:
-                self.onWaveformPlayHeadMoved(segment[0])
+                # self.waveform.updatePlayHead(t, self.player.isPlaying())
+                self.onWaveformPlayheadMoved(segment[0])
                 self.waveform.must_redraw = True
     
 
@@ -2311,6 +2318,25 @@ class MainWindow(QMainWindow):
             density = num_chars / dur
             userData = block.userData().data
             userData["density"] = density
+    
+
+    def changeEvent(self, event):
+        print("changeEvent")
+        if event.type() == QEvent.Type.LanguageChange:
+            print("retranslateUI")
+            self.retranslateUi()
+        super().changeEvent(event)
+    
+
+    def retranslateUi(self):
+        print("retranslate UI")
+        reply = QMessageBox.warning(
+            self,
+            self.tr("Switching language"),
+            self.tr("You need to restart the application to update the UI language."),
+            QMessageBox.StandardButton.Ok,
+            QMessageBox.StandardButton.Ok,
+        )
 
 
 
@@ -2546,6 +2572,7 @@ class DeleteUtterancesCommand(QUndoCommand):
         self.waveform.must_redraw = True
 
 
+
 class DeleteSegmentsCommand(QUndoCommand):
     def __init__(self, parent, seg_ids):
         super().__init__()
@@ -2588,14 +2615,40 @@ class DeleteSegmentsCommand(QUndoCommand):
 ###############################################################################
 
 
+class TranslatedApp(QApplication):
+    def __init__(self, argv):
+        super().__init__(argv)
+        self.translator = None  # Store current translator
+    
+    def switch_language(self, lang_code):
+        print("Switch language to", lang_code)
+        # Remove old translator if it exists
+        if self.translator is not None:
+            self.removeTranslator(self.translator)
+        
+        # Create and load new translator
+        self.translator = QTranslator()
+        locale = QLocale(lang_code)  # French
+        if self.translator.load(locale, "anaouder", "_", get_resource_path("translations")):
+            self.installTranslator(self.translator)
+            app_settings.setValue("ui_language", lang_code)
+        else:
+            # Fallback to no translation (source language)
+            self.translator = None
+
+
 def main(argv: list):
     file_path = ""
     
     if len(argv) > 1:
         file_path = argv[1]
     
-    app = QApplication(argv)
+    app = TranslatedApp(argv)
     app.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
+
+    # Internationalization
+    if (locale := app_settings.value("ui_language", None)):
+        app.switch_language(locale)
 
     loadIcons()
     window = MainWindow(file_path)

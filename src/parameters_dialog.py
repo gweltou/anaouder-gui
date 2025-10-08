@@ -35,7 +35,7 @@ from src.video_widget import VideoWidget
 from src.cache_system import CacheSystem
 from src.utils import get_cache_directory
 from src.settings import (
-    MULTI_LANG, app_settings,
+    MULTI_LANG, app_settings, UI_LANGUAGES,
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_MIN_INTERVAL,
     SUBTITLES_AUTO_EXTEND, SUBTITLES_AUTO_EXTEND_MAX_GAP,
     SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
@@ -628,20 +628,18 @@ class SubtitlesTab(QWidget):
         self.setLayout(main_layout)
 
         if app_settings.value("subtitles/use_default", True, type=bool):
-            print("should set to default")
             if self.pref_selector.currentIndex() == 0:
                 self.updateParameters(0)
             else:
                 self.pref_selector.setCurrentIndex(0)
         else:
-            print("should set to user pref")
             self.pref_selector.setCurrentIndex(1)
     
     def updateMinFrames(self):
         min_frames = self.min_frames_spin.value()
         app_settings.setValue("subtitles/min_frames", min_frames)
         t = min_frames / self.fps
-        self.min_dur_label.setText(self.tr("{time}s @{fps}fps")
+        self.min_dur_label.setText(self.tr("{{time}}s @{{fps}}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         if not self.default_params_lock:
             self.user_params["min_frames"] = min_frames
@@ -651,7 +649,7 @@ class SubtitlesTab(QWidget):
         max_frames = self.max_frames_spin.value()
         app_settings.setValue("subtitles/max_frames", max_frames)
         t = max_frames / self.fps
-        self.max_dur_label.setText(self.tr("{time}s @{fps}fps")
+        self.max_dur_label.setText(self.tr("{{time}}s @{{fps}}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         if not self.default_params_lock:
             self.user_params["max_frames"] = max_frames
@@ -661,7 +659,7 @@ class SubtitlesTab(QWidget):
         min_interval = self.min_interval_spin.value()
         app_settings.setValue("subtitles/min_interval", min_interval)
         t = min_interval / self.fps
-        self.min_interval_time_label.setText(self.tr("{time}s @{fps}fps")
+        self.min_interval_time_label.setText(self.tr("{{time}}s @{{fps}}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         self.extend_max_gap_spin.setMinimum(min_interval + 1)
         if not self.default_params_lock:
@@ -672,7 +670,7 @@ class SubtitlesTab(QWidget):
         max_gap = self.extend_max_gap_spin.value()
         app_settings.setValue("subtitles/auto_extend_max_gap", max_gap)
         t = max_gap / self.fps
-        self.extend_max_gap_time_label.setText(self.tr("{time}s @{fps}fps")
+        self.extend_max_gap_time_label.setText(self.tr("{{time}}s @{{fps}}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         if not self.default_params_lock:
             self.user_params["auto_extend_max_gap"] = max_gap
@@ -732,12 +730,20 @@ class UITab(QWidget):
 
         main_layout = QVBoxLayout()
 
+        # UI LANGUAGE
         ui_lang_group = QGroupBox(self.tr("Language of user interface"))
         lang_layout = QHBoxLayout()
         lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         # lang_label = QLabel("Lang")
+
         self.lang_selection = QComboBox()
-        self.lang_selection.addItems(["Brezhoneg", "Cymbraeg", "English", "Français"])
+        current_language = app_settings.value("ui_language", "en")
+        current_language_idx = 0
+        for i, (short_name, long_name) in enumerate(UI_LANGUAGES):
+            self.lang_selection.addItem(long_name.capitalize(), short_name)
+            if short_name == current_language:
+                current_language_idx = i
+        self.lang_selection.setCurrentIndex(current_language_idx)
         # self.lang_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         # self.lang_selection.setCurrentText(lang.getCurrentLanguage(long_name=True))
         self.lang_selection.currentIndexChanged.connect(self.updateUiLanguage)
@@ -782,8 +788,9 @@ class UITab(QWidget):
         self.setLayout(main_layout)
     
 
-    def updateUiLanguage(self):
-        pass
+    def updateUiLanguage(self, index):
+        lang_code = self.lang_selection.itemData(index)
+        QApplication.instance().switch_language(lang_code)
 
 
     def pickColorFont(self):

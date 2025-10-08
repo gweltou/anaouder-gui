@@ -5,58 +5,51 @@ from PySide6.QtGui import QIcon
 from PySide6.QtCore import QSize
 from PySide6.QtWidgets import QLabel
 
+from src.utils import get_resource_path
 
-
-def resourcePath(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
 
 
 icons = dict()
 
 def loadIcons():
     """This function must be called AFTER creating a QGuiApplication"""
-    icons["anaouder"] = QIcon(resourcePath("icons/anaouder_256.png"))
-    icons["otile"] = QIcon(resourcePath("icons/OTilde.png"))
-    icons["dizale"] = QIcon(resourcePath("icons/logo_dizale_small.png"))
-    icons["rannvro"] = QIcon(resourcePath("icons/logo_rannvro_breizh.png"))
+    icons["anaouder"] = QIcon(get_resource_path("icons/anaouder_256.png"))
+    icons["otile"] = QIcon(get_resource_path("icons/OTilde.png"))
+    icons["dizale"] = QIcon(get_resource_path("icons/logo_dizale_small.png"))
+    icons["rannvro"] = QIcon(get_resource_path("icons/logo_rannvro_breizh.png"))
 
-    icons["sparkles"] = QIcon(resourcePath("icons/sparkles-yellow.png"))
+    icons["sparkles"] = QIcon(get_resource_path("icons/sparkles-yellow.png"))
 
-    icons["play"] = QIcon(resourcePath("icons/play-button.png"))
-    icons["pause"] = QIcon(resourcePath("icons/pause.png"))
+    icons["play"] = QIcon(get_resource_path("icons/play-button.png"))
+    icons["pause"] = QIcon(get_resource_path("icons/pause.png"))
     # icons["replay"] = QIcon(resourcePath("icons/replay.png"))
-    icons["back"] = QIcon(resourcePath("icons/back.png"))
-    icons["previous"] = QIcon(resourcePath("icons/previous.png"))
-    icons["next"] = QIcon(resourcePath("icons/next.png"))
-    icons["loop"] = QIcon(resourcePath("icons/endless-loop.png"))
+    icons["back"] = QIcon(get_resource_path("icons/back.png"))
+    icons["previous"] = QIcon(get_resource_path("icons/previous.png"))
+    icons["next"] = QIcon(get_resource_path("icons/next.png"))
+    icons["loop"] = QIcon(get_resource_path("icons/endless-loop.png"))
 
-    icons["zoom_in"] = QIcon(resourcePath("icons/zoom_in.png"))
-    icons["zoom_out"] = QIcon(resourcePath("icons/zoom_out.png"))
+    icons["zoom_in"] = QIcon(get_resource_path("icons/zoom_in.png"))
+    icons["zoom_out"] = QIcon(get_resource_path("icons/zoom_out.png"))
 
-    icons["undo"] = QIcon(resourcePath("icons/undo.png"))
-    icons["redo"] = QIcon(resourcePath("icons/redo.png"))
+    icons["undo"] = QIcon(get_resource_path("icons/undo.png"))
+    icons["redo"] = QIcon(get_resource_path("icons/redo.png"))
 
-    icons["italic"] = QIcon(resourcePath("icons/italic.png"))
-    icons["bold"] = QIcon(resourcePath("icons/bold.png"))
+    icons["italic"] = QIcon(get_resource_path("icons/italic.png"))
+    icons["bold"] = QIcon(get_resource_path("icons/bold.png"))
 
-    icons["head"] = QIcon(resourcePath("icons/head-side-thinking.png"))
-    icons["numbers"] = QIcon(resourcePath("icons/123-numbers.png"))
-    icons["font"] = QIcon(resourcePath("icons/font.png"))
-    icons["waveform"] = QIcon(resourcePath("icons/waveform.png"))
-    icons["volume"] = QIcon(resourcePath("icons/volume.png"))
-    icons["rabbit"] = QIcon(resourcePath("icons/rabbit-fast.png"))
-    icons["folder"] = QIcon(resourcePath("icons/folder.png"))
+    icons["head"] = QIcon(get_resource_path("icons/head-side-thinking.png"))
+    icons["numbers"] = QIcon(get_resource_path("icons/123-numbers.png"))
+    icons["font"] = QIcon(get_resource_path("icons/font.png"))
+    icons["waveform"] = QIcon(get_resource_path("icons/waveform.png"))
+    icons["volume"] = QIcon(get_resource_path("icons/volume.png"))
+    icons["rabbit"] = QIcon(get_resource_path("icons/rabbit-fast.png"))
+    icons["folder"] = QIcon(get_resource_path("icons/folder.png"))
 
-    icons["magnet"] = QIcon(resourcePath("icons/magnet.png"))
-    icons["select"] = QIcon(resourcePath("icons/select_segment.png"))
-    icons["add_segment"] = QIcon(resourcePath("icons/add_segment.png"))
-    icons["del_segment"] = QIcon(resourcePath("icons/del_segment.png"))
-    icons["follow_playhead"] = QIcon(resourcePath("icons/follow_playhead.png"))
+    icons["magnet"] = QIcon(get_resource_path("icons/magnet.png"))
+    icons["select"] = QIcon(get_resource_path("icons/select_segment.png"))
+    icons["add_segment"] = QIcon(get_resource_path("icons/add_segment.png"))
+    icons["del_segment"] = QIcon(get_resource_path("icons/del_segment.png"))
+    icons["follow_playhead"] = QIcon(get_resource_path("icons/follow_playhead.png"))
 
 
 class IconWidget(QLabel):
