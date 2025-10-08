@@ -9,6 +9,7 @@ DEBUG = True if os.getenv("DEBUG") == 'True' else False
 print("Architecture set to", ARCH)
 print(f"{DEBUG=}")
 
+
 def get_lib_path(path):
     if platform.system() in ("Linux", "Darwin"):
         python_version = f"python{platform.python_version_tuple()[0]}.{platform.python_version_tuple()[1]}"
@@ -28,8 +29,6 @@ def get_binaries():
         binaries = [
             (get_lib_path("vosk/libvosk.dyld"), "vosk"),
             (get_lib_path("static_ffmpeg/bin/darwin/*"), "static_ffmpeg/bin/darwin"),
-            #(get_lib_path("PySide6/Qt/lib/*.dylib"), "."),
-            #(get_lib_path("PySide6/Qt/plugins/*"), "PySide6/Qt/plugins"),
         ]
     elif platform.system() == "Windows":
         binaries = [
@@ -82,6 +81,10 @@ a = Analysis(
         ("./icons/logo_dizale_small.png", "icons/"),
         ("./icons/logo_rannvro_breizh.png", "icons/"),
 
+        # Translation files
+        ("./translations/anaouder_br.qm", "translations/"),
+        ("./translations/anaouder_fr.qm", "translations/"),
+        
         # Breton language specific files
         (get_lib_path("ostilhou/asr/*.tsv"), "ostilhou/asr"),
         (get_lib_path("ostilhou/dicts/*.tsv"), "ostilhou/dicts"),
@@ -99,30 +102,29 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
-    optimize=0,
 )
+
+splash = None
+if platform.system() in ("Windows", "Linux"):
+    splash = Splash(
+        "icons/anaouder_splash.png",
+        binaries=a.binaries,
+        datas=a.datas,
+        text_pos=(516, 134),
+        text_size=12,
+        text_color='black',
+        text_default='O kargañ...',
+    )
 
 pyz = PYZ(a.pure)
-
-
-"""
-splash = Splash(
-    "image.png",
-    binaries=a.binaries,
-    datas=a.datas,
-    text_pos=(10, 50),
-    text_size=12,
-    text_color='black'
-)
-"""
-
 
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
-    [],
+    #splash,  # Add splash here
+    #splash.binaries,  # Add splash binaries
+    exclude_binaries=True,  # Important for onedir mode
+    #[],
     name='Anaouder',
     debug=DEBUG,
     bootloader_ignore_signals=False,
@@ -134,29 +136,39 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=True, # Needed by macOS, apparently
     target_arch=ARCH,
-    codesign_identity=None,
-    entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    #splash.binaries,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='Anaouder',
 )
 
 # macOS specific configurations
-app = BUNDLE(
-    exe,
-    name='Anaouder.app',
-    icon='icons/icon.icns',
-    bundle_identifier='com.OTilde.Anaouder',
-    info_plist={
-        'CFBundleExecutable': 'Anaouder',
-        'CFBundlePackageType': 'APPL',
-        'NSPrincipalClass': 'NSApplication',
-        'NSAppleScriptEnabled': False,
-        'NSHighResolutionCapable': 'True',
-        'LSMinimumSystemVersion': '10.13.0',
-        'NSRequiresAquaSystemAppearance': 'False',
-	    'CFBundleDisplayName': 'Anaouder',
-        'CFBundleName': 'Anaouder',
-        'CFBundleIdentifier': 'com.OTilde.Anaouder',
-        'CFBundleShortVersionString': '1.0.0',
-        'CFBundleVersion': '1.0.0',
-        'LSApplicationCategoryType': 'public.app-category.utilities',
-    }
-)
+if platform.system() == "Darwin":
+    app = BUNDLE(
+        coll,
+        name='Anaouder.app',
+        icon='icons/icon.icns',
+        bundle_identifier='com.OTilde.Anaouder',
+        info_plist={
+            'CFBundleExecutable': 'Anaouder',
+            'CFBundlePackageType': 'APPL',
+            'NSPrincipalClass': 'NSApplication',
+            'NSAppleScriptEnabled': False,
+            'NSHighResolutionCapable': 'True',
+            'LSMinimumSystemVersion': '10.13.0',
+            'NSRequiresAquaSystemAppearance': 'False',
+    	    'CFBundleDisplayName': 'Anaouder',
+            'CFBundleName': 'Anaouder',
+            'CFBundleIdentifier': 'com.OTilde.Anaouder',
+            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleVersion': '1.0.0',
+            'LSApplicationCategoryType': 'public.app-category.utilities',
+        }
+    )

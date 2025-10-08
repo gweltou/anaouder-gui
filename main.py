@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 
+import sys
 import logging
 import cProfile
 import pstats
@@ -14,7 +15,6 @@ logging.basicConfig(
     ]
 )
 
-import sys
 from src.main import main
 
 
@@ -34,7 +34,15 @@ if __name__ == "__main__":
     if profiling:
         profiler = cProfile.Profile()
         profiler.enable()
-    main(argv)
+    
+    if hasattr(sys, '_MEIPASS'):
+        try:
+            import pyi_splash
+            pyi_splash.close()
+        except ImportError:
+            pass
+
+    ret = main(argv)
     
     if profiling:
         profiler.disable()
@@ -42,3 +50,5 @@ if __name__ == "__main__":
         stats = pstats.Stats(profiler)
         stats.sort_stats(SortKey.CUMULATIVE)
         stats.print_stats(50)
+    
+    sys.exit(ret)
