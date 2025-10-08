@@ -253,7 +253,7 @@ class TextEditWidget(QTextEdit):
         ALIGNED = 2
         NOT_ALIGNED = 3
 
-    cursor_changed_signal = Signal(list)
+    cursor_changed_signal = Signal(list) # Utterance ids of segment under cursor or selection
     join_utterances = Signal(list)
     delete_utterances = Signal(list)
     split_utterance = Signal(int, int)
@@ -450,8 +450,22 @@ class TextEditWidget(QTextEdit):
         cursor = self.textCursor()
         cursor.setPosition(pos)
         cursor.insertBlock()
-        # cursor.insertText(text)
-        cursor.insertHtml(text)
+
+        # Escape the special tokens ("<C'HOARZH>", "<LAU>"...)
+        expression = QRegularExpression(r"<([a-zA-Z\']+)>")
+        escaped_string = ""
+        i = 0
+        matches = expression.globalMatch(text)
+        while matches.hasNext():
+            match = matches.next()
+            tag = match.captured(1)
+            if tag.upper() not in ("I", "B", "BR"):
+                escaped_string += text[i:match.capturedStart()]
+                escaped_string += "&lt;" + tag + "&gt;"
+                i = match.capturedEnd()
+        escaped_string += text[i:]
+
+        cursor.insertHtml(escaped_string)
         if data:
             cursor.block().setUserData(MyTextBlockUserData(data))
         
