@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, List
 import logging
 
 from PySide6.QtWidgets import (
@@ -11,17 +11,236 @@ from PySide6.QtGui import (
 )
 
 from src.utils import MyTextBlockUserData
+from src.interfaces import (
+    Segment, SegmentId,
+    WaveformInterface, TextDocumentInterface
+)
 
 
 log = logging.getLogger(__name__)
 
 
+class CreateNewUtteranceCommand(QUndoCommand):
+    """
+    Create a new utterance with empty text,
+    the segment will be added to the waveform.
+    """
+
+    def __init__(
+            self,
+            parent,
+            segment: Segment,
+            seg_id: Optional[SegmentId]=None
+        ):
+        log.debug(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {seg_id=})")
+        print(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {seg_id=})")
+
+        super().__init__()
+        self.parent = parent    # TODO: rewrite
+        self.text_widget: TextDocumentInterface =  parent.text_widget
+        self.waveform: WaveformInterface = parent.waveform
+        self.segment = segment
+        self.seg_id = seg_id or self.waveform.getNewId()
+        self.prev_cursor = self.text_widget.getCursorState()
+
+    
+    def undo(self):
+        if self.parent.playing_segment == self.seg_id:
+            self.parent.playing_segment = -1
+        self.text_widget.deleteSentence(self.seg_id)
+        del self.waveform.segments[self.seg_id]
+        if self.seg_id in self.waveform.active_segments:
+            self.waveform.active_segments.remove(self.seg_id)
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True
+        self.text_widget.setCursorState(self.prev_cursor)
+
+
+    def redo(self):
+        self.waveform.addSegment(self.segment, self.seg_id)
+        self.text_widget.insertSentenceWithId('*', self.seg_id)
+        self.text_widget.highlightUtterance(self.seg_id)
+
+
+
+class JoinUtterancesCommand(QUndoCommand):
+    def __init__(
+            self,
+            text_widget: TextDocumentInterface,
+            waveform: WaveformInterface,
+            seg_ids: List[SegmentId],
+        ):
+        super().__init__()
+        self.text_widget = text_widget
+        self.waveform = waveform
+        self.seg_ids = sorted(seg_ids, key=lambda x: self.waveform.segments[x][0])
+        self.segments: list
+        self.segments_text: list
+        self.prev_cursor = self.text_widget.getCursorState()
+
+    def undo(self):
+        # Restore first utterance
+        first_id = self.seg_ids[0]
+        self.text_widget.setSentenceText(first_id, self.segments_text[0])
+        self.waveform.segments[first_id] = self.segments[0]
+        
+        block = self.text_widget.getBlockById(first_id)
+        assert block != None
+        cursor = QTextCursor(block)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
+        
+        # Restore other utterances
+        for i, id in enumerate(self.seg_ids[1:]):
+            cursor.insertBlock()
+            cursor.insertText(self.segments_text[i+1])
+            user_data = {"seg_id": id}
+            cursor.block().setUserData(MyTextBlockUserData(user_data))
+            self.waveform.segments[id] = self.segments[i+1]
+            self.text_widget.deactivateSentence(id)
+        
+        self.text_widget.setCursorState(self.prev_cursor)
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True
+        # self.waveform.refreshSegmentInfo()
+
+    def redo(self):
+        print(f"JoinUtterancesCommand {self.seg_ids=}")
+        # TODO: fix bug when joining (sometimes)
+        self.segments = [self.waveform.segments[id] for id in self.seg_ids]
+        self.segments_text = [self.text_widget.getBlockById(id).text() for id in self.seg_ids]
+        # Remove all sentences except the first one
+        for id in self.seg_ids[1:]:
+            block = self.text_widget.getBlockById(id)
+            assert block != None
+            cursor = QTextCursor(block)
+            cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+            cursor.removeSelectedText()
+        
+        joined_text = ' '.join( [ t.strip() for t in self.segments_text ] )
+        self.text_widget.setSentenceText(self.seg_ids[0], joined_text)
+
+        # Join waveform segments
+        first_id = self.seg_ids[0]
+        new_seg_start = self.waveform.segments[first_id][0]
+        new_seg_end = self.waveform.segments[self.seg_ids[-1]][1]
+        self.waveform.segments[first_id] = [new_seg_start, new_seg_end]
+        for id in self.seg_ids[1:]:
+            del self.waveform.segments[id]
+        
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, len(self.segments_text[0]))
+        self.text_widget.setTextCursor(cursor)
+
+        self.waveform.active_segments = [first_id]
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True
+        # self.waveform.refreshSegmentInfo()
+
+
+
+class AlignWithSelectionCommand(QUndoCommand):
+    # TODO: Rewrite this
+
+    def __init__(
+            self,
+            text_widget: TextDocumentInterface,
+            waveform: WaveformInterface,
+            block
+        ):
+        log.debug(f"AlignWithSelectionCommand.__init__(parent, {block=})")
+        print(f"{block.text()=}")
+        super().__init__()
+        self.parent: MainWindow = parent
+        self.text_widget = text_widget
+        self.waveform = waveform
+        self.block: QTextBlock = block
+        self.old_block_data = self.block.userData().data.copy() if block.userData() else None
+        s = self.waveform.getSelection()
+        self.selection: Optional[Segment] = s.copy() if s != None else None
+        # self.prev_active_segments = self.parent.waveform.active_segments[:]
+        # self.prev_active_segment_id = self.parent.waveform.active_segment_id
+        self.segment_id = self.waveform.getNewId()
+    
+    def undo(self):
+        # self.parent.text_widget.highlightUtterance(self.prev_active_segment_id)
+        if self.old_block_data:
+            self.block.setUserData(MyTextBlockUserData(self.old_block_data))
+        else:
+            self.block.setUserData(None)
+        self.text_widget.highlighter.rehighlightBlock(self.block)
+        self.waveform._selection = self.selection
+        self.parent.status_bar.clearMessage()
+        del self.waveform.segments[self.segment_id]
+        self.waveform.must_redraw = True
+
+    def redo(self):
+        if self.selection:
+            self.waveform.addSegment(self.selection, self.segment_id)
+        self.waveform.deselect()
+        self.text_widget.setBlockId(self.block, self.segment_id)
+        self.parent.updateUtteranceDensity(self.segment_id)
+        self.text_widget.highlighter.rehighlightBlock(self.block)
+
+
+
+class DeleteUtterancesCommand(QUndoCommand):
+    def __init__(self, text_widget, waveform_widget, seg_ids: list):
+        log.debug(f"DeleteUtterancesCommand.__init__(parent, {seg_ids=})")
+
+        super().__init__()
+        self.text_widget: TextDocumentInterface = text_widget
+        self.waveform: WaveformInterface = waveform_widget
+        self.seg_ids = seg_ids[:]
+        self.segments = [ self.waveform.segments[seg_id][:] for seg_id in self.seg_ids ]
+        
+        blocks = [ block for seg_id in seg_ids if (block := self.text_widget.getBlockById(seg_id)) is not None ]
+        self.texts = [ block.text() for block in blocks ]
+        self.datas = [ block.userData() for block in blocks ]
+        self.datas = [ m.data.copy() if m else None for m in self.datas ]
+        self.positions = [ block.position() for block in blocks ]
+        self.prev_cursor = self.text_widget.getCursorState()
+    
+    def undo(self):
+        log.debug("DeleteUtterancesCommand UNDO")
+
+        for segment, text, seg_id, data, pos in zip(self.segments, self.texts, self.seg_ids, self.datas, self.positions):
+            seg_id = self.waveform.addSegment(segment, seg_id)
+            block = self.text_widget.insertBlock(text, data, pos - 1)
+            self.text_widget.highlighter.rehighlightBlock(block)
+
+        self.waveform.must_redraw = True
+        # self.waveform.refreshSegmentInfo()
+        self.text_widget.setCursorState(self.prev_cursor)        
+
+    def redo(self):
+        # Delete text sentences
+        log.debug("DeleteUtterancesCommand REDO")
+
+        self.text_widget.document().blockSignals(True)
+        self.text_widget.setCursorState(self.prev_cursor)
+        
+        for seg_id in self.seg_ids:
+            self.text_widget.deleteSentence(seg_id)
+            del self.waveform.segments[seg_id]
+        self.text_widget.document().blockSignals(False)
+
+        self.waveform.active_segments = []
+        self.waveform.active_segment_id = -1
+        self.waveform.must_sort = True
+        # self.waveform.refreshSegmentInfo()
+        self.waveform.must_redraw = True
+
+
+
+###############################################################################
+####                         Text related Commands                         ####
+###############################################################################
 
 class InsertTextCommand(QUndoCommand):
     """Add characters at a given position in the document"""
     def __init__(self, text_edit, text, position):
         super().__init__()
-        self.text_edit : QTextEdit = text_edit
+        self.text_edit: TextDocumentInterface = text_edit
         self.text: str = text[:]
         self.position : int = position
         # Save the cursor state
@@ -61,7 +280,7 @@ class DeleteTextCommand(QUndoCommand):
     """
     def __init__(
             self,
-            text_edit: QTextEdit,
+            text_edit: TextDocumentInterface,
             position: int,
             size: int,
             direction: QTextCursor.MoveOperation
@@ -131,7 +350,7 @@ class InsertBlockCommand(QUndoCommand):
     """
     def __init__(
             self,
-            text_edit: QTextEdit,
+            text_edit: TextDocumentInterface,
             position: int,
             text = "",
             seg_id: Optional[int] = None,
@@ -245,10 +464,9 @@ class ReplaceTextCommand(QUndoCommand):
     """Replace the content of a text block"""
     def __init__(
             self,
-            text_edit: QTextEdit,
+            text_edit: TextDocumentInterface,
             block: QTextBlock,
             new_text: str,
-            # html=False
         ):
         super().__init__()
         self.text_edit = text_edit
@@ -257,7 +475,6 @@ class ReplaceTextCommand(QUndoCommand):
         self.old_text = text_edit.getBlockHtml(block)[0]
         self.new_text = new_text
         self.prev_cursor = self.text_edit.getCursorState()
-        # self.html = html
     
     def undo(self):
         block = self.text_edit.document().findBlockByNumber(self.block_number)
@@ -296,7 +513,7 @@ class MoveTextCursor(QUndoCommand):
     """
     def __init__(
             self,
-            text_edit: QTextEdit,
+            text_edit: TextDocumentInterface,
             position: int,
         ):
         super().__init__()
@@ -319,3 +536,109 @@ class MoveTextCursor(QUndoCommand):
         self.text_edit.setTextCursor(cursor)
 
         self.text_edit.blockSignals(was_blocked)
+
+
+
+###############################################################################
+####                       Waveform related Commands                       ####
+###############################################################################
+
+class AddSegmentCommand(QUndoCommand):
+    """Define a new audio segment"""
+
+    def __init__(
+            self,
+            waveform_widget: WaveformInterface,
+            segment: Segment,
+            seg_id: Optional[SegmentId] = None
+        ):
+        super().__init__()
+        self.waveform_widget = waveform_widget
+        self.segment = segment[:]
+        self.seg_id = seg_id
+    
+    def undo(self):
+        assert self.seg_id != None
+        del self.waveform_widget.segments[self.seg_id]
+        self.waveform_widget.must_sort = True
+        self.waveform_widget.must_redraw = True
+        # self.waveform_widget.refreshSegmentInfo()
+
+    def redo(self):
+        self.seg_id = self.waveform_widget.addSegment(self.segment, self.seg_id)
+        self.waveform_widget.must_sort = True
+        self.waveform_widget.must_redraw = True
+        # self.waveform_widget.refreshSegmentInfo()
+
+
+
+class ResizeSegmentCommand(QUndoCommand):
+    def __init__(
+            self,
+            waveform_widget: WaveformInterface,
+            segment_id: SegmentId,
+            seg_start: float,
+            seg_end: float,
+        ):
+        super().__init__()
+        self.waveform_widget = waveform_widget
+        self.segment_id = segment_id
+        self.old_segment: Segment = waveform_widget.segments[segment_id][:]
+        self.seg_start = seg_start
+        self.seg_end = seg_end
+    
+    def undo(self):
+        self.waveform_widget.segments[self.segment_id] = self.old_segment[:]
+        self.waveform_widget.refresh_segment_info.emit(self.segment_id)
+        self.waveform_widget.must_sort = True
+        self.waveform_widget.must_redraw = True
+    
+    def redo(self):
+        self.waveform_widget.segments[self.segment_id] = [self.seg_start, self.seg_end]
+        self.waveform_widget.refresh_segment_info.emit(self.segment_id)
+        self.waveform_widget.must_sort = True
+        self.waveform_widget.must_redraw = True
+        
+    # def id(self):
+    #     return 21
+    
+    # def mergeWith(self, other: QUndoCommand) -> bool:
+    #     if other.segment_id == self.segment_id and other.side == self.side:
+    #         self.time_pos = other.time_pos
+    #         return True
+    #     return False
+
+
+
+class DeleteSegmentsCommand(QUndoCommand):
+    def __init__(self, parent, seg_ids):
+        super().__init__()
+        self.text_edit: TextEditWidget = parent.text_widget
+        self.waveform: WaveformInterface = parent.waveform
+        self.seg_ids = seg_ids
+        self.segments = {
+            id: self.waveform.segments[id]
+            for id in seg_ids if id in self.waveform.segments
+        }
+    
+    def undo(self):
+        for seg_id, segment in self.segments.items():
+            self.waveform.segments[seg_id] = segment
+            block = self.text_edit.getBlockById(seg_id)
+            self.text_edit.highlighter.rehighlightBlock(block)
+
+        self.waveform.active_segments = list(self.segments.keys())
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True
+
+    def redo(self):
+        for seg_id in self.segments:
+            block = self.text_edit.getBlockById(seg_id)
+            if seg_id in self.waveform.segments:
+                del self.waveform.segments[seg_id]
+            self.text_edit.highlighter.rehighlightBlock(block)
+        
+        self.waveform.active_segment_id = -1
+        self.waveform.active_segments = []
+        self.waveform.must_sort = True
+        self.waveform.must_redraw = True

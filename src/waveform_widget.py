@@ -25,6 +25,7 @@ from PySide6.QtGui import (
 from src.theme import theme
 from src.settings import app_settings, shortcuts, SUBTITLES_CPS
 from src.utils import lerpColor, mapNumber
+from src.commands import ResizeSegmentCommand
 
 
 ZOOM_Y = 3.5    # In pixels per second
@@ -40,44 +41,6 @@ Handle = Enum("Handle", ["LEFT", "RIGHT", "MIDDLE"])
 
 log = logging.getLogger(__name__)
 
-
-
-class ResizeSegmentCommand(QUndoCommand):
-    """
-    """
-    def __init__(
-            self,
-            waveform_widget,
-            segment_id: SegmentId,
-            seg_start: float,
-            seg_end: float,
-        ):
-        super().__init__()
-        self.waveform_widget : WaveformWidget = waveform_widget
-        self.segment_id = segment_id
-        self.old_segment : Segment = waveform_widget.segments[segment_id][:]
-        self.seg_start = seg_start
-        self.seg_end = seg_end
-    
-    def undo(self):
-        self.waveform_widget.segments[self.segment_id] = self.old_segment[:]
-        self.waveform_widget.refresh_segment_info.emit(self.segment_id)
-        self.waveform_widget.must_sort = True
-        self.waveform_widget.must_redraw = True
-    def redo(self):
-        self.waveform_widget.segments[self.segment_id] = [self.seg_start, self.seg_end]
-        self.waveform_widget.refresh_segment_info.emit(self.segment_id)
-        self.waveform_widget.must_sort = True
-        self.waveform_widget.must_redraw = True
-        
-    # def id(self):
-    #     return 21
-    
-    # def mergeWith(self, other: QUndoCommand) -> bool:
-    #     if other.segment_id == self.segment_id and other.side == self.side:
-    #         self.time_pos = other.time_pos
-    #         return True
-    #     return False
 
 
 

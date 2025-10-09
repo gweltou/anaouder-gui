@@ -1,3 +1,4 @@
+from typing import Optional
 import os
 import re
 import srt
@@ -26,7 +27,11 @@ exportSrtSignals = ExportSrtSignals()
 
 
 class ExportSrtDialog(QDialog):
-    def __init__(self, parent, default_path:str=None, fps:float=None):
+    def __init__(
+            self,
+            parent,
+            default_path: Optional[str]=None,
+        ):
         super().__init__(parent)
 
         self.setWindowTitle("Export to SRT")
@@ -104,7 +109,7 @@ class ExportSrtDialog(QDialog):
         self.setLayout(main_layout)
     
 
-    def browse_file(self, default_path: str=None):
+    def browse_file(self, default_path: Optional[str]=None):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save SRT File",
@@ -116,14 +121,14 @@ class ExportSrtDialog(QDialog):
             self.file_path.setText(file_path)
 
 
-def exportSrt(parent, media_path, utterances, fps: float=None):
+def exportSrt(parent, media_path, utterances) -> None:
     rm_special_tokens = True
 
     dir = os.path.split(media_path)[0] if media_path else os.path.expanduser('~')
     default_path = os.path.splitext(media_path)[0] if media_path else "untitled"
     default_path += ".srt"
 
-    dialog = ExportSrtDialog(parent, os.path.join(dir, default_path), fps)
+    dialog = ExportSrtDialog(parent, os.path.join(dir, default_path))
     result = dialog.exec()
 
     if result == QDialog.DialogCode.Rejected:

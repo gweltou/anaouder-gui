@@ -359,21 +359,21 @@ class TextEditWidget(QTextEdit):
         return -1
 
 
-    def setBlockId(self, block: QTextBlock, id: int):
-        log.debug(f"setBlockId({block=}, {id=})")
+    def setBlockId(self, block: QTextBlock, seg_id: SegmentId):
+        log.debug(f"setBlockId({block=}, {seg_id=})")
         if not block.userData():
-            block.setUserData(MyTextBlockUserData({"seg_id": id}))
+            block.setUserData(MyTextBlockUserData({"seg_id": seg_id}))
         else:
             user_data = block.userData().data
-            user_data["seg_id"] = id
+            user_data["seg_id"] = seg_id
 
 
-    def getBlockById(self, id: int) -> Optional[QTextBlock]:
+    def getBlockById(self, seg_id: SegmentId) -> Optional[QTextBlock]:
         doc = self.document()
         block = doc.firstBlock()
         while block.isValid():
             if block.userData():
-                if block.userData().data["seg_id"] == id:
+                if block.userData().data["seg_id"] == seg_id:
                     return block
             block = block.next()
         return None
