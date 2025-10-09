@@ -2326,15 +2326,12 @@ class MainWindow(QMainWindow):
     
 
     def changeEvent(self, event):
-        print("changeEvent")
         if event.type() == QEvent.Type.LanguageChange:
-            print("retranslateUI")
             self.retranslateUi()
         super().changeEvent(event)
     
 
     def retranslateUi(self):
-        print("retranslate UI")
         reply = QMessageBox.warning(
             self,
             self.tr("Switching language"),
@@ -2358,13 +2355,17 @@ class TranslatedApp(QApplication):
         self.translator = None
     
     def switch_language(self, lang_code):
-        print("Switch language to", lang_code)
+        log.info(f"Switching UI language to {lang_code}")
+        print("Switching UI language to", lang_code)
         if self.translator is not None:
             self.removeTranslator(self.translator)
         
         self.translator = QTranslator()
         locale = QLocale(lang_code)
-        if self.translator.load(locale, "anaouder", "_", get_resource_path("translations")):
+        if lang_code == "en":
+            app_settings.setValue("ui_language", lang_code)
+            self.translator = None
+        elif self.translator.load(locale, "anaouder", "_", get_resource_path("translations")):
             self.installTranslator(self.translator)
             app_settings.setValue("ui_language", lang_code)
         else:
