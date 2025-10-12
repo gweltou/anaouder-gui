@@ -65,6 +65,7 @@ def process_text_for_alignment(s: str) -> str:
     s = s.replace('è', 'e')
     # Remove silent letters
     s = s.replace('h', '')
+    s = s.replace('\'', '')
     # Remove double-letters
     chars = []
     for c in s:

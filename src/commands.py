@@ -143,6 +143,7 @@ class AlignWithSelectionCommand(QUndoCommand):
 
     def __init__(
             self,
+            parent,
             text_widget: TextDocumentInterface,
             waveform: WaveformInterface,
             block
@@ -150,7 +151,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         log.debug(f"AlignWithSelectionCommand.__init__(parent, {block=})")
         print(f"{block.text()=}")
         super().__init__()
-        self.parent: MainWindow = parent
+        self.parent = parent
         self.text_widget = text_widget
         self.waveform = waveform
         self.block: QTextBlock = block

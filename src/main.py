@@ -89,7 +89,7 @@ from src.parameters_dialog import ParametersDialog
 from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
 from src.export_txt import exportTxt, exportTxtSignals
-from src.levenshtein_aligner import smart_split, smart_split_time
+from src.levenshtein_aligner import smart_split, smart_split_time, can_smart_split
 from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
     app_settings, shortcuts,
@@ -897,7 +897,7 @@ class MainWindow(QMainWindow):
                         self.text_widget.appendSentence(line, seg_id)
                     else:
                         # Regular text or comments or metadata only
-                        self.text_widget.addText(line)
+                        self.text_widget.append(line)
 
                     # Check for an "audio_path" metadata in current line
                     if not media_path and "audio-path" in metadata:
@@ -1370,7 +1370,7 @@ class MainWindow(QMainWindow):
         return (seg_id, html)
     
 
-    def updateSubtitle(self, time: float):
+    def updateSubtitle(self, time: float) -> None:
         """
         Args:
             time (float): time position in seconds
@@ -1381,7 +1381,7 @@ class MainWindow(QMainWindow):
             self.video_widget.setCaption(text)
 
 
-    def onPlayerPositionChanged(self, position: int):
+    def onPlayerPositionChanged(self, position: int) -> None:
         """
         Called every time the position is changed in the QMediaPlayer
         Updates the head position on the waveform and highlight the
@@ -1451,11 +1451,11 @@ class MainWindow(QMainWindow):
         self.updateSubtitle(player_position)
     
 
-    def setLooping(self, checked: bool):
+    def setLooping(self, checked: bool) -> None:
         self.looping = checked
 
 
-    def playAction(self):
+    def playAction(self) -> None:
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.pause()
             self.play_button.setIcon(icons["play"])
@@ -1478,21 +1478,21 @@ class MainWindow(QMainWindow):
             self.play_button.setIcon(icons["pause"])
 
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop playback"""
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.stop()
             self.play_button.setIcon(icons["play"])
 
 
-    def playSegment(self, segment: Segment):
+    def playSegment(self, segment: Segment) -> None:
         start, _ = segment
         self.player.setPosition(int(start * 1000))
         self.player.play()
         self.play_button.setIcon(icons["pause"])
 
 
-    def playNextAction(self):
+    def playNextAction(self) -> None:
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.stop()
         id = self.waveform.getNextSegmentId()
@@ -2089,7 +2089,7 @@ class MainWindow(QMainWindow):
 
     @Slot(QTextBlock)
     def alignWithSelection(self, block:QTextBlock):
-        self.undo_stack.push(AlignWithSelectionCommand(self, block))
+        self.undo_stack.push(AlignWithSelectionCommand(self, self.text_widget, self.waveform, block))
         if self.selection_button.isChecked():
             self.selection_button.setChecked(False)
 

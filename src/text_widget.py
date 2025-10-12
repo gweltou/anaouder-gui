@@ -432,10 +432,6 @@ class TextEditWidget(QTextEdit):
         cursor.insertText(text)
 
 
-    def addText(self, text: str, is_utt=False):
-        self.append(text)
-
-
     def appendSentence(self, text: str, seg_id: Optional[SegmentId]):
         """Insert new utterance at the end of the document"""
         end_position = self.document().characterCount() - 1  # -1 because of implicit newline
@@ -582,6 +578,7 @@ class TextEditWidget(QTextEdit):
         else:
             # raise NotImplementedError("Deleting text over many blocks is not permitted")
             # Deletion over many blocks
+            print("Delete many lines")
             self.undo_stack.beginMacro("Delete many lines")
             block = end_block
             while block.isValid():

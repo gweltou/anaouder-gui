@@ -25,11 +25,15 @@ def smart_split(text: str, position: int, vosk_tokens: list) -> tuple:
         where each part is a list of timecoded tokens
     """
 
+    if not can_smart_split(text, vosk_tokens):
+        # Will call prepare_sentence, like align_text_with_vosk_token
+        # We could take advantage of that to avoid redundant calls
+        raise Exception("CER is too high to smart-split")
+
     left_text = text[:position].rstrip()
     right_text = text[position:].lstrip()
 
     result = align_texts_with_vosk_tokens(' '.join([left_text, SPLIT_TOKEN, right_text]), vosk_tokens)
-    #print(' '.join([left_text, SPLIT_TOKEN, right_text]))
     
     # Find index of split token
     i = 0
@@ -84,6 +88,11 @@ def smart_split_time(text: str, timepos: float, vosk_tokens: list) -> tuple:
     Returns:
         A 2-tuple consisting of the left text and the right text
     """
+    if not can_smart_split(text, vosk_tokens):
+        # Will call prepare_sentence.
+        # We could take advantage of that to avoid redundant calls
+        raise Exception("CER is too high to smart-split")
+
     # Find the best location to split the transcribed sentence
     idx = 0
     for t_start, t_end, word, _, _ in vosk_tokens:
@@ -115,11 +124,16 @@ def smart_split_time(text: str, timepos: float, vosk_tokens: list) -> tuple:
     return (' '.join(words[:best_idx]), ' '.join(words[best_idx:]))
 
 
-def prep_word(word: str) -> str:
-    return prepTextForAlignment(word)  # Language dependent pre-processing
+def can_smart_split(text: str, vosk_tokens: list):
+    # Simplify text representation
+    gt = prep_sentence(text)
+    hyp = prep_sentence(' '.join([t[2] for t in vosk_tokens]))
+    cer = jiwer.cer(gt, hyp)
+    print(f"{cer=}")
+    return cer < 0.5
 
 
-def prep_sentence(sentence: str) -> str:
+def prep_sentence(sentence: str, remove_spaces=True) -> str:
     """
     Return a simplified representation of the given sentence,
     for more better alignment
@@ -131,10 +145,14 @@ def prep_sentence(sentence: str) -> str:
     sentence = sentence.replace('*', '')
     sentence = sentence.replace('-', ' ')            # Needed for Breton, but how does it impact other languages?
     sentence = sentence.replace('.', ' ')
-    sentence = filter_out_chars(sentence, PUNCTUATION + "' ")
+    sentence = filter_out_chars(sentence, PUNCTUATION)
 
-    simplified = prepTextForAlignment(sentence)
-    return simplified
+    normalized = prepTextForAlignment(sentence)
+
+    if remove_spaces:
+        sentence = normalized.replace(' ', '')
+        
+    return sentence
 
 
 def align_texts_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
@@ -149,20 +167,9 @@ def align_texts_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
             with the format (ground_truth_word, (hyp_word, start, end))
     """
     # Simplify text representation
-    text = text.lower()
-    text = text.replace('\n', ' ')
-    text = re.sub(r"{.+?}", '', text)        # Ignore metadata
-    text = re.sub(r"<[A-Z\']+?>", '¤', text) # Replace special tokens
-    text = text.replace('*', '')
-    text = text.replace('-', ' ')            # Needed for Breton, but how does it impact other languages?
-    text = text.replace('.', ' ')
-    text = filter_out_chars(text, PUNCTUATION + "'")
+    gt_words = prep_sentence(text, remove_spaces=False).split()
 
-    # Create matrix
-    gt_words = [prep_word(w) for w in text.split()]
-    gt_words = list(filter(lambda x: x, gt_words))
-
-    hyp_words = [ (prep_word(t[2]), t[0], t[1]) for t in vosk_tokens]
+    hyp_words = [ (prepTextForAlignment(t[2]), t[0], t[1]) for t in vosk_tokens]
 
     n, m = len(gt_words), len(hyp_words)
     dp = [[float('inf')] * (m + 1) for _ in range(n + 1)]
