@@ -314,9 +314,9 @@ class TextEditWidget(QTextEdit):
         return state
     
 
-    def setCursorState(self, state):
+    def setCursorState(self, cursor_state):
         cursor = self.textCursor()
-        cursor.setPosition(state["position"])
+        cursor.setPosition(cursor_state["position"])
         self.setTextCursor(cursor)
 
 
@@ -419,11 +419,11 @@ class TextEditWidget(QTextEdit):
         return False
 
 
-    def setSentenceText(self, id: int, text: str):
+    def setSentenceText(self, seg_id: int, text: str):
         """
         TODO: move this to a private method of JoinUtterancesCommand? It is not used anywhere else
         """
-        block = self.getBlockById(id)
+        block = self.getBlockById(seg_id)
         if not block:
             return
         cursor = QTextCursor(block)
@@ -530,13 +530,13 @@ class TextEditWidget(QTextEdit):
             self.setTextCursor(cursor)
             
 
-    def deleteSentence(self, utt_id: int) -> None:
+    def deleteSentence(self, seg_id: int) -> None:
         """
         Delete the sentence of an utterance, and its metadata.
         This is not a undoable command.
         """
-        # TODO: fix this (userData aren't deleted)
-        block = self.getBlockById(utt_id)
+        # TODO: fix this (userData is not deleted)
+        block = self.getBlockById(seg_id)
         if not block:
             return
         
@@ -576,14 +576,12 @@ class TextEditWidget(QTextEdit):
                 DeleteTextCommand(self, pos, size, QTextCursor.MoveOperation.Left)
             )
         else:
-            # raise NotImplementedError("Deleting text over many blocks is not permitted")
             # Deletion over many blocks
-            print("Delete many lines")
             self.undo_stack.beginMacro("Delete many lines")
             block = end_block
             while block.isValid():
+                prev_block = block.previous()
                 utt_id = self.getBlockId(block)
-                print("deleting", block.text())
                 if utt_id >= 0:
                     # Delete this utterance
                     self.delete_utterances.emit([utt_id])
@@ -596,7 +594,7 @@ class TextEditWidget(QTextEdit):
                     )
                 if block == start_block:
                     break
-                block = block.previous()
+                block = prev_block
             
             self.undo_stack.endMacro()
 

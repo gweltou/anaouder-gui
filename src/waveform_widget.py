@@ -777,9 +777,9 @@ class WaveformWidget(QWidget):
         elif event.key() == Qt.Key.Key_Shift:
             self.shift_pressed = True
 
-        # elif event.key() == Qt.Key.Key_A and self.selection_is_active:
-        #     # Create a new segment from selection
-        #     self.new_utterance_from_selection.emit()
+        elif event.key() == Qt.Key.Key_A and self.selection_is_active:
+            # Create a new segment from selection
+            self.new_utterance_from_selection.emit()
 
         elif event.key() == Qt.Key.Key_J and len(self.active_segments) > 1:
             # Join multiple segments

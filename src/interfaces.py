@@ -12,8 +12,11 @@ from PySide6.QtGui import (
 )
 
 
+# Custom types
+
 type Segment = List[float]
 type SegmentId = int
+
 
 
 class WaveformInterface(Protocol):
@@ -57,31 +60,31 @@ class TextDocumentInterface(Protocol):
     def setTextCursor(self, cursor: QTextCursor, /) -> None:
         ... 
     
-    def insertBlock(self, str, data: Optional[dict], int) -> QTextBlock:
+    def insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock:
         ...
 
-    def insertSentenceWithId(self, str, SegmentId, with_cursor: Optional[bool]=None) -> None:
+    def insertSentenceWithId(self, text: str, seg_id: SegmentId, with_cursor: bool) -> None:
         ...
     
-    def setSentenceText(self, SegmentId, str) -> None:
+    def setSentenceText(self, seg_id: SegmentId, text: str) -> None:
         ...
 
-    def deleteSentence(self, SegmendId) -> None:
+    def deleteSentence(self, seg_id: SegmentId) -> None:
         ...
     
-    def deactivateSentence(self, SegmentId) -> None:
+    def deactivateSentence(self, seg_id: SegmentId) -> None:
         ...
     
-    def setBlockId(self, QTextBlock, SegmentId) -> None:
+    def setBlockId(self, block: QTextBlock, seg_id: SegmentId) -> None:
         ...
 
-    def getBlockById(self, SegmentId) -> Optional[QTextBlock]:
+    def getBlockById(self, seg_id: SegmentId) -> Optional[QTextBlock]:
         ...
     
     def getBlockNumber(self, position: int) -> int:
         ...
     
-    def getBlockHtml(self, QTextBlock) -> Tuple[str, List[bool]]:
+    def getBlockHtml(self, block: QTextBlock) -> Tuple[str, List[bool]]:
         ...
     
     def getCursorState(self) -> dict:
@@ -90,11 +93,11 @@ class TextDocumentInterface(Protocol):
     def setCursorState(self, cursor_state: dict) -> None:
         ...
     
-    def blockSignals(self, bool) -> None:
+    def blockSignals(self, b: bool, /) -> bool:
         ...
     
     def signalsBlocked(self) -> bool:
         ...
     
-    def highlightUtterance(self, SegmentId) -> None:
+    def highlightUtterance(self, seg_id: SegmentId) -> None:
         ...

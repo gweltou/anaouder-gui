@@ -151,7 +151,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         log.debug(f"AlignWithSelectionCommand.__init__(parent, {block=})")
         print(f"{block.text()=}")
         super().__init__()
-        self.parent = parent
+        self.parent = parent # MainWindow
         self.text_widget = text_widget
         self.waveform = waveform
         self.block: QTextBlock = block
@@ -286,7 +286,7 @@ class DeleteTextCommand(QUndoCommand):
             size: int,
             direction: QTextCursor.MoveOperation
         ):
-        # log.debug(f"DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
+        log.debug(f"DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
         
         super().__init__()
         self.text_edit = text_edit

@@ -149,7 +149,7 @@ def test_create_new_utterance():
 def test_delete_utterances():
     load_document()
     undo_redo_command(
-        DeleteUtterancesCommand(main_window, [2, 3, 4]),
+        DeleteUtterancesCommand(main_window.text_widget, main_window.waveform, [2, 3, 4]),
         random_cursor=True
     )
 
@@ -162,7 +162,7 @@ def test_split_utterance():
 
 def test_join_utterances():
     load_document()
-    undo_redo_command(JoinUtterancesCommand(main_window, [2, 3, 4]))
+    undo_redo_command(JoinUtterancesCommand(main_window.text_widget, main_window.waveform, [2, 3, 4]))
 
 
 def test_delete_segments():
@@ -193,7 +193,7 @@ def test_align_with_selection():
     segment = main_window.waveform.segments[block_id][:]
     main_window.undo_stack.push(DeleteSegmentsCommand(main_window, [block_id]))
     main_window.waveform._selection = segment
-    undo_redo_command(AlignWithSelectionCommand(main_window, block))
+    undo_redo_command(AlignWithSelectionCommand(main_window, main_window.text_widget, main_window.waveform, block))
 
 
 def test_insert_block_command():
@@ -263,12 +263,12 @@ def test_delete_first_utterance():
         #     )
         # )
         main_window.undo_stack.push(
-            DeleteUtterancesCommand(main_window, seg_ids=[0])
+            DeleteUtterancesCommand(main_window.text_widget, main_window.waveform, seg_ids=[0])
         )
         main_window.undo_stack.endMacro()
 
     undo_redo_function(apply_commands, random_cursor=True)
-    
+
 
 if main_window.recognizer_thread.isRunning():
     main_window.recognizer_worker.must_stop = True

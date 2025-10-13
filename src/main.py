@@ -1737,7 +1737,7 @@ class MainWindow(QMainWindow):
         Sets the corresponding segment active on the waveform
         Called only on aligned text blocks or with None
         """
-        log.debug(f"onTextCursorChanged({seg_ids=})")
+        log.debug(f"onTextCursorChanged({seg_ids=}) cursor_pos={self.text_widget.textCursor().position()}")
 
         seg_ids = seg_ids or None
         

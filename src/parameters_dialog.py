@@ -639,7 +639,7 @@ class SubtitlesTab(QWidget):
         min_frames = self.min_frames_spin.value()
         app_settings.setValue("subtitles/min_frames", min_frames)
         t = min_frames / self.fps
-        self.min_dur_label.setText(self.tr("{{time}}s @{{fps}}fps")
+        self.min_dur_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         if not self.default_params_lock:
             self.user_params["min_frames"] = min_frames
@@ -649,7 +649,7 @@ class SubtitlesTab(QWidget):
         max_frames = self.max_frames_spin.value()
         app_settings.setValue("subtitles/max_frames", max_frames)
         t = max_frames / self.fps
-        self.max_dur_label.setText(self.tr("{{time}}s @{{fps}}fps")
+        self.max_dur_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         if not self.default_params_lock:
             self.user_params["max_frames"] = max_frames
@@ -659,7 +659,7 @@ class SubtitlesTab(QWidget):
         min_interval = self.min_interval_spin.value()
         app_settings.setValue("subtitles/min_interval", min_interval)
         t = min_interval / self.fps
-        self.min_interval_time_label.setText(self.tr("{{time}}s @{{fps}}fps")
+        self.min_interval_time_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         self.extend_max_gap_spin.setMinimum(min_interval + 1)
         if not self.default_params_lock:
@@ -670,7 +670,7 @@ class SubtitlesTab(QWidget):
         max_gap = self.extend_max_gap_spin.value()
         app_settings.setValue("subtitles/auto_extend_max_gap", max_gap)
         t = max_gap / self.fps
-        self.extend_max_gap_time_label.setText(self.tr("{{time}}s @{{fps}}fps")
+        self.extend_max_gap_time_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
         if not self.default_params_lock:
             self.user_params["auto_extend_max_gap"] = max_gap
