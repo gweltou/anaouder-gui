@@ -24,14 +24,6 @@ MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm", ".mov"
 ALL_COMPATIBLE_FORMATS = MEDIA_FORMATS + (".ali", ".seg", ".split", ".srt")
 
 
-def get_resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
-
 
 class MyTextBlockUserData(QTextBlockUserData):
     """
@@ -46,6 +38,16 @@ class MyTextBlockUserData(QTextBlockUserData):
         # This method is required by QTextBlockUserData.
         # It should return a copy of the user data object.
         return MyTextBlockUserData(self.data)
+
+
+
+def get_resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 def color_yellow(text):

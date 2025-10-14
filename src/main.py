@@ -70,6 +70,7 @@ from src.cache_system import CacheSystem
 from src.version import __version__
 from src.theme import theme
 from src.icons import icons, loadIcons, IconWidget
+#from src.media_player_controller import MediaPlayerController
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
 from src.text_widget import (
     TextEditWidget, MyTextBlockUserData, Highlighter,
@@ -127,6 +128,18 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.cache = CacheSystem()
+
+        """
+        # Replace the old player setup with:
+        self.media_controller = MediaPlayerController(self)
+        # Connect signals
+        self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
+        self.media_controller.playback_started.connect(self.onPlaybackStarted)
+        self.media_controller.playback_stopped.connect(self.onPlaybackStopped)
+        self.media_controller.subtitle_changed.connect(self.updateSubtitle)
+        # Connect to video widget
+        self.media_controller.connectVideoWidget(self.video_widget)
+        """
         
         self.audio_samples = None
         
@@ -914,6 +927,7 @@ class MainWindow(QMainWindow):
                     break
         
         if ext == ".srt":
+            self._openSrtFile(filepath)
             self.log.debug("Opening an SRT file...")
             # Check for an associated audio file
             for audio_ext in MEDIA_FORMATS:
@@ -925,9 +939,14 @@ class MainWindow(QMainWindow):
                     break
             
             # Subtitle file
-            with open(filepath, 'r', encoding="utf-8") as f_in:
-                subtitle_generator = srt.parse(f_in.read())
-            subtitles = list(subtitle_generator)
+            try:
+                with open(filepath, 'r', encoding="utf-8") as f_in:
+                    subtitle_generator = srt.parse(f_in.read())
+                subtitles = list(subtitle_generator)
+            except UnicodeDecodeError:
+                print("woopsie")
+                subtitles = []
+            
             for subtitle in subtitles:
                 start = subtitle.start.seconds + subtitle.start.microseconds/1e6
                 end = subtitle.end.seconds + subtitle.end.microseconds/1e6
@@ -971,8 +990,36 @@ class MainWindow(QMainWindow):
         # self.text_widget.document().blockSignals(was_blocked)
 
 
+    def _loadAssociatedMediaFile(self, folder: str, basename: str) -> bool:
+        """
+        Search for and load a media file with the same basename.
+        
+        Args:
+            folder: Directory to search in
+            basename: Filename without extension
+            
+        Returns:
+            True if media file was found and loaded, False otherwise
+        """
+        for audio_ext in MEDIA_FORMATS:
+            media_path = os.path.join(folder, basename + audio_ext)
+            if os.path.exists(media_path):
+                self.log.debug(f"Found associated media file: {media_path}")
+                self.loadMediaFile(media_path)
+                return True
+        
+        self.log.debug("No associated media file found")
+        return False
+
+
     def _openAliFile(self, filepath):
-        self.log.debug(f"Opening an ALI file... {filepath}")
+        """
+        Open an ALI file and associated media.
+        
+        Args:
+            filepath: Full path to the ALI file
+        """
+        self.log.debug(f"Opening ALI file... {filepath}")
 
         media_path = None
         first_utt_id = None
@@ -1006,54 +1053,143 @@ class MainWindow(QMainWindow):
                     media_path = os.path.join(dir, metadata["audio-path"])
                     media_path = os.path.normpath(media_path)
 
-        if not media_path:
-            # Check for an audio file with the same basename
-            for audio_ext in MEDIA_FORMATS:
-                tmp_media_path = basename + audio_ext
-                tmp_media_path = os.path.join(folder, tmp_media_path)
-                if os.path.exists(tmp_media_path):
-                    self.log.debug(f"Found same name audio file {filepath}")
-                    media_path = tmp_media_path
-                    break
-        
         if media_path and os.path.exists(media_path):
             self.loadMediaFile(media_path)
         else:
             # No media file found for this ALI document
-            # Open a File Dialog to re-associate with a valid media
-
             log.warning("No associated media file found")
-            msg_box = QMessageBox(
-                QMessageBox.Icon.Warning,
-                self.tr("No media file"),
-                self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
-                # QMessageBox.StandardButton.NoButton, self
-            )
-            if media_path:
-                m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
-                msg_box.setInformativeText(m)
 
-            msg_box.addButton(self.tr("&Open media"), QMessageBox.ButtonRole.AcceptRole)
-            msg_box.addButton(self.tr("&Cancel"), QMessageBox.ButtonRole.RejectRole)
+            # Check for an audio file with the same basename
+            sucess = self._loadAssociatedMediaFile(folder, basename)
 
-            if msg_box.exec() == 0x2:
-                audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
-                media_file_path, _ = QFileDialog.getOpenFileName(
-                    self,
-                    self.tr("Open Media File"),
-                    folder,
-                    audio_filter
+            # Open a File Dialog to re-associate with a valid media
+            if not sucess:
+                msg_box = QMessageBox(
+                    QMessageBox.Icon.Warning,
+                    self.tr("No media file"),
+                    self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
+                    # QMessageBox.StandardButton.NoButton, self
                 )
-                if media_file_path and os.path.exists(media_file_path):
-                    self._saveFile(self.filepath, media_file_path)
-                    # Re-open the updated file
-                    self.openFile(self.filepath)
-            else:
-                # Cancelled
-                pass
+                if media_path:
+                    m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
+                    msg_box.setInformativeText(m)
+
+                msg_box.addButton(self.tr("&Open media"), QMessageBox.ButtonRole.AcceptRole)
+                msg_box.addButton(self.tr("&Cancel"), QMessageBox.ButtonRole.RejectRole)
+
+                if msg_box.exec() == 0x2:
+                    audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+                    media_file_path, _ = QFileDialog.getOpenFileName(
+                        self,
+                        self.tr("Open Media File"),
+                        folder,
+                        audio_filter
+                    )
+                    if media_file_path and os.path.exists(media_file_path):
+                        self._saveFile(self.filepath, media_file_path)
+                        # Re-open the updated file
+                        self.openFile(self.filepath)
         
         # Add file to recent files
         self.addRecentFile(filepath)
+
+
+    def _openSrtFile(self, filepath: str) -> None:
+        """
+        Open an SRT subtitle file and optionally load associated media.
+        
+        Args:
+            filepath: Full path to the SRT file
+
+        """
+        self.log.debug("Opening an SRT file...")
+
+        folder, filename = os.path.split(filepath)
+        basename, _ = os.path.splitext(filename)
+        
+        # Try to find and load associated media file
+        self._loadAssociatedMediaFile(folder, basename)
+        
+        # Parse subtitle file
+        subtitles = self._parseSrtFile(filepath)
+        if not subtitles:
+            return
+        
+        # Import subtitles as segments
+        self._importSubtitles(subtitles)
+        self.waveform.must_redraw = True
+
+
+    def _parseSrtFile(self, filepath: str) -> List:
+        """
+        Parse an SRT file and return list of subtitle objects.
+        
+        Args:
+            filepath: Path to the SRT file
+            
+        Returns:
+            List of srt.Subtitle objects, empty list on error
+        """
+        encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+        
+        for encoding in encodings:
+            try:
+                with open(filepath, 'r', encoding=encoding) as f_in:
+                    content = f_in.read()
+                    subtitle_generator = srt.parse(content)
+                    subtitles = list(subtitle_generator)
+                    self.log.info(f"Successfully parsed {len(subtitles)} subtitles using {encoding} encoding")
+                    return subtitles
+                    
+            except UnicodeDecodeError:
+                self.log.debug(f"Failed to parse with {encoding} encoding")
+                continue
+            except srt.SRTParseError as e:
+                self.log.error(f"SRT parsing error: {e}")
+                self.setStatusMessage(self.tr("Error parsing SRT file: invalid format"))
+                return []
+            except Exception as e:
+                self.log.error(f"Unexpected error parsing SRT file: {e}")
+                self.setStatusMessage(self.tr("Error opening SRT file"))
+                return []
+        
+        # All encodings failed
+        self.log.error(f"Could not decode file with any known encoding: {filepath}")
+        self.setStatusMessage(self.tr("Error: Could not decode subtitle file"))
+        return []
+
+
+    def _importSubtitles(self, subtitles: List) -> None:
+        """
+        Import subtitles as text segments.
+        
+        Args:
+            subtitles: List of srt.Subtitle objects
+        """
+        if not subtitles:
+            return
+        
+        self.log.info(f"Importing {len(subtitles)} subtitles")
+        
+        for subtitle in subtitles:
+            # Convert timedelta to seconds
+            start = subtitle.start.total_seconds()
+            end = subtitle.end.total_seconds()
+            
+            # Validate timing
+            if start >= end:
+                self.log.warning(f"Skipping invalid subtitle {subtitle.index}: start >= end")
+                continue
+            
+            # Create segment
+            segment = [start, end]
+            seg_id = self.waveform.addSegment(segment)
+            
+            # Format content (replace newlines with HTML breaks)
+            content = subtitle.content.strip().replace('\n', '<BR>')
+            self.text_widget.appendSentence(content, seg_id)
+        
+        self.setStatusMessage(self.tr("Imported {} subtitles").format(len(subtitles)))
 
 
     def addRecentFile(self, filepath):
@@ -2320,6 +2456,8 @@ class MainWindow(QMainWindow):
             while resizing a segment (which is not commited yet)
         """
         # Show info in status bar
+        warning_style = "background-color: red; color: white;"
+
         start, end = segment
         start_str = sec2hms(start, sep='', precision=2, m_unit='m', s_unit='s')
         end_str = sec2hms(end, sep='', precision=2, m_unit='m', s_unit='s')
@@ -2332,21 +2470,21 @@ class MainWindow(QMainWindow):
         duration = end - start
         fps = self.media_metadata.get("fps")
         duration_string = self.tr("dur: {}s").format(f"{duration:.3f}")
+        # Highlight value if segment is too short or too long
         if fps and fps > 0 and (
             duration < (self._subs_min_frames / fps)
             or duration > (self._subs_max_frames / fps)
         ):
-            string_parts.append(f"<span style='background-color: red;'>{duration_string}</span>")
+            string_parts.append(f"<span style='{warning_style}'>{duration_string}</span>")
         else:
             string_parts.append(duration_string)
 
         if density >= 0.0:
             density_str = self.tr('{}c/s').format(f'{density:.1f}')
             if density >= self._target_density:
-                string_parts.append(f"<span style='background-color: red;'>{density_str}</span>")
+                string_parts.append(f"<span style='{warning_style}'>{density_str}</span>")
             else:
                 string_parts.append(density_str)
-        # self.statusBar().showMessage("\t\t\t\t".join(string_parts))
 
         self.status_label.setText("&nbsp;&nbsp;&nbsp;&nbsp;".join(string_parts))
 
