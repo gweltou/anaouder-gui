@@ -277,7 +277,7 @@ class WaveformWidget(QWidget):
         self.id_counter = 0
         self.must_sort = True
         self.audio_len = 0
-        self.fps = 0
+        self.fps = 0.0
 
         self.must_redraw = True
 
@@ -1084,7 +1084,7 @@ class WaveformWidget(QWidget):
             self.must_redraw = True
     
 
-    def onTargetDensityChanged(self, cps=float):
+    def changeTargetDensity(self, cps: float):
         """Must be connected to the ParametersDialog's signal from MainWindow"""
         self._target_density = cps
 

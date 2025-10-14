@@ -5,21 +5,30 @@ from PySide6.QtCore import Qt, QSettings
 from PySide6.QtGui import QShortcut, QKeySequence
 
 
+_is_darwin = platform.system() == "Darwin"
+
 
 APP_NAME = "Anaouder"
 DEFAULT_LANGUAGE = 'br'
 MULTI_LANG = False
 
+app_settings = QSettings("OTilde", APP_NAME)
+
+
 WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
 
-# Default values for subtitles
-SUBTITLES_MIN_FRAMES = 16
-SUBTITLES_MAX_FRAMES = 125
-SUBTITLES_MIN_INTERVAL = 2
-SUBTITLES_AUTO_EXTEND = True
-SUBTITLES_AUTO_EXTEND_MAX_GAP = 12
-SUBTITLES_MARGIN_SIZE = 42  # Text margin (number of chars)
-SUBTITLES_CPS = 16.0    # Speech density (chars per second)
+
+# UI settings
+
+BUTTON_SIZE = 30        # in pixels
+BUTTON_MEDIA_SIZE = 30  # in pixels
+BUTTON_SPACING = 4      # in pixels
+BUTTON_MARGIN = 8       # in pixels
+BUTTON_LABEL_SIZE = 16  # in pixels
+DIAL_SIZE = 30          # in pixels
+
+STATUS_BAR_TIMEOUT = 4000 # Display time of status bar messages (in ms)
+
 
 UI_LANGUAGES = [
     ("br", "brezhoneg"),
@@ -27,10 +36,6 @@ UI_LANGUAGES = [
     ("fr", "français")
 ]
 
-app_settings = QSettings("OTilde", APP_NAME)
-
-
-_is_darwin = platform.system() == "Darwin"
 
 shortcuts: Dict[str, QKeySequence] = {
     "transcribe":      QKeySequence("Ctrl+R"),
@@ -48,3 +53,14 @@ shortcuts: Dict[str, QKeySequence] = {
     # "zoom_in":      QKeySequence(QKeySequence.StandardKey.ZoomIn),
     # "zoom_out":     QKeySequence(QKeySequence.StandardKey.ZoomOut),
 }
+
+
+# Default values for subtitles
+
+SUBTITLES_MIN_FRAMES = 16
+SUBTITLES_MAX_FRAMES = 125
+SUBTITLES_MIN_INTERVAL = 2
+SUBTITLES_AUTO_EXTEND = True
+SUBTITLES_AUTO_EXTEND_MAX_GAP = 12
+SUBTITLES_MARGIN_SIZE = 42  # Text margin (number of chars)
+SUBTITLES_CPS = 16.0    # Speech density (chars per second)

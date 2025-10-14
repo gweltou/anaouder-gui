@@ -228,7 +228,8 @@ class ParametersDialog(QDialog):
         """Custom signals"""
         subtitles_margin_size_changed = Signal(int)
         subtitles_cps_changed = Signal(float)
-        
+        subtitles_min_frames_changed = Signal(int)
+        subtitles_max_frames_changed = Signal(int)
 
 
     def __init__(self, parent, media_metadata: dict):
@@ -641,6 +642,7 @@ class SubtitlesTab(QWidget):
         t = min_frames / self.fps
         self.min_dur_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
+        self.my_parent.signals.subtitles_min_frames_changed.emit(min_frames)
         if not self.default_params_lock:
             self.user_params["min_frames"] = min_frames
             self.switchToUserParams()
@@ -651,6 +653,7 @@ class SubtitlesTab(QWidget):
         t = max_frames / self.fps
         self.max_dur_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
+        self.my_parent.signals.subtitles_max_frames_changed.emit(max_frames)
         if not self.default_params_lock:
             self.user_params["max_frames"] = max_frames
             self.switchToUserParams()

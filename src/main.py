@@ -93,17 +93,15 @@ from src.levenshtein_aligner import smart_split, smart_split_time, can_smart_spl
 from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
     app_settings, shortcuts,
-    SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL,
+    SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES,
+    SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL, SUBTITLES_CPS,
     WAVEFORM_SAMPLERATE,
+    STATUS_BAR_TIMEOUT,
+    BUTTON_SIZE, BUTTON_MEDIA_SIZE, BUTTON_SPACING,
+    BUTTON_MARGIN, BUTTON_LABEL_SIZE, DIAL_SIZE,
 )
 import src.lang as lang
 from src.interfaces import Segment, SegmentId
-
-
-
-# Config
-AUTOSEG_MAX_LENGTH = 15 # seconds
-AUTOSEG_MIN_LENGTH = 3  # seconds
 
 
 
@@ -119,17 +117,9 @@ log = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    BUTTON_SIZE = 30
-    BUTTON_MEDIA_SIZE = 30
-    BUTTON_SPACING = 4
-    BUTTON_MARGIN = 8
-    BUTTON_LABEL_SIZE = 16
-    DIAL_SIZE = 30
-
-    STATUS_BAR_TIMEOUT = 4000
-    
     transcribe_file_signal = Signal(str, float)    # Signals are needed for communication between threads
     transcribe_segments_signal = Signal(str, list)
+
 
     def __init__(self, filepath=""):
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
@@ -176,6 +166,10 @@ class MainWindow(QMainWindow):
         self.text_cursor_utterance_id = -1
         self.looping = False
         self.caption_counter = 0
+
+        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
+        self._subs_min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
+        self._subs_max_frames = app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
 
         self.undo_stack = QUndoStack(self)
         self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
@@ -262,7 +256,44 @@ class MainWindow(QMainWindow):
 
 
     def initUI(self):
-        # Menu
+        # Main Menu
+        self._createMainMenu()
+
+        # Top toolbar
+        top_layout = QVBoxLayout()
+        top_layout.setSpacing(0)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.addLayout(self._createTopToolbarLayout())
+
+        # Text widget (left) and Video widget (right)
+        self.text_video_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.text_video_splitter.setHandleWidth(5)
+        self.text_video_splitter.addWidget(self.text_widget)
+        self.text_video_splitter.addWidget(self.video_widget)
+        self.text_video_splitter.setSizes([1, 1])
+        top_layout.addWidget(self.text_video_splitter)
+        
+        # Media toolbar and transport
+        top_layout.addLayout(self._createMediaToolbarLayout())
+        
+        # Waveform
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setHandleWidth(5)
+        self.top_widget = QWidget()
+        self.top_widget.setLayout(top_layout)
+        splitter.addWidget(self.top_widget)
+        splitter.addWidget(self.waveform)        
+        splitter.setSizes([400, 140])
+        
+        self.setCentralWidget(splitter)
+
+        # To add color to the status bar text
+        self.status_label = QLabel()
+        self.status_label.setTextFormat(Qt.TextFormat.RichText)
+        self.statusBar().addWidget(self.status_label)
+        
+    
+    def _createMainMenu(self):
         menu_bar = self.menuBar()
 
         file_menu = menu_bar.addMenu(self.tr("&File"))
@@ -331,7 +362,6 @@ class MainWindow(QMainWindow):
         adapt_to_subtitle_action.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adapt_to_subtitle_action)
 
-
         # Display Menu
         display_menu = menu_bar.addMenu(self.tr("&Display"))
         self.toggle_video_action = QAction(self.tr("&Video"), self)
@@ -357,7 +387,6 @@ class MainWindow(QMainWindow):
         self.scene_detect_action.setCheckable(True)
         self.scene_detect_action.toggled.connect(lambda checked: self.toggleSceneDetect(checked))
         display_menu.addAction(self.scene_detect_action)
-
 
         ## Coloring sub-menu
         coloring_subMenu = display_menu.addMenu(self.tr("Coloring..."))
@@ -387,25 +416,23 @@ class MainWindow(QMainWindow):
         about_action = QAction(self.tr("&About"), self)
         about_action.triggered.connect(self.showAbout)
         help_menu.addAction(about_action)
+    
 
-        ########################
-        ####  TOP TOOL-BAR  ####
-        ########################
-
+    def _createTopToolbarLayout(self):
         top_bar_layout = QHBoxLayout()
         top_bar_layout.setContentsMargins(0, 2, 0, 2)
-        top_bar_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        top_bar_layout.setSpacing(BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Undo/Redo buttons
         undo_redo_layout = QHBoxLayout()
-        undo_redo_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        undo_redo_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        undo_redo_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        undo_redo_layout.setSpacing(BUTTON_SPACING)
         undo_redo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         undo_button = QPushButton()
         undo_button.setIcon(icons["undo"])
-        undo_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        undo_button.setFixedWidth(BUTTON_SIZE)
         undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
         undo_button.clicked.connect(self.undo)
         undo_redo_layout.addWidget(undo_button)
@@ -416,7 +443,7 @@ class MainWindow(QMainWindow):
 
         redo_button = QPushButton()
         redo_button.setIcon(icons["redo"])
-        redo_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        redo_button.setFixedWidth(BUTTON_SIZE)
         redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
         redo_button.clicked.connect(self.redo)
         undo_redo_layout.addWidget(redo_button)
@@ -430,13 +457,13 @@ class MainWindow(QMainWindow):
 
         # Transcription buttons
         transcription_buttons_layout = QHBoxLayout()
-        transcription_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        transcription_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        transcription_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        transcription_buttons_layout.setSpacing(BUTTON_SPACING)
         transcription_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self.transcribe_button = QPushButton()
         self.transcribe_button.setIcon(icons["sparkles"])
-        self.transcribe_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        self.transcribe_button.setFixedWidth(BUTTON_SIZE)
         self.transcribe_button.setCheckable(True)
         self.transcribe_button.setToolTip(self.tr("Transcribe") + f" <{shortcuts["transcribe"].toString()}>")
         self.transcribe_button.setShortcut(shortcuts["transcribe"])
@@ -457,7 +484,7 @@ class MainWindow(QMainWindow):
             transcription_buttons_layout.addWidget(self.language_selection)
 
         transcription_buttons_layout.addSpacing(4)
-        transcription_buttons_layout.addWidget(IconWidget(icons["head"], MainWindow.BUTTON_LABEL_SIZE))
+        transcription_buttons_layout.addWidget(IconWidget(icons["head"], BUTTON_LABEL_SIZE))
 
         self.model_selection = QComboBox()
         # self.model_selection.addItems(self.available_models)
@@ -467,7 +494,7 @@ class MainWindow(QMainWindow):
         transcription_buttons_layout.addWidget(self.model_selection)
 
         transcription_buttons_layout.addWidget(
-            IconWidget(icons["numbers"], MainWindow.BUTTON_LABEL_SIZE))
+            IconWidget(icons["numbers"], BUTTON_LABEL_SIZE))
         self.normalization_checkbox = QCheckBox()
         self.normalization_checkbox.setChecked(True)
         self.normalization_checkbox.setToolTip(self.tr("Normalize numbers"))
@@ -479,13 +506,13 @@ class MainWindow(QMainWindow):
 
         # Text format buttons
         format_buttons_layout = QHBoxLayout()
-        format_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        format_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        format_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        format_buttons_layout.setSpacing(BUTTON_SPACING)
         format_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         italic_button = QPushButton()
         italic_button.setIcon(icons["italic"])
-        italic_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        italic_button.setFixedWidth(BUTTON_SIZE)
         italic_button.setToolTip(self.tr("Italic") + f" <{QKeySequence(QKeySequence.StandardKey.Italic).toString()}>")
         italic_button.setShortcut(QKeySequence.StandardKey.Italic)
         italic_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.ITALIC))
@@ -493,7 +520,7 @@ class MainWindow(QMainWindow):
 
         bold_button = QPushButton()
         bold_button.setIcon(icons["bold"])
-        bold_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        bold_button.setFixedWidth(BUTTON_SIZE)
         bold_button.setToolTip(self.tr("Bold") + f" <{QKeySequence(QKeySequence.StandardKey.Bold).toString()}>")
         bold_button.setShortcut(QKeySequence.StandardKey.Bold)
         bold_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.BOLD))
@@ -504,45 +531,45 @@ class MainWindow(QMainWindow):
 
         # Text zoom buttons
         view_buttons_layout = QHBoxLayout()
-        view_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        view_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        view_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        view_buttons_layout.setSpacing(BUTTON_SPACING)
         view_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        view_buttons_layout.addWidget(IconWidget(icons["font"], MainWindow.BUTTON_LABEL_SIZE))
+        view_buttons_layout.addWidget(IconWidget(icons["font"], BUTTON_LABEL_SIZE))
         text_zoom_out_button = QPushButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
-        text_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        text_zoom_out_button.setFixedWidth(BUTTON_SIZE)
         text_zoom_out_button.setToolTip(self.tr("Zoom out"))
         text_zoom_out_button.clicked.connect(lambda: self.text_widget.zoomOut(1))
         view_buttons_layout.addWidget(text_zoom_out_button)
 
         text_zoom_in_button = QPushButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
-        text_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        text_zoom_in_button.setFixedWidth(BUTTON_SIZE)
         text_zoom_out_button.setToolTip(self.tr("Zoom in"))
         text_zoom_in_button.clicked.connect(lambda: self.text_widget.zoomIn(1))
         view_buttons_layout.addWidget(text_zoom_in_button)
 
         top_bar_layout.addLayout(view_buttons_layout)
 
-        ########################
-        #### MEDIA TOOL-BAR ####
-        ########################
+        return top_bar_layout
+    
 
+    def _createMediaToolbarLayout(self):
         media_toolbar_layout = QHBoxLayout()
         media_toolbar_layout.setContentsMargins(0, 2, 0, 0)
-        media_toolbar_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        media_toolbar_layout.setSpacing(BUTTON_SPACING)
         media_toolbar_layout.addStretch(1)
 
         # Segment action buttons
         segment_buttons_layout = QHBoxLayout()
-        segment_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        segment_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        segment_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        segment_buttons_layout.setSpacing(BUTTON_SPACING)
 
         self.selection_button = QPushButton()
         self.selection_button.setIcon(icons["select"])
         # self.select_button.setIconSize(QSize(28*0.8, 28*0.8))
-        self.selection_button.setFixedWidth(MainWindow.BUTTON_MEDIA_SIZE)
+        self.selection_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.selection_button.setToolTip(self.tr("Create a selection") + f" &lt;{shortcuts["select"].toString()}&gt;")
         self.selection_button.setCheckable(True)
         self.selection_button.toggled.connect(self.toggleCreateSelection)
@@ -550,14 +577,14 @@ class MainWindow(QMainWindow):
 
         self.add_segment_button = QPushButton()
         self.add_segment_button.setIcon(icons["add_segment"])
-        self.add_segment_button.setFixedWidth(MainWindow.BUTTON_MEDIA_SIZE)
+        self.add_segment_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.add_segment_button.setToolTip(self.tr("Create segment from selection") + f" &lt;A&gt;")
         self.add_segment_button.clicked.connect(self.newUtteranceFromSelection)
         segment_buttons_layout.addWidget(self.add_segment_button)
 
         self.del_segment_button = QPushButton()
         self.del_segment_button.setIcon(icons["del_segment"])
-        self.del_segment_button.setFixedWidth(MainWindow.BUTTON_MEDIA_SIZE)
+        self.del_segment_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.del_segment_button.setToolTip(
             self.tr("Delete segment") + f" &lt;{QKeySequence(Qt.Key.Key_Delete).toString()}&gt;/&lt;{QKeySequence(Qt.Key.Key_Backspace).toString()}&gt;"
         )
@@ -566,7 +593,7 @@ class MainWindow(QMainWindow):
 
         # Snapping checkbox
         segment_buttons_layout.addWidget(
-            IconWidget(icons["magnet"], MainWindow.BUTTON_LABEL_SIZE))
+            IconWidget(icons["magnet"], BUTTON_LABEL_SIZE))
         self.snapping_checkbox = QCheckBox()
         self.snapping_checkbox.setChecked(True)
         self.snapping_checkbox.setToolTip(self.tr("Snap to video frames"))
@@ -577,13 +604,13 @@ class MainWindow(QMainWindow):
 
         # Play buttons
         play_buttons_layout = QHBoxLayout()
-        play_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        play_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        play_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        play_buttons_layout.setSpacing(BUTTON_SPACING)
         play_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         back_button = QPushButton()
         back_button.setIcon(icons["back"])
-        back_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
+        back_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         back_button.setToolTip(self.tr("Go to first utterance"))
         back_button.clicked.connect(self.backAction)
         play_buttons_layout.addWidget(back_button)
@@ -591,21 +618,21 @@ class MainWindow(QMainWindow):
         #buttonsLayout.addSpacerItem(QSpacerItem())
         prev_button = QPushButton()
         prev_button.setIcon(icons["previous"])
-        prev_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
+        prev_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         prev_button.setToolTip(self.tr("Previous utterance") + f" &lt;{shortcuts["play_prev"].toString()}&gt;")
         prev_button.clicked.connect(self.playPrevAction)
         play_buttons_layout.addWidget(prev_button)
 
         self.play_button = QPushButton()
         self.play_button.setIcon(icons["play"])
-        self.play_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
+        self.play_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         self.play_button.setToolTip(self.tr("Play current utterance") + f" &lt;{shortcuts["play_stop"].toString()}&gt;")
         self.play_button.clicked.connect(self.playAction)
         play_buttons_layout.addWidget(self.play_button)
 
         next_button = QPushButton()
         next_button.setIcon(icons["next"])
-        next_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
+        next_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         next_button.setToolTip(self.tr("Next utterance") + f" &lt;{shortcuts["play_next"].toString()}&gt;")
         next_button.clicked.connect(self.playNextAction)
         play_buttons_layout.addWidget(next_button)
@@ -613,7 +640,7 @@ class MainWindow(QMainWindow):
         loop_button = QPushButton()
         loop_button.setCheckable(True)
         loop_button.setIcon(icons["loop"])
-        loop_button.setFixedWidth(round(MainWindow.BUTTON_MEDIA_SIZE * 1.2))
+        loop_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         loop_button.setToolTip(self.tr("Loop"))
         loop_button.toggled.connect(self.setLooping)
         play_buttons_layout.addWidget(loop_button)
@@ -622,24 +649,24 @@ class MainWindow(QMainWindow):
 
         # Dials
         dial_layout = QHBoxLayout()
-        dial_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        dial_layout.setSpacing(BUTTON_SPACING)
 
         volume_dial = QDial()
-        volume_dial.setMaximumSize(QSize(MainWindow.DIAL_SIZE, MainWindow.DIAL_SIZE))
+        volume_dial.setMaximumSize(QSize(DIAL_SIZE, DIAL_SIZE))
         volume_dial.setNotchesVisible(True)
         volume_dial.setNotchTarget(5)
         volume_dial.setToolTip(self.tr("Audio volume"))
         volume_dial.setValue(100)
         volume_dial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
-        dial_layout.addWidget(IconWidget(icons["volume"], MainWindow.BUTTON_LABEL_SIZE))
+        dial_layout.addWidget(IconWidget(icons["volume"], BUTTON_LABEL_SIZE))
         dial_layout.addWidget(volume_dial)
         media_toolbar_layout.addLayout(dial_layout)
 
         dial_layout = QHBoxLayout()
-        dial_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        dial_layout.setSpacing(BUTTON_SPACING)
 
         speed_dial = QDial()
-        speed_dial.setMaximumSize(QSize(MainWindow.DIAL_SIZE, MainWindow.DIAL_SIZE))
+        speed_dial.setMaximumSize(QSize(DIAL_SIZE, DIAL_SIZE))
         speed_dial.setRange(0, 20)
         speed_dial.setValue(10)
         speed_dial.setNotchesVisible(True)
@@ -647,20 +674,20 @@ class MainWindow(QMainWindow):
         speed_dial.setToolTip(self.tr("Audio speed"))
         # speed_dial.valueChanged.connect(lambda val: self.player.setPlaybackRate(0.5 + val/10))
         speed_dial.valueChanged.connect(lambda val: self.player.setPlaybackRate(0.5 + (val**2)/200))
-        dial_layout.addWidget(IconWidget(icons["rabbit"], MainWindow.BUTTON_LABEL_SIZE))
+        dial_layout.addWidget(IconWidget(icons["rabbit"], BUTTON_LABEL_SIZE))
         dial_layout.addWidget(speed_dial)
         media_toolbar_layout.addLayout(dial_layout)
 
         # View buttons
         view_buttons_layout = QHBoxLayout()
-        view_buttons_layout.setContentsMargins(MainWindow.BUTTON_MARGIN, 0, MainWindow.BUTTON_MARGIN, 0)
-        view_buttons_layout.setSpacing(MainWindow.BUTTON_SPACING)
+        view_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        view_buttons_layout.setSpacing(BUTTON_SPACING)
         view_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         ## Follow playhead button
         self.follow_playhead_button = QPushButton()
         self.follow_playhead_button.setIcon(icons["follow_playhead"])
-        self.follow_playhead_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        self.follow_playhead_button.setFixedWidth(BUTTON_SIZE)
         self.follow_playhead_button.setCheckable(True)
         self.follow_playhead_button.setToolTip(self.tr("View follow playhead"))
         self.follow_playhead_button.setChecked(self.waveform.follow_playhead)
@@ -669,10 +696,10 @@ class MainWindow(QMainWindow):
 
         ## Zoom out
         view_buttons_layout.addSpacing(8)
-        view_buttons_layout.addWidget(IconWidget(icons["waveform"], MainWindow.BUTTON_LABEL_SIZE))
+        view_buttons_layout.addWidget(IconWidget(icons["waveform"], BUTTON_LABEL_SIZE))
         wave_zoom_out_button = QPushButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
-        wave_zoom_out_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        wave_zoom_out_button.setFixedWidth(BUTTON_SIZE)
         wave_zoom_out_button.setToolTip(self.tr("Zoom out") + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;")
         wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
         view_buttons_layout.addWidget(wave_zoom_out_button)
@@ -680,50 +707,23 @@ class MainWindow(QMainWindow):
         ## Zoom in
         wave_zoom_in_button = QPushButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
-        wave_zoom_in_button.setFixedWidth(MainWindow.BUTTON_SIZE)
+        wave_zoom_in_button.setFixedWidth(BUTTON_SIZE)
         wave_zoom_in_button.setToolTip(self.tr("Zoom in") + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;")
         wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
         view_buttons_layout.addWidget(wave_zoom_in_button)
         
         media_toolbar_layout.addStretch(1)
         media_toolbar_layout.addLayout(view_buttons_layout)
-
-
-        top_layout = QVBoxLayout()
-        top_layout.setSpacing(0)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.addLayout(top_bar_layout)
-
-        # Video widget right of text widget
-        self.text_video_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.text_video_splitter.setHandleWidth(5)
-        self.text_video_splitter.addWidget(self.text_widget)
-        self.text_video_splitter.addWidget(self.video_widget)
-        self.text_video_splitter.setSizes([1, 1])
-        top_layout.addWidget(self.text_video_splitter)
         
-        # top_layout.addWidget(self.text_edit)
-        top_layout.addLayout(media_toolbar_layout)
-        
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.setHandleWidth(5)
-        self.top_widget = QWidget()
-        self.top_widget.setLayout(top_layout)
-        splitter.addWidget(self.top_widget)
-        splitter.addWidget(self.waveform)        
-        splitter.setSizes([400, 140])
-        
-        self.setCentralWidget(splitter)
-        
-        self.status_bar = self.statusBar()
+        return media_toolbar_layout
 
 
     @Slot(str)
-    def setStatusMessage(self, message: str):
-        self.status_bar.showMessage(message, MainWindow.STATUS_BAR_TIMEOUT)
+    def setStatusMessage(self, message: str) -> None:
+        self.statusBar().showMessage(message, STATUS_BAR_TIMEOUT)
 
 
-    def updateWindowTitle(self):
+    def updateWindowTitle(self) -> None:
         title_parts = []
         if not self.undo_stack.isClean():
             title_parts.append("●")
@@ -734,7 +734,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(' '.join(title_parts))
 
 
-    def changeLanguage(self, language: str):
+    def changeLanguage(self, language: str) -> None:
         # This shouldn't be called when a recognizer worker is running
         lang.loadLanguage(language)
         if self.language_selection.currentText() != language:
@@ -745,7 +745,7 @@ class MainWindow(QMainWindow):
         self.model_selection.addItems(self.available_models)
 
 
-    def _saveFile(self, filepath, audio_path=None):
+    def _saveFile(self, filepath, audio_path=None) -> None:
         """
         Save ALI file to disk
 
@@ -805,7 +805,7 @@ class MainWindow(QMainWindow):
             print(f"Backup file written to '{bck_filepath}'")
 
 
-    def saveFile(self):
+    def saveFile(self) -> None:
         if self.filepath and self.filepath.endswith(".ali"):
             self._saveFile(self.filepath)
         else:
@@ -815,7 +815,7 @@ class MainWindow(QMainWindow):
         self.updateWindowTitle()
 
 
-    def saveFileAs(self):
+    def saveFileAs(self) -> None:
         basename = os.path.basename(self.filepath)
         basename, ext = os.path.splitext(basename)
         if ext.lower() == ".ali":
@@ -842,123 +842,49 @@ class MainWindow(QMainWindow):
         self.updateWindowTitle()
 
 
-    def openFile(self, file_path="", keep_text=False, keep_audio=False):
-        self.log.info(f"Opening file {file_path}")
+    def openFile(self, filepath="", keep_text=False, keep_audio=False) -> None:
+        self.log.info(f"Opening file {filepath}")
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
 
-        if not file_path:
+        if not filepath:
             # Open a File dialog window
             dir = app_settings.value("main/last_opened_folder", "", type=str)
-            file_path, _ = QFileDialog.getOpenFileName(self, "Open File", dir, ";;".join([supported_filter, audio_filter]))
-            if not file_path:
+            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", dir, ";;".join([supported_filter, audio_filter]))
+            if not filepath:
                 return
-            app_settings.setValue("main/last_opened_folder", os.path.split(file_path)[0])
+            app_settings.setValue("main/last_opened_folder", os.path.split(filepath)[0])
         
         if not keep_audio:
             self.waveform.clear()
         if not keep_text:
             self.text_widget.clear()
 
-        self.filepath = file_path
-        folder, filename = os.path.split(file_path)
+        self.filepath = filepath
+        folder, filename = os.path.split(filepath)
         basename, ext = os.path.splitext(filename)
         ext = ext.lower()
-        media_path = None
         first_utt_id = None
 
         if ext in MEDIA_FORMATS:
             # Selected file is an audio of video file
-            self.log.debug(f"Loading media file {file_path}")
-            self.loadMediaFile(file_path)
+            self.log.debug(f"Loading media file {filepath}")
+            self.loadMediaFile(filepath)
             self.updateWindowTitle()
             return
         
         # was_blocked = self.text_widget.document().blockSignals(True)
 
         if ext == ".ali":
-            self.log.debug("Opening an ALI file...")
-            with open(file_path, 'r', encoding="utf-8") as fr:
-                # Find associated audio file in metadata
-                for line in fr.readlines():
-                    line = line.strip()
-                    _, metadata = extract_metadata(line)
-                    match = re.search(r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line)
-                    if match:
-                        # An utterance sentence
-                        segment = [float(match[1]), float(match[2])]
-                        seg_id = self.waveform.addSegment(segment)
-                        if first_utt_id == None:
-                            first_utt_id = seg_id
-                        line = line[:match.start()] + line[match.end():]
-                        line = line.strip()
-                        # line = re.sub(r"<br>", '\u2028', line, count=0, flags=re.IGNORECASE)
-                        line = line.replace(LINE_BREAK, "<br>")
-                        self.text_widget.appendSentence(line, seg_id)
-                    else:
-                        # Regular text or comments or metadata only
-                        self.text_widget.append(line)
-
-                    # Check for an "audio_path" metadata in current line
-                    if not media_path and "audio-path" in metadata:
-                        dir = os.path.split(file_path)[0]
-                        media_path = os.path.join(dir, metadata["audio-path"])
-                        media_path = os.path.normpath(media_path)
-
-            if not media_path:
-                # Check for an audio file with the same basename
-                for audio_ext in MEDIA_FORMATS:
-                    tmp_media_path = basename + audio_ext
-                    tmp_media_path = os.path.join(folder, tmp_media_path)
-                    if os.path.exists(tmp_media_path):
-                        self.log.debug(f"Found same name audio file {file_path}")
-                        media_path = tmp_media_path
-                        break
-            
-            if media_path and os.path.exists(media_path):
-                self.loadMediaFile(media_path)
-            else:
-                # No media file for this ALI file
-                log.warning("No associated media file found")
-                msg_box = QMessageBox(
-                    QMessageBox.Icon.Warning,
-                    self.tr("No media file"),
-                    self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
-                    # QMessageBox.StandardButton.NoButton, self
-                )
-                if media_path:
-                    m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
-                    msg_box.setInformativeText(m)
-
-                msg_box.addButton(self.tr("&Open media"), QMessageBox.ButtonRole.AcceptRole)
-                msg_box.addButton(self.tr("&Cancel"), QMessageBox.ButtonRole.RejectRole)
-
-                if msg_box.exec() == 0x2:
-                    audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
-                    media_file_path, _ = QFileDialog.getOpenFileName(
-                        self,
-                        self.tr("Open Media File"),
-                        folder,
-                        audio_filter
-                    )
-                    if media_file_path and os.path.exists(media_file_path):
-                        self._saveFile(self.filepath, media_file_path)
-                        # Re-open the updated file
-                        self.openFile(self.filepath)
-                else:
-                    # Cancelled
-                    pass
-            
-            # Add file to recent files
-            self.addRecentFile(file_path)
+            self._openAliFile(filepath)
 
         if ext in (".seg", ".split"):
-            segments = load_segments_data(file_path)
+            segments = load_segments_data(filepath)
             seg_id_list = []
             for start, end in segments:
                 seg_id = self.waveform.addSegment([start, end])
                 seg_id_list.append(seg_id)
-                if first_utt_id == None:
+                if first_utt_id is None:
                     first_utt_id = seg_id
 
             # Check for the text file
@@ -980,26 +906,26 @@ class MainWindow(QMainWindow):
             
             # Check for an associated audio file
             for audio_ext in MEDIA_FORMATS:
-                file_path = basename + audio_ext
-                file_path = os.path.join(folder, file_path)
-                if os.path.exists(file_path):
-                    self.log.debug(f"Found same name audio file {file_path}")
-                    self.loadMediaFile(file_path)
+                filepath = basename + audio_ext
+                filepath = os.path.join(folder, filepath)
+                if os.path.exists(filepath):
+                    self.log.debug(f"Found same name audio file {filepath}")
+                    self.loadMediaFile(filepath)
                     break
         
         if ext == ".srt":
             self.log.debug("Opening an SRT file...")
             # Check for an associated audio file
             for audio_ext in MEDIA_FORMATS:
-                file_path = basename + audio_ext
-                file_path = os.path.join(folder, file_path)
-                if os.path.exists(file_path):
-                    self.log.debug(f"Found same name audio file {file_path}")
-                    self.loadMediaFile(file_path)
+                filepath = basename + audio_ext
+                filepath = os.path.join(folder, filepath)
+                if os.path.exists(filepath):
+                    self.log.debug(f"Found same name audio file {filepath}")
+                    self.loadMediaFile(filepath)
                     break
             
             # Subtitle file
-            with open(file_path, 'r', encoding="utf-8") as f_in:
+            with open(filepath, 'r', encoding="utf-8") as f_in:
                 subtitle_generator = srt.parse(f_in.read())
             subtitles = list(subtitle_generator)
             for subtitle in subtitles:
@@ -1012,7 +938,7 @@ class MainWindow(QMainWindow):
 
             self.waveform.must_redraw = True
 
-        doc_metadata = self.cache.get_doc_metadata(file_path)
+        doc_metadata = self.cache.get_doc_metadata(filepath)
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
         else:
@@ -1043,6 +969,91 @@ class MainWindow(QMainWindow):
         #     self.text_edit.setTextCursor(QTextCursor(block))
         
         # self.text_widget.document().blockSignals(was_blocked)
+
+
+    def _openAliFile(self, filepath):
+        self.log.debug(f"Opening an ALI file... {filepath}")
+
+        media_path = None
+        first_utt_id = None
+        folder, filename = os.path.split(filepath)
+        basename, _ = os.path.splitext(filename)
+
+        with open(filepath, 'r', encoding="utf-8") as fr:
+            # Find associated audio file in metadata
+            for line in fr.readlines():
+                line = line.strip()
+                _, metadata = extract_metadata(line)
+                match = re.search(r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line)
+                if match:
+                    # An utterance sentence
+                    segment = [float(match[1]), float(match[2])]
+                    seg_id = self.waveform.addSegment(segment)
+                    if first_utt_id is None:
+                        first_utt_id = seg_id
+                    line = line[:match.start()] + line[match.end():]
+                    line = line.strip()
+                    # line = re.sub(r"<br>", '\u2028', line, count=0, flags=re.IGNORECASE)
+                    line = line.replace(LINE_BREAK, "<br>")
+                    self.text_widget.appendSentence(line, seg_id)
+                else:
+                    # Regular text or comments or metadata only
+                    self.text_widget.append(line)
+
+                # Check for an "audio_path" metadata in current line
+                if not media_path and "audio-path" in metadata:
+                    dir = os.path.split(filepath)[0]
+                    media_path = os.path.join(dir, metadata["audio-path"])
+                    media_path = os.path.normpath(media_path)
+
+        if not media_path:
+            # Check for an audio file with the same basename
+            for audio_ext in MEDIA_FORMATS:
+                tmp_media_path = basename + audio_ext
+                tmp_media_path = os.path.join(folder, tmp_media_path)
+                if os.path.exists(tmp_media_path):
+                    self.log.debug(f"Found same name audio file {filepath}")
+                    media_path = tmp_media_path
+                    break
+        
+        if media_path and os.path.exists(media_path):
+            self.loadMediaFile(media_path)
+        else:
+            # No media file found for this ALI document
+            # Open a File Dialog to re-associate with a valid media
+
+            log.warning("No associated media file found")
+            msg_box = QMessageBox(
+                QMessageBox.Icon.Warning,
+                self.tr("No media file"),
+                self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
+                # QMessageBox.StandardButton.NoButton, self
+            )
+            if media_path:
+                m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
+                msg_box.setInformativeText(m)
+
+            msg_box.addButton(self.tr("&Open media"), QMessageBox.ButtonRole.AcceptRole)
+            msg_box.addButton(self.tr("&Cancel"), QMessageBox.ButtonRole.RejectRole)
+
+            if msg_box.exec() == 0x2:
+                audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+                media_file_path, _ = QFileDialog.getOpenFileName(
+                    self,
+                    self.tr("Open Media File"),
+                    folder,
+                    audio_filter
+                )
+                if media_file_path and os.path.exists(media_file_path):
+                    self._saveFile(self.filepath, media_file_path)
+                    # Re-open the updated file
+                    self.openFile(self.filepath)
+            else:
+                # Cancelled
+                pass
+        
+        # Add file to recent files
+        self.addRecentFile(filepath)
 
 
     def addRecentFile(self, filepath):
@@ -1203,15 +1214,25 @@ class MainWindow(QMainWindow):
 
         # Connect signals
         dialog.signals.subtitles_margin_size_changed.connect(self.text_widget.onMarginSizeChanged)
-        dialog.signals.subtitles_cps_changed.connect(self.waveform.onTargetDensityChanged)
+        dialog.signals.subtitles_cps_changed.connect(self.onTargetDensityChanged)
+        dialog.signals.subtitles_min_frames_changed.connect(lambda i: setattr(self, '_subs_min_frames', i))
+        dialog.signals.subtitles_max_frames_changed.connect(lambda i: setattr(self, '_subs_max_frames', i))
 
         result = dialog.exec()
 
         # Disconnect signals (not sure if it is necessary, better safe than sorry)
         dialog.signals.subtitles_margin_size_changed.disconnect()
         dialog.signals.subtitles_cps_changed.disconnect()
+        dialog.signals.subtitles_min_frames_changed.disconnect()
+        dialog.signals.subtitles_max_frames_changed.disconnect()
         
         self.changeLanguage(old_language)
+
+
+    @Slot(float)
+    def onTargetDensityChanged(self, cps: float) -> None:
+        self.waveform.changeTargetDensity(cps)
+        self._target_density = cps
 
 
     def showAbout(self):
@@ -1361,7 +1382,7 @@ class MainWindow(QMainWindow):
         
         # Remove metadata from subtitle text
         block = self.text_widget.getBlockById(seg_id)
-        if block == None:
+        if block is None:
             return (-1, "")
 
         html, _ = self.text_widget.getBlockHtml(block)
@@ -1542,10 +1563,10 @@ class MainWindow(QMainWindow):
         #     self.text_widget.highlightUtterance(seg_id)
 
 
-
     def toggleVideo(self, checked):
         log.debug(f"toggle video {checked=}")
-        if self.text_video_splitter.sizes()[1] < 100:
+        MIN_VIDEO_PANEL_WIDTH = 100
+        if self.text_video_splitter.sizes()[1] < MIN_VIDEO_PANEL_WIDTH:
             self.text_video_splitter.setSizes([1, 1])
         self.video_widget.setVisible(checked)
 
@@ -1559,6 +1580,8 @@ class MainWindow(QMainWindow):
 
 
     def toggleSceneDetect(self, checked):
+        FFMPEG_SCENCE_DETECTOR_THRESHOLD = 0.2
+
         if checked and "fps" in self.media_metadata:
             self.waveform.display_scene_change = True
             if "scenes" in self.media_metadata and self.media_metadata["scenes"]:
@@ -1569,7 +1592,7 @@ class MainWindow(QMainWindow):
                 self.log.info("Start scene changes detection")
                 self.scene_detector = SceneDetectWorker()
                 self.scene_detector.setFilePath(self.media_path)
-                self.scene_detector.setThreshold(0.2)
+                self.scene_detector.setThreshold(FFMPEG_SCENCE_DETECTOR_THRESHOLD)
                 self.scene_detector.new_scene.connect(self.onNewSceneChange)
                 self.scene_detector.finished.connect(self.onSceneChangeFinished)
                 self.scene_detector.start()
@@ -1593,6 +1616,9 @@ class MainWindow(QMainWindow):
     
 
     def autoSegment(self):
+        SEGMENTS_MAXIMUM_LENGTH = 10
+        RATIO_THRESHOLD = 0.05
+
         log.info("Finding segments...")
         if self.audio_samples is None:
             return
@@ -1606,7 +1632,12 @@ class MainWindow(QMainWindow):
             end_frame = int(selection_end * WAVEFORM_SAMPLERATE)
             self.waveform.deselect()
 
-        segments = split_to_segments(self.audio_samples[start_frame:end_frame], WAVEFORM_SAMPLERATE, 10, 0.05)
+        segments = split_to_segments(
+            self.audio_samples[start_frame:end_frame],
+            WAVEFORM_SAMPLERATE,
+            SEGMENTS_MAXIMUM_LENGTH,
+            RATIO_THRESHOLD
+        )
         segments = [
             (start+start_frame/WAVEFORM_SAMPLERATE, end+start_frame/WAVEFORM_SAMPLERATE)
             for start, end in segments
@@ -1743,7 +1774,7 @@ class MainWindow(QMainWindow):
         
         self.waveform.setActive(seg_ids, self.player.isPlaying())
         
-        if seg_ids == None:
+        if seg_ids is None:
             return
         
         seg_id = seg_ids[0]
@@ -1944,7 +1975,7 @@ class MainWindow(QMainWindow):
         log.debug(f"splitFromText({seg_id=}, {position=})")
 
         block = self.text_widget.getBlockById(seg_id)
-        if block == None:
+        if block is None:
             return
         
         text = block.text()
@@ -1990,7 +2021,7 @@ class MainWindow(QMainWindow):
 
     def splitFromWaveform(self, seg_id: SegmentId, timepos: float):
         block = self.text_widget.getBlockById(seg_id)
-        if block == None:
+        if block is None:
             return
         if seg_id not in self.waveform.segments:
             return
@@ -2023,7 +2054,7 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     log.error(f"Could not smart split: {e}")
 
-        if left_text == None or right_text == None:
+        if left_text is None or right_text is None:
             # Add en empty sentence after
             left_text = text[:]
             right_text = ""
@@ -2099,7 +2130,7 @@ class MainWindow(QMainWindow):
         """Delete both segments and sentences"""
         if segments_id:
             if self.text_widget.highlighted_sentence_id in segments_id:
-                self.status_bar.clearMessage()
+                self.statusBar().clearMessage()
             self.undo_stack.push(DeleteUtterancesCommand(self.text_widget, self.waveform, segments_id))
         else:
             self.setStatusMessage(self.tr("Select one or more utterances first"))
@@ -2249,7 +2280,7 @@ class MainWindow(QMainWindow):
 
         self.waveform.setActive(seg_ids, self.player.isPlaying())
         
-        if seg_ids == None:
+        if seg_ids is None:
             self.playing_segment = -1
             return
         
@@ -2259,45 +2290,65 @@ class MainWindow(QMainWindow):
 
 
     @Slot(int)
-    def updateSegmentInfo(self, id:SegmentId):
+    def updateSegmentInfo(self, seg_id:SegmentId):
         """Rehighlight sentence in text widget and update status bar info"""
-        if id not in self.waveform.segments:
-            self.status_bar.clearMessage()
+        if seg_id not in self.waveform.segments:
+            self.statusBar().clearMessage()
             return
 
         # Refresh block color in density mode
         if self.text_widget.highlighter.mode == Highlighter.ColorMode.DENSITY:
-            block = self.text_widget.getBlockById(id)
+            block = self.text_widget.getBlockById(seg_id)
             if block:
                 self.text_widget.highlighter.rehighlightBlock(block)
         
-        segment = self.waveform.segments[id]
-        density = self.getUtteranceDensity(id)
-        self.updateSegmentInfoResizing(id, segment, density)
+        density = self.getUtteranceDensity(seg_id)
+        segment = self.waveform.getSegment(seg_id)
+        self.updateSegmentInfoResizing(seg_id, segment, density)
 
 
     @Slot(int, list, float)
-    def updateSegmentInfoResizing(self, id:SegmentId, segment:Segment, density:float):
+    def updateSegmentInfoResizing(self, seg_id:SegmentId, segment:Segment, density:float):
         """Rehighlight sentence in text widget and update status bar info
         
         Parameters:
             segment (list): Segment boundaries
             density (float): Utterance character density (in characters per seconds)
+        
+        Note:
+            The `segment` argument is needed when this method is called
+            while resizing a segment (which is not commited yet)
         """
         # Show info in status bar
         start, end = segment
-        dur = end - start
-        start = sec2hms(start, sep='', precision=2, m_unit='m', s_unit='s')
-        end = sec2hms(end, sep='', precision=2, m_unit='m', s_unit='s')
+        start_str = sec2hms(start, sep='', precision=2, m_unit='m', s_unit='s')
+        end_str = sec2hms(end, sep='', precision=2, m_unit='m', s_unit='s')
         string_parts = [
-            f"ID: {id}",
-            self.tr("start: {}").format(f"{start:10}"),
-            self.tr("end: {}").format(f"{end:10}"),
-            self.tr("dur: {}s").format(f"{dur:.3f}"),
+            f"ID: {seg_id}",
+            self.tr("start: {}").format(f"{start_str:10}"),
+            self.tr("end: {}").format(f"{end_str:10}"),
         ]
+
+        duration = end - start
+        fps = self.media_metadata.get("fps")
+        duration_string = self.tr("dur: {}s").format(f"{duration:.3f}")
+        if fps and fps > 0 and (
+            duration < (self._subs_min_frames / fps)
+            or duration > (self._subs_max_frames / fps)
+        ):
+            string_parts.append(f"<span style='background-color: red;'>{duration_string}</span>")
+        else:
+            string_parts.append(duration_string)
+
         if density >= 0.0:
-            string_parts.append(self.tr("{}c/s").format(f"{density:.1f}"))
-        self.status_bar.showMessage("\t\t\t\t".join(string_parts))
+            density_str = self.tr('{}c/s').format(f'{density:.1f}')
+            if density >= self._target_density:
+                string_parts.append(f"<span style='background-color: red;'>{density_str}</span>")
+            else:
+                string_parts.append(density_str)
+        # self.statusBar().showMessage("\t\t\t\t".join(string_parts))
+
+        self.status_label.setText("&nbsp;&nbsp;&nbsp;&nbsp;".join(string_parts))
 
 
     def getUtteranceDensity(self, seg_id:SegmentId) -> float:
@@ -2314,7 +2365,7 @@ class MainWindow(QMainWindow):
         log.debug(f"updateUtteranceDensity({seg_id=})")
         # Count the number of characters in sentence
         block = self.text_widget.getBlockById(seg_id)
-        if block == None:
+        if block is None:
             return
 
         num_chars = self.text_widget.getSentenceLength(block)
