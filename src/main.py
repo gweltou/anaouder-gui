@@ -70,7 +70,7 @@ from src.cache_system import CacheSystem
 from src.version import __version__
 from src.theme import theme
 from src.icons import icons, loadIcons, IconWidget
-#from src.media_player_controller import MediaPlayerController
+from src.media_player_controller import MediaPlayerController
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
 from src.text_widget import (
     TextEditWidget, MyTextBlockUserData, Highlighter,
@@ -128,18 +128,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.cache = CacheSystem()
-
-        """
-        # Replace the old player setup with:
-        self.media_controller = MediaPlayerController(self)
-        # Connect signals
-        self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
-        self.media_controller.playback_started.connect(self.onPlaybackStarted)
-        self.media_controller.playback_stopped.connect(self.onPlaybackStopped)
-        self.media_controller.subtitle_changed.connect(self.updateSubtitle)
-        # Connect to video widget
-        self.media_controller.connectVideoWidget(self.video_widget)
-        """
         
         self.audio_samples = None
         
@@ -170,12 +158,17 @@ class MainWindow(QMainWindow):
 
         # self.video_window = None
         self.video_widget = VideoWidget(self)
-        self.audio_output = QAudioOutput()
-        self.player = QMediaPlayer()
-        self.player.setAudioOutput(self.audio_output)
-        self.player.positionChanged.connect(self.onPlayerPositionChanged)
-        self.video_widget.connectToMediaPlayer(self.player)
-        self.playing_segment = -1
+
+        # Media Controller
+        self.media_controller = MediaPlayerController(self)
+        # Connect signals
+        self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
+        # self.media_controller.playback_started.connect(self.onPlaybackStarted)
+        # self.media_controller.playback_stopped.connect(self.onPlaybackStopped)
+        self.media_controller.subtitle_changed.connect(self.updateSubtitle)
+        # Connect to video widget
+        self.media_controller.connectVideoWidget(self.video_widget)
+
         self.text_cursor_utterance_id = -1
         self.looping = False
         self.caption_counter = 0
@@ -215,10 +208,10 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.playAction)
         # Next
         shortcut = QShortcut(shortcuts["play_next"], self)
-        shortcut.activated.connect(self.playNextAction)
+        shortcut.activated.connect(self.playNextSegment)
         # Prev
         shortcut = QShortcut(shortcuts["play_prev"], self)
-        shortcut.activated.connect(self.playPrevAction)
+        shortcut.activated.connect(self.playPreviousSegment)
 
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.selectAll)
@@ -633,7 +626,7 @@ class MainWindow(QMainWindow):
         prev_button.setIcon(icons["previous"])
         prev_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         prev_button.setToolTip(self.tr("Previous utterance") + f" &lt;{shortcuts["play_prev"].toString()}&gt;")
-        prev_button.clicked.connect(self.playPrevAction)
+        prev_button.clicked.connect(self.playPreviousSegment)
         play_buttons_layout.addWidget(prev_button)
 
         self.play_button = QPushButton()
@@ -647,7 +640,7 @@ class MainWindow(QMainWindow):
         next_button.setIcon(icons["next"])
         next_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         next_button.setToolTip(self.tr("Next utterance") + f" &lt;{shortcuts["play_next"].toString()}&gt;")
-        next_button.clicked.connect(self.playNextAction)
+        next_button.clicked.connect(self.playNextSegment)
         play_buttons_layout.addWidget(next_button)
 
         loop_button = QPushButton()
@@ -685,8 +678,8 @@ class MainWindow(QMainWindow):
         speed_dial.setNotchesVisible(True)
         speed_dial.setNotchTarget(4)
         speed_dial.setToolTip(self.tr("Audio speed"))
-        # speed_dial.valueChanged.connect(lambda val: self.player.setPlaybackRate(0.5 + val/10))
-        speed_dial.valueChanged.connect(lambda val: self.player.setPlaybackRate(0.5 + (val**2)/200))
+        # speed_dial.valueChanged.connect(lambda val: self.media_controller.setPlaybackRate(0.5 + val/10))
+        speed_dial.valueChanged.connect(lambda val: self.media_controller.setPlaybackRate(0.5 + (val**2)/200))
         dial_layout.addWidget(IconWidget(icons["rabbit"], BUTTON_LABEL_SIZE))
         dial_layout.addWidget(speed_dial)
         media_toolbar_layout.addLayout(dial_layout)
@@ -777,15 +770,15 @@ class MainWindow(QMainWindow):
                 backup = _fin.read()
 
         error = False
-        with open(filepath, 'w', encoding="utf-8") as _fout:
-            if audio_path:
-                # Add the audio-path metadata at the beggining of the document
-                _fout.write(f"{{audio-path: {audio_path}}}\n")
+        try:
+            with open(filepath, 'w', encoding="utf-8") as _fout:
+                if audio_path:
+                    # Add the audio-path metadata at the beggining of the document
+                    _fout.write(f"{{audio-path: {audio_path}}}\n")
 
-            doc = self.text_widget.document()
-            block = doc.firstBlock()
-            while block.isValid():
-                try:
+                doc = self.text_widget.document()
+                block = doc.firstBlock()
+                while block.isValid():
                     text = self.text_widget.getBlockHtml(block)[0]
                     # Replace the audio-source metadata if necessary
                     if audio_path:
@@ -801,21 +794,32 @@ class MainWindow(QMainWindow):
                     if utt_id >= 0 and utt_id in self.waveform.segments:
                         start, end = self.waveform.segments[utt_id]
                         text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
-                except Exception:
-                    self.log.error(f"Error writing file, block {self.text_widget.getBlockNumber(block.position())}: {text}")
-                    error = True
-                else:
                     _fout.write(text + '\n')
-                block = block.next()
+                    block = block.next()
+        except IOError as e:
+            self.log.error(f"Failed to save file: {e}")
+            QMessageBox.critical(
+                self,
+                self.tr("Save Error"),
+                self.tr("Could not save file: {}").format(str(e))
+            )
+            error = True
+        except Exception as e:
+            self.log.error(f"Unexpected error saving file: {e}")
+            self.log.error(f"Block {self.text_widget.getBlockNumber(block.position())}: {text}")
+            error = True
         
         if error and backup:
             # Create a backup copy of the previous version of the file
             dir, filename = os.path.split(filepath)
             basename, ext = os.path.splitext(filename)
             bck_filepath = os.path.join(dir, f"{basename}_bck{ext}")
-            with open(bck_filepath, 'w', encoding="utf-8") as _fout:
-                _fout.write(backup)
-            print(f"Backup file written to '{bck_filepath}'")
+            try:
+                with open(bck_filepath, 'w', encoding="utf-8") as _fout:
+                    _fout.write(backup)
+                print(f"Backup file written to '{bck_filepath}'")
+            except Exception as e:
+                self.log.error(f"Unexpected error saving file {bck_filepath}: {e}")
 
 
     def saveFile(self) -> None:
@@ -881,7 +885,6 @@ class MainWindow(QMainWindow):
 
         if ext in MEDIA_FORMATS:
             # Selected file is an audio of video file
-            self.log.debug(f"Loading media file {filepath}")
             self.loadMediaFile(filepath)
             self.updateWindowTitle()
             return
@@ -1246,12 +1249,10 @@ class MainWindow(QMainWindow):
 
     def loadMediaFile(self, filepath):
         ## XXX: Use QAudioDecoder instead maybe ?
-
         self.toggleSceneDetect(False)
-
-        self.stop()
-        self.player.setSource(QUrl.fromLocalFile(filepath))
-        self.media_path = filepath
+        
+        if self.media_controller.loadMedia(filepath):
+            self.media_path = filepath
 
         # Convert to MP3 in case of MKV file
         # (problems with PyDub)
@@ -1263,14 +1264,14 @@ class MainWindow(QMainWindow):
         #         file_path = mp3_file
 
         # Load waveform
-        cached_waveform = self.cache.get_waveform(self.media_path)
+        cached_waveform = self.cache.get_waveform(filepath)
         if cached_waveform is not None:
             self.log.info("Using cached waveform")
             self.audio_samples = cached_waveform
         else:
             self.log.info("Rendering waveform...")
-            self.audio_samples = get_samples(self.media_path, WAVEFORM_SAMPLERATE)
-            self.cache.update_media_metadata(self.media_path, {"waveform": self.audio_samples})
+            self.audio_samples = get_samples(filepath, WAVEFORM_SAMPLERATE)
+            self.cache.update_media_metadata(filepath, {"waveform": self.audio_samples})
         
         self.log.info(f"Loaded {len(self.audio_samples)} audio samples")
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
@@ -1285,7 +1286,7 @@ class MainWindow(QMainWindow):
                 if match := re.match(r"(\d+)/(\d+)", audio_metadata["r_frame_rate"]):
                     if int(match[1]) > 0:
                         self.media_metadata["fps"] = int(match[1]) / int(match[2])
-                        self.cache.update_media_metadata(self.media_path, self.media_metadata)
+                        self.cache.update_media_metadata(filepath, self.media_metadata)
                     self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
                 else:
                     self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
@@ -1353,6 +1354,7 @@ class MainWindow(QMainWindow):
         dialog.signals.subtitles_cps_changed.connect(self.onTargetDensityChanged)
         dialog.signals.subtitles_min_frames_changed.connect(lambda i: setattr(self, '_subs_min_frames', i))
         dialog.signals.subtitles_max_frames_changed.connect(lambda i: setattr(self, '_subs_max_frames', i))
+        dialog.signals.cache_scenes_removed.connect(self.onCachedSceneRemoved)
 
         result = dialog.exec()
 
@@ -1361,6 +1363,7 @@ class MainWindow(QMainWindow):
         dialog.signals.subtitles_cps_changed.disconnect()
         dialog.signals.subtitles_min_frames_changed.disconnect()
         dialog.signals.subtitles_max_frames_changed.disconnect()
+        dialog.signals.cache_scenes_removed.disconnect()
         
         self.changeLanguage(old_language)
 
@@ -1369,6 +1372,12 @@ class MainWindow(QMainWindow):
     def onTargetDensityChanged(self, cps: float) -> None:
         self.waveform.changeTargetDensity(cps)
         self._target_density = cps
+
+
+    @Slot()
+    def onCachedSceneRemoved(self) -> None:
+        self.waveform.scenes = []
+        self.toggleSceneDetect(False)
 
 
     def showAbout(self):
@@ -1538,65 +1547,63 @@ class MainWindow(QMainWindow):
             self.video_widget.setCaption(text)
 
 
-    def onPlayerPositionChanged(self, position: int) -> None:
+    def onPlayerPositionChanged(self, position_sec: int) -> None:
         """
         Called every time the position is changed in the QMediaPlayer
         Updates the head position on the waveform and highlight the
-        sentence in the text widget if play head is above a segment
+        sentence in the text widget if play head is above an aligned segment
         """
 
         if self.video_widget.isVisible() and not self.video_widget.video_is_valid:
             self.video_widget.updateLayout() # fixes the video layout updating
-        
-        # Convert to seconds
-        player_position = position / 1000
 
-        self.waveform.updatePlayHead(player_position, self.player.isPlaying())
+        self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
 
         # Check if end of current selected segments is reached
-        if self.playing_segment >= 0:
-            if self.playing_segment in self.waveform.segments:
-                start, end = self.waveform.segments[self.playing_segment]
+        playing_segment_id = self.media_controller.getPlayingSegmentId()
+        if playing_segment_id >= 0:
+            if playing_segment_id in self.waveform.segments:
+                start, end = self.waveform.segments[playing_segment_id]
 
-                if player_position >= end:
+                if position_sec >= end:
                     # Compare the playing segment with the text cursor position
                     if (
                         self.text_cursor_utterance_id > 0
-                        and (self.text_cursor_utterance_id != self.playing_segment)
+                        and (self.text_cursor_utterance_id != playing_segment_id)
                     ):
                         # Position the waveform playhead to the same utterance
                         # as the text cursor
-                        self.playing_segment = self.text_cursor_utterance_id
+                        playing_segment_id = self.text_cursor_utterance_id
 
-                    if self.looping:
+                    if self.media_controller.isLooping():
                         if (
                             self.waveform.active_segment_id >= 0
-                            and self.waveform.active_segment_id != self.playing_segment
+                            and self.waveform.active_segment_id != playing_segment_id
                         ):
                             # A different segment has been selected on the waveform
-                            self.playing_segment = self.waveform.active_segment_id
-                            start, _ = self.waveform.segments[self.playing_segment]
-                        self.player.setPosition(int(start * 1000))
+                            playing_segment_id = self.waveform.active_segment_id
+                            start, _ = self.waveform.segments[playing_segment_id]
+                        self.media_controller.seekTo(start)
                         return
                     else:
-                        self.player.pause()
+                        self.media_controller.pause()
                         self.play_button.setIcon(icons["play"])
-                        self.waveform.updatePlayHead(end, self.player.isPlaying())
+                        self.waveform.updatePlayHead(end, self.media_controller.isPlaying())
             else:
                 # The segment could have been deleted by the user during playback
-                self.playing_segment = -1
+                self.media_controller.deselectSegment()
         
         # Check if end of active selection is reached
         elif (segment := self.waveform.getSelection()) != None:
             selection_start, selection_end = segment
-            if player_position >= selection_end:
+            if position_sec >= selection_end:
                 if self.looping:
-                    self.player.setPosition(int(selection_start * 1000))
+                    self.media_controller.seekTo(selection_start)
                     return
                 else:
-                    self.player.pause()
+                    self.media_controller.pause()
                     self.play_button.setIcon(icons["play"])
-                    self.waveform.updatePlayHead(selection_end, self.player.isPlaying())
+                    self.waveform.updatePlayHead(selection_end, self.media_controller.isPlaying())
         
         # Highlight text sentence at this time position
         if (seg_id := self.waveform.getSegmentAtTime(self.waveform.playhead)) >= 0:
@@ -1605,96 +1612,92 @@ class MainWindow(QMainWindow):
         else:
             self.text_widget.deactivateSentence()
         
-        self.updateSubtitle(player_position)
+        self.updateSubtitle(position_sec)
     
 
     def setLooping(self, checked: bool) -> None:
         self.looping = checked
-
+    
 
     def playAction(self) -> None:
-        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.player.pause()
+        if self.media_controller.isPlaying():
+            self.media_controller.pause()
             self.play_button.setIcon(icons["play"])
-            if (
-                self.playing_segment == self.waveform.active_segment_id
-                or self.waveform.active_segment_id == -1
-            ):
-                return
-
-        if self.waveform.active_segment_id >= 0:
-            self.playing_segment = self.waveform.active_segment_id
-            self.playSegment(self.waveform.segments[self.playing_segment])
-        elif self.waveform.selection_is_active:
-            self.playing_segment = -1
-            self.playSegment(self.waveform.getSelection())
         else:
-            self.playing_segment = -1
-            self.player.setPosition(int(self.waveform.playhead * 1000))
-            self.player.play()
+            if self.waveform.active_segment_id >= 0:
+                segment = self.waveform.segments[self.waveform.active_segment_id]
+                self.media_controller.playSegment(segment, self.waveform.active_segment_id)
+            elif self.waveform.selection_is_active:
+                self.media_controller.playSelection(self.waveform.getSelection())
+            else:
+                self.media_controller.play()
             self.play_button.setIcon(icons["pause"])
 
 
     def stop(self) -> None:
         """Stop playback"""
-        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.player.stop()
+        if self.media_controller.isPlaying():
+            self.media_controller.stop()
             self.play_button.setIcon(icons["play"])
 
 
-    def playSegment(self, segment: Segment) -> None:
-        start, _ = segment
-        self.player.setPosition(int(start * 1000))
-        self.player.play()
-        self.play_button.setIcon(icons["pause"])
+    def playSegment(self, segment: Segment, segment_id: SegmentId = -1) -> None:
+        self.media_controller.playSegment(segment, segment_id)
+        if self.play_button.icon() is not icons["pause"]:
+            self.play_button.setIcon(icons["pause"])
 
 
-    def playNextAction(self) -> None:
-        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.player.stop()
-        id = self.waveform.getNextSegmentId()
-        if id < 0:
-            id = self.waveform.active_segment_id
-            return
-        self.waveform.setActive([id], is_playing=True)
-        self.text_widget.highlightUtterance(id)
-        self.playing_segment = id
-        self.playSegment(self.waveform.segments[id])
+    def playNextSegment(self) -> None:
+        segment_id = self.waveform.active_segments[0] if self.waveform.active_segments else -1
+        next_segment_id = self.waveform.getNextSegmentId(segment_id)
+
+        if next_segment_id >= 0:
+            self.waveform.setActive([next_segment_id], is_playing=True)
+            self.text_widget.highlightUtterance(next_segment_id)
+            self.playSegment(self.waveform.segments[next_segment_id], next_segment_id)
+        else:
+            self.media_controller.deselectSegment()
+            self.waveform.setActive(None, self.media_controller.isPlaying())
+            self.text_widget.deactivateSentence()
+            self.media_controller.deselectSegment()
+            self.media_controller.stop()
+            self.media_controller.seekTo(0.0)
 
 
-    def playPrevAction(self):
-        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.player.stop()
-        if not self.waveform.active_segments:
-            return
-        id = self.waveform.getPrevSegmentId()
-        if id < 0:
-            id = self.waveform.active_segment_id
-            return
-        self.waveform.setActive([id], is_playing=True)
-        self.text_widget.highlightUtterance(id)
-        self.playing_segment = id
-        self.playSegment(self.waveform.segments[id])
+    def playPreviousSegment(self):
+        segment_id = self.waveform.active_segments[0] if self.waveform.active_segments else -1
+        prev_segment_id = self.waveform.getPrevSegmentId(segment_id)
+
+        if prev_segment_id >= 0:
+            self.waveform.setActive([prev_segment_id], self.media_controller.isPlaying())
+            self.text_widget.highlightUtterance(prev_segment_id)
+            self.media_controller.playSegment(self.waveform.segments[prev_segment_id], prev_segment_id)
+        else:
+            self.waveform.setActive(None, self.media_controller.isPlaying())
+            self.text_widget.deactivateSentence()
+            self.media_controller.deselectSegment()
+            self.media_controller.seekTo(0.0)
     
 
     def backAction(self):
         """Get back to the first segment or to the beginning of the recording"""
+        print("back")
         self.stop()
         if len(self.waveform.segments) > 0:
             first_seg_id = self.waveform.getSortedSegments()[0][0]
-            self.waveform.setActive([first_seg_id], self.player.isPlaying())
+            self.waveform.setActive([first_seg_id], self.media_controller.isPlaying())
             self.text_widget.highlightUtterance(first_seg_id)
-            self.waveform.updatePlayHead(self.waveform.segments[first_seg_id][0], self.player.isPlaying())
+            self.waveform.updatePlayHead(self.waveform.segments[first_seg_id][0], self.media_controller.isPlaying())
         else:
             self.waveform.t_left = 0.0
             self.waveform.scroll_vel = 0.0
-            self.waveform.updatePlayHead(0.0, self.player.isPlaying())
+            self.waveform.updatePlayHead(0.0, self.media_controller.isPlaying())
 
 
     @Slot(float)
-    def onWaveformPlayheadMoved(self, t: float):
-        self.waveform.updatePlayHead(t, self.player.isPlaying())
-        self.player.setPosition(int(self.waveform.playhead * 1000))
+    def onWaveformPlayheadMoved(self, position_sec: float):
+        self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
+        self.media_controller.seekTo(self.waveform.playhead)
         # if (seg_id := self.waveform.getSegmentAtTime(t)) >= 0:
         #     self.text_widget.highlightUtterance(seg_id)
 
@@ -1726,16 +1729,17 @@ class MainWindow(QMainWindow):
                 self.waveform.must_redraw = True
             else:
                 self.log.info("Start scene changes detection")
-                self.scene_detector = SceneDetectWorker()
-                self.scene_detector.setFilePath(self.media_path)
-                self.scene_detector.setThreshold(FFMPEG_SCENCE_DETECTOR_THRESHOLD)
-                self.scene_detector.new_scene.connect(self.onNewSceneChange)
-                self.scene_detector.finished.connect(self.onSceneChangeFinished)
-                self.scene_detector.start()
+                if self.scene_detector is None:
+                    self.scene_detector = SceneDetectWorker()
+                    self.scene_detector.setFilePath(self.media_path)
+                    self.scene_detector.setThreshold(FFMPEG_SCENCE_DETECTOR_THRESHOLD)
+                    self.scene_detector.new_scene.connect(self.onNewSceneChange)
+                    self.scene_detector.finished.connect(self.onSceneChangeFinished)
+                    self.scene_detector.start()
         else:
             self.waveform.display_scene_change = False
-            if self.scene_detector and self.scene_detector.isRunning():
-                self.scene_detector.end()
+            # if self.scene_detector and self.scene_detector.isRunning():
+            #     self.scene_detector.end()
             self.waveform.must_redraw = True
             self.scene_detect_action.setChecked(False)
 
@@ -1748,6 +1752,10 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def onSceneChangeFinished(self):
+        if self.scene_detector:
+            self.scene_detector.new_scene.disconnect()
+            self.scene_detector.finished.disconnect()
+            self.scene_detector = None
         self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
     
 
@@ -1766,7 +1774,7 @@ class MainWindow(QMainWindow):
             selection_start, selection_end = self.waveform.getSelection()
             start_frame = int(selection_start * WAVEFORM_SAMPLERATE)
             end_frame = int(selection_end * WAVEFORM_SAMPLERATE)
-            self.waveform.deselect()
+            self.waveform.removeSelection()
 
         segments = split_to_segments(
             self.audio_samples[start_frame:end_frame],
@@ -1785,7 +1793,9 @@ class MainWindow(QMainWindow):
         for start, end in segments:
             self.undo_stack.push(
                 CreateNewUtteranceCommand(
-                    self,
+                    self.media_controller,
+                    self.text_widget,
+                    self.waveform
                     [start, end],
                     None
                 )
@@ -1908,7 +1918,7 @@ class MainWindow(QMainWindow):
 
         seg_ids = seg_ids or None
         
-        self.waveform.setActive(seg_ids, self.player.isPlaying())
+        self.waveform.setActive(seg_ids, self.media_controller.isPlaying())
         
         if seg_ids is None:
             return
@@ -1916,11 +1926,10 @@ class MainWindow(QMainWindow):
         seg_id = seg_ids[0]
         self.text_cursor_utterance_id = seg_id # Set the segment that should be played
 
-        if self.player.playbackState() in (QMediaPlayer.PlaybackState.PausedState, QMediaPlayer.PlaybackState.StoppedState):
+        if self.media_controller.isPaused() or self.media_controller.isStopped():
             # Set the play head at the beggining of the segment
             segment = self.waveform.getSegment(seg_id)
             if segment:
-                # self.waveform.updatePlayHead(t, self.player.isPlaying())
                 self.onWaveformPlayheadMoved(segment[0])
                 self.waveform.must_redraw = True
     
@@ -1942,15 +1951,20 @@ class MainWindow(QMainWindow):
                     (seg_start < selection_start < seg_end)
                     or (seg_start < selection_end < seg_end)
                 ):
-                    # self.waveform.deselect()
                     self.setStatusMessage(self.tr("Can't create a segment over another segment"))
                     return
+                
+            self.undo_stack.push(
+                CreateNewUtteranceCommand(
+                    self.media_controller,
+                    self.text_widget,
+                    self.waveform,
+                    [selection_start, selection_end]
+                )
+            )
+            self.waveform.removeSelection()
         else:
             self.setStatusMessage(self.tr("Select part of the waveform first"))
-            return
-
-        self.undo_stack.push(CreateNewUtteranceCommand(self, self.waveform.getSelection()))
-        self.waveform.deselect()
 
 
     @Slot(list, list, int)
@@ -2077,7 +2091,7 @@ class MainWindow(QMainWindow):
             seg_id = self.waveform.getNewId()
             segments = [(seg_id, *self.waveform.getSelection())]
             self.transcribe_segments_signal.emit(self.media_path, segments)
-            self.waveform.deselect()
+            self.waveform.removeSelection()
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
             segments = [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
@@ -2371,15 +2385,23 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
         
+        self.recognizer_worker.must_stop = True
+        self.recognizer_worker.deleteLater()
+
+        self.recognizer_thread.quit()
+        self.recognizer_thread.wait(2000) # 2 second timeout
         if self.recognizer_thread.isRunning():
-            self.recognizer_worker.must_stop = True
-            self.recognizer_thread.quit()
-            self.recognizer_thread.wait()
-        # if self.video_window:
-        #     self.video_window.close()
-        if self.scene_detector and self.scene_detector.isRunning():
+            self.recognizer_thread.terminate()
+        self.recognizer_thread.deleteLater()
+        
+        if self.scene_detector:
             self.scene_detector.end()
-            self.scene_detector.wait()
+            self.scene_detector.wait(2000) # 2 second timeout
+            if self.scene_detector.isRunning():
+                self.scene_detector.terminate()
+            self.scene_detector.deleteLater()
+        
+        self.media_controller.cleanup()
         
         # Save document state to cache
         if self.filepath.lower().endswith(".ali"):
@@ -2406,18 +2428,19 @@ class MainWindow(QMainWindow):
     
     @Slot(list)
     def selectFromWaveform(self, seg_ids: List[SegmentId] | None):
-        """Scroll the text widget to display the sentence
+        """
+        Called when the user clicks on the waveform area
+        Scroll the text widget to display the sentence
         
-        Parameters:
-            seg_ids (list):
-                ID of selected segments or None
+        Args:
+            seg_ids (list): ID of selected segments or None
         """
         seg_ids = seg_ids if seg_ids else None
 
-        self.waveform.setActive(seg_ids, self.player.isPlaying())
+        self.waveform.setActive(seg_ids, self.media_controller.isPlaying())
         
         if seg_ids is None:
-            self.playing_segment = -1
+            self.media_controller.deselectSegment()
             return
         
         last_id = seg_ids[-1]
@@ -2445,9 +2468,10 @@ class MainWindow(QMainWindow):
 
     @Slot(int, list, float)
     def updateSegmentInfoResizing(self, seg_id:SegmentId, segment:Segment, density:float):
-        """Rehighlight sentence in text widget and update status bar info
+        """
+        Rehighlight sentence in text widget and update status bar info
         
-        Parameters:
+        Args:
             segment (list): Segment boundaries
             density (float): Utterance character density (in characters per seconds)
         

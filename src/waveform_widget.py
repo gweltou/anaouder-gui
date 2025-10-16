@@ -356,35 +356,65 @@ class WaveformWidget(QWidget):
                 self.split_utterance.emit(self.active_segment_id, self.playhead)
 
 
-    def getPrevSegmentId(self, seg_id: Optional[SegmentId]=None) -> SegmentId:
-        if seg_id == None:
-            seg_id = self.active_segment_id
-        if seg_id < 0:
-            return -1
+    def getPrevSegmentId(self, segment_id: SegmentId) -> SegmentId:
+        """
+        Returns the ID of the segment before the currently selected one, or -1.
+        If no segment are selected, return the previous one relative to the playhead.
+
+        Returns:
+            A segment ID or -1
+        """
+        if segment_id is None:
+            segment_id = self.active_segment_id
+            
         sorted_segments = self.getSortedSegments()
-        for i, (sid, _) in enumerate(sorted_segments):
-            if sid == seg_id:
-                if i > 0:
-                    return sorted_segments[i - 1][0]
-                return -1
+
+        if segment_id == -1:
+            # Check relative to playhead position
+            for i, (seg_id, (start, _)) in enumerate(sorted_segments):
+                if start > self.playhead:
+                    if i > 0:
+                        return sorted_segments[i - 1][0]
+                    return -1
+        else:
+            for i, (seg_id, _) in enumerate(sorted_segments):
+                if seg_id == segment_id:
+                    if i > 0:
+                        return sorted_segments[i - 1][0]
+                    return -1
         return -1
 
 
-    def getNextSegmentId(self, seg_id: Optional[SegmentId]=None) -> SegmentId:
-        if seg_id == None:
-            seg_id = self.active_segment_id
-        if seg_id < 0:
-            return -1
+    def getNextSegmentId(self, segment_id: SegmentId) -> SegmentId:
+        """
+        Returns the ID of the segment after the currently selected one, or -1.
+        If no segment are selected, return the next one relative to the playhead.
+
+        Returns:
+            A segment ID or -1
+        """
+        if segment_id is None:
+            segment_id = self.active_segment_id
+
         sorted_segments = self.getSortedSegments()
-        for i, (sid, _) in enumerate(sorted_segments):
-            if sid == seg_id:
-                if i < len(sorted_segments) - 1:
-                    return sorted_segments[i + 1][0]
-                return -1
+
+        if segment_id == -1:
+            # Check relative to playhead position
+            for i, (segment_id, (_, end)) in enumerate(sorted_segments):
+                if end > self.playhead:
+                    if i < len(sorted_segments) - 1:
+                        return sorted_segments[i][0]
+                    return -1
+        else:
+            for i, (seg_id, _) in enumerate(sorted_segments):
+                if seg_id == segment_id:
+                    if i < len(sorted_segments) - 1:
+                        return sorted_segments[i + 1][0]
+                    return -1
         return -1
 
 
-    def setActive(self, seg_ids: List[SegmentId] | None, is_playing=False) -> None:
+    def setActive(self, seg_ids: List[SegmentId] | None, is_playing = False) -> None:
         """
         Select the given segment(s) and adjust view in the waveform.
         This method is called from MainWindow only.
@@ -449,18 +479,18 @@ class WaveformWidget(QWidget):
         """
 
 
-    def updatePlayHead(self, t, is_playing):
+    def updatePlayHead(self, position_sec: float, is_playing: bool) -> None:
         """
         Set the playing head
         Slide the waveform window following the playhead
 
         This method is called continuously from MainWindow.
         """
-        self.playhead = t
+        self.playhead = position_sec
 
         if self.follow_playhead and is_playing:
             # Center the view on playhead
-            self.t_left = t - self.width() * 0.5 / self.ppsec
+            self.t_left = position_sec - self.width() * 0.5 / self.ppsec
             self.scroll_vel = 0.0
             self.scroll_goal = -1
         # elif (
@@ -472,8 +502,8 @@ class WaveformWidget(QWidget):
         self.must_redraw = True
     
 
-    def deselect(self):
-        log.debug("deselect()")
+    def removeSelection(self):
+        log.debug("removeSelection()")
         self.selection_is_active = False
         self._selection = None
         self.must_redraw = True
@@ -632,7 +662,7 @@ class WaveformWidget(QWidget):
         self.anchor = -1
 
         if checked:
-            self.deselect()
+            self.removeSelection()
             self.setCursor(Qt.CursorShape.SplitHCursor)
         else:
             self.unsetCursor() # Change mouse cursor shape to default
@@ -830,7 +860,7 @@ class WaveformWidget(QWidget):
 
             if not self.isSelectionAtPosition(self.click_pos):
                 # Deselect current selection
-                self.deselect()
+                self.removeSelection()
             
             # Move the playhead
             self.playhead_moved.emit(self.t_left + self.click_pos.x() / self.ppsec)
@@ -1274,7 +1304,7 @@ class WaveformWidget(QWidget):
         markers = []
 
         # Check next segment boundary
-        next_segment_id = self.getNextSegmentId()
+        next_segment_id = self.getNextSegmentId(self.active_segment_id)
         next_segment_start = self.audio_len
         if next_segment_id >= 0:
             next_segment_start = self.segments[next_segment_id][0]
@@ -1310,7 +1340,7 @@ class WaveformWidget(QWidget):
 
     def _drawSceneChanges(self, t_right: float):
         height = 8
-        sep_height = 16
+        sep_height = 12
         y_pos = self.height() - height
         opacity = 200
         

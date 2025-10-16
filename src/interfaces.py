@@ -43,7 +43,7 @@ class WaveformInterface(Protocol):
     def getSelection(self) -> Optional[Segment]:
         ...
     
-    def deselect(self) -> None:
+    def removeSelection(self) -> None:
         ...
 
 

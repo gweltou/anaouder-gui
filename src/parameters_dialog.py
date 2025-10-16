@@ -230,6 +230,7 @@ class ParametersDialog(QDialog):
         subtitles_cps_changed = Signal(float)
         subtitles_min_frames_changed = Signal(int)
         subtitles_max_frames_changed = Signal(int)
+        cache_scenes_removed = Signal()
 
 
     def __init__(self, parent, media_metadata: dict):
@@ -245,7 +246,7 @@ class ParametersDialog(QDialog):
         self.tabs.addTab(ModelsTab(), self.tr("Models"))
         self.tabs.addTab(SubtitlesTab(self, media_metadata.get("fps", 0)), self.tr("Subtitles"))
         self.tabs.addTab(UITab(parent.video_widget), self.tr("UI"))
-        self.tabs.addTab(CacheTab(parent.cache, media_metadata), self.tr("Cache"))
+        self.tabs.addTab(CacheTab(self, parent.cache, media_metadata), self.tr("Cache"))
         # self.tabs.addTab(self.display_tab, "Display")
         # self.tabs.addTab(self.dictionary_tab, "Dictionary")
         
@@ -486,7 +487,7 @@ class ModelsTab(QWidget):
 class SubtitlesTab(QWidget):
     def __init__(self, parent: ParametersDialog, fps: int, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
-        self.my_parent = parent
+        self.parent_dialog = parent
         self.fps = fps if fps > 0 else 25 # Default to 25 fps even if irrevelant
 
         self.default_params_lock = False
@@ -642,7 +643,7 @@ class SubtitlesTab(QWidget):
         t = min_frames / self.fps
         self.min_dur_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
-        self.my_parent.signals.subtitles_min_frames_changed.emit(min_frames)
+        self.parent_dialog.signals.subtitles_min_frames_changed.emit(min_frames)
         if not self.default_params_lock:
             self.user_params["min_frames"] = min_frames
             self.switchToUserParams()
@@ -653,7 +654,7 @@ class SubtitlesTab(QWidget):
         t = max_frames / self.fps
         self.max_dur_label.setText(self.tr("{time}s @{fps}fps")
                                   .format(time=round(t, 3), fps=self.fps))
-        self.my_parent.signals.subtitles_max_frames_changed.emit(max_frames)
+        self.parent_dialog.signals.subtitles_max_frames_changed.emit(max_frames)
         if not self.default_params_lock:
             self.user_params["max_frames"] = max_frames
             self.switchToUserParams()
@@ -682,7 +683,7 @@ class SubtitlesTab(QWidget):
     def updateMarginSize(self):
         margin_size = self.text_margin_spin.value()
         app_settings.setValue("subtitles/margin_size", margin_size)
-        self.my_parent.signals.subtitles_margin_size_changed.emit(margin_size)
+        self.parent_dialog.signals.subtitles_margin_size_changed.emit(margin_size)
         if not self.default_params_lock:
             self.user_params["text_margin"] = margin_size
             self.switchToUserParams()
@@ -690,7 +691,7 @@ class SubtitlesTab(QWidget):
     def updateDensity(self):
         density = self.text_density_spin.value()
         app_settings.setValue("subtitles/cps", density)
-        self.my_parent.signals.subtitles_cps_changed.emit(density)
+        self.parent_dialog.signals.subtitles_cps_changed.emit(density)
         if not self.default_params_lock:
             self.user_params["text_density"] = density
             self.switchToUserParams()
@@ -847,9 +848,11 @@ class UITab(QWidget):
 
 
 class CacheTab(QWidget):
-    def __init__(self, cache: CacheSystem, media_metadata, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
 
+    def __init__(self, parent: ParametersDialog, cache: CacheSystem, media_metadata, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.parent_dialog = parent
         self.media_metadata = media_metadata
         self.cache = cache
 
@@ -973,7 +976,7 @@ class CacheTab(QWidget):
     
 
     def update(self):
-        """Update values of cache sizes"""
+        """Update values of cache sizes by calculating its footprint on the hard-drive"""
         
         if self.current_file_group.isEnabled():
             fingerprint = self.media_metadata["fingerprint"]
@@ -1092,6 +1095,7 @@ class CacheTab(QWidget):
             transcription_path = self.cache._get_transcription_path(fingerprint)
             transcription_path.unlink(missing_ok=True)
             self.media_metadata.pop("scenes", None)
+            self.parent_dialog.signals.cache_scenes_removed.emit()
         
         if (
             self.current_waveform.isChecked() and

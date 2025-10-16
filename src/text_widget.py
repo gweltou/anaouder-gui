@@ -557,7 +557,6 @@ class TextEditWidget(QTextEdit):
         if not new_block.text():
             new_block.setUserData(None)
         
-        print("cursor set")
         self.setTextCursor(cursor)
         
         self.document().blockSignals(False)
@@ -709,7 +708,7 @@ class TextEditWidget(QTextEdit):
 
     def deactivateSentence(self, seg_id: Optional[SegmentId]=None):
         """Reset format of currently active sentence"""
-        if seg_id == None:
+        if seg_id is None:
             seg_id = self.highlighted_sentence_id
         if seg_id < 0:
             return

@@ -141,7 +141,12 @@ def test_add_segment():
 def test_create_new_utterance():
     load_document()
     undo_redo_command(
-        CreateNewUtteranceCommand(main_window, [10, 12], 12),
+        CreateNewUtteranceCommand(
+            main_window.media_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            [10, 12], 12
+        ),
         random_cursor=True
     )
 

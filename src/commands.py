@@ -15,6 +15,7 @@ from src.interfaces import (
     Segment, SegmentId,
     WaveformInterface, TextDocumentInterface
 )
+from src.media_player_controller import MediaPlayerController
 
 
 log = logging.getLogger(__name__)
@@ -28,38 +29,40 @@ class CreateNewUtteranceCommand(QUndoCommand):
 
     def __init__(
             self,
-            parent,
+            media_controller: MediaPlayerController,
+            text_widget: TextDocumentInterface,
+            waveform_widget: WaveformInterface,
             segment: Segment,
-            seg_id: Optional[SegmentId]=None
+            segment_id: Optional[SegmentId]=None
         ):
-        log.debug(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {seg_id=})")
-        print(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {seg_id=})")
+        log.debug(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {segment_id=})")
+        print(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {segment_id=})")
 
         super().__init__()
-        self.parent = parent    # TODO: rewrite
-        self.text_widget: TextDocumentInterface =  parent.text_widget
-        self.waveform: WaveformInterface = parent.waveform
+        self.media_controller = media_controller
+        self.text_widget =  text_widget
+        self.waveform_widget = waveform_widget
         self.segment = segment
-        self.seg_id = seg_id or self.waveform.getNewId()
+        self.segment_id = segment_id or self.waveform_widget.getNewId()
         self.prev_cursor = self.text_widget.getCursorState()
 
     
     def undo(self):
-        if self.parent.playing_segment == self.seg_id:
-            self.parent.playing_segment = -1
-        self.text_widget.deleteSentence(self.seg_id)
-        del self.waveform.segments[self.seg_id]
-        if self.seg_id in self.waveform.active_segments:
-            self.waveform.active_segments.remove(self.seg_id)
-        self.waveform.must_sort = True
-        self.waveform.must_redraw = True
+        if self.media_controller.getPlayingSegmentId() == self.segment_id:
+            self.media_controller.deselectSegment()
+        self.text_widget.deleteSentence(self.segment_id)
+        del self.waveform_widget.segments[self.segment_id]
+        if self.segment_id in self.waveform_widget.active_segments:
+            self.waveform_widget.active_segments.remove(self.segment_id)
+        self.waveform_widget.must_sort = True
+        self.waveform_widget.must_redraw = True
         self.text_widget.setCursorState(self.prev_cursor)
 
 
     def redo(self):
-        self.waveform.addSegment(self.segment, self.seg_id)
-        self.text_widget.insertSentenceWithId('*', self.seg_id)
-        self.text_widget.highlightUtterance(self.seg_id)
+        self.waveform_widget.addSegment(self.segment, self.segment_id)
+        self.text_widget.insertSentenceWithId('*', self.segment_id)
+        self.text_widget.highlightUtterance(self.segment_id)
 
 
 
@@ -170,14 +173,14 @@ class AlignWithSelectionCommand(QUndoCommand):
             self.block.setUserData(None)
         self.text_widget.highlighter.rehighlightBlock(self.block)
         self.waveform._selection = self.selection
-        self.parent.status_bar.clearMessage()
+        self.parent.statusBar().clearMessage()
         del self.waveform.segments[self.segment_id]
         self.waveform.must_redraw = True
 
     def redo(self):
         if self.selection:
             self.waveform.addSegment(self.selection, self.segment_id)
-        self.waveform.deselect()
+        self.waveform.removeSelection()
         self.text_widget.setBlockId(self.block, self.segment_id)
         self.parent.updateUtteranceDensity(self.segment_id)
         self.text_widget.highlighter.rehighlightBlock(self.block)
