@@ -103,6 +103,7 @@ from src.settings import (
 )
 import src.lang as lang
 from src.interfaces import Segment, SegmentId
+from src.strings import strings
 
 
 
@@ -304,13 +305,13 @@ class MainWindow(QMainWindow):
 
         file_menu = menu_bar.addMenu(self.tr("&File"))
         ## Open
-        open_action = QAction(self.tr("&Open"), self)
+        open_action = QAction(self.tr("&Open") + "...", self)
         open_action.setShortcut(QKeySequence.StandardKey.Open)
         open_action.triggered.connect(self.openFile)
         file_menu.addAction(open_action)
 
         # Recent files
-        self.recent_menu = file_menu.addMenu(self.tr("&Open recent..."))
+        self.recent_menu = file_menu.addMenu(self.tr("&Open recent"))
         file_menu.addSeparator()
 
         ## Save
@@ -319,13 +320,13 @@ class MainWindow(QMainWindow):
         save_action.triggered.connect(self.saveFile)
         file_menu.addAction(save_action)
         ## Save as
-        saveAs_action = QAction(self.tr("Save as"), self)
+        saveAs_action = QAction(self.tr("Save as") + "...", self)
         saveAs_action.setShortcut(QKeySequence.StandardKey.SaveAs)
         saveAs_action.triggered.connect(self.saveFileAs)
         file_menu.addAction(saveAs_action)
 
         ## Export sub-menu
-        export_subMenu = file_menu.addMenu(self.tr("&Export as..."))
+        export_subMenu = file_menu.addMenu(self.tr("&Export as"))
         
         export_srt_action = QAction(self.tr("&SubRip (.srt)"), self)
         export_srt_action.setStatusTip(self.tr("Subtitle file"))
@@ -343,7 +344,7 @@ class MainWindow(QMainWindow):
 
         ## Parameters
         file_menu.addSeparator()
-        parameters_action = QAction(self.tr("&Parameters"), self)
+        parameters_action = QAction(self.tr("&Parameters") + "...", self)
         parameters_action.setShortcut(QKeySequence.StandardKey.Print)
         parameters_action.triggered.connect(self.showParameters)
         file_menu.addAction(parameters_action)
@@ -358,12 +359,12 @@ class MainWindow(QMainWindow):
         # Operation Menu
         operation_menu = menu_bar.addMenu(self.tr("&Operations"))
         ## Auto Segment
-        auto_segment_action = QAction(self.tr("Auto segment"), self)
+        auto_segment_action = QAction(self.tr("Auto &Segment"), self)
         auto_segment_action.setStatusTip(self.tr("Find segments based on sound activity"))
         auto_segment_action.triggered.connect(self.autoSegment)
         operation_menu.addAction(auto_segment_action)
         ## Adapt to subtitle
-        adapt_to_subtitle_action = QAction(self.tr("Adapt to subtitles"), self)
+        adapt_to_subtitle_action = QAction(self.tr("&Adapt to subtitles"), self)
         adapt_to_subtitle_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
         adapt_to_subtitle_action.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adapt_to_subtitle_action)
@@ -395,7 +396,7 @@ class MainWindow(QMainWindow):
         display_menu.addAction(self.scene_detect_action)
 
         ## Coloring sub-menu
-        coloring_subMenu = display_menu.addMenu(self.tr("Coloring..."))
+        coloring_subMenu = display_menu.addMenu(self.tr("Coloring"))
         coloring_action_group = QActionGroup(self)
         coloring_action_group.setExclusive(True)
 
@@ -545,14 +546,14 @@ class MainWindow(QMainWindow):
         text_zoom_out_button = QPushButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
         text_zoom_out_button.setFixedWidth(BUTTON_SIZE)
-        text_zoom_out_button.setToolTip(self.tr("Zoom out"))
+        text_zoom_out_button.setToolTip(strings.TR_ZOOM_OUT)
         text_zoom_out_button.clicked.connect(lambda: self.text_widget.zoomOut(1))
         view_buttons_layout.addWidget(text_zoom_out_button)
 
         text_zoom_in_button = QPushButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
         text_zoom_in_button.setFixedWidth(BUTTON_SIZE)
-        text_zoom_out_button.setToolTip(self.tr("Zoom in"))
+        text_zoom_out_button.setToolTip(strings.TR_ZOOM_IN)
         text_zoom_in_button.clicked.connect(lambda: self.text_widget.zoomIn(1))
         view_buttons_layout.addWidget(text_zoom_in_button)
 
@@ -695,7 +696,7 @@ class MainWindow(QMainWindow):
         self.follow_playhead_button.setIcon(icons["follow_playhead"])
         self.follow_playhead_button.setFixedWidth(BUTTON_SIZE)
         self.follow_playhead_button.setCheckable(True)
-        self.follow_playhead_button.setToolTip(self.tr("View follow playhead"))
+        self.follow_playhead_button.setToolTip(self.tr("The view will follow the playhead"))
         self.follow_playhead_button.setChecked(self.waveform.follow_playhead)
         self.follow_playhead_button.toggled.connect(self.toggleFollowPlayhead)
         view_buttons_layout.addWidget(self.follow_playhead_button)
@@ -706,7 +707,7 @@ class MainWindow(QMainWindow):
         wave_zoom_out_button = QPushButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
         wave_zoom_out_button.setFixedWidth(BUTTON_SIZE)
-        wave_zoom_out_button.setToolTip(self.tr("Zoom out") + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;")
+        wave_zoom_out_button.setToolTip(strings.TR_ZOOM_OUT + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;")
         wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
         view_buttons_layout.addWidget(wave_zoom_out_button)
         
@@ -714,7 +715,7 @@ class MainWindow(QMainWindow):
         wave_zoom_in_button = QPushButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
         wave_zoom_in_button.setFixedWidth(BUTTON_SIZE)
-        wave_zoom_in_button.setToolTip(self.tr("Zoom in") + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;")
+        wave_zoom_in_button.setToolTip(strings.TR_ZOOM_IN + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;")
         wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
         view_buttons_layout.addWidget(wave_zoom_in_button)
         
@@ -947,7 +948,6 @@ class MainWindow(QMainWindow):
                     subtitle_generator = srt.parse(f_in.read())
                 subtitles = list(subtitle_generator)
             except UnicodeDecodeError:
-                print("woopsie")
                 subtitles = []
             
             for subtitle in subtitles:
@@ -1192,7 +1192,7 @@ class MainWindow(QMainWindow):
             content = subtitle.content.strip().replace('\n', '<BR>')
             self.text_widget.appendSentence(content, seg_id)
         
-        self.setStatusMessage(self.tr("Imported {} subtitles").format(len(subtitles)))
+        self.setStatusMessage(self.tr("Imported {n} subtitles").format(n=len(subtitles)))
 
 
     def addRecentFile(self, filepath):
@@ -1495,7 +1495,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(scroll_area)
         
         # OK button
-        ok_button = QPushButton(self.tr("OK"))
+        ok_button = QPushButton(strings.TR_OK)
         ok_button.clicked.connect(dialog.accept)
         button_layout = QHBoxLayout()
         button_layout.addStretch()
@@ -1621,9 +1621,11 @@ class MainWindow(QMainWindow):
 
     def playAction(self) -> None:
         if self.media_controller.isPlaying():
+            # Stop playback
             self.media_controller.pause()
             self.play_button.setIcon(icons["play"])
-        else:
+        elif self.media_controller.hasMedia():
+            # Start playback
             if self.waveform.active_segment_id >= 0:
                 segment = self.waveform.segments[self.waveform.active_segment_id]
                 self.media_controller.playSegment(segment, self.waveform.active_segment_id)
@@ -1664,7 +1666,7 @@ class MainWindow(QMainWindow):
             self.media_controller.seekTo(0.0)
 
 
-    def playPreviousSegment(self):
+    def playPreviousSegment(self) -> None:
         segment_id = self.waveform.active_segments[0] if self.waveform.active_segments else -1
         prev_segment_id = self.waveform.getPrevSegmentId(segment_id)
 
@@ -1679,7 +1681,7 @@ class MainWindow(QMainWindow):
             self.media_controller.seekTo(0.0)
     
 
-    def backAction(self):
+    def backAction(self) -> None:
         """Get back to the first segment or to the beginning of the recording"""
         print("back")
         self.stop()
@@ -1695,14 +1697,14 @@ class MainWindow(QMainWindow):
 
 
     @Slot(float)
-    def onWaveformPlayheadMoved(self, position_sec: float):
+    def onWaveformPlayheadMoved(self, position_sec: float) -> None:
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
         self.media_controller.seekTo(self.waveform.playhead)
         # if (seg_id := self.waveform.getSegmentAtTime(t)) >= 0:
         #     self.text_widget.highlightUtterance(seg_id)
 
 
-    def toggleVideo(self, checked):
+    def toggleVideo(self, checked) -> None:
         log.debug(f"toggle video {checked=}")
         MIN_VIDEO_PANEL_WIDTH = 100
         if self.text_video_splitter.sizes()[1] < MIN_VIDEO_PANEL_WIDTH:
@@ -1710,15 +1712,15 @@ class MainWindow(QMainWindow):
         self.video_widget.setVisible(checked)
 
 
-    def toggleAlignmentColoring(self, checked):
+    def toggleAlignmentColoring(self, checked) -> None:
         self.text_widget.highlighter.setMode(Highlighter.ColorMode.ALIGNMENT)
     
 
-    def toggleDensityColoring(self, checked):
+    def toggleDensityColoring(self, checked) -> None:
         self.text_widget.highlighter.setMode(Highlighter.ColorMode.DENSITY)
 
 
-    def toggleSceneDetect(self, checked):
+    def toggleSceneDetect(self, checked) -> None:
         FFMPEG_SCENCE_DETECTOR_THRESHOLD = 0.2
 
         if checked and "fps" in self.media_metadata:
@@ -1745,13 +1747,13 @@ class MainWindow(QMainWindow):
 
 
     @Slot(float, tuple)
-    def onNewSceneChange(self, time: float, color: tuple):
+    def onNewSceneChange(self, time: float, color: tuple) -> None:
         self.waveform.scenes.append((time, color[0], color[1], color[2]))
         self.waveform.must_redraw = True
     
 
     @Slot()
-    def onSceneChangeFinished(self):
+    def onSceneChangeFinished(self) -> None:
         if self.scene_detector:
             self.scene_detector.new_scene.disconnect()
             self.scene_detector.finished.disconnect()
@@ -1759,7 +1761,7 @@ class MainWindow(QMainWindow):
         self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
     
 
-    def autoSegment(self):
+    def autoSegment(self) -> None:
         SEGMENTS_MAXIMUM_LENGTH = 10
         RATIO_THRESHOLD = 0.05
 
@@ -1804,7 +1806,7 @@ class MainWindow(QMainWindow):
 
     
 
-    def adaptToSubtitle(self):
+    def adaptToSubtitle(self) -> None:
         """
         Try to adapt the selected utterance to a subtitle format by:
           * Setting the segments boundaries on frame positions
@@ -1891,7 +1893,7 @@ class MainWindow(QMainWindow):
 
 
     @Slot()
-    def onTextChanged(self):
+    def onTextChanged(self) -> None:
         # Update the utterance density field
         cursor = self.text_widget.textCursor()
         block = cursor.block()
@@ -1909,7 +1911,7 @@ class MainWindow(QMainWindow):
 
 
     @Slot(list)
-    def onTextCursorChanged(self, seg_ids: List[SegmentId] | None):
+    def onTextCursorChanged(self, seg_ids: List[SegmentId] | None) -> None:
         """
         Sets the corresponding segment active on the waveform
         Called only on aligned text blocks or with None
@@ -1935,7 +1937,7 @@ class MainWindow(QMainWindow):
     
 
     @Slot(bool)
-    def toggleCreateSelection(self, checked: bool):
+    def toggleCreateSelection(self, checked: bool) -> None:
         log.debug(f"Toggle create selection: {checked=}")
         self.waveform.setSelecting(checked)
 
@@ -1973,7 +1975,7 @@ class MainWindow(QMainWindow):
         tokens: list,
         segment: list,
         seg_id: int,
-    ):
+    ) -> None:
         if seg_id not in self.waveform.segments:
             # Create segment as a undoable action
             self.undo_stack.push(CreateNewUtteranceCommand(self, segment, seg_id))
@@ -1986,7 +1988,7 @@ class MainWindow(QMainWindow):
 
 
     @Slot(list)
-    def newSegmentTranscribed(self, tokens):
+    def newSegmentTranscribed(self, tokens) -> None:
         if tokens:
             text = self.onRecognizerOutput(tokens)
             text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
@@ -2064,28 +2066,28 @@ class MainWindow(QMainWindow):
 
 
     @Slot()
-    def onRecognizerEOF(self):
+    def onRecognizerEOF(self) -> None:
         self.media_metadata["transcription_completed"] = True
         if self.media_path != None:
             self.cache.update_media_metadata(self.media_path, self.media_metadata)
 
 
     @Slot(float)
-    def updateProgressBar(self, t: float):
+    def updateProgressBar(self, t: float) -> None:
         self.waveform.recognizer_progress = t
         if t > self.waveform.t_left and t < self.waveform.getTimeRight():
             self.waveform.must_redraw = True
 
 
     @Slot(bool)
-    def toggleTranscribe(self, toggled):
+    def toggleTranscribe(self, toggled) -> None:
         if toggled:
             self.transcribeAction()
         else:
             self.recognizer_worker.must_stop = True
     
 
-    def transcribeAction(self):
+    def transcribeAction(self) -> None:
         if self.waveform.selection_is_active:
             # Transcribe current audio selection
             seg_id = self.waveform.getNewId()
@@ -2117,7 +2119,7 @@ class MainWindow(QMainWindow):
             self.transcribe_file_signal.emit(self.media_path, transcription_progress)
 
 
-    def splitFromText(self, seg_id: SegmentId, position: int):
+    def splitFromText(self, seg_id: SegmentId, position: int) -> None:
         """
         Split audio segment, given a char relative position in sentence
         Called from the textEdit widget
@@ -2169,7 +2171,7 @@ class MainWindow(QMainWindow):
         self.splitUtterance(seg_id, left_text, right_text, left_seg, right_seg)
     
 
-    def splitFromWaveform(self, seg_id: SegmentId, timepos: float):
+    def splitFromWaveform(self, seg_id: SegmentId, timepos: float) -> None:
         block = self.text_widget.getBlockById(seg_id)
         if block is None:
             return
@@ -2217,7 +2219,7 @@ class MainWindow(QMainWindow):
             seg_id: SegmentId,
             left_text: str, right_text: str,
             left_seg: list, right_seg: list
-        ):
+        ) -> None:
         left_id = self.waveform.getNewId()
         right_id = self.waveform.getNewId()
         
@@ -2261,7 +2263,7 @@ class MainWindow(QMainWindow):
 
 
     @Slot(list)
-    def joinUtterances(self, segments_id):
+    def joinUtterances(self, segments_id) -> None:
         """Join many segments in one.
         Keep the segment ID of the earliest segment among the selected ones.
         """
@@ -2269,7 +2271,7 @@ class MainWindow(QMainWindow):
 
 
     @Slot(QTextBlock)
-    def alignWithSelection(self, block:QTextBlock):
+    def alignWithSelection(self, block:QTextBlock) -> None:
         self.undo_stack.push(AlignWithSelectionCommand(self, self.text_widget, self.waveform, block))
         if self.selection_button.isChecked():
             self.selection_button.setChecked(False)
@@ -2292,28 +2294,28 @@ class MainWindow(QMainWindow):
         self.undo_stack.push(DeleteSegmentsCommand(self, segments_id))
 
 
-    def selectAll(self):
+    def selectAll(self) -> None:
         selection = [ id for id, _ in self.waveform.getSortedSegments() ]
         self.waveform.active_segments = selection
         self.waveform.active_segment_id = selection[-1] if selection else -1
         self.waveform.must_redraw = True
 
 
-    def search(self):
+    def search(self) -> None:
         print("search tool")
 
 
-    def toggleFollowPlayhead(self):
+    def toggleFollowPlayhead(self) -> None:
         new_state = not self.waveform.follow_playhead
         self.follow_playhead_button.setChecked(new_state)
         self.follow_playhead_action.setChecked(new_state)
         self.waveform.toggleFollowPlayHead(new_state)
 
 
-    def undo(self):
+    def undo(self) -> None:
         self.undo_stack.undo()
 
-    def redo(self):
+    def redo(self) -> None:
         self.undo_stack.redo()
 
 
@@ -2325,7 +2327,7 @@ class MainWindow(QMainWindow):
 
 
     # Drag and drop event handlers
-    def dragEnterEvent(self, event):
+    def dragEnterEvent(self, event) -> None:
         mime_data = event.mimeData()
         
         # Accept the event only if it contains a URL pointing to a text file
@@ -2340,12 +2342,12 @@ class MainWindow(QMainWindow):
         self.setStatusMessage(self.tr("Cannot open this file type"))
 
 
-    def dragMoveEvent(self, event):
+    def dragMoveEvent(self, event) -> None:
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
 
 
-    def dropEvent(self, event):
+    def dropEvent(self, event) -> None:
         mime_data = event.mimeData()
         
         if mime_data.hasUrls():
@@ -2366,7 +2368,7 @@ class MainWindow(QMainWindow):
                 return  # Only load the first file
 
 
-    def closeEvent(self, event: QCloseEvent):
+    def closeEvent(self, event: QCloseEvent) -> None:
         if not self.undo_stack.isClean():
             reply = QMessageBox.warning(
                 self, 
@@ -2427,7 +2429,7 @@ class MainWindow(QMainWindow):
     
     
     @Slot(list)
-    def selectFromWaveform(self, seg_ids: List[SegmentId] | None):
+    def selectFromWaveform(self, seg_ids: List[SegmentId] | None) -> None:
         """
         Called when the user clicks on the waveform area
         Scroll the text widget to display the sentence
@@ -2449,7 +2451,7 @@ class MainWindow(QMainWindow):
 
 
     @Slot(int)
-    def updateSegmentInfo(self, seg_id:SegmentId):
+    def updateSegmentInfo(self, seg_id:SegmentId) -> None:
         """Rehighlight sentence in text widget and update status bar info"""
         if seg_id not in self.waveform.segments:
             self.statusBar().clearMessage()
@@ -2467,7 +2469,7 @@ class MainWindow(QMainWindow):
 
 
     @Slot(int, list, float)
-    def updateSegmentInfoResizing(self, seg_id:SegmentId, segment:Segment, density:float):
+    def updateSegmentInfoResizing(self, seg_id:SegmentId, segment:Segment, density:float) -> None:
         """
         Rehighlight sentence in text widget and update status bar info
         
@@ -2504,7 +2506,7 @@ class MainWindow(QMainWindow):
             string_parts.append(duration_string)
 
         if density >= 0.0:
-            density_str = self.tr('{}c/s').format(f'{density:.1f}')
+            density_str = f"{density:.1f}{strings.TR_CPS_UNIT}"
             if density >= self._target_density:
                 string_parts.append(f"<span style='{warning_style}'>{density_str}</span>")
             else:
@@ -2538,13 +2540,13 @@ class MainWindow(QMainWindow):
             block.userData().data["density"] = density
     
 
-    def changeEvent(self, event):
+    def changeEvent(self, event) -> None:
         if event.type() == QEvent.Type.LanguageChange:
             self.retranslateUi()
         super().changeEvent(event)
     
 
-    def retranslateUi(self):
+    def retranslateUi(self) -> None:
         reply = QMessageBox.warning(
             self,
             self.tr("Switching language"),

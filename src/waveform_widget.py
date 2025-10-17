@@ -26,6 +26,7 @@ from src.theme import theme
 from src.settings import app_settings, shortcuts, SUBTITLES_CPS
 from src.utils import lerpColor, mapNumber
 from src.commands import ResizeSegmentCommand
+from src.strings import strings
 
 
 ZOOM_Y = 3.5    # In pixels per second
@@ -1323,7 +1324,7 @@ class WaveformWidget(QWidget):
         # Ideal density
         ideal_density_dur = self.resizing_textlen / self._target_density
         t = start + ideal_density_dur
-        tag = str(round(self._target_density, 1)) + self.tr("c/s")
+        tag = str(round(self._target_density, 1)) + strings.TR_CPS_UNIT
         t_x = round((t - self.t_left) * self.ppsec)
         self.painter.setPen(QPen(QColor(120, 120, 120)))
         self.painter.drawText(t_x - 8 * len(tag) // 2, round(self.height() * 0.15 + 15), tag)
