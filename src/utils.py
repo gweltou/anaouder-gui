@@ -22,6 +22,7 @@ STOP_CHARS = PUNCTUATION + ' \t\u2028'
 
 MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm", ".mov")
 ALL_COMPATIBLE_FORMATS = MEDIA_FORMATS + (".ali", ".seg", ".split", ".srt")
+SUBTITLES_FILE_FORMATS = (".srt",)
 
 
 

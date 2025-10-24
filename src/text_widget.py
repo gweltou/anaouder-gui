@@ -432,14 +432,14 @@ class TextEditWidget(QTextEdit):
         cursor.insertText(text)
 
 
-    def appendSentence(self, text: str, seg_id: Optional[SegmentId]):
+    def appendSentence(self, text: str, segment_id: Optional[SegmentId]):
         """Insert new utterance at the end of the document"""
         end_position = self.document().characterCount() - 1  # -1 because of implicit newline
-        new_block = self.insertBlock(text, {"seg_id": seg_id} if seg_id != None else None, end_position)
+        new_block = self._insertBlock(text, {"seg_id": segment_id} if segment_id != None else None, end_position)
         self.highlighter.rehighlightBlock(new_block)
 
 
-    def insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock:
+    def _insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock:
         """Insert a block, with user data, at a given position"""
         log.debug(f"text_widget.insertBlock({text=}, {data=}, {pos=})")
 
@@ -471,19 +471,21 @@ class TextEditWidget(QTextEdit):
     def insertSentenceWithId(
             self,
             text: str,
-            seg_id: SegmentId,
+            segment_id: SegmentId,
             with_cursor=False
             ):
         """
-        Create a new utterance from an existing segment id.
+        Create a new utterance from an existing segment id
+        and insert it based on its segment's timecodes.
+        
         This action won't be added to the undo stack.
         """
-        log.debug(f"text_widget.insertSenteceWithId({text=}, {seg_id=}, {with_cursor=})")
-        print(f"text_widget.insertSenteceWithId({text=}, {seg_id=}, {with_cursor=}")
+        log.debug(f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=})")
+        print(f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=}")
 
-        assert seg_id in self.main_window.waveform.segments
+        assert segment_id in self.main_window.waveform.segments
         doc = self.document()
-        seg_start, seg_end = self.main_window.waveform.segments[seg_id]
+        seg_start, seg_end = self.main_window.waveform.segments[segment_id]
 
         if not with_cursor:
             self.document().blockSignals(True) # Prevent segment info display
@@ -511,7 +513,7 @@ class TextEditWidget(QTextEdit):
                     cursor.movePosition(QTextCursor.MoveOperation.Left) # Go back one position
                     cursor.insertBlock()
                     cursor.insertText(text)
-                    cursor.block().setUserData(MyTextBlockUserData({"seg_id": seg_id}))
+                    cursor.block().setUserData(MyTextBlockUserData({"seg_id": segment_id}))
                     self.highlighter.rehighlightBlock(cursor.block())
                     if with_cursor:
                         # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
@@ -521,7 +523,7 @@ class TextEditWidget(QTextEdit):
             block = block.next()
 
         # Insert new utterance at the end
-        self.appendSentence(text, seg_id)
+        self.appendSentence(text, segment_id)
 
         if not with_cursor:
             self.document().blockSignals(False)

@@ -16,10 +16,10 @@ from src.lang import getModelPath, getCurrentLanguage
 
 
 class RecognizerWorker(QObject):
-    """This worker should needs only to be created once"""
+    """This worker should only be created once"""
 
-    SAMPLE_RATE = 16000
-
+    # Signals
+    
     segment_transcribed = Signal(list, list, int) # (re-)transcribe a pre-defined segment
     new_segment_transcribed = Signal(list) # Create a new utterance with transcription
     progress = Signal(float)    # In seconds since the beginning of the audio file
@@ -27,6 +27,7 @@ class RecognizerWorker(QObject):
     end_of_file = Signal()  # Whole file transcription is completed
     finished = Signal()     # Used to toggle up the transcription button
 
+    SAMPLE_RATE = 16000
 
     def __init__(self):
         super().__init__()
@@ -176,8 +177,8 @@ class RecognizerWorker(QObject):
     def _transcribeSegment(
             self,
             file_path: str,
-            start_time: float, 
-            duration: float,
+            start_time_seconds: float, 
+            duration_seconds: float,
             lang: str,
         ) -> list:
         """ 
@@ -198,8 +199,8 @@ class RecognizerWorker(QObject):
             "ffmpeg",
             "-hide_banner", "-loglevel", "error",     # Reduce ffmpeg output to bare minimum
             "-i", file_path,
-            "-ss", str(start_time),
-            "-t", str(duration),
+            "-ss", str(start_time_seconds),
+            "-t", str(duration_seconds),
             "-ar", str(self.SAMPLE_RATE), "-ac", "1", # 16kHz sample rate, single channel
             "-f", "s16le",                            # 16-bit signed little-endian PCM
             "-",                                      # Output to stdout
@@ -247,7 +248,7 @@ class RecognizerWorker(QObject):
                         process.wait()
         
         for tok in tokens:
-            tok["start"] += start_time
-            tok["end"] += start_time
+            tok["start"] += start_time_seconds
+            tok["end"] += start_time_seconds
             tok["lang"] = lang
         return tokens

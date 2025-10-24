@@ -64,8 +64,9 @@ from PySide6.QtMultimedia import (
 from src.utils import (
     get_resource_path,
     sec2hms, splitForSubtitle,
-    ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS,
+    ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS, SUBTITLES_FILE_FORMATS
 )
+from src.file_manager import FileManager, FileOperationError
 from src.cache_system import CacheSystem
 from src.version import __version__
 from src.theme import theme
@@ -125,9 +126,12 @@ class MainWindow(QMainWindow):
 
     def __init__(self, filepath=""):
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-
         super().__init__()
         
+        # File Manager
+        self.file_manager = FileManager()
+        self.file_manager.show_status_message.connect(self.setStatusMessage)
+
         self.cache = CacheSystem()
         
         self.audio_samples = None
@@ -157,12 +161,10 @@ class MainWindow(QMainWindow):
         self.media_metadata = dict()
         self.hidden_transcription = False
 
-        # self.video_window = None
         self.video_widget = VideoWidget(self)
 
         # Media Controller
         self.media_controller = MediaPlayerController(self)
-        # Connect signals
         self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
         # self.media_controller.playback_started.connect(self.onPlaybackStarted)
         # self.media_controller.playback_stopped.connect(self.onPlaybackStopped)
@@ -171,8 +173,6 @@ class MainWindow(QMainWindow):
         self.media_controller.connectVideoWidget(self.video_widget)
 
         self.text_cursor_utterance_id = -1
-        self.looping = False
-        self.caption_counter = 0
 
         self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
         self._subs_min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
@@ -207,24 +207,11 @@ class MainWindow(QMainWindow):
         ## Play
         shortcut = QShortcut(shortcuts["play_stop"], self)
         shortcut.activated.connect(self.playAction)
-        # Next
-        shortcut = QShortcut(shortcuts["play_next"], self)
-        shortcut.activated.connect(self.playNextSegment)
-        # Prev
-        shortcut = QShortcut(shortcuts["play_prev"], self)
-        shortcut.activated.connect(self.playPreviousSegment)
 
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.selectAll)
 
-        self.follow_playhead_action = QAction(self.tr("Follow playhead"))
-        self.follow_playhead_action.setCheckable(True)
-        self.follow_playhead_action.setChecked(self.follow_playhead_button.isChecked())
-        self.follow_playhead_action.setShortcut(shortcuts["follow_playhead"])
-        self.follow_playhead_action.triggered.connect(self.toggleFollowPlayhead)
-        self.addAction(self.follow_playhead_action)
-
-        # Signal connections
+        # Text Widget Signal connections
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
@@ -232,7 +219,7 @@ class MainWindow(QMainWindow):
         self.text_widget.auto_transcribe.connect(self.transcribe_button.toggle)
         self.text_widget.align_with_selection.connect(self.alignWithSelection)
 
-        # self.waveform.selection_started.connect(lambda: self.select_button.setChecked(True))
+        # Waveform Widget Signal connections
         self.waveform.selection_ended.connect(lambda: self.selection_button.setChecked(False))
         self.waveform.toggle_selection.connect(self.selection_button.toggle)
         self.waveform.join_utterances.connect(self.joinUtterances)
@@ -297,7 +284,10 @@ class MainWindow(QMainWindow):
         # To add color to the status bar text
         self.status_label = QLabel()
         self.status_label.setTextFormat(Qt.TextFormat.RichText)
-        self.statusBar().addWidget(self.status_label)
+
+        self.progress_label = QLabel()
+        # self.progress_label.setTextFormat(Qt.TextFormat.RichText)
+        self.statusBar().addPermanentWidget(self.progress_label)
         
     
     def _createMainMenu(self):
@@ -312,7 +302,8 @@ class MainWindow(QMainWindow):
 
         # Recent files
         self.recent_menu = file_menu.addMenu(self.tr("&Open recent"))
-        file_menu.addSeparator()
+
+        file_menu.addSeparator() # -------------------------
 
         ## Save
         save_action = QAction(self.tr("&Save"), self)
@@ -325,35 +316,50 @@ class MainWindow(QMainWindow):
         saveAs_action.triggered.connect(self.saveFileAs)
         file_menu.addAction(saveAs_action)
 
-        ## Export sub-menu
-        export_subMenu = file_menu.addMenu(self.tr("&Export as"))
-        
+        file_menu.addSeparator() # -------------------------
+
+        ## Import / Export Menu
+
+        import_media_action = QAction(strings.TR_IMPORT_MEDIA + '...', self)
+        import_media_action.setStatusTip(self.tr("Import a media file (audio or video)"))
+        import_media_action.triggered.connect(self.onImportMedia)
+        file_menu.addAction(import_media_action)
+
+        import_subtitles_action = QAction(strings.TR_IMPORT_SUBTITLES + '...', self)
+        import_subtitles_action.setStatusTip(self.tr("Import a subtitles file, keep current media"))
+        import_subtitles_action.triggered.connect(self.onImportSubtitles)
+        file_menu.addAction(import_subtitles_action)
+
+        import_export_submenu = file_menu.addMenu(self.tr("&Export as"))
+
         export_srt_action = QAction(self.tr("&SubRip (.srt)"), self)
         export_srt_action.setStatusTip(self.tr("Subtitle file"))
         export_srt_action.triggered.connect(self.exportSrt)
-        export_subMenu.addAction(export_srt_action)
+        import_export_submenu.addAction(export_srt_action)
 
         export_eaf_action = QAction("&Elan (.eaf)", self)
         export_eaf_action.triggered.connect(self.exportEaf)
-        export_subMenu.addAction(export_eaf_action)
+        import_export_submenu.addAction(export_eaf_action)
 
         export_txt_action = QAction(self.tr("Raw &text (.txt)"), self)
         export_txt_action.setStatusTip(self.tr("Simple text document"))
         export_txt_action.triggered.connect(self.exportTxt)
-        export_subMenu.addAction(export_txt_action)
+        import_export_submenu.addAction(export_txt_action)
+
+        file_menu.addSeparator() # -------------------------
 
         ## Parameters
-        file_menu.addSeparator()
         parameters_action = QAction(self.tr("&Parameters") + "...", self)
         parameters_action.setShortcut(QKeySequence.StandardKey.Print)
         parameters_action.triggered.connect(self.showParameters)
         file_menu.addAction(parameters_action)
 
+        file_menu.addSeparator() # -------------------------
+
         ## Exit
         exit_action = QAction(self.tr("E&xit"), self)
         exit_action.setShortcut(QKeySequence.StandardKey.Quit)
         exit_action.triggered.connect(self.close)
-        file_menu.addSeparator()
         file_menu.addAction(exit_action)
 
         # Operation Menu
@@ -413,7 +419,7 @@ class MainWindow(QMainWindow):
         coloring_subMenu.addAction(color_density_action)
         coloring_action_group.addAction(color_density_action)
 
-        display_menu.addSeparator()
+        display_menu.addSeparator() # -------------------------
 
         # deviceMenu = menu_bar.addMenu("Device")
         # for dev in self.input_devices:
@@ -575,7 +581,6 @@ class MainWindow(QMainWindow):
 
         self.selection_button = QPushButton()
         self.selection_button.setIcon(icons["select"])
-        # self.select_button.setIconSize(QSize(28*0.8, 28*0.8))
         self.selection_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.selection_button.setToolTip(self.tr("Create a selection") + f" &lt;{shortcuts["select"].toString()}&gt;")
         self.selection_button.setCheckable(True)
@@ -626,7 +631,9 @@ class MainWindow(QMainWindow):
         prev_button = QPushButton()
         prev_button.setIcon(icons["previous"])
         prev_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
-        prev_button.setToolTip(self.tr("Previous utterance") + f" &lt;{shortcuts["play_prev"].toString()}&gt;")
+        shortcut_tooltip_str = shortcuts["play_prev"].toString().replace("Up", '⬆️')
+        prev_button.setToolTip(self.tr("Previous utterance") + f" &lt;{shortcut_tooltip_str}&gt;")
+        prev_button.setShortcut(shortcuts["play_prev"])
         prev_button.clicked.connect(self.playPreviousSegment)
         play_buttons_layout.addWidget(prev_button)
 
@@ -640,17 +647,20 @@ class MainWindow(QMainWindow):
         next_button = QPushButton()
         next_button.setIcon(icons["next"])
         next_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
-        next_button.setToolTip(self.tr("Next utterance") + f" &lt;{shortcuts["play_next"].toString()}&gt;")
+        shortcut_tooltip_str = shortcuts["play_next"].toString().replace("Down", '⬇️')
+        next_button.setToolTip(self.tr("Next utterance") + f" &lt;{shortcut_tooltip_str}&gt;")
+        next_button.setShortcut(shortcuts["play_next"])
         next_button.clicked.connect(self.playNextSegment)
         play_buttons_layout.addWidget(next_button)
 
-        loop_button = QPushButton()
-        loop_button.setCheckable(True)
-        loop_button.setIcon(icons["loop"])
-        loop_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
-        loop_button.setToolTip(self.tr("Loop"))
-        loop_button.toggled.connect(self.setLooping)
-        play_buttons_layout.addWidget(loop_button)
+        self.looping_button = QPushButton()
+        self.looping_button.setCheckable(True)
+        self.looping_button.setIcon(icons["loop"])
+        self.looping_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
+        self.looping_button.setToolTip(self.tr("Loop") + f" &lt;{shortcuts["loop"].toString()}&gt;")
+        self.looping_button.setShortcut(shortcuts["loop"])
+        self.looping_button.toggled.connect(self.toggleLooping)
+        play_buttons_layout.addWidget(self.looping_button)
 
         media_toolbar_layout.addLayout(play_buttons_layout)
 
@@ -664,7 +674,7 @@ class MainWindow(QMainWindow):
         volume_dial.setNotchTarget(5)
         volume_dial.setToolTip(self.tr("Audio volume"))
         volume_dial.setValue(100)
-        volume_dial.valueChanged.connect(lambda val: self.audio_output.setVolume(val/100))
+        volume_dial.valueChanged.connect(lambda val: self.media_controller.setVolume(val/100.0))
         dial_layout.addWidget(IconWidget(icons["volume"], BUTTON_LABEL_SIZE))
         dial_layout.addWidget(volume_dial)
         media_toolbar_layout.addLayout(dial_layout)
@@ -679,7 +689,6 @@ class MainWindow(QMainWindow):
         speed_dial.setNotchesVisible(True)
         speed_dial.setNotchTarget(4)
         speed_dial.setToolTip(self.tr("Audio speed"))
-        # speed_dial.valueChanged.connect(lambda val: self.media_controller.setPlaybackRate(0.5 + val/10))
         speed_dial.valueChanged.connect(lambda val: self.media_controller.setPlaybackRate(0.5 + (val**2)/200))
         dial_layout.addWidget(IconWidget(icons["rabbit"], BUTTON_LABEL_SIZE))
         dial_layout.addWidget(speed_dial)
@@ -696,10 +705,17 @@ class MainWindow(QMainWindow):
         self.follow_playhead_button.setIcon(icons["follow_playhead"])
         self.follow_playhead_button.setFixedWidth(BUTTON_SIZE)
         self.follow_playhead_button.setCheckable(True)
-        self.follow_playhead_button.setToolTip(self.tr("The view will follow the playhead"))
+        self.follow_playhead_button.setToolTip(self.tr("Follow playhead"))
         self.follow_playhead_button.setChecked(self.waveform.follow_playhead)
         self.follow_playhead_button.toggled.connect(self.toggleFollowPlayhead)
         view_buttons_layout.addWidget(self.follow_playhead_button)
+
+        self.follow_playhead_action = QAction(self.tr("Follow playhead"))
+        self.follow_playhead_action.setCheckable(True)
+        self.follow_playhead_action.setChecked(self.follow_playhead_button.isChecked())
+        self.follow_playhead_action.setShortcut(shortcuts["follow_playhead"])
+        self.follow_playhead_action.triggered.connect(self.toggleFollowPlayhead)
+        self.addAction(self.follow_playhead_action)
 
         ## Zoom out
         view_buttons_layout.addSpacing(8)
@@ -725,7 +741,6 @@ class MainWindow(QMainWindow):
         return media_toolbar_layout
 
 
-    @Slot(str)
     def setStatusMessage(self, message: str) -> None:
         self.statusBar().showMessage(message, STATUS_BAR_TIMEOUT)
 
@@ -738,6 +753,9 @@ class MainWindow(QMainWindow):
         if self.filepath:
             title_parts.append('-')
             title_parts.append(os.path.split(self.filepath)[1])
+        elif self.media_path:
+            title_parts.append('-')
+            title_parts.append(os.path.split(self.media_path)[1])
         self.setWindowTitle(' '.join(title_parts))
 
 
@@ -752,77 +770,6 @@ class MainWindow(QMainWindow):
         self.model_selection.addItems(self.available_models)
 
 
-    def _saveFile(self, filepath, audio_path=None) -> None:
-        """
-        Save ALI file to disk
-
-        Parameters:
-            filepath (str): File path to write to
-            audio_path (str): overwrite the audio_path if provided
-        """
-
-        filepath = os.path.abspath(filepath)
-        self.log.info(f"Saving file to {filepath}")
-
-        # Get a copy of the old file, if it already exist
-        backup = None
-        if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
-            with open(filepath, 'r', encoding="utf-8") as _fin:
-                backup = _fin.read()
-
-        error = False
-        try:
-            with open(filepath, 'w', encoding="utf-8") as _fout:
-                if audio_path:
-                    # Add the audio-path metadata at the beggining of the document
-                    _fout.write(f"{{audio-path: {audio_path}}}\n")
-
-                doc = self.text_widget.document()
-                block = doc.firstBlock()
-                while block.isValid():
-                    text = self.text_widget.getBlockHtml(block)[0]
-                    # Replace the audio-source metadata if necessary
-                    if audio_path:
-                        match = re.search(r"{\s*audio\-path\s*:\s*(.*?)\s*}", text)
-                        if match:
-                            # Strip the audio-path metadata from the rest of the string
-                            text = text[:match.start()] + text[match.end():]
-                            audio_path = None
-                            if not text.strip():
-                                block = block.next()
-                                continue
-                    utt_id = self.text_widget.getBlockId(block)
-                    if utt_id >= 0 and utt_id in self.waveform.segments:
-                        start, end = self.waveform.segments[utt_id]
-                        text += f" {{start: {format_timecode(start)}; end: {format_timecode(end)}}}"
-                    _fout.write(text + '\n')
-                    block = block.next()
-        except IOError as e:
-            self.log.error(f"Failed to save file: {e}")
-            QMessageBox.critical(
-                self,
-                self.tr("Save Error"),
-                self.tr("Could not save file: {}").format(str(e))
-            )
-            error = True
-        except Exception as e:
-            self.log.error(f"Unexpected error saving file: {e}")
-            self.log.error(f"Block {self.text_widget.getBlockNumber(block.position())}: {text}")
-            error = True
-        
-        if error and backup:
-            # Create a backup copy of the previous version of the file
-            dir, filename = os.path.split(filepath)
-            basename, ext = os.path.splitext(filename)
-            bck_filepath = os.path.join(dir, f"{basename}_bck{ext}")
-            try:
-                with open(bck_filepath, 'w', encoding="utf-8") as _fout:
-                    _fout.write(backup)
-                print(f"Backup file written to '{bck_filepath}'")
-            except Exception as e:
-                self.log.error(f"Unexpected error saving file {bck_filepath}: {e}")
-
-
     def saveFile(self) -> None:
         if self.filepath and self.filepath.endswith(".ali"):
             self._saveFile(self.filepath)
@@ -834,21 +781,27 @@ class MainWindow(QMainWindow):
 
 
     def saveFileAs(self) -> None:
-        basename = os.path.basename(self.filepath)
+        if self.filepath:
+            basename = os.path.basename(self.filepath)
+            dir = os.path.split(self.filepath)[0]
+        elif self.media_path:
+            basename = os.path.basename(self.media_path)
+            dir = os.path.split(self.media_path)[0]
+        else:
+            basename = "nevez"
+            dir = app_settings.value("main/last_opened_folder", "", type=str)
         basename, ext = os.path.splitext(basename)
+        
         if ext.lower() == ".ali":
             basename += ext
-            dir = os.path.split(self.filepath)[0]
-            # dir = app_settings.value("main/last_opened_folder", "")
         else:
             basename += ".ali"
-            dir = os.path.split(self.filepath)[0]
         
         filepath, _ = QFileDialog.getSaveFileName(
             self,
-            self.tr("Save File"),
+            strings.TR_SAVE_FILE,
             os.path.join(dir, basename),
-            self.tr("ALI files ({ext})").format(ext="*.ali")
+            strings.TR_ALI_FILES + f" (*.ali)"
         )
         
         if not filepath:
@@ -858,20 +811,54 @@ class MainWindow(QMainWindow):
         self._saveFile(filepath)
         self.addRecentFile(filepath)
         self.updateWindowTitle()
+    
+
+    def _saveFile(self, filepath: str, media_path: Optional[str] = None) -> None:
+        """Parse the internal document and sends the data to the File Manager"""
+        blocks_data = []
+
+        doc = self.text_widget.document()
+        block = doc.firstBlock()
+        while block.isValid():
+            text = self.text_widget.getBlockHtml(block)[0]
+            segment = None
+            
+            utt_id = self.text_widget.getBlockId(block)
+            if utt_id >= 0 and utt_id in self.waveform.segments:
+                segment = self.waveform.segments[utt_id]
+
+            blocks_data.append((text, segment))
+            block = block.next()
+        
+        try:
+            self.file_manager.saveAliFile(filepath, blocks_data, media_path)
+        except FileOperationError as e:
+            QMessageBox.critical(
+                self,
+                self.tr("Save Error"),
+                self.tr("Could not save file: {}").format(str(e))
+            )
+
+
+    def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]:
+        dir = app_settings.value("main/last_opened_folder", "", type=str)
+        filepath, _ = QFileDialog.getOpenFileName(self, title, dir, filter)
+        if not filepath:
+            return None
+        app_settings.setValue("main/last_opened_folder", os.path.split(filepath)[0])
+        return filepath
 
 
     def openFile(self, filepath="", keep_text=False, keep_audio=False) -> None:
-        self.log.info(f"Opening file {filepath}")
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
 
         if not filepath:
             # Open a File dialog window
-            dir = app_settings.value("main/last_opened_folder", "", type=str)
-            filepath, _ = QFileDialog.getOpenFileName(self, "Open File", dir, ";;".join([supported_filter, audio_filter]))
+            filepath = self.getOpenFileDialog(self.tr("Open File"), ";;".join([supported_filter, audio_filter]))
             if not filepath:
                 return
-            app_settings.setValue("main/last_opened_folder", os.path.split(filepath)[0])
+        self.log.info(f"Opening file {filepath}")
         
         if not keep_audio:
             self.waveform.clear()
@@ -882,7 +869,6 @@ class MainWindow(QMainWindow):
         folder, filename = os.path.split(filepath)
         basename, ext = os.path.splitext(filename)
         ext = ext.lower()
-        first_utt_id = None
 
         if ext in MEDIA_FORMATS:
             # Selected file is an audio of video file
@@ -893,7 +879,38 @@ class MainWindow(QMainWindow):
         # was_blocked = self.text_widget.document().blockSignals(True)
 
         if ext == ".ali":
-            self._openAliFile(filepath)
+            data = self.file_manager.readAliFile(filepath)
+            # Add file to recent files
+            self.loadDocumentData(data["document"])
+            self.addRecentFile(filepath)
+
+            media_path = data.get("media-path", None)
+            if media_path and os.path.exists(media_path) :
+                self.loadMediaFile(media_path)
+            else:
+                # Open a File Dialog to re-link
+                msg_box = QMessageBox(
+                    QMessageBox.Icon.Warning,
+                    self.tr("No media file"),
+                    self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
+                    # QMessageBox.StandardButton.NoButton, self
+                )
+                if media_path:
+                    m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
+                    msg_box.setInformativeText(m)
+
+                msg_box.addButton(strings.TR_OPEN, QMessageBox.ButtonRole.AcceptRole)
+                msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
+
+                ret = msg_box.exec()
+                if ret == 0x2:
+                    media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+                    media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
+                    if media_filepath and os.path.exists(media_filepath):
+                        # Rewrite the file to disk
+                        self._saveFile(self.filepath, media_filepath)
+                        # Re-open the updated file
+                        self.openFile(self.filepath)
 
         if ext in (".seg", ".split"):
             segments = load_segments_data(filepath)
@@ -901,8 +918,6 @@ class MainWindow(QMainWindow):
             for start, end in segments:
                 seg_id = self.waveform.addSegment([start, end])
                 seg_id_list.append(seg_id)
-                if first_utt_id is None:
-                    first_utt_id = seg_id
 
             # Check for the text file
             txt_filepath = os.path.extsep.join((basename, "txt"))
@@ -931,40 +946,13 @@ class MainWindow(QMainWindow):
                     break
         
         if ext == ".srt":
-            self._openSrtFile(filepath)
             self.log.debug("Opening an SRT file...")
-            # Check for an associated audio file
-            for audio_ext in MEDIA_FORMATS:
-                filepath = basename + audio_ext
-                filepath = os.path.join(folder, filepath)
-                if os.path.exists(filepath):
-                    self.log.debug(f"Found same name audio file {filepath}")
-                    self.loadMediaFile(filepath)
-                    break
-            
-            # Subtitle file
-            try:
-                with open(filepath, 'r', encoding="utf-8") as f_in:
-                    subtitle_generator = srt.parse(f_in.read())
-                subtitles = list(subtitle_generator)
-            except UnicodeDecodeError:
-                subtitles = []
-            
-            for subtitle in subtitles:
-                start = subtitle.start.seconds + subtitle.start.microseconds/1e6
-                end = subtitle.end.seconds + subtitle.end.microseconds/1e6
-                segment = [start, end]
-                seg_id = self.waveform.addSegment(segment)
-                content = subtitle.content.strip().replace('\n', '<BR>')
-                self.text_widget.appendSentence(content, seg_id)
-
-            self.waveform.must_redraw = True
+            data = self.file_manager.openSrtFile(filepath)
+            self.loadDocumentData(data["document"])
 
         doc_metadata = self.cache.get_doc_metadata(filepath)
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
-        else:
-            self.toggle_video_action.setChecked(False)
         if "cursor_pos" in doc_metadata:
             cursor = self.text_widget.textCursor()
             cursor.setPosition(doc_metadata["cursor_pos"])
@@ -984,216 +972,51 @@ class MainWindow(QMainWindow):
             self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
 
         self.updateWindowTitle()
-
-        # Select the first utterance
-        # if first_utt_id != None:
-        #     block = self.text_edit.getBlockById(first_utt_id)
-        #     self.text_edit.setTextCursor(QTextCursor(block))
         
         # self.text_widget.document().blockSignals(was_blocked)
 
 
-    def _loadAssociatedMediaFile(self, folder: str, basename: str) -> bool:
-        """
-        Search for and load a media file with the same basename.
-        
-        Args:
-            folder: Directory to search in
-            basename: Filename without extension
-            
-        Returns:
-            True if media file was found and loaded, False otherwise
-        """
-        for audio_ext in MEDIA_FORMATS:
-            media_path = os.path.join(folder, basename + audio_ext)
-            if os.path.exists(media_path):
-                self.log.debug(f"Found associated media file: {media_path}")
-                self.loadMediaFile(media_path)
-                return True
-        
-        self.log.debug("No associated media file found")
-        return False
-
-
-    def _openAliFile(self, filepath):
-        """
-        Open an ALI file and associated media.
-        
-        Args:
-            filepath: Full path to the ALI file
-        """
-        self.log.debug(f"Opening ALI file... {filepath}")
-
-        media_path = None
-        first_utt_id = None
-        folder, filename = os.path.split(filepath)
-        basename, _ = os.path.splitext(filename)
-
-        with open(filepath, 'r', encoding="utf-8") as fr:
-            # Find associated audio file in metadata
-            for line in fr.readlines():
-                line = line.strip()
-                _, metadata = extract_metadata(line)
-                match = re.search(r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line)
-                if match:
-                    # An utterance sentence
-                    segment = [float(match[1]), float(match[2])]
-                    seg_id = self.waveform.addSegment(segment)
-                    if first_utt_id is None:
-                        first_utt_id = seg_id
-                    line = line[:match.start()] + line[match.end():]
-                    line = line.strip()
-                    # line = re.sub(r"<br>", '\u2028', line, count=0, flags=re.IGNORECASE)
-                    line = line.replace(LINE_BREAK, "<br>")
-                    self.text_widget.appendSentence(line, seg_id)
-                else:
-                    # Regular text or comments or metadata only
-                    self.text_widget.append(line)
-
-                # Check for an "audio_path" metadata in current line
-                if not media_path and "audio-path" in metadata:
-                    dir = os.path.split(filepath)[0]
-                    media_path = os.path.join(dir, metadata["audio-path"])
-                    media_path = os.path.normpath(media_path)
-
-        if media_path and os.path.exists(media_path):
-            self.loadMediaFile(media_path)
-        else:
-            # No media file found for this ALI document
-            log.warning("No associated media file found")
-
-            # Check for an audio file with the same basename
-            sucess = self._loadAssociatedMediaFile(folder, basename)
-
-            # Open a File Dialog to re-associate with a valid media
-            if not sucess:
-                msg_box = QMessageBox(
-                    QMessageBox.Icon.Warning,
-                    self.tr("No media file"),
-                    self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
-                    # QMessageBox.StandardButton.NoButton, self
-                )
-                if media_path:
-                    m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
-                    msg_box.setInformativeText(m)
-
-                msg_box.addButton(self.tr("&Open media"), QMessageBox.ButtonRole.AcceptRole)
-                msg_box.addButton(self.tr("&Cancel"), QMessageBox.ButtonRole.RejectRole)
-
-                if msg_box.exec() == 0x2:
-                    audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
-                    media_file_path, _ = QFileDialog.getOpenFileName(
-                        self,
-                        self.tr("Open Media File"),
-                        folder,
-                        audio_filter
-                    )
-                    if media_file_path and os.path.exists(media_file_path):
-                        self._saveFile(self.filepath, media_file_path)
-                        # Re-open the updated file
-                        self.openFile(self.filepath)
-        
-        # Add file to recent files
-        self.addRecentFile(filepath)
-
-
-    def _openSrtFile(self, filepath: str) -> None:
-        """
-        Open an SRT subtitle file and optionally load associated media.
-        
-        Args:
-            filepath: Full path to the SRT file
-
-        """
-        self.log.debug("Opening an SRT file...")
-
-        folder, filename = os.path.split(filepath)
-        basename, _ = os.path.splitext(filename)
-        
-        # Try to find and load associated media file
-        self._loadAssociatedMediaFile(folder, basename)
-        
-        # Parse subtitle file
-        subtitles = self._parseSrtFile(filepath)
-        if not subtitles:
-            return
-        
-        # Import subtitles as segments
-        self._importSubtitles(subtitles)
+    def loadDocumentData(self, data: list) -> None:
+        # TODO: This function seems quite slow
+        """Called from the File Manager"""
+        for text, segment in data:
+            if segment:
+                segment_id = self.waveform.addSegment(segment)
+                self.text_widget.appendSentence(text, segment_id)
         self.waveform.must_redraw = True
+    
+
+    def onImportMedia(self):
+        media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+        media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
+        if media_filepath and os.path.exists(media_filepath):
+            self.loadMediaFile(media_filepath)
+        # TODO: When saving, the folder and basename are not set
 
 
-    def _parseSrtFile(self, filepath: str) -> List:
-        """
-        Parse an SRT file and return list of subtitle objects.
-        
-        Args:
-            filepath: Path to the SRT file
-            
-        Returns:
-            List of srt.Subtitle objects, empty list on error
-        """
-        encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
-        
-        for encoding in encodings:
-            try:
-                with open(filepath, 'r', encoding=encoding) as f_in:
-                    content = f_in.read()
-                    subtitle_generator = srt.parse(content)
-                    subtitles = list(subtitle_generator)
-                    self.log.info(f"Successfully parsed {len(subtitles)} subtitles using {encoding} encoding")
-                    return subtitles
-                    
-            except UnicodeDecodeError:
-                self.log.debug(f"Failed to parse with {encoding} encoding")
-                continue
-            except srt.SRTParseError as e:
-                self.log.error(f"SRT parsing error: {e}")
-                self.setStatusMessage(self.tr("Error parsing SRT file: invalid format"))
-                return []
-            except Exception as e:
-                self.log.error(f"Unexpected error parsing SRT file: {e}")
-                self.setStatusMessage(self.tr("Error opening SRT file"))
-                return []
-        
-        # All encodings failed
-        self.log.error(f"Could not decode file with any known encoding: {filepath}")
-        self.setStatusMessage(self.tr("Error: Could not decode subtitle file"))
-        return []
+    def onImportSubtitles(self):
+        subs_filter = f"Subtitles files ({' '.join(['*'+fmt for fmt in SUBTITLES_FILE_FORMATS])})"
 
-
-    def _importSubtitles(self, subtitles: List) -> None:
-        """
-        Import subtitles as text segments.
-        
-        Args:
-            subtitles: List of srt.Subtitle objects
-        """
-        if not subtitles:
+        filepath = self.getOpenFileDialog(self.tr("Open Subtitles File"), subs_filter)
+        if not filepath:
             return
-        
-        self.log.info(f"Importing {len(subtitles)} subtitles")
-        
-        for subtitle in subtitles:
-            # Convert timedelta to seconds
-            start = subtitle.start.total_seconds()
-            end = subtitle.end.total_seconds()
-            
-            # Validate timing
-            if start >= end:
-                self.log.warning(f"Skipping invalid subtitle {subtitle.index}: start >= end")
-                continue
-            
-            # Create segment
-            segment = [start, end]
-            seg_id = self.waveform.addSegment(segment)
-            
-            # Format content (replace newlines with HTML breaks)
-            content = subtitle.content.strip().replace('\n', '<BR>')
-            self.text_widget.appendSentence(content, seg_id)
-        
-        self.setStatusMessage(self.tr("Imported {n} subtitles").format(n=len(subtitles)))
 
+        data = self.file_manager.openSrtFile(filepath, find_media=not self.media_controller.hasMedia())
+        self.loadDocumentData(data["document"])
+
+        # Load the media file if none is already loaded
+        if not self.media_controller.hasMedia():
+            media_filepath = data.get("media-path", None)
+            if media_filepath and os.path.exists(media_filepath):
+                # Use sibling media to the subtitles file
+                self.loadMediaFile(media_filepath)
+            else:
+                # Open a File Dialog to find the associated media file
+                media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+                media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
+                if media_filepath and os.path.exists(media_filepath):
+                    self.loadMediaFile(media_filepath)
+    
 
     def addRecentFile(self, filepath):
         """Add a file to the recent files list"""
@@ -1248,11 +1071,16 @@ class MainWindow(QMainWindow):
 
 
     def loadMediaFile(self, filepath):
+        """
+        Load a Media File and update the Media Player and Waveform Widget.
+        Should be called after loading the document (to open the Video Widget)
+        """
         ## XXX: Use QAudioDecoder instead maybe ?
         self.toggleSceneDetect(False)
         
-        if self.media_controller.loadMedia(filepath):
+        if self.media_controller.loadMediaToPlayer(filepath):
             self.media_path = filepath
+        print(f"{self.media_path=}")
 
         # Convert to MP3 in case of MKV file
         # (problems with PyDub)
@@ -1276,6 +1104,7 @@ class MainWindow(QMainWindow):
         self.log.info(f"Loaded {len(self.audio_samples)} audio samples")
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
 
+        # Load metadata
         self.media_metadata = self.cache.get_media_metadata(filepath)
 
         if not "fps" in self.media_metadata:
@@ -1295,6 +1124,8 @@ class MainWindow(QMainWindow):
 
         if "fps" in self.media_metadata:
             self.waveform.fps = self.media_metadata["fps"]
+            # Open Video Widget
+            self.toggle_video_action.setChecked(True)
 
         if "transcription_progress" in self.media_metadata:
             self.waveform.recognizer_progress = self.media_metadata["transcription_progress"]
@@ -1507,7 +1338,7 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
 
-    def getSubtitleAtPosition(self, time: float) -> Tuple[int, str]:
+    def getSubtitleAtPosition(self, time: float) -> Tuple[SegmentId, str]:
         """
         Return (seg_id, sentence) or None
         if there is any utterance at that time position
@@ -1597,7 +1428,7 @@ class MainWindow(QMainWindow):
         elif (segment := self.waveform.getSelection()) != None:
             selection_start, selection_end = segment
             if position_sec >= selection_end:
-                if self.looping:
+                if self.media_controller.isLooping():
                     self.media_controller.seekTo(selection_start)
                     return
                 else:
@@ -1615,11 +1446,8 @@ class MainWindow(QMainWindow):
         self.updateSubtitle(position_sec)
     
 
-    def setLooping(self, checked: bool) -> None:
-        self.looping = checked
-    
-
     def playAction(self) -> None:
+        print("playAction")
         if self.media_controller.isPlaying():
             # Stop playback
             self.media_controller.pause()
@@ -1683,17 +1511,20 @@ class MainWindow(QMainWindow):
 
     def backAction(self) -> None:
         """Get back to the first segment or to the beginning of the recording"""
-        print("back")
-        self.stop()
-        if len(self.waveform.segments) > 0:
-            first_seg_id = self.waveform.getSortedSegments()[0][0]
-            self.waveform.setActive([first_seg_id], self.media_controller.isPlaying())
-            self.text_widget.highlightUtterance(first_seg_id)
-            self.waveform.updatePlayHead(self.waveform.segments[first_seg_id][0], self.media_controller.isPlaying())
+        segment_id = self.waveform.active_segments[0] if self.waveform.active_segments else -1
+        segment = self.waveform.getSegment(segment_id)
+        # self.stop()
+        if segment:
+            first_segment_id = self.waveform.getSortedSegments()[0][0]
+            self.waveform.setActive([first_segment_id], self.media_controller.isPlaying())
+            self.text_widget.highlightUtterance(first_segment_id)
+            self.media_controller.playSegment(segment, segment_id)
+            # self.waveform.updatePlayHead(self.waveform.segments[first_segment_id][0], self.media_controller.isPlaying())
         else:
-            self.waveform.t_left = 0.0
             self.waveform.scroll_vel = 0.0
-            self.waveform.updatePlayHead(0.0, self.media_controller.isPlaying())
+            self.media_controller.seekTo(0.0)
+            # self.waveform.t_left = 0.0
+            # self.waveform.updatePlayHead(0.0, self.media_controller.isPlaying())
 
 
     @Slot(float)
@@ -1762,7 +1593,7 @@ class MainWindow(QMainWindow):
     
 
     def autoSegment(self) -> None:
-        SEGMENTS_MAXIMUM_LENGTH = 10
+        SEGMENTS_MAXIMUM_LENGTH = 10 # Seconds
         RATIO_THRESHOLD = 0.05
 
         log.info("Finding segments...")
@@ -2073,10 +1904,12 @@ class MainWindow(QMainWindow):
 
 
     @Slot(float)
-    def updateProgressBar(self, t: float) -> None:
-        self.waveform.recognizer_progress = t
-        if t > self.waveform.t_left and t < self.waveform.getTimeRight():
+    def updateProgressBar(self, t_seconds: float) -> None:
+        self.waveform.recognizer_progress = t_seconds
+        if t_seconds > self.waveform.t_left and t_seconds < self.waveform.getTimeRight():
             self.waveform.must_redraw = True
+        
+        self.progress_label.setText(self.tr("transcribed") + f" {t_seconds / self.media_controller.getDuration():.0%}")
 
 
     @Slot(bool)
@@ -2303,6 +2136,13 @@ class MainWindow(QMainWindow):
 
     def search(self) -> None:
         print("search tool")
+
+
+    def toggleLooping(self) -> None:
+        self.media_controller.toggleLooping()
+        self.looping_button.blockSignals(True)
+        self.looping_button.setChecked(self.media_controller.isLooping())
+        self.looping_button.blockSignals(False)
 
 
     def toggleFollowPlayhead(self) -> None:
@@ -2569,6 +2409,7 @@ class TranslatedApp(QApplication):
         super().__init__(argv)
         self.translator = None
     
+
     def switch_language(self, lang_code):
         log.info(f"Switching UI language to {lang_code}")
         print("Switching UI language to", lang_code)
@@ -2585,13 +2426,16 @@ class TranslatedApp(QApplication):
             app_settings.setValue("ui_language", lang_code)
         else:
             self.translator = None
+        
+        # Reload strings
+        strings.initialize()
 
 
 def main(argv: list):
-    file_path = ""
+    filepath = ""
     
     if len(argv) > 1:
-        file_path = argv[1]
+        filepath = argv[1]
     
     app = TranslatedApp(argv)
     app.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
@@ -2599,9 +2443,11 @@ def main(argv: list):
     # Internationalization
     if (locale := app_settings.value("ui_language", None)):
         app.switch_language(locale)
+    else:
+        strings.initialize() # Load strings
 
     loadIcons()
-    window = MainWindow(file_path)
+    window = MainWindow(filepath)
     window.show()
 
     if len(window.available_models) == 0:

@@ -75,7 +75,7 @@ class MediaPlayerController(QObject):
         self.log.debug("MediaPlayerController initialized")
     
 
-    def loadMedia(self, filepath: str) -> bool:
+    def loadMediaToPlayer(self, filepath: str) -> bool:
         """
         Load a media file for playback.
         
@@ -95,7 +95,6 @@ class MediaPlayerController(QObject):
         
         self.media_path = filepath
         self.player.setSource(QUrl.fromLocalFile(filepath))
-        
         return True
 
 
@@ -158,7 +157,7 @@ class MediaPlayerController(QObject):
     
     def playSegment(self, segment: Segment, segment_id: SegmentId = -1) -> bool:
         """
-        Play a specific segment.
+        Play a specific segment. Leave segment_id to -1 to play the selection.
         
         Args:
             segment: Tuple of (start, end) in seconds

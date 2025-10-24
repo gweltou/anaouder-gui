@@ -209,7 +209,7 @@ class DeleteUtterancesCommand(QUndoCommand):
 
         for segment, text, seg_id, data, pos in zip(self.segments, self.texts, self.seg_ids, self.datas, self.positions):
             seg_id = self.waveform.addSegment(segment, seg_id)
-            block = self.text_widget.insertBlock(text, data, pos - 1)
+            block = self.text_widget._insertBlock(text, data, pos - 1)
             self.text_widget.highlighter.rehighlightBlock(block)
 
         self.waveform.must_redraw = True

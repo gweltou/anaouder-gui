@@ -419,6 +419,10 @@ class WaveformWidget(QWidget):
         """
         Select the given segment(s) and adjust view in the waveform.
         This method is called from MainWindow only.
+
+        Args:
+            seg_ids (list): list of segmend ids to select
+            is_playing (bool): 
         """
         if seg_ids == None:
             # Clicked outside of any segment, deselect current active segment
@@ -652,6 +656,7 @@ class WaveformWidget(QWidget):
 
 
     def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
+        """Return the list of (SegmentId, Segment), sorted by start time"""
         if self.must_sort:
             self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
             self.must_sort = False

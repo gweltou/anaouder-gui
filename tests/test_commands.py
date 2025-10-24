@@ -24,6 +24,7 @@ from src.commands import (
 )
 from src.icons import loadIcons
 from src.text_widget import TextEditWidget
+from src.strings import strings
 
 
 logging.basicConfig(
@@ -35,8 +36,12 @@ logging.basicConfig(
 )
 
 
-app = QApplication()
+app = QApplication.instance()
+if app is None:
+    app = QApplication()
+
 loadIcons()
+strings.initialize()
 main_window = MainWindow()
 
 
@@ -273,9 +278,3 @@ def test_delete_first_utterance():
         main_window.undo_stack.endMacro()
 
     undo_redo_function(apply_commands, random_cursor=True)
-
-
-if main_window.recognizer_thread.isRunning():
-    main_window.recognizer_worker.must_stop = True
-    main_window.recognizer_thread.quit()
-    main_window.recognizer_thread.wait()
