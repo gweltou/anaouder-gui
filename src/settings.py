@@ -29,6 +29,9 @@ DIAL_SIZE = 30          # in pixels
 
 STATUS_BAR_TIMEOUT = 4000 # Display time of status bar messages (in ms)
 
+# FFMPEG settings
+FFMPEG_SCENCE_DETECTOR_THRESHOLD = 0.2
+
 
 UI_LANGUAGES = [
     ("br", "brezhoneg"),

@@ -101,6 +101,7 @@ from src.settings import (
     STATUS_BAR_TIMEOUT,
     BUTTON_SIZE, BUTTON_MEDIA_SIZE, BUTTON_SPACING,
     BUTTON_MARGIN, BUTTON_LABEL_SIZE, DIAL_SIZE,
+    FFMPEG_SCENCE_DETECTOR_THRESHOLD
 )
 import src.lang as lang
 from src.interfaces import Segment, SegmentId
@@ -822,10 +823,9 @@ class MainWindow(QMainWindow):
         while block.isValid():
             text = self.text_widget.getBlockHtml(block)[0]
             segment = None
-            
             utt_id = self.text_widget.getBlockId(block)
-            if utt_id >= 0 and utt_id in self.waveform.segments:
-                segment = self.waveform.segments[utt_id]
+            if utt_id >= 0:
+                segment = self.waveform.getSegment(utt_id)
 
             blocks_data.append((text, segment))
             block = block.next()
@@ -1137,7 +1137,7 @@ class MainWindow(QMainWindow):
         self.waveform.must_redraw = True
 
 
-    def getUtterancesForExport(self):
+    def getUtterancesForExport(self) -> List[Tuple[str, Segment]]:
         """Return all sentences and segments for export"""
         utterances = []
         block = self.text_widget.document().firstBlock()
@@ -1150,8 +1150,9 @@ class MainWindow(QMainWindow):
                 text = LINE_BREAK.join(lines)
             
                 block_id = self.text_widget.getBlockId(block)
-                start, end = self.waveform.segments[block_id]
-                utterances.append( [text, (start, end)] )
+                segment = self.waveform.getSegment(block_id)
+                if segment:
+                    utterances.append( (text, segment) )
             
             block = block.next()
         
@@ -1393,8 +1394,9 @@ class MainWindow(QMainWindow):
         # Check if end of current selected segments is reached
         playing_segment_id = self.media_controller.getPlayingSegmentId()
         if playing_segment_id >= 0:
-            if playing_segment_id in self.waveform.segments:
-                start, end = self.waveform.segments[playing_segment_id]
+            segment = self.waveform.getSegment(playing_segment_id)
+            if segment:
+                start, end = segment
 
                 if position_sec >= end:
                     # Compare the playing segment with the text cursor position
@@ -1455,8 +1457,9 @@ class MainWindow(QMainWindow):
         elif self.media_controller.hasMedia():
             # Start playback
             if self.waveform.active_segment_id >= 0:
-                segment = self.waveform.segments[self.waveform.active_segment_id]
-                self.media_controller.playSegment(segment, self.waveform.active_segment_id)
+                segment = self.waveform.getSegment(self.waveform.active_segment_id)
+                if segment:
+                    self.media_controller.playSegment(segment, self.waveform.active_segment_id)
             elif self.waveform.selection_is_active:
                 self.media_controller.playSelection(self.waveform.getSelection())
             else:
@@ -1484,7 +1487,9 @@ class MainWindow(QMainWindow):
         if next_segment_id >= 0:
             self.waveform.setActive([next_segment_id], is_playing=True)
             self.text_widget.highlightUtterance(next_segment_id)
-            self.playSegment(self.waveform.segments[next_segment_id], next_segment_id)
+            next_segment = self.waveform.getSegment(next_segment_id)
+            if next_segment:
+                self.playSegment(next_segment, next_segment_id)
         else:
             self.media_controller.deselectSegment()
             self.waveform.setActive(None, self.media_controller.isPlaying())
@@ -1501,7 +1506,9 @@ class MainWindow(QMainWindow):
         if prev_segment_id >= 0:
             self.waveform.setActive([prev_segment_id], self.media_controller.isPlaying())
             self.text_widget.highlightUtterance(prev_segment_id)
-            self.media_controller.playSegment(self.waveform.segments[prev_segment_id], prev_segment_id)
+            prev_segment = self.waveform.getSegment(prev_segment_id)
+            if prev_segment:
+                self.media_controller.playSegment(prev_segment, prev_segment_id)
         else:
             self.waveform.setActive(None, self.media_controller.isPlaying())
             self.text_widget.deactivateSentence()
@@ -1513,26 +1520,20 @@ class MainWindow(QMainWindow):
         """Get back to the first segment or to the beginning of the recording"""
         segment_id = self.waveform.active_segments[0] if self.waveform.active_segments else -1
         segment = self.waveform.getSegment(segment_id)
-        # self.stop()
         if segment:
             first_segment_id = self.waveform.getSortedSegments()[0][0]
             self.waveform.setActive([first_segment_id], self.media_controller.isPlaying())
             self.text_widget.highlightUtterance(first_segment_id)
             self.media_controller.playSegment(segment, segment_id)
-            # self.waveform.updatePlayHead(self.waveform.segments[first_segment_id][0], self.media_controller.isPlaying())
         else:
             self.waveform.scroll_vel = 0.0
             self.media_controller.seekTo(0.0)
-            # self.waveform.t_left = 0.0
-            # self.waveform.updatePlayHead(0.0, self.media_controller.isPlaying())
 
 
     @Slot(float)
     def onWaveformPlayheadMoved(self, position_sec: float) -> None:
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
         self.media_controller.seekTo(self.waveform.playhead)
-        # if (seg_id := self.waveform.getSegmentAtTime(t)) >= 0:
-        #     self.text_widget.highlightUtterance(seg_id)
 
 
     def toggleVideo(self, checked) -> None:
@@ -1552,8 +1553,6 @@ class MainWindow(QMainWindow):
 
 
     def toggleSceneDetect(self, checked) -> None:
-        FFMPEG_SCENCE_DETECTOR_THRESHOLD = 0.2
-
         if checked and "fps" in self.media_metadata:
             self.waveform.display_scene_change = True
             if "scenes" in self.media_metadata and self.media_metadata["scenes"]:
@@ -1729,16 +1728,17 @@ class MainWindow(QMainWindow):
         cursor = self.text_widget.textCursor()
         block = cursor.block()
         if self.text_widget.isAligned(block):
-            id = self.text_widget.getBlockId(block)
+            segment_id = self.text_widget.getBlockId(block)
             # Update utterance density
-            self.updateUtteranceDensity(id)
-            self.updateSegmentInfo(id)
+            self.updateUtteranceDensity(segment_id)
+            self.updateSegmentInfo(segment_id)
             self.waveform.must_redraw = True
         
             # Update current subtitles, if needed
-            start, end = self.waveform.segments[id]
-            if start <= self.waveform.playhead <= end:
-                self.updateSubtitle(self.waveform.playhead)
+            if segment := self.waveform.getSegment(segment_id):
+                start, end = segment
+                if start <= self.waveform.playhead <= end:
+                    self.updateSubtitle(self.waveform.playhead)
 
 
     @Slot(list)
@@ -1804,14 +1804,22 @@ class MainWindow(QMainWindow):
     def updateUtteranceTranscription(
         self,
         tokens: list,
-        segment: list,
-        seg_id: int,
+        segment: Segment,
+        segment_id: SegmentId,
     ) -> None:
-        if seg_id not in self.waveform.segments:
+        if segment_id not in self.waveform.segments:
             # Create segment as a undoable action
-            self.undo_stack.push(CreateNewUtteranceCommand(self, segment, seg_id))
+            self.undo_stack.push(
+                CreateNewUtteranceCommand(
+                    self.media_controller,
+                    self.text_widget,
+                    self.waveform,
+                    segment,
+                    segment_id
+                )
+            )
             
-        block = self.text_widget.getBlockById(seg_id)
+        block = self.text_widget.getBlockById(segment_id)
         if block:
             text = self.onRecognizerOutput(tokens)
             text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
@@ -1952,19 +1960,23 @@ class MainWindow(QMainWindow):
             self.transcribe_file_signal.emit(self.media_path, transcription_progress)
 
 
-    def splitFromText(self, seg_id: SegmentId, position: int) -> None:
+    def splitFromText(self, segment_id: SegmentId, position: int) -> None:
         """
         Split audio segment, given a char relative position in sentence
         Called from the textEdit widget
         """
-        log.debug(f"splitFromText({seg_id=}, {position=})")
+        log.debug(f"splitFromText({segment_id=}, {position=})")
 
-        block = self.text_widget.getBlockById(seg_id)
+        block = self.text_widget.getBlockById(segment_id)
         if block is None:
             return
+
+        segment = self.waveform.getSegment(segment_id)
+        if not segment:
+            return
         
+        seg_start, seg_end = segment
         text = block.text()
-        seg_start, seg_end = self.waveform.segments[seg_id]
 
         left_text = text[:position].rstrip()
         right_text = text[position:].lstrip()
@@ -2001,18 +2013,20 @@ class MainWindow(QMainWindow):
             right_seg = [seg_start + dur*pc + 0.05, seg_end]
             log.info("ratio splitting")
         
-        self.splitUtterance(seg_id, left_text, right_text, left_seg, right_seg)
+        self.splitUtterance(segment_id, left_text, right_text, left_seg, right_seg)
     
 
-    def splitFromWaveform(self, seg_id: SegmentId, timepos: float) -> None:
-        block = self.text_widget.getBlockById(seg_id)
+    def splitFromWaveform(self, segment_id: SegmentId, timepos: float) -> None:
+        block = self.text_widget.getBlockById(segment_id)
         if block is None:
             return
-        if seg_id not in self.waveform.segments:
+        
+        segment = self.waveform.getSegment(segment_id)
+        if not segment:
             return
         
+        seg_start, seg_end = segment
         text = block.text()
-        seg_start, seg_end = self.waveform.segments[seg_id]
 
         left_seg = [seg_start, timepos]
         right_seg = [timepos, seg_end]
@@ -2044,7 +2058,7 @@ class MainWindow(QMainWindow):
             left_text = text[:]
             right_text = ""
 
-        self.splitUtterance(seg_id, left_text, right_text, left_seg, right_seg)
+        self.splitUtterance(segment_id, left_text, right_text, left_seg, right_seg)
         
 
     def splitUtterance(
@@ -2291,21 +2305,21 @@ class MainWindow(QMainWindow):
 
 
     @Slot(int)
-    def updateSegmentInfo(self, seg_id:SegmentId) -> None:
+    def updateSegmentInfo(self, segment_id: SegmentId) -> None:
         """Rehighlight sentence in text widget and update status bar info"""
-        if seg_id not in self.waveform.segments:
+        segment = self.waveform.getSegment(segment_id)
+        if not segment:
             self.statusBar().clearMessage()
             return
 
         # Refresh block color in density mode
         if self.text_widget.highlighter.mode == Highlighter.ColorMode.DENSITY:
-            block = self.text_widget.getBlockById(seg_id)
+            block = self.text_widget.getBlockById(segment_id)
             if block:
                 self.text_widget.highlighter.rehighlightBlock(block)
         
-        density = self.getUtteranceDensity(seg_id)
-        segment = self.waveform.getSegment(seg_id)
-        self.updateSegmentInfoResizing(seg_id, segment, density)
+        density = self.getUtteranceDensity(segment_id)
+        self.updateSegmentInfoResizing(segment_id, segment, density)
 
 
     @Slot(int, list, float)
@@ -2364,16 +2378,21 @@ class MainWindow(QMainWindow):
         return block.userData().data.get("density", 0.0)
     
 
-    def updateUtteranceDensity(self, seg_id:SegmentId) -> None:
+    def updateUtteranceDensity(self, segment_id: SegmentId) -> None:
         """Update the density (chars/s) field of an utterance"""
-        log.debug(f"updateUtteranceDensity({seg_id=})")
+        log.debug(f"updateUtteranceDensity({segment_id=})")
         # Count the number of characters in sentence
-        block = self.text_widget.getBlockById(seg_id)
+        block = self.text_widget.getBlockById(segment_id)
         if block is None:
             return
 
         num_chars = self.text_widget.getSentenceLength(block)
-        start, end = self.waveform.segments[seg_id]
+
+        segment = self.waveform.getSegment(segment_id)
+        if not segment:
+            return
+        
+        start, end = segment
         dur = end - start
         if dur > 0.0:
             density = num_chars / dur
