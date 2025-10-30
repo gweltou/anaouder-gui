@@ -38,13 +38,26 @@ from src.settings import (
     MULTI_LANG, app_settings, UI_LANGUAGES,
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_MIN_INTERVAL,
     SUBTITLES_AUTO_EXTEND, SUBTITLES_AUTO_EXTEND_MAX_GAP,
-    SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
+    SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS,
+    SUBTITLES_DEFAULT_COLOR, SUBTITLES_BLOCK_DEFAULT_COLOR
 )
 from src.strings import strings
 
 
 log = logging.getLogger(__name__)
 
+
+class Signals(QObject):
+        """Custom signals"""
+        subtitles_margin_size_changed = Signal(int)
+        subtitles_cps_changed = Signal(float)
+        subtitles_min_frames_changed = Signal(int)
+        subtitles_max_frames_changed = Signal(int)
+        cache_scenes_removed = Signal()
+
+        update_ui_language = Signal(str)
+
+signals = Signals()
 
 
 class DownloadProgressDialog(QDialog):
@@ -233,6 +246,8 @@ class ParametersDialog(QDialog):
         subtitles_max_frames_changed = Signal(int)
         cache_scenes_removed = Signal()
 
+        update_ui_language = Signal(str)
+
 
     def __init__(self, parent, media_metadata: dict):
         super().__init__(parent)
@@ -244,10 +259,11 @@ class ParametersDialog(QDialog):
         
         self.tabs = QTabWidget()
 
-        self.tabs.addTab(ModelsTab(), self.tr("Models"))
-        self.tabs.addTab(SubtitlesTab(self, media_metadata.get("fps", 0)), self.tr("Subtitles"))
-        self.tabs.addTab(UITab(parent.video_widget), self.tr("UI"))
-        self.tabs.addTab(CacheTab(self, parent.cache, media_metadata), self.tr("Cache"))
+        self.tabs.addTab(GeneralPanel(self, parent.video_widget), self.tr("General"))
+        self.tabs.addTab(ModelsPanel(self), self.tr("Models"))
+        self.tabs.addTab(SubtitlesPanel(self, media_metadata.get("fps", 0)), self.tr("Subtitles"))
+        # self.tabs.addTab(UIPanel(parent.video_widget), self.tr("UI"))
+        self.tabs.addTab(CachePanel(self, parent.cache, media_metadata), self.tr("Cache"))
         # self.tabs.addTab(self.display_tab, "Display")
         # self.tabs.addTab(self.dictionary_tab, "Dictionary")
         
@@ -380,7 +396,146 @@ class ParametersDialog(QDialog):
 """
 
 
-class ModelsTab(QWidget):
+class GeneralPanel(QWidget):
+    def __init__(self, parent, video_widget, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.parent_dialog = parent
+        self.video_widget = video_widget
+
+        main_layout = QVBoxLayout()
+
+        # UI LANGUAGE
+        ui_lang_group = QGroupBox(self.tr("Language of user interface"))
+        lang_layout = QHBoxLayout()
+        lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.lang_selection = QComboBox()
+        current_language = app_settings.value("ui_language", "en")
+        current_language_idx = 0
+        for i, (short_name, long_name) in enumerate(UI_LANGUAGES):
+            self.lang_selection.addItem(long_name.capitalize(), short_name)
+            if short_name == current_language:
+                current_language_idx = i
+        self.lang_selection.setCurrentIndex(current_language_idx)
+        # self.lang_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.lang_selection.currentIndexChanged.connect(self.updateUiLanguage)
+        lang_layout.addWidget(self.lang_selection)
+        
+        ui_lang_group.setLayout(lang_layout)
+
+        # Subtitles styling
+        ui_subs_group = QGroupBox(self.tr("Subtitles style"))
+        ui_subs_layout = QGridLayout()
+
+        color_label = QLabel(self.tr("Subtitles font color"))
+        ui_subs_layout.addWidget(color_label, 0, 0)
+        self.subs_font_color_button = QPushButton()
+        self.subs_font_color_button.clicked.connect(self.pickColorFont)
+        current_color: QColor = app_settings.value("subtitles/font_color", SUBTITLES_DEFAULT_COLOR)
+        if current_color.isValid():
+            self.setColorButtonStyle(self.subs_font_color_button, current_color)
+        ui_subs_layout.addWidget(self.subs_font_color_button, 0, 2)
+
+        rect_label = QLabel("Background rectangle")
+        ui_subs_layout.addWidget(rect_label, 1, 0)
+
+        self.rect_visibility_checkbox = QCheckBox("Show")
+        self.rect_visibility_checkbox.setChecked(app_settings.value("subtitles/rect_visible", True, type=bool))
+        self.rect_visibility_checkbox.toggled.connect(self.toggleRectVisibility)
+        ui_subs_layout.addWidget(self.rect_visibility_checkbox, 1, 1)
+
+        self.subs_rect_color_button = QPushButton()
+        self.subs_rect_color_button.clicked.connect(self.pickColorRect)
+        current_color: QColor = app_settings.value("subtitles/rect_color", SUBTITLES_BLOCK_DEFAULT_COLOR)
+        if current_color.isValid():
+            self.setColorButtonStyle(self.subs_rect_color_button, current_color)
+        ui_subs_layout.addWidget(self.subs_rect_color_button, 1, 2)
+
+        reset_button = QPushButton(self.tr("Reset to default"))
+        reset_button.clicked.connect(self.resetColorDefault)
+        ui_subs_layout.addWidget(reset_button, 2, 2)
+        
+        ui_subs_group.setLayout(ui_subs_layout)
+
+        # Auto-save
+        autosave_group = QGroupBox(self.tr("Auto Save"), checkable=True)
+
+        main_layout.addWidget(ui_lang_group)
+        main_layout.addWidget(ui_subs_group)
+        main_layout.addWidget(autosave_group)
+        main_layout.addStretch()
+        self.setLayout(main_layout)
+    
+
+    def updateUiLanguage(self, index):
+        lang_code = self.lang_selection.itemData(index)
+        self.parent_dialog.signals.update_ui_language.emit(lang_code)
+        # QApplication.instance().switch_language(lang_code)
+    
+
+    def pickColorFont(self, _checked, color=None):
+        if color is None:
+            prev_color = app_settings.value("subtitles/font_color", SUBTITLES_DEFAULT_COLOR)
+            color = QColorDialog.getColor(
+                prev_color,
+                self,
+                strings.TR_SELECT_COLOR
+            )
+        if color and color.isValid():
+            self.setColorButtonStyle(self.subs_font_color_button, color)
+            self.video_widget.adjustFontColor(color)
+            app_settings.setValue("subtitles/font_color", color)
+    
+
+    def pickColorRect(self, _checked, color=None):
+        if color is None:
+            prev_color = app_settings.value("subtitles/rect_color", SUBTITLES_BLOCK_DEFAULT_COLOR)
+            color = QColorDialog.getColor(
+                prev_color,
+                self,
+                strings.TR_SELECT_COLOR,
+                QColorDialog.ColorDialogOption.ShowAlphaChannel
+            )
+        if color and color.isValid():
+            self.setColorButtonStyle(self.subs_rect_color_button, color)
+            self.video_widget.adjustRectColor(color)
+            app_settings.setValue("subtitles/rect_color", color)
+    
+
+    def toggleRectVisibility(self, checked):
+        self.video_widget.toggleRectVisibility(checked)
+        app_settings.setValue("subtitles/rect_visible", checked)
+
+
+    def setColorButtonStyle(self, button: QPushButton, color: QColor):
+        button.setText(color.name())
+        text_color = QColor(255, 255, 255) if color.lightnessF() < 0.5 else QColor(0, 0, 0)
+        button.setStyleSheet(f"""
+                QPushButton {{
+                    color: {text_color.name()};
+                    background-color: {color.name()};
+                    border: 1px solid #ccc;
+                    padding: 8px;
+                }}
+                QPushButton:hover {{
+                    background-color: {color.lighter(120).name()};
+                }}
+                QPushButton:pressed {{
+                    background-color: {color.name()};
+                }}
+            """)
+    
+
+    def resetColorDefault(self):
+        print("blip")
+        self.pickColorFont(False, SUBTITLES_DEFAULT_COLOR)
+        self.pickColorRect(False, SUBTITLES_BLOCK_DEFAULT_COLOR)
+        if not self.rect_visibility_checkbox.isChecked():
+            self.rect_visibility_checkbox.toggle()
+
+
+
+class ModelsPanel(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -485,27 +640,12 @@ class ModelsTab(QWidget):
 
 
 
-class SubtitlesTab(QWidget):
+class SubtitlesPanel(QWidget):
     def __init__(self, parent: ParametersDialog, fps: int, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
+
         self.parent_dialog = parent
         self.fps = fps if fps > 0 else 25 # Default to 25 fps even if irrevelant
-
-        self.default_params_lock = False
-
-        # self.default_params = app_settings.value(
-        #     "subtitles/default",
-        #     {
-        #         "min_frames": SUBTITLES_MIN_FRAMES,
-        #         "max_frames": SUBTITLES_MAX_FRAMES,
-        #         "min_interval": SUBTITLES_MIN_INTERVAL,
-        #         "auto_extend": SUBTITLES_AUTO_EXTEND,
-        #         "text_margin": SUBTITLES_MARGIN_SIZE,
-        #         "text_density": SUBTITLES_CPS
-        #     },
-        #     type=dict
-        # )
-
         self.user_params: dict = app_settings.value(
             "subtitles/user",
             {
@@ -516,7 +656,9 @@ class SubtitlesTab(QWidget):
                 "text_margin": SUBTITLES_MARGIN_SIZE,
                 "text_density": SUBTITLES_CPS
             },
+            # type=dict
         )
+        self.default_params_lock = False
 
         main_layout = QVBoxLayout()
 
@@ -728,129 +870,7 @@ class SubtitlesTab(QWidget):
 
 
 
-class UITab(QWidget):
-    def __init__(self, video_widget: VideoWidget, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.video_widget = video_widget
-
-        main_layout = QVBoxLayout()
-
-        # UI LANGUAGE
-        ui_lang_group = QGroupBox(self.tr("Language of user interface"))
-        lang_layout = QHBoxLayout()
-        lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        # lang_label = QLabel("Lang")
-
-        self.lang_selection = QComboBox()
-        current_language = app_settings.value("ui_language", "en")
-        current_language_idx = 0
-        for i, (short_name, long_name) in enumerate(UI_LANGUAGES):
-            self.lang_selection.addItem(long_name.capitalize(), short_name)
-            if short_name == current_language:
-                current_language_idx = i
-        self.lang_selection.setCurrentIndex(current_language_idx)
-        # self.lang_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        # self.lang_selection.setCurrentText(lang.getCurrentLanguage(long_name=True))
-        self.lang_selection.currentIndexChanged.connect(self.updateUiLanguage)
-        # lang_layout.addWidget(lang_label)
-        lang_layout.addWidget(self.lang_selection)
-        
-        ui_lang_group.setLayout(lang_layout)
-
-        # Subtitles styling
-        ui_subs_group = QGroupBox(self.tr("Subtitles style"))
-        ui_subs_layout = QGridLayout()
-
-        color_label = QLabel(self.tr("Subtitles font color"))
-        ui_subs_layout.addWidget(color_label, 0, 0)
-        self.subs_font_color_button = QPushButton()
-        self.subs_font_color_button.clicked.connect(self.pickColorFont)
-        current_color: QColor = app_settings.value("subtitles/font_color", QColor(255, 255, 255))
-        if current_color.isValid():
-            self.setColorButtonStyle(self.subs_font_color_button, current_color)
-        ui_subs_layout.addWidget(self.subs_font_color_button, 0, 2)
-
-        rect_label = QLabel("Background rectangle")
-        ui_subs_layout.addWidget(rect_label, 1, 0)
-
-        rect_visibility_checkbox = QCheckBox("Show")
-        rect_visibility_checkbox.setChecked(app_settings.value("subtitles/rect_visible", True))
-        rect_visibility_checkbox.toggled.connect(self.toggleRectVisibility)
-        ui_subs_layout.addWidget(rect_visibility_checkbox, 1, 1)
-
-        self.subs_rect_color_button = QPushButton()
-        self.subs_rect_color_button.clicked.connect(self.pickColorRect)
-        current_color: QColor = app_settings.value("subtitles/rect_color", QColor(0, 0, 0, 100))
-        if current_color.isValid():
-            self.setColorButtonStyle(self.subs_rect_color_button, current_color)
-        ui_subs_layout.addWidget(self.subs_rect_color_button, 1, 2)
-        
-        ui_subs_group.setLayout(ui_subs_layout)
-
-        main_layout.addWidget(ui_lang_group)
-        main_layout.addWidget(ui_subs_group)
-        main_layout.addStretch()
-        self.setLayout(main_layout)
-    
-
-    def updateUiLanguage(self, index):
-        lang_code = self.lang_selection.itemData(index)
-        QApplication.instance().switch_language(lang_code)
-
-
-    def pickColorFont(self):
-        prev_color = app_settings.value("subtitles/font_color", QColor(255, 255, 255))
-        color = QColorDialog.getColor(
-            prev_color,
-            self,
-            strings.TR_SELECT_COLOR
-        )
-        if color.isValid():
-            self.setColorButtonStyle(self.subs_font_color_button, color)
-            self.video_widget.adjustFontColor(color)
-            app_settings.setValue("subtitles/font_color", color)
-    
-
-    def pickColorRect(self):
-        prev_color = app_settings.value("subtitles/rect_color", QColor(0, 0, 0, 100))
-        color = QColorDialog.getColor(
-            prev_color,
-            self,
-            strings.TR_SELECT_COLOR,
-            QColorDialog.ColorDialogOption.ShowAlphaChannel
-        )
-        if color.isValid():
-            self.setColorButtonStyle(self.subs_rect_color_button, color)
-            self.video_widget.adjustRectColor(color)
-            app_settings.setValue("subtitles/rect_color", color)
-    
-
-    def toggleRectVisibility(self, checked):
-        self.video_widget.toggleRectVisibility(checked)
-        app_settings.setValue("subtitles/rect_visible", checked)
-
-
-    def setColorButtonStyle(self, button: QPushButton, color: QColor):
-        button.setText(color.name())
-        button.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color.name()};
-                    border: 1px solid #ccc;
-                    padding: 8px;
-                }}
-                QPushButton:hover {{
-                    background-color: {color.lighter(120).name()};
-                }}
-                QPushButton:pressed {{
-                    background-color: {color.name()};
-                }}
-            """)
-
-
-
-class CacheTab(QWidget):
-    
+class CachePanel(QWidget):
 
     def __init__(self, parent: ParametersDialog, cache: CacheSystem, media_metadata, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)

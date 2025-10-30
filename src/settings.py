@@ -2,7 +2,7 @@ from typing import Dict
 import platform
 
 from PySide6.QtCore import Qt, QSettings
-from PySide6.QtGui import QShortcut, QKeySequence
+from PySide6.QtGui import QShortcut, QKeySequence, QColor
 
 
 _is_darwin = platform.system() == "Darwin"
@@ -68,3 +68,6 @@ SUBTITLES_AUTO_EXTEND = True
 SUBTITLES_AUTO_EXTEND_MAX_GAP = 12
 SUBTITLES_MARGIN_SIZE = 42  # Text margin (number of chars)
 SUBTITLES_CPS = 16.0    # Speech density (chars per second)
+
+SUBTITLES_DEFAULT_COLOR = QColor(255, 255, 255)
+SUBTITLES_BLOCK_DEFAULT_COLOR = QColor(0, 0, 0, 100)
