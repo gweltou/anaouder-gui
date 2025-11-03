@@ -10,8 +10,10 @@ Terminology
 
 import sys
 import os.path
+from pathlib import Path
 from typing import List, Tuple, Optional
 import logging
+import time
 from math import floor, ceil
 
 import static_ffmpeg
@@ -46,7 +48,7 @@ from PySide6.QtCore import (
     Signal, Slot, QThread,
     QSettings,
     QTranslator, QLocale, 
-    QEvent,
+    QEvent, QTimer
 )
 from PySide6.QtGui import (
     QAction, QActionGroup,
@@ -101,7 +103,9 @@ from src.settings import (
     STATUS_BAR_TIMEOUT,
     BUTTON_SIZE, BUTTON_MEDIA_SIZE, BUTTON_SPACING,
     BUTTON_MARGIN, BUTTON_LABEL_SIZE, DIAL_SIZE,
-    FFMPEG_SCENCE_DETECTOR_THRESHOLD
+    FFMPEG_SCENCE_DETECTOR_THRESHOLD,
+    AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER,
+    RECENT_FILES_LIMIT
 )
 import src.lang as lang
 from src.interfaces import Segment, SegmentId
@@ -125,7 +129,7 @@ class MainWindow(QMainWindow):
     transcribe_segments_signal = Signal(str, list)
 
 
-    def __init__(self, filepath=""):
+    def __init__(self, filepath:Optional[Path] = None):
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         super().__init__()
         
@@ -181,6 +185,13 @@ class MainWindow(QMainWindow):
 
         self.undo_stack = QUndoStack(self)
         self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
+
+        # Autosave
+        self.last_saved_index = 0
+        self.last_saved_time = time.time()
+        self.autosave_timer = QTimer()
+        self.autosave_timer.timeout.connect(self.autoSave)
+        self.autosave_timer.start(6_000)    # Autosave timer is set to the shortest autosave interval
 
         self.text_widget = TextEditWidget(self)
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
@@ -285,6 +296,7 @@ class MainWindow(QMainWindow):
         # To add color to the status bar text
         self.status_label = QLabel()
         self.status_label.setTextFormat(Qt.TextFormat.RichText)
+        self.statusBar().addWidget(self.status_label)
 
         self.progress_label = QLabel()
         # self.progress_label.setTextFormat(Qt.TextFormat.RichText)
@@ -298,7 +310,7 @@ class MainWindow(QMainWindow):
         ## Open
         open_action = QAction(self.tr("&Open") + "...", self)
         open_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(self.openFile)
+        open_action.triggered.connect(lambda: self.openFile())
         file_menu.addAction(open_action)
 
         # Recent files
@@ -742,8 +754,9 @@ class MainWindow(QMainWindow):
         return media_toolbar_layout
 
 
-    def setStatusMessage(self, message: str) -> None:
-        self.statusBar().showMessage(message, STATUS_BAR_TIMEOUT)
+    def setStatusMessage(self, message: str, timeout=STATUS_BAR_TIMEOUT) -> None:
+        """Sets a temporary status message"""
+        self.statusBar().showMessage(message, timeout)
 
 
     def updateWindowTitle(self) -> None:
@@ -751,93 +764,149 @@ class MainWindow(QMainWindow):
         if not self.undo_stack.isClean():
             title_parts.append("●")
         title_parts.append(APP_NAME)
-        if self.filepath:
-            title_parts.append('-')
-            title_parts.append(os.path.split(self.filepath)[1])
-        elif self.media_path:
-            title_parts.append('-')
-            title_parts.append(os.path.split(self.media_path)[1])
+
+        path = self.filepath or self.media_path
+        if path:
+            title_parts.extend(['-', Path(path).name])
+        
         self.setWindowTitle(' '.join(title_parts))
 
 
     def changeLanguage(self, language: str) -> None:
         # This shouldn't be called when a recognizer worker is running
         lang.loadLanguage(language)
+
         if self.language_selection.currentText() != language:
             self.language_selection.setCurrentIndex(self.languages.index(language))
+        
         # Add this language's models in the model combo-box
         self.available_models = lang.getCachedModelList()
         self.model_selection.clear()
         self.model_selection.addItems(self.available_models)
 
 
-    def saveFile(self) -> None:
-        if self.filepath and self.filepath.endswith(".ali"):
-            self._saveFile(self.filepath)
+    def saveFile(self) -> bool:
+        if self.filepath and self.filepath.suffix == ".ali":
+            return self._saveFile(str(self.filepath))
         else:
-            # Open a file dialog
-            self.saveFileAs()
-        self.undo_stack.setClean()
-        self.updateWindowTitle()
+            return self.saveFileAs()
 
 
-    def saveFileAs(self) -> None:
+    def _get_default_save_location(self) -> tuple[str, str]:
+        """Returns (directory, basename) for save dialog."""
         if self.filepath:
-            basename = os.path.basename(self.filepath)
-            dir = os.path.split(self.filepath)[0]
-        elif self.media_path:
-            basename = os.path.basename(self.media_path)
-            dir = os.path.split(self.media_path)[0]
-        else:
-            basename = "nevez"
-            dir = app_settings.value("main/last_opened_folder", "", type=str)
-        basename, ext = os.path.splitext(basename)
+            return str(self.filepath.parent), self.filepath.stem + ".ali"
         
-        if ext.lower() == ".ali":
-            basename += ext
-        else:
-            basename += ".ali"
+        if self.media_path:
+            path = Path(self.media_path)
+            return str(path.parent), path.stem + ".ali"
+        
+        default_dir = app_settings.value("main/last_opened_folder", Path.home(), type=str)
+        return str(default_dir), "nevez.ali"
+
+
+    def saveFileAs(self) -> bool:
+        directory, default_name = self._get_default_save_location()
         
         filepath, _ = QFileDialog.getSaveFileName(
             self,
             strings.TR_SAVE_FILE,
-            os.path.join(dir, basename),
-            strings.TR_ALI_FILES + f" (*.ali)"
+            str(Path(directory) / default_name),
+            strings.TR_ALI_FILES + " (*.ali)"
         )
         
         if not filepath:
-            return
+            return False
         
-        self.filepath = filepath
-        self._saveFile(filepath)
-        self.addRecentFile(filepath)
-        self.updateWindowTitle()
-    
+        self.filepath = Path(filepath)
+        success = self._saveFile(filepath)
 
-    def _saveFile(self, filepath: str, media_path: Optional[str] = None) -> None:
-        """Parse the internal document and sends the data to the File Manager"""
+        if success:
+            self.addRecentFile(filepath)
+        
+        return success
+
+
+    def _saveFile(self, filepath: str) -> bool:
+        """Opens a critical dialog window on error"""
+        try:
+            self._performSave(filepath)
+            self.undo_stack.setClean()
+            self.updateWindowTitle()
+            self.addRecentFile(filepath)
+            return True
+        except FileOperationError as e:
+            QMessageBox.critical(
+                self,
+                self.tr("Save Error"),
+                str(e)
+            )
+            return False
+
+
+    def _performSave(self, filepath: str, media_path: Optional[str] = None) -> None:
+        """
+        Parse the internal document and sends the data to the File Manager
+
+        Args:
+            filepath (str): path to save to
+            media_path (str): overwrite the media path linked to this file
+        
+        Raise:
+            FileOperationError
+        """
         blocks_data = []
-
         doc = self.text_widget.document()
+
         block = doc.firstBlock()
         while block.isValid():
             text = self.text_widget.getBlockHtml(block)[0]
-            segment = None
             utt_id = self.text_widget.getBlockId(block)
+
+            segment = None
             if utt_id >= 0:
                 segment = self.waveform.getSegment(utt_id)
 
             blocks_data.append((text, segment))
             block = block.next()
         
+        self.file_manager.save_ali_file(filepath, blocks_data, media_path)
+
+        self.last_saved_index = self.undo_stack.index()
+        self.last_saved_time = time.time()
+
+
+    def autoSave(self):
+        current_index = self.undo_stack.index()
+        if not self.filepath:
+            return
+        if current_index == self.last_saved_index:
+            return
+        if self.media_controller.isPlaying(): # Don't save during playback
+            return
+        
+        autosave_interval_second = 60.0 * app_settings.value("autosave/interval_minute", AUTOSAVE_DEFAULT_INTERVAL, type=float)
+        if (time.time() - self.last_saved_time) < autosave_interval_second:
+            return
+        
+        # Autosave
+        time_tag = time.strftime("%Y%m%d_%H%M%S")
+        autosave_folder = self.filepath.parent / "autosave"
+        autosave_path = autosave_folder / f"{self.filepath.stem}@{time_tag}.ali"
         try:
-            self.file_manager.saveAliFile(filepath, blocks_data, media_path)
+            self.setStatusMessage("Autosaving...", 1000) # Display for 1 second
+
+            autosave_folder.mkdir(exist_ok=True)    # Create "autosave" folder, if necessary
+            self._performSave(str(autosave_path))
+
+            # Remove old backups, if necessary
+            old_backups = sorted(autosave_folder.glob(str(self.filepath.stem) + "@*.ali"))
+            max_backups = app_settings.value("autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int)
+            if len(old_backups) > max_backups:
+                for i in range(len(old_backups) - max_backups):
+                    old_backups[i].unlink()                               
         except FileOperationError as e:
-            QMessageBox.critical(
-                self,
-                self.tr("Save Error"),
-                self.tr("Could not save file: {}").format(str(e))
-            )
+            print("Autosave failed", e)
 
 
     def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]:
@@ -849,108 +918,61 @@ class MainWindow(QMainWindow):
         return filepath
 
 
-    def openFile(self, filepath="", keep_text=False, keep_audio=False) -> None:
-        supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
-        audio_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+    def openFile(
+            self,
+            filepath: Optional[Path] = None,
+            keep_text=False,
+            keep_media=False
+        ) -> None:
+        """Hub function for opening files"""
 
-        if not filepath:
+        supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
+        media_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+
+        if filepath is None:
             # Open a File dialog window
-            filepath = self.getOpenFileDialog(self.tr("Open File"), ";;".join([supported_filter, audio_filter]))
-            if not filepath:
+            filepath = self.getOpenFileDialog(self.tr("Open File"), ";;".join([supported_filter, media_filter]))
+            if filepath is None:
                 return
-        self.log.info(f"Opening file {filepath}")
-        
-        if not keep_audio:
+        filepath = Path(filepath)
+                
+        self.filepath = None
+        self.last_saved_index = 0
+        self.last_saved_time = 0.0
+        if not keep_media:
             self.waveform.clear()
         if not keep_text:
             self.text_widget.clear()
 
-        self.filepath = filepath
-        folder, filename = os.path.split(filepath)
-        basename, ext = os.path.splitext(filename)
-        ext = ext.lower()
+        ext = filepath.suffix.lower()
 
         if ext in MEDIA_FORMATS:
             # Selected file is an audio of video file
-            self.loadMediaFile(filepath)
+            self.loadMediaFile(str(filepath))
             self.updateWindowTitle()
             return
         
-        # was_blocked = self.text_widget.document().blockSignals(True)
-
         if ext == ".ali":
-            data = self.file_manager.readAliFile(filepath)
-            # Add file to recent files
+            self.loadAliFile(filepath)
+
+        if ext in (".seg", ".split"):
+            data = self.file_manager.read_split_file(filepath)
             self.loadDocumentData(data["document"])
-            self.addRecentFile(filepath)
 
             media_path = data.get("media-path", None)
             if media_path and os.path.exists(media_path) :
                 self.loadMediaFile(media_path)
-            else:
-                # Open a File Dialog to re-link
-                msg_box = QMessageBox(
-                    QMessageBox.Icon.Warning,
-                    self.tr("No media file"),
-                    self.tr("Couldn't find media file for '{filename}'").format(filename=filename),
-                    # QMessageBox.StandardButton.NoButton, self
-                )
-                if media_path:
-                    m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
-                    msg_box.setInformativeText(m)
-
-                msg_box.addButton(strings.TR_OPEN, QMessageBox.ButtonRole.AcceptRole)
-                msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
-
-                ret = msg_box.exec()
-                if ret == 0x2:
-                    media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
-                    media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
-                    if media_filepath and os.path.exists(media_filepath):
-                        # Rewrite the file to disk
-                        self._saveFile(self.filepath, media_filepath)
-                        # Re-open the updated file
-                        self.openFile(self.filepath)
-
-        if ext in (".seg", ".split"):
-            segments = load_segments_data(filepath)
-            seg_id_list = []
-            for start, end in segments:
-                seg_id = self.waveform.addSegment([start, end])
-                seg_id_list.append(seg_id)
-
-            # Check for the text file
-            txt_filepath = os.path.extsep.join((basename, "txt"))
-            txt_filepath = os.path.join(folder, txt_filepath)
-            if os.path.exists(txt_filepath):
-                with open(txt_filepath, 'r') as _f:
-                    i = 0
-                    for sentence in _f.readlines():
-                        cleaned = extract_metadata(sentence)[0].strip()
-                        if cleaned and not cleaned.startswith('#'):
-                            self.text_widget.appendSentence(sentence.strip(), seg_id_list[i])
-                            i += 1
-                        else:
-                            self.text_widget.appendSentence(sentence.strip(), None)
-                self.text_widget.highlightUtterance(seg_id_list[0])
-            else:
-                self.log.error(f"Couldn't find text file {txt_filepath}")
-            
-            # Check for an associated audio file
-            for audio_ext in MEDIA_FORMATS:
-                filepath = basename + audio_ext
-                filepath = os.path.join(folder, filepath)
-                if os.path.exists(filepath):
-                    self.log.debug(f"Found same name audio file {filepath}")
-                    self.loadMediaFile(filepath)
-                    break
         
         if ext == ".srt":
             self.log.debug("Opening an SRT file...")
-            data = self.file_manager.openSrtFile(filepath)
+            data = self.file_manager.read_srt_file(str(filepath), find_media=True)
             self.loadDocumentData(data["document"])
 
-        doc_metadata = self.cache.get_doc_metadata(filepath)
+            media_path = data.get("media-path", None)
+            if media_path and os.path.exists(media_path) :
+                self.loadMediaFile(media_path)
+
+        doc_metadata = self.cache.get_doc_metadata(str(filepath))
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
         if "cursor_pos" in doc_metadata:
@@ -972,17 +994,99 @@ class MainWindow(QMainWindow):
             self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
 
         self.updateWindowTitle()
+    
+
+    def loadAliFile(self, filepath: Path):
+        """Load an ALI file or its more recent backup"""
+        # Check if there is more recent backup files
+        load_backup = False
+        if last_backup := self.file_manager.get_last_backup(filepath):
+            if last_backup.stat().st_mtime > filepath.stat().st_mtime:
+                # Backup file is more recent
+                load_backup = self._promptLoadAutosaved(last_backup)
+
+        try:
+            data = self.file_manager.read_ali_file(last_backup if load_backup else filepath)
+        except FileOperationError as e:
+            QMessageBox.critical(
+                self,
+                self.tr("Read Error"),
+                str(e)
+            )
+            return
         
-        # self.text_widget.document().blockSignals(was_blocked)
+        self.loadDocumentData(data["document"])
+        self.addRecentFile(str(filepath))
+        self.filepath = filepath
+
+        media_path = data.get("media-path", None)
+        if media_path and load_backup:
+             # Change the media filepath to point to the parent folder
+             media_path = Path(media_path)
+             media_path = str(media_path.parent.parent / media_path.name)
+
+        if media_path and os.path.exists(media_path) :
+            self.loadMediaFile(media_path)
+        else:
+            # Open a File Dialog to re-link
+            msg_box = QMessageBox(
+                QMessageBox.Icon.Warning,
+                self.tr("No media file"),
+                self.tr("Couldn't find media file for '{filename}'").format(filename=filepath.name),
+                # QMessageBox.StandardButton.NoButton, self
+            )
+            if media_path:
+                m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
+                msg_box.setInformativeText(m)
+
+            msg_box.addButton(strings.TR_OPEN, QMessageBox.ButtonRole.AcceptRole)
+            msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
+
+            ret = msg_box.exec()
+            if ret == 0x2:
+                media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+                media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
+                if media_filepath and os.path.exists(media_filepath):
+                    # Rewrite the file to disk
+                    self._performSave(str(filepath), media_filepath)
+                    # Re-open the updated file
+                    self.openFile(filepath)
 
 
-    def loadDocumentData(self, data: list) -> None:
+    def _promptLoadAutosaved(self, backup_file: Path) -> bool:
+        """Prompt the user what file to open, if the backup file is more recent"""
+
+        s1 = self.tr("The autosaved file has more recent changes.")
+        s2 = self.tr("Load autosaved file?")
+
+        reply = QMessageBox.question(
+            self,
+            self.tr("Backup file"),
+            s1 + "\n\n" + s2,
+            buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+            defaultButton=QMessageBox.StandardButton.Yes
+        )
+
+        return reply == QMessageBox.StandardButton.Yes
+    
+
+    def loadDocumentData(self, data: List[Tuple[str, Optional[Segment]]]) -> None:
+        """
+        Load a document to the text widget
+        
+        Args:
+            data (list): List of document blocks (text, Segment)
+        """
         # TODO: This function seems quite slow
-        """Called from the File Manager"""
+        self.undo_stack.clear()
+        self.last_saved_index = 0
+
+        self.text_widget.document().clear()
+
         for text, segment in data:
-            if segment:
-                segment_id = self.waveform.addSegment(segment)
-                self.text_widget.appendSentence(text, segment_id)
+            segment_id = self.waveform.addSegment(segment) if segment else None
+            self.text_widget.appendSentence(text, segment_id)
+            
         self.waveform.must_redraw = True
     
 
@@ -1001,7 +1105,7 @@ class MainWindow(QMainWindow):
         if not filepath:
             return
 
-        data = self.file_manager.openSrtFile(filepath, find_media=not self.media_controller.hasMedia())
+        data = self.file_manager.read_srt_file(filepath, find_media=not self.media_controller.hasMedia())
         self.loadDocumentData(data["document"])
 
         # Load the media file if none is already loaded
@@ -1027,10 +1131,9 @@ class MainWindow(QMainWindow):
 
         recent_files.insert(0, filepath)
         recent_files = [f for f in recent_files if os.path.exists(f)]
-        recent_files = recent_files[:5] # Limit size
+        recent_files = recent_files[:RECENT_FILES_LIMIT] # Limit size
 
         app_settings.setValue("recent_files", recent_files)
-
         self.updateRecentMenu()
     
 
@@ -1054,7 +1157,7 @@ class MainWindow(QMainWindow):
 
                 action = QAction(display_name, self)
                 action.setStatusTip(filepath)  # Show full path in status bar
-                action.triggered.connect(lambda checked, f=filepath: self.openFile(f))
+                action.triggered.connect(lambda checked, f=filepath: self.openFile(Path(f)))
                 self.recent_menu.addAction(action)
             
             # Add "Clear Recent" option
@@ -1070,7 +1173,7 @@ class MainWindow(QMainWindow):
         self.updateRecentMenu()
 
 
-    def loadMediaFile(self, filepath):
+    def loadMediaFile(self, filepath: str):
         """
         Load a Media File and update the Media Player and Waveform Widget.
         Should be called after loading the document (to open the Video Widget)
@@ -1080,17 +1183,7 @@ class MainWindow(QMainWindow):
         
         if self.media_controller.loadMediaToPlayer(filepath):
             self.media_path = filepath
-        print(f"{self.media_path=}")
-
-        # Convert to MP3 in case of MKV file
-        # (problems with PyDub)
-        # _, ext = os.path.splitext(file_path)
-        # if ext.lower() == ".mkv":
-        #     mp3_file = file_path[:-4] + ".mp3"
-        #     if not os.path.exists(mp3_file):
-        #         convert_to_mp3(file_path, mp3_file)
-        #         file_path = mp3_file
-
+        
         # Load waveform
         cached_waveform = self.cache.get_waveform(filepath)
         if cached_waveform is not None:
@@ -1178,35 +1271,36 @@ class MainWindow(QMainWindow):
 
 
     def showParameters(self):
+        def _onMinFramesChanged(i: int):
+            self._subs_max_frames = i
+        
+        def _onMaxFramesChanged(i: int):
+            self._subs_max_frames = i
+        
+        def _onUpdateUiLanguage(lang: str) -> None:
+            QApplication.instance().switch_language(lang)
+
         old_language = lang.getCurrentLanguage()
         dialog = ParametersDialog(self, self.media_metadata)
 
         # Connect signals
         dialog.signals.subtitles_margin_size_changed.connect(self.text_widget.onMarginSizeChanged)
         dialog.signals.subtitles_cps_changed.connect(self.onTargetDensityChanged)
-        dialog.signals.subtitles_min_frames_changed.connect(lambda i: setattr(self, '_subs_min_frames', i))
-        dialog.signals.subtitles_max_frames_changed.connect(lambda i: setattr(self, '_subs_max_frames', i))
+        dialog.signals.subtitles_min_frames_changed.connect(_onMinFramesChanged)
+        dialog.signals.subtitles_max_frames_changed.connect(_onMaxFramesChanged)
         dialog.signals.cache_scenes_removed.connect(self.onCachedSceneRemoved)
+        dialog.signals.update_ui_language.connect(_onUpdateUiLanguage)
 
         result = dialog.exec()
 
-        # Disconnect signals (not sure if it is necessary, better safe than sorry)
-        dialog.signals.subtitles_margin_size_changed.disconnect()
-        dialog.signals.subtitles_cps_changed.disconnect()
-        dialog.signals.subtitles_min_frames_changed.disconnect()
-        dialog.signals.subtitles_max_frames_changed.disconnect()
-        dialog.signals.cache_scenes_removed.disconnect()
-        
         self.changeLanguage(old_language)
 
 
-    @Slot(float)
     def onTargetDensityChanged(self, cps: float) -> None:
         self.waveform.changeTargetDensity(cps)
         self._target_density = cps
 
 
-    @Slot()
     def onCachedSceneRemoved(self) -> None:
         self.waveform.scenes = []
         self.toggleSceneDetect(False)
@@ -1741,7 +1835,6 @@ class MainWindow(QMainWindow):
                     self.updateSubtitle(self.waveform.playhead)
 
 
-    @Slot(list)
     def onTextCursorChanged(self, seg_ids: List[SegmentId] | None) -> None:
         """
         Sets the corresponding segment active on the waveform
@@ -1751,6 +1844,7 @@ class MainWindow(QMainWindow):
 
         seg_ids = seg_ids or None
         
+        # Highlight the selected ids on the waveform
         self.waveform.setActive(seg_ids, self.media_controller.isPlaying())
         
         if seg_ids is None:
@@ -1767,7 +1861,6 @@ class MainWindow(QMainWindow):
                 self.waveform.must_redraw = True
     
 
-    @Slot(bool)
     def toggleCreateSelection(self, checked: bool) -> None:
         log.debug(f"Toggle create selection: {checked=}")
         self.waveform.setSelecting(checked)
@@ -2004,6 +2097,7 @@ class MainWindow(QMainWindow):
                     right_seg[1] = seg_end
                 except Exception as e:
                     log.error(e)
+                    self.setStatusMessage(strings.TR_CANT_SMART_SPLIT)
 
         if not left_seg or not right_seg:
             # Revert to naive splitting method
@@ -2051,6 +2145,7 @@ class MainWindow(QMainWindow):
                     log.info("smart splitting")
                     left_text, right_text = smart_split_time(text, timepos, tokens_range)
                 except Exception as e:
+                    self.setStatusMessage(strings.TR_CANT_SMART_SPLIT)
                     log.error(f"Could not smart split: {e}")
 
         if left_text is None or right_text is None:
@@ -2070,9 +2165,6 @@ class MainWindow(QMainWindow):
         left_id = self.waveform.getNewId()
         right_id = self.waveform.getNewId()
         
-        position = self.text_widget.textCursor().position()
-        text_len = len(self.text_widget.getBlockById(seg_id).text())
-
         self.undo_stack.beginMacro("split utterance")
         self.undo_stack.push(DeleteUtterancesCommand(self.text_widget, self.waveform, [seg_id]))
         self.undo_stack.push(AddSegmentCommand(self.waveform, left_seg, left_id))
@@ -2206,13 +2298,13 @@ class MainWindow(QMainWindow):
         
         if mime_data.hasUrls():
             for url in mime_data.urls():
-                filepath = url.toLocalFile()
-                basename, ext = os.path.splitext(filepath)
-                ext = ext.lower()
+                filepath = Path(url.toLocalFile())
+                basename = filepath.stem
+                ext = filepath.suffix.lower()
                 if ext == ".ali":
                     self.openFile(filepath)
                 elif ext == ".srt":
-                    self.openFile(filepath, keep_audio=True)
+                    self.openFile(filepath, keep_media=True)
                 elif ext in MEDIA_FORMATS:
                     self.openFile(filepath)
                 else:
@@ -2260,7 +2352,7 @@ class MainWindow(QMainWindow):
         self.media_controller.cleanup()
         
         # Save document state to cache
-        if self.filepath.lower().endswith(".ali"):
+        if self.filepath and self.filepath.suffix == ".ali":
             doc_metadata = {
                 "cursor_pos": self.text_widget.textCursor().position(),
                 "waveform_pos": self.waveform.t_left,
@@ -2269,7 +2361,7 @@ class MainWindow(QMainWindow):
                 "show_margin": self.toggle_margin_action.isChecked(),
                 "video_open": self.toggle_video_action.isChecked()
             }
-            self.cache.update_doc_metadata(self.filepath, doc_metadata)
+            self.cache.update_doc_metadata(str(self.filepath), doc_metadata)
         
         # Save media cache
         if self.media_path:
@@ -2429,7 +2521,7 @@ class TranslatedApp(QApplication):
         self.translator = None
     
 
-    def switch_language(self, lang_code):
+    def switch_language(self, lang_code: str):
         log.info(f"Switching UI language to {lang_code}")
         print("Switching UI language to", lang_code)
         if self.translator is not None:
@@ -2454,7 +2546,7 @@ def main(argv: list):
     filepath = ""
     
     if len(argv) > 1:
-        filepath = argv[1]
+        filepath = Path(argv[1].strip())
     
     app = TranslatedApp(argv)
     app.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)

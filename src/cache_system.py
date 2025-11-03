@@ -156,13 +156,13 @@ class CacheSystem:
                 print(f"Error: Couln't save document cache to disk ({e})")
 
 
-    def get_media_metadata(self, file_path: str):
+    def get_media_metadata(self, filepath: str):
         """
         Get cached metadata (except waveform) for media file and update access time
         The waveform is never present in returned dictionary
         You must call the 'get_waveform' method instead
         """
-        fingerprint = calculate_fingerprint(file_path)
+        fingerprint = calculate_fingerprint(filepath)
 
         if fingerprint in self.media_cache:
             metadata = self.media_cache[fingerprint]
@@ -240,10 +240,10 @@ class CacheSystem:
         self._save_root_cache_to_disk()
     
 
-    def _access_doc(self, file_path: str):
+    def _access_doc(self, filepath: str):
         """Get cached metadata for document file and update access time"""
-        if file_path in self.doc_cache:
-            metadata = self.doc_cache[file_path]
+        if filepath in self.doc_cache:
+            metadata = self.doc_cache[filepath]
             metadata["last_access"] = datetime.now().timestamp()
             self._doc_cache_dirty = True
             self._save_root_cache_to_disk()
@@ -251,17 +251,17 @@ class CacheSystem:
         return {}
 
 
-    def get_doc_metadata(self, file_path: str):
-        file_path = os.path.abspath(file_path)
-        if file_path in self.doc_cache:
-            return self._access_doc(file_path)
+    def get_doc_metadata(self, filepath: str):
+        filepath = os.path.abspath(filepath)
+        if filepath in self.doc_cache:
+            return self._access_doc(filepath)
         return {}
     
 
-    def update_doc_metadata(self, file_path: str, metadata: dict):
-        file_path = os.path.abspath(file_path)
+    def update_doc_metadata(self, filepath: str, metadata: dict):
+        filepath = os.path.abspath(filepath)
         metadata["last_access"] = datetime.now().timestamp()
-        self.doc_cache.update({file_path: metadata})
+        self.doc_cache.update({filepath: metadata})
 
         self._doc_cache_dirty = True
         self._save_root_cache_to_disk()

@@ -1,6 +1,7 @@
 from copy import deepcopy
 import random
 from typing import List
+from pathlib import Path
 import logging
 
 from PySide6.QtWidgets import QApplication
@@ -67,7 +68,7 @@ def load_document_2():
     main_window.text_widget.document().clear()
     main_window.undo_stack.clear()
 
-    main_window.openFile("Meli_mila_Malou_1.ali")
+    main_window.openFile(Path("Meli_mila_Malou_1.ali"))
 
 
 def getDocumentState() -> dict:

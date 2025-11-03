@@ -419,11 +419,11 @@ class TextEditWidget(QTextEdit):
         return False
 
 
-    def setSentenceText(self, seg_id: int, text: str):
+    def setSentenceText(self, text: str, segment_id: SegmentId):
         """
         TODO: move this to a private method of JoinUtterancesCommand? It is not used anywhere else
         """
-        block = self.getBlockById(seg_id)
+        block = self.getBlockById(segment_id)
         if not block:
             return
         cursor = QTextCursor(block)
@@ -432,20 +432,22 @@ class TextEditWidget(QTextEdit):
         cursor.insertText(text)
 
 
-    def appendSentence(self, text: str, segment_id: Optional[SegmentId]):
+    def appendSentence(self, text: str, segment_id: Optional[SegmentId]) -> QTextBlock:
         """Insert new utterance at the end of the document"""
         end_position = self.document().characterCount() - 1  # -1 because of implicit newline
-        new_block = self._insertBlock(text, {"seg_id": segment_id} if segment_id != None else None, end_position)
+        new_block = self.insertBlock(text, {"seg_id": segment_id} if segment_id is not None else None, end_position)
         self.highlighter.rehighlightBlock(new_block)
+        return new_block
 
 
-    def _insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock:
+    def insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock:
         """Insert a block, with user data, at a given position"""
         log.debug(f"text_widget.insertBlock({text=}, {data=}, {pos=})")
 
         cursor = self.textCursor()
         cursor.setPosition(pos)
-        cursor.insertBlock()
+        if pos > 0: # Account for the first preexisting block
+            cursor.insertBlock()
 
         # Escape the special tokens ("<C'HOARZH>", "<LAU>"...)
         expression = QRegularExpression(r"<([a-zA-Z\']+)>")

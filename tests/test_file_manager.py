@@ -66,13 +66,12 @@ def test_save_ali_replace_media(tmp_path: Path):
     load_document()
 
     output_file = tmp_path / "test.ali"
-    main_window._saveFile(output_file.as_posix(), "media.mp3")
+    main_window._performSave(str(output_file), "media.mp3")
 
     data = output_file.read_text()
 
     assert data.strip() == \
 """{media-path: media.mp3}
-
 Linenn kentañ {start: 0.45; end: 2.25}
 Eil linenn. {start: 16.05; end: 21.6}
 Trede linenn {start: 23.73; end: 31.2}
@@ -90,7 +89,23 @@ def test_read_ali():
 
     test_dir = Path(__file__).parent
 
-    data = main_window.file_manager.readAliFile(test_dir / "MeliMilaMalou.ali")
+    data = main_window.file_manager.read_ali_file(test_dir / "MeliMilaMalou.ali")
     assert "media-path" in data
     assert "document" in data
+    assert data["document"][0] == ("{metadata: yes}", None)
     print(data)
+
+
+def test_load_ali():
+    main_window.waveform.clear()
+    main_window.text_widget.document().clear()
+    main_window.undo_stack.clear()
+
+    test_dir = Path(__file__).parent
+
+    main_window.openFile(test_dir / "MeliMilaMalou.ali")
+    main_window.text_widget.printDocumentStructure()
+    doc = main_window.text_widget.document()
+    block = doc.firstBlock()
+    text, _ = main_window.text_widget.getBlockHtml(block)
+    assert text == "{metadata: yes}"

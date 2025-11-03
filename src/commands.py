@@ -84,7 +84,7 @@ class JoinUtterancesCommand(QUndoCommand):
     def undo(self):
         # Restore first utterance
         first_id = self.seg_ids[0]
-        self.text_widget.setSentenceText(first_id, self.segments_text[0])
+        self.text_widget.setSentenceText(self.segments_text[0], first_id)
         self.waveform.segments[first_id] = self.segments[0]
         
         block = self.text_widget.getBlockById(first_id)
@@ -120,7 +120,7 @@ class JoinUtterancesCommand(QUndoCommand):
             cursor.removeSelectedText()
         
         joined_text = ' '.join( [ t.strip() for t in self.segments_text ] )
-        self.text_widget.setSentenceText(self.seg_ids[0], joined_text)
+        self.text_widget.setSentenceText(joined_text, self.seg_ids[0])
 
         # Join waveform segments
         first_id = self.seg_ids[0]
@@ -209,7 +209,7 @@ class DeleteUtterancesCommand(QUndoCommand):
 
         for segment, text, seg_id, data, pos in zip(self.segments, self.texts, self.seg_ids, self.datas, self.positions):
             seg_id = self.waveform.addSegment(segment, seg_id)
-            block = self.text_widget._insertBlock(text, data, pos - 1)
+            block = self.text_widget.insertBlock(text, data, pos - 1)
             self.text_widget.highlighter.rehighlightBlock(block)
 
         self.waveform.must_redraw = True
@@ -617,7 +617,7 @@ class ResizeSegmentCommand(QUndoCommand):
 class DeleteSegmentsCommand(QUndoCommand):
     def __init__(self, parent, seg_ids):
         super().__init__()
-        self.text_edit: TextEditWidget = parent.text_widget
+        self.text_edit: TextDocumentInterface = parent.text_widget
         self.waveform: WaveformInterface = parent.waveform
         self.seg_ids = seg_ids
         self.segments = {
@@ -629,7 +629,8 @@ class DeleteSegmentsCommand(QUndoCommand):
         for seg_id, segment in self.segments.items():
             self.waveform.segments[seg_id] = segment
             block = self.text_edit.getBlockById(seg_id)
-            self.text_edit.highlighter.rehighlightBlock(block)
+            if block:
+                self.text_edit.highlighter.rehighlightBlock(block)
 
         self.waveform.active_segments = list(self.segments.keys())
         self.waveform.must_sort = True
@@ -640,7 +641,8 @@ class DeleteSegmentsCommand(QUndoCommand):
             block = self.text_edit.getBlockById(seg_id)
             if seg_id in self.waveform.segments:
                 del self.waveform.segments[seg_id]
-            self.text_edit.highlighter.rehighlightBlock(block)
+            if block:
+                self.text_edit.highlighter.rehighlightBlock(block)
         
         self.waveform.active_segment_id = -1
         self.waveform.active_segments = []

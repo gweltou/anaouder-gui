@@ -39,7 +39,8 @@ from src.settings import (
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_MIN_INTERVAL,
     SUBTITLES_AUTO_EXTEND, SUBTITLES_AUTO_EXTEND_MAX_GAP,
     SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS,
-    SUBTITLES_DEFAULT_COLOR, SUBTITLES_BLOCK_DEFAULT_COLOR
+    SUBTITLES_DEFAULT_COLOR, SUBTITLES_BLOCK_DEFAULT_COLOR,
+    AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER
 )
 from src.strings import strings
 
@@ -267,21 +268,9 @@ class ParametersDialog(QDialog):
         # self.tabs.addTab(self.display_tab, "Display")
         # self.tabs.addTab(self.dictionary_tab, "Dictionary")
         
-        # Dialog buttons
-        button_layout = QHBoxLayout()
-        self.close_button = QPushButton(strings.TR_CLOSE)
-        self.close_button.clicked.connect(self.close)
-        # self.cancel_button = QPushButton(self.tr("Cancel"))
-        # self.cancel_button.clicked.connect(self.reject)
-
-        button_layout.addStretch()
-        button_layout.addWidget(self.close_button)
-        # button_layout.addWidget(self.cancel_button)
-        
         # Main layout
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabs)
-        # main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
     
 """
@@ -459,6 +448,33 @@ class GeneralPanel(QWidget):
 
         # Auto-save
         autosave_group = QGroupBox(self.tr("Auto Save"), checkable=True)
+        autosave_group.setChecked(app_settings.value("autosave/checked", True, type=bool))
+        autosave_group.toggled.connect(self.toggleAutosave)
+        autosave_layout = QVBoxLayout()
+
+        self.save_interval_spin = QDoubleSpinBox()
+        self.save_interval_spin.setSuffix(' ' + strings.TR_MINUTE_UNIT)
+        self.save_interval_spin.setRange(0.1, 10)
+        self.save_interval_spin.setDecimals(1)
+        self.save_interval_spin.setSingleStep(0.1)
+        self.save_interval_spin.setValue(app_settings.value("autosave/interval_minute", AUTOSAVE_DEFAULT_INTERVAL, type=float))
+        self.save_interval_spin.valueChanged.connect(self.updateSaveInterval)
+        save_interval_layout = QHBoxLayout()
+        save_interval_layout.addWidget(QLabel(self.tr("Save every")))
+        save_interval_layout.addWidget(self.save_interval_spin)
+        autosave_layout.addLayout(save_interval_layout)
+
+        self.backup_number_spin = QSpinBox()
+        self.backup_number_spin.setSuffix(' ' + strings.TR_FILES_UNIT)
+        self.backup_number_spin.setRange(1, 10)
+        self.backup_number_spin.setValue(app_settings.value("autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int))
+        self.backup_number_spin.valueChanged.connect(self.updateBackupNumber)
+        backup_number_layout = QHBoxLayout()
+        backup_number_layout.addWidget(QLabel(self.tr("Keep only")))
+        backup_number_layout.addWidget(self.backup_number_spin)
+        autosave_layout.addLayout(backup_number_layout)
+
+        autosave_group.setLayout(autosave_layout)
 
         main_layout.addWidget(ui_lang_group)
         main_layout.addWidget(ui_subs_group)
@@ -523,15 +539,28 @@ class GeneralPanel(QWidget):
                 QPushButton:pressed {{
                     background-color: {color.name()};
                 }}
-            """)
-    
+            """)    
+
 
     def resetColorDefault(self):
-        print("blip")
         self.pickColorFont(False, SUBTITLES_DEFAULT_COLOR)
         self.pickColorRect(False, SUBTITLES_BLOCK_DEFAULT_COLOR)
         if not self.rect_visibility_checkbox.isChecked():
             self.rect_visibility_checkbox.toggle()
+
+
+    def toggleAutosave(self, checked):
+        app_settings.setValue("autosave/checked", checked)
+
+
+    def updateSaveInterval(self):
+        interval_mn = self.save_interval_spin.value()
+        app_settings.setValue("autosave/interval_minute", interval_mn)
+
+
+    def updateBackupNumber(self):
+        backup_num = self.backup_number_spin.value()
+        app_settings.setValue("autosave/backup_number", backup_num)
 
 
 

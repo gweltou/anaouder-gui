@@ -28,6 +28,7 @@ BUTTON_LABEL_SIZE = 16  # in pixels
 DIAL_SIZE = 30          # in pixels
 
 STATUS_BAR_TIMEOUT = 4000 # Display time of status bar messages (in ms)
+RECENT_FILES_LIMIT = 10  # Number of files kept in "Recent files" menu
 
 # FFMPEG settings
 FFMPEG_SCENCE_DETECTOR_THRESHOLD = 0.2
@@ -71,3 +72,6 @@ SUBTITLES_CPS = 16.0    # Speech density (chars per second)
 
 SUBTITLES_DEFAULT_COLOR = QColor(255, 255, 255)
 SUBTITLES_BLOCK_DEFAULT_COLOR = QColor(0, 0, 0, 100)
+
+AUTOSAVE_DEFAULT_INTERVAL = 1.0 # 1 minute
+AUTOSAVE_BACKUP_NUMBER = 3 # Keep 3 files at most

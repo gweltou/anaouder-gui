@@ -12,6 +12,9 @@ class Strings(QObject):
         self.TR_IMPORT_MEDIA = self.tr("Import media")
         self.TR_IMPORT_SUBTITLES = self.tr("Import subtitles")
 
+        # Status Bar
+        self.TR_CANT_SMART_SPLIT = self.tr("Could not smart split")
+
         # Buttons
         self.TR_OK = self.tr("OK")
         self.TR_OPEN = self.tr("&Open")
@@ -22,20 +25,24 @@ class Strings(QObject):
         self.TR_ZOOM_IN = self.tr("Zoom in")
         self.TR_ZOOM_OUT = self.tr("Zoom out")
 
-        # File Dialog
+        # Dialogs
         self.TR_OPEN_MEDIA_FILE = self.tr("Open Media File")
         self.TR_MEDIA_FILES = self.tr("Media files")
         self.TR_SAVE_FILE = self.tr("Save File")
         self.TR_ALI_FILES = self.tr("ALI files")
+        self.TR_SAVE_ERROR = self.tr("Save Error")
+        self.TR_COULD_NOT_SAVE_FILE = self.tr("Could not save file")
 
         # Parameters Dialog
         self.TR_FRAMES_UNIT = self.tr("frames")
         self.TR_CPS_UNIT = self.tr("c/s")
         self.TR_SECOND_UNIT = self.tr("s")
+        self.TR_MINUTE_UNIT = self.tr("mn")
         self.TR_FPS_UNIT = self.tr("fps")
         self.TR_OCTED_UNIT = self.tr("o")
         self.TR_KILO_OCTED_UNIT = self.tr("Ko")
         self.TR_MEGA_OCTED_UNIT = self.tr("Mo")
+        self.TR_FILES_UNIT = self.tr("file(s)")
 
         self.TR_SELECT_COLOR = self.tr("Select Color")
 

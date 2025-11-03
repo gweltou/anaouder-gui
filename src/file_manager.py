@@ -7,16 +7,17 @@ import os
 import re
 import logging
 from typing import Tuple, List, Optional
+from pathlib import Path
 
 import srt
 
 from PySide6.QtCore import QObject, Signal
 
-from ostilhou.asr import extract_metadata
+from ostilhou.asr import load_segments_data, extract_metadata
 from ostilhou.asr.dataset import format_timecode
 
 from src.utils import MEDIA_FORMATS, LINE_BREAK
-from src.interfaces import Segment
+from src.interfaces import Segment, WaveformInterface, TextDocumentInterface
 
 
 log = logging.getLogger(__name__)
@@ -36,12 +37,18 @@ class FileManager(QObject):
     show_status_message = Signal(str)    # Sends a message to be displayed in the status bar
 
 
-    def __init__(self):
+    def __init__(
+            self,
+            # text_widget: TextDocumentInterface,
+            # waveform_widget: WaveformInterface
+        ):
         super().__init__()
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        # self.text_widget = text_widget
+        # self.waveform_widget = waveform_widget
 
 
-    def saveAliFile(
+    def save_ali_file(
             self,
             filepath,
             blocks_data: List[Tuple[str, Optional[Segment]]],
@@ -113,44 +120,40 @@ class FileManager(QObject):
             raise FileOperationError
 
 
-    def readAliFile(self, filepath) -> dict:
+    def read_ali_file(self, filepath: Path) -> dict:
         """
-        Open an ALI file and associated media.
+        Read an ALI file and find associated media.
         
         Args:
-            filepath: Full path to the ALI file
+            filepath (Path): Full path to the ALI file
         
         Returns:
             Dictionary of parsed data
+        
+        Raise:
+            FileOperationError
         """
         self.log.debug(f"Opening ALI file... {filepath}")
-
-        folder, filename = os.path.split(filepath)
-        basename, _ = os.path.splitext(filename)
-
-        media_path = None
         parsed_data = []
-
+        media_path = None
+        
         try:
-            with open(filepath, 'r', encoding="utf-8") as _fin:
+            with filepath.open('r', encoding="utf-8") as _fin:
                 # Find associated audio file in metadata
-                for line in _fin.readlines():
+                for line in _fin:
                     line = line.strip()
 
                     # Extact "audio_path/media-path" metadata
                     _, metadata = extract_metadata(line)
                     if not media_path:
                         if "media-path" in metadata:
-                            media_path = os.path.join(folder, metadata["media-path"])
-                            media_path = os.path.normpath(media_path)
+                            media_path = (filepath.parent / metadata["media-path"]).resolve()
                         elif "audio-path" in metadata:
-                            media_path = os.path.join(folder, metadata["audio-path"])
-                            media_path = os.path.normpath(media_path)
+                            media_path = (filepath.parent / metadata["audio-path"]).resolve()
 
                     # Check for aligned utterances
                     match = re.search(
-                        r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}",
-                        line
+                        r"{\s*start\s*:\s*([0-9\.]+)\s*;\s*end\s*:\s*([0-9\.]+)\s*}", line
                     )
                     if match:
                         # Remove timecodes from text
@@ -158,60 +161,57 @@ class FileManager(QObject):
                         line = line.strip().replace(LINE_BREAK, "<br>")
                         segment = [float(match[1]), float(match[2])]
                         parsed_data.append((line, segment))
-                        # seg_id = self.waveform.addSegment(segment)
-                        # self.text_widget.appendSentence(line, seg_id)
                     else:
                         # Regular text or comments or metadata only
                         parsed_data.append((line, None))
-                        # self.text_widget.append(line)
         
         except IOError as e:
             self.log.error(f"Failed to open file: {e}")
-            # raise FileOperationError(f"Could not open file: {e}")
+            raise FileOperationError(f"Could not open file: {e}")
         except Exception as e:
-            self.log.error(f"Error parsing ALI file: {e}")
-            # raise FileOperationError(f"Parse error: {e}")
+            self.log.error(f"Error parsing file: {e}")
+            raise FileOperationError(f"Could not parse file: {e}")
         
         if not media_path:
             # Check for an audio file with the same basename
-            media_path = self.findAssociatedMedia(folder, basename)
+            media_path = self.find_associated_media(filepath)
 
         return {
-            "media-path": media_path,
-            "document": parsed_data
+            "document": parsed_data,
+            "media-path": str(media_path) if media_path else None
         }
 
 
-    def openSrtFile(self, filepath: str, find_media = False) -> dict:
+    def read_srt_file(self, filepath: str, find_media = False) -> dict:
         """
-        Open SRT file and optionally load associated media.
+        Read the content of a SRT file.
         
         Args:
             filepath: Full path to the SRT file
 
         Returns:
             Dictionary of parsed data
+        
+        Raise:
+            FileOperationError
         """
         self.log.debug("Opening SRT file: {filepath}")
-
-        folder, filename = os.path.split(filepath)
-        basename, _ = os.path.splitext(filename)
         
         # Parse subtitle file
-        subtitles = self._parseSrtFile(filepath)
+        subtitles = self._parse_srt_file(filepath)
         
-        # Try to find and load associated media file
         media_path = None
         if find_media:
-            media_path = self.findAssociatedMedia(folder, basename)
+            # Check for an audio file with the same basename
+            media_path = self.find_associated_media(Path(filepath))
 
         return {
-            "media-path": media_path,
-            "document": subtitles
+            "document": subtitles,
+            "media-path": str(media_path) if media_path else None
         }
 
 
-    def _parseSrtFile(self, filepath: str) -> List:
+    def _parse_srt_file(self, filepath: str) -> List:
         """
         Parse an SRT file and return a list of block data
         
@@ -220,6 +220,9 @@ class FileManager(QObject):
             
         Returns:
             List of (text, segment), or empty list on error
+        
+        Raise:
+            FileOperationError
         """
         subtitles = []
         encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
@@ -238,13 +241,11 @@ class FileManager(QObject):
                 self.log.debug(f"Failed to parse with {encoding} encoding")
                 continue
             except srt.SRTParseError as e:
-                self.log.error(f"SRT parsing error: {e}")
-                self.show_status_message.emit(self.tr("Error parsing SRT file: invalid format"))
-                break
+                self.log.error(f"Error parsing file: {e}")
+                raise FileOperationError(f"Could not read file: {e}")
             except Exception as e:
-                self.log.error(f"Unexpected error parsing SRT file: {e}")
-                self.show_status_message.emit(self.tr("Error opening SRT file"))
-                break
+                self.log.error(f"Error parsing file: {e}")
+                raise FileOperationError(f"Could not open file: {e}")
         if not subtitles:
             return []
         
@@ -269,7 +270,34 @@ class FileManager(QObject):
         return parsed_data
 
 
-    def findAssociatedMedia(self, folder: str, basename: str) -> Optional[str]:
+    def read_split_file(self, filepath: Path):
+        segments = load_segments_data(str(filepath))
+        txt_filepath = filepath.with_suffix('.txt')
+
+        if not txt_filepath.exists():
+            self.log.error(f"Couldn't find text file {txt_filepath}")
+            return {"document": [], "media-path": None}
+
+        with txt_filepath.open('r', encoding="utf-8") as _f:
+            data = []
+            segment_idx = 0
+            for sentence in _f.readlines():
+                cleaned = extract_metadata(sentence)[0].strip()
+                if cleaned and not cleaned.startswith('#'):
+                    data.append( (sentence.strip(), list(segments[segment_idx])) )
+                    segment_idx += 1
+                else:
+                    data.append( (sentence.strip(), None) )            
+        
+        media_path = self.find_associated_media(filepath)
+    
+        return {
+            "document": data,
+            "media-path": str(media_path) if media_path else None
+        }
+
+
+    def find_associated_media(self, filepath: Path) -> Optional[Path]:
         """
         Search for a media file with the same basename
         
@@ -281,10 +309,35 @@ class FileManager(QObject):
             Full path to media file if found, None otherwise
         """
         for ext in MEDIA_FORMATS:
-            media_path = os.path.join(folder, basename + ext)
-            if os.path.exists(media_path):
-                self.log.debug(f"Found associated media: {media_path}")
+            media_path = filepath.with_suffix(ext)
+            if media_path.exists():
+                self.log.debug(f"Found associated media: {str(media_path)}")
                 return media_path
         
         self.log.debug("No associated media file found")
         return None
+
+
+    def get_last_backup(self, filepath: Path) -> Optional[Path]:
+        """Get the most recent backup of the given ALI file, if any"""
+        autosave_folder = filepath.parent / "autosave"
+        if not autosave_folder.exists():
+            return None
+        
+        old_backups = sorted(autosave_folder.glob(str(filepath.stem) + "@*.ali"))
+        if old_backups:
+            return old_backups[-1]
+        return None
+
+
+    def get_backup_parent(self, filepath: Path) -> Optional[Path]:
+        """Returns the path of the original file, if this file is a backup file"""
+        timestamp = r"@\d+_\d+"
+        
+        if filepath.parent.name == "autosave" and bool(re.search(timestamp + r'$', filepath.stem)):
+            # Check for parent ALI file
+            parent_ali = filepath.parent.parent / re.sub(timestamp, '', filepath.name)
+            if parent_ali.exists():
+                return parent_ali
+        return None
+
