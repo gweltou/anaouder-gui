@@ -185,6 +185,7 @@ class MainWindow(QMainWindow):
 
         self.undo_stack = QUndoStack(self)
         self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
+        self.undo_stack.indexChanged.connect(self.onUndoStackIndexChanged)
 
         # Autosave
         self.last_saved_index = 0
@@ -456,26 +457,28 @@ class MainWindow(QMainWindow):
         undo_redo_layout.setSpacing(BUTTON_SPACING)
         undo_redo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        undo_button = QPushButton()
-        undo_button.setIcon(icons["undo"])
-        undo_button.setFixedWidth(BUTTON_SIZE)
-        undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
-        undo_button.clicked.connect(self.undo)
-        undo_redo_layout.addWidget(undo_button)
+        self.undo_button = QPushButton()
+        self.undo_button.setIcon(icons["undo"])
+        self.undo_button.setFixedWidth(BUTTON_SIZE)
+        self.undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
+        self.undo_button.clicked.connect(self.undo_stack.undo)
+        self.undo_button.setEnabled(False)
+        undo_redo_layout.addWidget(self.undo_button)
         undo_action = QAction("Undo", self)
         undo_action.setShortcut(QKeySequence.StandardKey.Undo)
-        undo_action.triggered.connect(undo_button.animateClick)
+        undo_action.triggered.connect(self.undo_button.animateClick)
         self.addAction(undo_action)
 
-        redo_button = QPushButton()
-        redo_button.setIcon(icons["redo"])
-        redo_button.setFixedWidth(BUTTON_SIZE)
-        redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
-        redo_button.clicked.connect(self.redo)
-        undo_redo_layout.addWidget(redo_button)
+        self.redo_button = QPushButton()
+        self.redo_button.setIcon(icons["redo"])
+        self.redo_button.setFixedWidth(BUTTON_SIZE)
+        self.redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
+        self.redo_button.clicked.connect(self.undo_stack.redo)
+        self.redo_button.setEnabled(False)
+        undo_redo_layout.addWidget(self.redo_button)
         redo_action = QAction("Redo", self)
         redo_action.setShortcut(QKeySequence.StandardKey.Redo)
-        redo_action.triggered.connect(redo_button.animateClick)
+        redo_action.triggered.connect(self.redo_button.animateClick)
         self.addAction(redo_action)
 
         top_bar_layout.addLayout(undo_redo_layout)
@@ -877,7 +880,6 @@ class MainWindow(QMainWindow):
 
 
     def autoSave(self):
-        print("blip")
         current_index = self.undo_stack.index()
         if not self.filepath:
             return
@@ -1312,10 +1314,8 @@ class MainWindow(QMainWindow):
         if checked:
             # Timer resolution is set to the shortest autosave interval
             self.autosave_timer.start(6_000)
-            print("!!! starting autosave timer")
         else:
             self.autosave_timer.stop()
-            print("!!! stopping autosave timer")
 
 
     def showAbout(self):
@@ -1697,6 +1697,18 @@ class MainWindow(QMainWindow):
         self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
     
 
+    def onUndoStackIndexChanged(self, index: int) -> None:
+        if index == 0:
+            self.undo_button.setEnabled(False)
+        else:
+            self.undo_button.setEnabled(True)
+        
+        if index < self.undo_stack.count():
+            self.redo_button.setEnabled(True)
+        else:
+            self.redo_button.setEnabled(False)
+
+
     def autoSegment(self) -> None:
         SEGMENTS_MAXIMUM_LENGTH = 10 # Seconds
         RATIO_THRESHOLD = 0.05
@@ -1905,7 +1917,6 @@ class MainWindow(QMainWindow):
             self.setStatusMessage(self.tr("Select part of the waveform first"))
 
 
-    @Slot(list, list, int)
     def updateUtteranceTranscription(
         self,
         tokens: list,
@@ -1931,7 +1942,6 @@ class MainWindow(QMainWindow):
             self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
 
 
-    @Slot(list)
     def newSegmentTranscribed(self, tokens) -> None:
         if tokens:
             text = self.onRecognizerOutput(tokens)
@@ -2016,7 +2026,6 @@ class MainWindow(QMainWindow):
             self.cache.update_media_metadata(self.media_path, self.media_metadata)
 
 
-    @Slot(float)
     def updateProgressBar(self, t_seconds: float) -> None:
         self.waveform.recognizer_progress = t_seconds
         if t_seconds > self.waveform.t_left and t_seconds < self.waveform.getTimeRight():
@@ -2025,7 +2034,6 @@ class MainWindow(QMainWindow):
         self.progress_label.setText(self.tr("transcribed") + f" {t_seconds / self.media_controller.getDuration():.0%}")
 
 
-    @Slot(bool)
     def toggleTranscribe(self, toggled) -> None:
         if toggled:
             self.transcribeAction()
@@ -2213,7 +2221,6 @@ class MainWindow(QMainWindow):
         self.waveform.must_redraw = True
 
 
-    @Slot(list)
     def joinUtterances(self, segments_id) -> None:
         """Join many segments in one.
         Keep the segment ID of the earliest segment among the selected ones.
@@ -2221,14 +2228,12 @@ class MainWindow(QMainWindow):
         self.undo_stack.push(JoinUtterancesCommand(self.text_widget, self.waveform, segments_id))
 
 
-    @Slot(QTextBlock)
     def alignWithSelection(self, block:QTextBlock) -> None:
         self.undo_stack.push(AlignWithSelectionCommand(self, self.text_widget, self.waveform, block))
         if self.selection_button.isChecked():
             self.selection_button.setChecked(False)
 
 
-    @Slot(list)
     def deleteUtterances(self, segments_id: List[SegmentId]) -> None:
         """Delete both segments and sentences"""
         if segments_id:
@@ -2239,7 +2244,6 @@ class MainWindow(QMainWindow):
             self.setStatusMessage(self.tr("Select one or more utterances first"))
 
 
-    @Slot(list)
     def deleteSegments(self, segments_id: List[SegmentId]) -> None:
         """Delete segments but keep sentences"""
         self.undo_stack.push(DeleteSegmentsCommand(self, segments_id))
@@ -2268,20 +2272,6 @@ class MainWindow(QMainWindow):
         self.follow_playhead_button.setChecked(new_state)
         self.follow_playhead_action.setChecked(new_state)
         self.waveform.toggleFollowPlayHead(new_state)
-
-
-    def undo(self) -> None:
-        self.undo_stack.undo()
-
-    def redo(self) -> None:
-        self.undo_stack.redo()
-
-
-    # def keyPressEvent(self, event: QKeyEvent) -> None:
-    #     if event.matches(QKeySequence.StandardKey.Undo):
-    #         self.undo()
-    #     elif event.matches(QKeySequence.StandardKey.Redo):
-    #         self.redo()
 
 
     # Drag and drop event handlers
