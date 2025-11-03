@@ -191,7 +191,7 @@ class MainWindow(QMainWindow):
         self.last_saved_time = time.time()
         self.autosave_timer = QTimer()
         self.autosave_timer.timeout.connect(self.autoSave)
-        self.autosave_timer.start(6_000)    # Autosave timer is set to the shortest autosave interval
+        self.onSetAutosave(bool(app_settings.value("autosave/checked", True)))
 
         self.text_widget = TextEditWidget(self)
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
@@ -877,6 +877,7 @@ class MainWindow(QMainWindow):
 
 
     def autoSave(self):
+        print("blip")
         current_index = self.undo_stack.index()
         if not self.filepath:
             return
@@ -901,7 +902,7 @@ class MainWindow(QMainWindow):
 
             # Remove old backups, if necessary
             old_backups = sorted(autosave_folder.glob(str(self.filepath.stem) + "@*.ali"))
-            max_backups = app_settings.value("autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int)
+            max_backups = int(app_settings.value("autosave/backup_number", AUTOSAVE_BACKUP_NUMBER))
             if len(old_backups) > max_backups:
                 for i in range(len(old_backups) - max_backups):
                     old_backups[i].unlink()                               
@@ -1290,6 +1291,7 @@ class MainWindow(QMainWindow):
         dialog.signals.subtitles_max_frames_changed.connect(_onMaxFramesChanged)
         dialog.signals.cache_scenes_removed.connect(self.onCachedSceneRemoved)
         dialog.signals.update_ui_language.connect(_onUpdateUiLanguage)
+        dialog.signals.toggle_autosave.connect(self.onSetAutosave)
 
         result = dialog.exec()
 
@@ -1304,6 +1306,16 @@ class MainWindow(QMainWindow):
     def onCachedSceneRemoved(self) -> None:
         self.waveform.scenes = []
         self.toggleSceneDetect(False)
+
+    
+    def onSetAutosave(self, checked: bool) -> None:
+        if checked:
+            # Timer resolution is set to the shortest autosave interval
+            self.autosave_timer.start(6_000)
+            print("!!! starting autosave timer")
+        else:
+            self.autosave_timer.stop()
+            print("!!! stopping autosave timer")
 
 
     def showAbout(self):

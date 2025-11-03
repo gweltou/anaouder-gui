@@ -67,11 +67,11 @@ SUBTITLES_MAX_FRAMES = 125
 SUBTITLES_MIN_INTERVAL = 2
 SUBTITLES_AUTO_EXTEND = True
 SUBTITLES_AUTO_EXTEND_MAX_GAP = 12
-SUBTITLES_MARGIN_SIZE = 42  # Text margin (number of chars)
-SUBTITLES_CPS = 16.0    # Speech density (chars per second)
+SUBTITLES_MARGIN_SIZE = 42         # Text margin (number of chars)
+SUBTITLES_CPS = 16.0               # Speech density (chars per second)
 
 SUBTITLES_DEFAULT_COLOR = QColor(255, 255, 255)
 SUBTITLES_BLOCK_DEFAULT_COLOR = QColor(0, 0, 0, 100)
 
-AUTOSAVE_DEFAULT_INTERVAL = 1.0 # 1 minute
-AUTOSAVE_BACKUP_NUMBER = 3 # Keep 3 files at most
+AUTOSAVE_DEFAULT_INTERVAL = 1.0    # 1 minute
+AUTOSAVE_BACKUP_NUMBER = 3         # Number of files to keep at most

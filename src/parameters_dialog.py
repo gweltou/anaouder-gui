@@ -48,17 +48,18 @@ from src.strings import strings
 log = logging.getLogger(__name__)
 
 
-class Signals(QObject):
-        """Custom signals"""
-        subtitles_margin_size_changed = Signal(int)
-        subtitles_cps_changed = Signal(float)
-        subtitles_min_frames_changed = Signal(int)
-        subtitles_max_frames_changed = Signal(int)
-        cache_scenes_removed = Signal()
+# class Signals(QObject):
+#         """Custom signals"""
+#         subtitles_margin_size_changed = Signal(int)
+#         subtitles_cps_changed = Signal(float)
+#         subtitles_min_frames_changed = Signal(int)
+#         subtitles_max_frames_changed = Signal(int)
+#         cache_scenes_removed = Signal()
+#         update_ui_language = Signal(str)
+#         toggle_autosave = Signal(bool)
 
-        update_ui_language = Signal(str)
 
-signals = Signals()
+# signals = Signals()
 
 
 class DownloadProgressDialog(QDialog):
@@ -84,7 +85,7 @@ class DownloadProgressDialog(QDialog):
         
         # Setup UI
         self.setWindowTitle(self.tr("Downloading {}").format(model_name))
-        self.setWindowModality(Qt.WindowModal)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setMinimumSize(400, 150)
         
         layout = QVBoxLayout()
@@ -199,7 +200,7 @@ class DownloadProgressDialog(QDialog):
     
     
     @Slot(int)
-    def update_progress(self, percent):
+    def update_progress(self, percent: int):
         """Update the progress bar and bytes label"""
         self.progress_bar.setValue(percent)
         
@@ -217,7 +218,7 @@ class DownloadProgressDialog(QDialog):
     
 
     @Slot(str)
-    def download_error(self, error_msg):
+    def download_error(self, error_msg: str):
         """Handle download error"""
         QMessageBox.critical(self, "Download Error", 
                             f"An error occurred during download:\n{error_msg}")
@@ -246,8 +247,8 @@ class ParametersDialog(QDialog):
         subtitles_min_frames_changed = Signal(int)
         subtitles_max_frames_changed = Signal(int)
         cache_scenes_removed = Signal()
-
         update_ui_language = Signal(str)
+        toggle_autosave = Signal(bool)
 
 
     def __init__(self, parent, media_metadata: dict):
@@ -551,6 +552,7 @@ class GeneralPanel(QWidget):
 
     def toggleAutosave(self, checked):
         app_settings.setValue("autosave/checked", checked)
+        self.parent_dialog.signals.toggle_autosave.emit(checked)
 
 
     def updateSaveInterval(self):
