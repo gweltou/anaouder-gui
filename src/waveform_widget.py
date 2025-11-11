@@ -447,11 +447,12 @@ class WaveformWidget(QWidget):
                     t_right_goal = min(self.audio_len, end + 0.1 * window_dur)
                     self.scroll_goal = t_right_goal - self.width() / self.ppsec # time relative to left of window
             else:
-                # Choose a zoom level that will fit this segment in 80% of the window width
-                adapted_window_dur = segment_dur / 0.8
-                adapted_ppsec = self.width() / adapted_window_dur
-                self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
-                self.ppsec_goal = adapted_ppsec
+                # # Choose a zoom level that will fit this segment in 80% of the window width
+                # adapted_window_dur = segment_dur / 0.8
+                # adapted_ppsec = self.width() / adapted_window_dur
+                # self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
+                # self.ppsec_goal = adapted_ppsec
+                self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
 
         self.selection_is_active = False
         self.must_redraw = True
@@ -486,7 +487,7 @@ class WaveformWidget(QWidget):
 
     def updatePlayHead(self, position_sec: float, is_playing: bool) -> None:
         """
-        Set the playing head
+        Set the playing head to the given position
         Slide the waveform window following the playhead
 
         This method is called continuously from MainWindow.

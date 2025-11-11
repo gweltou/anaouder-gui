@@ -119,6 +119,7 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def isSubsentence(self, segments: list, start: int, end: int) -> bool:
+        """This is sentences' segments, NOT audio segments !"""
         assert start < end
         for seg_start, seg_end in segments:
             if start >= seg_start and end <= seg_end:
@@ -141,10 +142,6 @@ class Highlighter(QSyntaxHighlighter):
             else:
                 cursor.setBlockFormat(QTextBlockFormat())
         else:
-            # print(f"{sentence_splits=}")
-            # if sentence_splits:
-            #     cursor.setBlockFormat(self.red_block_format)
-            # else:
             cursor.setBlockFormat(QTextBlockFormat())
 
 
@@ -723,24 +720,24 @@ class TextEditWidget(QTextEdit):
             self.highlighter.rehighlightBlock(block)
 
 
-    def highlightUtterance(self, seg_id: SegmentId, scroll_text=True):
+    def highlightUtterance(self, segment_id: SegmentId, scroll_text=True):
         """
         Highlight a given utterance's sentence
 
         Arguments:
             scroll_text (boolean): scroll the text widget to the text cursor
         """
-        log.debug(f"Highlight Utterance {seg_id=}")
+        log.debug(f"Highlight Utterance {segment_id=}")
         was_blocked = self.document().blockSignals(True)
 
         # Reset previously selected utterance
         self.deactivateSentence()
 
-        block = self.getBlockById(seg_id)
+        block = self.getBlockById(segment_id)
         if block == None:
             return
         
-        self.highlighted_sentence_id = seg_id # Needs to be set before rehighlighting
+        self.highlighted_sentence_id = segment_id # Needs to be set before rehighlighting
         self.highlighter.rehighlightBlock(block)
 
         self.blockSignals(True)
@@ -985,8 +982,7 @@ class TextEditWidget(QTextEdit):
             if format_range.start <= cursor.positionInBlock() <= format_range.start + format_range.length:
                 if format_range.format.underlineStyle() == QTextCharFormat.UnderlineStyle.SpellCheckUnderline:
                     # Found misspelled word
-                    cursor.select(QTextCursor.SelectionType.WordUnderCursor)
-                    misspelled_word = cursor.selectedText()
+                    misspelled_word = self._selectWordAtPosition(cursor.position())
         
         # context = self.createStandardContextMenu(event.pos())
         context_menu = QMenu(self)
@@ -1517,6 +1513,31 @@ class TextEditWidget(QTextEdit):
     def mouseDoubleClickEvent(self, event):
         """Prevent default double-click behaviour"""
         event.ignore()
+
+
+    def _selectWordAtPosition(self, position: int) -> str:
+        """
+        Return the word under cursor, adapted for Breton language.
+        
+        Note:
+            QTextCursor.select(WordUnderCursor) won't work
+            because if common use of the quote character in Breton.
+        """
+        cursor = QTextCursor(self.document())
+        cursor.setPosition(position)
+        text_block = cursor.block()
+        position -= text_block.position()
+        text = text_block.text()
+
+        # Find word boundaries
+        word_start, word_end = position, position
+        while word_start > 0 and text[word_start-1] not in STOP_CHARS:
+            word_start -= 1
+        while word_end < len(text) and text[word_end] not in STOP_CHARS:
+            word_end += 1
+        
+        word = text[word_start:word_end]
+        return word
 
 
     def enterEvent(self, event: QEnterEvent):

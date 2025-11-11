@@ -14,6 +14,11 @@ class Strings(QObject):
 
         # Status Bar
         self.TR_CANT_SMART_SPLIT = self.tr("Could not smart split")
+        self.TR_TRANSCRIPTION_COMPLETED = self.tr("Transcription completed")
+        self.TR_NO_TRANSCRIPTION_LABEL = self.tr("No transcription")
+        self.TR_NO_TRANSCRIPTION_TOOLTIP = self.tr("This media file has not been transcribed yet.")
+        self.TR_NO_TRANSCRIPTION_LABEL_TOOLTIP = self.tr("Click on the 'Transcribe' button, with no segments selected, to start automatic transcription")
+        self.TR_PARTIAL_TRANSCRIPTION_LABEL_TOOLTIP = self.tr("Click on the 'Transcribe' button, with no segments selected, to continue automatic transcription")
 
         # Buttons
         self.TR_OK = self.tr("OK")

@@ -1,8 +1,8 @@
 import sys
 import os.path
 
-from PySide6.QtGui import QIcon
-from PySide6.QtCore import QSize
+from PySide6.QtGui import QIcon, QMouseEvent
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QLabel
 
 from src.utils import get_resource_path
@@ -51,12 +51,53 @@ def loadIcons():
     icons["del_segment"] = QIcon(get_resource_path("icons/del_segment.png"))
     icons["follow_playhead"] = QIcon(get_resource_path("icons/follow_playhead.png"))
 
+    icons["led_green"] = QIcon(get_resource_path("icons/led_green.png"))
+    icons["led_red"] = QIcon(get_resource_path("icons/led_red.png"))
+    icons["led_orange"] = QIcon(get_resource_path("icons/led_orange.png"))
+
+
 
 class IconWidget(QLabel):
     def __init__(self, icon:QIcon, size=32):
         super().__init__()
         self.setFixedSize(size, size)
-        # Load icon and convert to pixmap
-        # icon = QIcon(icon_path)
-        pixmap = icon.pixmap(QSize(size, size))
+        self.pixmaps = dict() # Allow for multiple pixmaps per icon
+        self.setIcon(icon)
+
+
+    def setIcon(self, icon:QIcon) -> None:
+        size = self.width()
+        if icon in self.pixmaps:
+            pixmap = self.pixmaps[icon]
+        else:
+            pixmap = icon.pixmap(QSize(size, size))
+            self.pixmaps[icon] = pixmap
         self.setPixmap(pixmap)
+
+
+
+class ClickableIconWidget(QLabel):
+    clicked = Signal()
+
+    def __init__(self, icon:QIcon, size=32):
+        super().__init__()
+        self.setFixedSize(size, size)
+        self.pixmaps = dict() # Allow for multiple pixmaps per icon
+        self.setIcon(icon)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+
+    def setIcon(self, icon:QIcon) -> None:
+        size = self.width()
+        if icon in self.pixmaps:
+            pixmap = self.pixmaps[icon]
+        else:
+            pixmap = icon.pixmap(QSize(size, size))
+            self.pixmaps[icon] = pixmap
+        self.setPixmap(pixmap)
+    
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)

@@ -174,6 +174,7 @@ class MainWindow(QMainWindow):
         # self.media_controller.playback_started.connect(self.onPlaybackStarted)
         # self.media_controller.playback_stopped.connect(self.onPlaybackStopped)
         self.media_controller.subtitle_changed.connect(self.updateSubtitle)
+        self.media_controller.media_duration_changed.connect(self.onMediaDurationChanged)
         # Connect to video widget
         self.media_controller.connectVideoWidget(self.video_widget)
 
@@ -299,9 +300,18 @@ class MainWindow(QMainWindow):
         self.status_label.setTextFormat(Qt.TextFormat.RichText)
         self.statusBar().addWidget(self.status_label)
 
-        self.progress_label = QLabel()
+        self.transcription_status_label = QLabel()
         # self.progress_label.setTextFormat(Qt.TextFormat.RichText)
-        self.statusBar().addPermanentWidget(self.progress_label)
+        self.transcription_led = IconWidget(icons["led_red"], 10)
+        self.transcription_led.setToolTip(strings.TR_NO_TRANSCRIPTION_TOOLTIP)
+        self.statusBar().addPermanentWidget(self.transcription_status_label)
+        self.statusBar().addPermanentWidget(self.transcription_led)
+        self.transcription_led.setVisible(False)
+
+        # Spacer to the right
+        spacer = QLabel()
+        spacer.setFixedWidth(1)
+        self.statusBar().addPermanentWidget(spacer)
         
     
     def _createMainMenu(self):
@@ -315,7 +325,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(open_action)
 
         # Recent files
-        self.recent_menu = file_menu.addMenu(self.tr("&Open recent"))
+        self.recent_menu = file_menu.addMenu(self.tr("Open &recent"))
 
         file_menu.addSeparator() # -------------------------
 
@@ -462,24 +472,18 @@ class MainWindow(QMainWindow):
         self.undo_button.setFixedWidth(BUTTON_SIZE)
         self.undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
         self.undo_button.clicked.connect(self.undo_stack.undo)
+        self.undo_button.setShortcut(QKeySequence.StandardKey.Undo)
         self.undo_button.setEnabled(False)
         undo_redo_layout.addWidget(self.undo_button)
-        undo_action = QAction("Undo", self)
-        undo_action.setShortcut(QKeySequence.StandardKey.Undo)
-        undo_action.triggered.connect(self.undo_button.animateClick)
-        self.addAction(undo_action)
 
         self.redo_button = QPushButton()
         self.redo_button.setIcon(icons["redo"])
         self.redo_button.setFixedWidth(BUTTON_SIZE)
         self.redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
         self.redo_button.clicked.connect(self.undo_stack.redo)
+        self.redo_button.setShortcut(QKeySequence.StandardKey.Redo)
         self.redo_button.setEnabled(False)
         undo_redo_layout.addWidget(self.redo_button)
-        redo_action = QAction("Redo", self)
-        redo_action.setShortcut(QKeySequence.StandardKey.Redo)
-        redo_action.triggered.connect(self.redo_button.animateClick)
-        self.addAction(redo_action)
 
         top_bar_layout.addLayout(undo_redo_layout)
         # top_bar_layout.addStretch(1)
@@ -1224,12 +1228,29 @@ class MainWindow(QMainWindow):
             self.toggle_video_action.setChecked(True)
 
         if "transcription_progress" in self.media_metadata:
-            self.waveform.recognizer_progress = self.media_metadata["transcription_progress"]
+            progress_seconds = self.media_metadata["transcription_progress"]
+            self.waveform.recognizer_progress = progress_seconds
+            if "transcription_completed" in self.media_metadata and self.media_metadata["transcription_completed"]:
+                self._setStatusTranscriptionCompleted()
+
+            if "duration" in self.media_metadata:
+                progress_ratio = progress_seconds / self.media_metadata["duration"]
+                if progress_ratio == 0.0:
+                    self._setStatusNoTranscription()
+                elif progress_ratio <= 0.99:
+                    self._setStatusPartialTranscription(progress_ratio)
+                else:
+                    self._setStatusTranscriptionCompleted()
+            else:
+                self._setStatusNoTranscription()
+        else:
+            self._setStatusNoTranscription()
 
         if "scenes" in self.media_metadata:
             self.waveform.scenes = self.media_metadata["scenes"]
 
         self.transcribe_button.setEnabled(True)
+        self.transcription_led.setVisible(True)
         self.waveform.must_redraw = True
 
 
@@ -1295,7 +1316,7 @@ class MainWindow(QMainWindow):
         dialog.signals.update_ui_language.connect(_onUpdateUiLanguage)
         dialog.signals.toggle_autosave.connect(self.onSetAutosave)
 
-        result = dialog.exec()
+        dialog.exec()
 
         self.changeLanguage(old_language)
 
@@ -1642,6 +1663,12 @@ class MainWindow(QMainWindow):
         self.media_controller.seekTo(self.waveform.playhead)
 
 
+    def onMediaDurationChanged(self, duration_sec: float) -> None:
+        if self.media_path and self.media_metadata and "duration" not in self.media_metadata:
+            self.media_metadata["duration"] = duration_sec
+            self.cache.update_media_metadata(self.media_path, self.media_metadata)
+
+
     def toggleVideo(self, checked) -> None:
         log.debug(f"toggle video {checked=}")
         MIN_VIDEO_PANEL_WIDTH = 100
@@ -1872,9 +1899,12 @@ class MainWindow(QMainWindow):
         self.waveform.setActive(seg_ids, self.media_controller.isPlaying())
         
         if seg_ids is None:
+            self.text_widget.deactivateSentence()
+            self.status_label.clear()
             return
         
         seg_id = seg_ids[0]
+        self.text_widget.highlightUtterance(seg_id)
         self.text_cursor_utterance_id = seg_id # Set the segment that should be played
 
         if self.media_controller.isPaused() or self.media_controller.isStopped():
@@ -2024,14 +2054,7 @@ class MainWindow(QMainWindow):
         self.media_metadata["transcription_completed"] = True
         if self.media_path != None:
             self.cache.update_media_metadata(self.media_path, self.media_metadata)
-
-
-    def updateProgressBar(self, t_seconds: float) -> None:
-        self.waveform.recognizer_progress = t_seconds
-        if t_seconds > self.waveform.t_left and t_seconds < self.waveform.getTimeRight():
-            self.waveform.must_redraw = True
-        
-        self.progress_label.setText(self.tr("transcribed") + f" {t_seconds / self.media_controller.getDuration():.0%}")
+        self._setStatusTranscriptionCompleted()
 
 
     def toggleTranscribe(self, toggled) -> None:
@@ -2070,6 +2093,7 @@ class MainWindow(QMainWindow):
                 # Don't create utterances
                 # Needed for "smart splitting"
                 self.hidden_transcription = True
+            self._setStatusTranscriptionStarted()
             self.transcribe_file_signal.emit(self.media_path, transcription_progress)
 
 
@@ -2258,6 +2282,12 @@ class MainWindow(QMainWindow):
 
     def search(self) -> None:
         print("search tool")
+        # button = QPushButton(tr("Animated Button"), self)
+        # anim = QPropertyAnimation(button, "pos", self)
+        # anim.setDuration(10000)
+        # anim.setStartValue(QPoint(0, 0))
+        # anim.setEndValue(QPoint(100, 250))
+        # anim.start()
 
 
     def toggleLooping(self) -> None:
@@ -2391,6 +2421,7 @@ class MainWindow(QMainWindow):
         
         if seg_ids is None:
             self.media_controller.deselectSegment()
+            self.status_label.clear()
             return
         
         last_id = seg_ids[-1]
@@ -2507,6 +2538,39 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Ok,
             QMessageBox.StandardButton.Ok,
         )
+    
+
+    def updateProgressBar(self, t_seconds: float) -> None:
+        self.waveform.recognizer_progress = t_seconds
+        if t_seconds > self.waveform.t_left and t_seconds < self.waveform.getTimeRight():
+            self.waveform.must_redraw = True
+        
+        self.transcription_status_label.setText(self.tr("Transcribed") + f" {t_seconds / self.media_controller.getDuration():.0%}")
+
+
+    def _setStatusNoTranscription(self):
+        self.transcription_led.setIcon(icons["led_red"])
+        self.transcription_led.setToolTip(strings.TR_NO_TRANSCRIPTION_TOOLTIP)
+        self.transcription_status_label.setText(strings.TR_NO_TRANSCRIPTION_LABEL)
+        self.transcription_status_label.setToolTip(strings.TR_NO_TRANSCRIPTION_LABEL_TOOLTIP)
+
+    def _setStatusPartialTranscription(self, progress):
+        self.transcription_led.setIcon(icons["led_red"])
+        self.transcription_led.setToolTip(strings.TR_NO_TRANSCRIPTION_TOOLTIP)
+        self.transcription_status_label.setText(f"{progress:.0%}")
+        self.transcription_status_label.setToolTip(strings.TR_PARTIAL_TRANSCRIPTION_LABEL_TOOLTIP)
+
+    def _setStatusTranscriptionCompleted(self):
+        self.transcription_led.setIcon(icons["led_green"])
+        self.transcription_led.setToolTip(strings.TR_TRANSCRIPTION_COMPLETED)
+        self.transcription_status_label.clear()
+        self.transcription_status_label.setToolTip("")
+    
+    def _setStatusTranscriptionStarted(self):
+        self.transcription_led.setIcon(icons["led_orange"])
+        self.transcription_led.setToolTip("")
+        self.transcription_status_label.clear()
+        self.transcription_status_label.setToolTip("")
 
 
 

@@ -51,6 +51,7 @@ class MediaPlayerController(QObject):
     playback_stopped = Signal()
     segment_ended = Signal(int)       # segment_id
     subtitle_changed = Signal(float)  # time in seconds
+    media_duration_changed = Signal(float)  # duration in seconds
     
 
     def __init__(self, parent=None):
@@ -381,6 +382,7 @@ class MediaPlayerController(QObject):
         """Handle media duration changes"""
         self.media_duration = duration_ms / 1000.0
         self.log.info(f"Media duration: {self.media_duration:.2f}s")
+        self.media_duration_changed.emit(self.media_duration)
     
 
     def _checkPlaybackBoundaries(self, position_sec: float) -> None:
