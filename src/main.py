@@ -1512,14 +1512,14 @@ class MainWindow(QMainWindow):
         Updates the head position on the waveform and highlight the
         sentence in the text widget if play head is above an aligned segment
         """
-
+        log.debug(f"onPlayerPositionChanged({position_sec=})")
         if self.video_widget.isVisible() and not self.video_widget.video_is_valid:
             self.video_widget.updateLayout() # fixes the video layout updating
 
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
 
         # Check if end of current selected segments is reached
-        playing_segment_id = self.media_controller.getPlayingSegmentId()
+        playing_segment_id = self.text_cursor_utterance_id
         if playing_segment_id >= 0:
             segment = self.waveform.getSegment(playing_segment_id)
             if segment:
@@ -1528,7 +1528,7 @@ class MainWindow(QMainWindow):
                 if position_sec >= end:
                     # Compare the playing segment with the text cursor position
                     if (
-                        self.text_cursor_utterance_id > 0
+                        self.text_cursor_utterance_id >= 0
                         and (self.text_cursor_utterance_id != playing_segment_id)
                     ):
                         # Position the waveform playhead to the same utterance
@@ -1576,7 +1576,6 @@ class MainWindow(QMainWindow):
     
 
     def playAction(self) -> None:
-        print("playAction")
         if self.media_controller.isPlaying():
             # Stop playback
             self.media_controller.pause()
@@ -1659,8 +1658,7 @@ class MainWindow(QMainWindow):
 
     @Slot(float)
     def onWaveformPlayheadMoved(self, position_sec: float) -> None:
-        self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
-        self.media_controller.seekTo(self.waveform.playhead)
+        self.media_controller.seekTo(position_sec)
 
 
     def onMediaDurationChanged(self, duration_sec: float) -> None:
@@ -1869,6 +1867,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def onTextChanged(self) -> None:
+        log.debug("onTextChanged()")
         # Update the utterance density field
         cursor = self.text_widget.textCursor()
         block = cursor.block()
@@ -1904,7 +1903,7 @@ class MainWindow(QMainWindow):
             return
         
         seg_id = seg_ids[0]
-        self.text_widget.highlightUtterance(seg_id)
+        # self.text_widget.highlightUtterance(seg_id)
         self.text_cursor_utterance_id = seg_id # Set the segment that should be played
 
         if self.media_controller.isPaused() or self.media_controller.isStopped():

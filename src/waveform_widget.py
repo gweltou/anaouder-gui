@@ -492,6 +492,7 @@ class WaveformWidget(QWidget):
 
         This method is called continuously from MainWindow.
         """
+        log.debug(f"updatePlayHead({position_sec=}, {is_playing=})")
         self.playhead = position_sec
 
         if self.follow_playhead and is_playing:
@@ -611,9 +612,12 @@ class WaveformWidget(QWidget):
 
     def getSegmentAtTime(self, time: float) -> int:
         """Return the ID of any segment at a given position, or -1 if none is present"""
-        for id, (start, end) in self.getSortedSegments():
-            if start <= time <= end:
-                return id
+        log.debug(f"getSegmentAtTime({time=})")
+        for seg_id, (start, end) in self.getSortedSegments():
+            # Give precedence to the segment that starts at this timecode
+            # rather than the one that ends at this timecode
+            if start - 0.001 <= time < end:
+                return seg_id
         return -1
 
 
