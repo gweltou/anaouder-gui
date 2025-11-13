@@ -366,7 +366,6 @@ class MediaPlayerController(QObject):
         self._checkPlaybackBoundaries(position_sec)
     
 
-    @Slot(QMediaPlayer.PlaybackState)
     def _onPlaybackStateChanged(self, state: QMediaPlayer.PlaybackState) -> None:
         """Handle playback state changes"""
         if state == QMediaPlayer.PlaybackState.PlayingState:
@@ -377,7 +376,6 @@ class MediaPlayerController(QObject):
             self.playback_stopped.emit()
     
 
-    @Slot(int)
     def _onDurationChanged(self, duration_ms: int) -> None:
         """Handle media duration changes"""
         self.media_duration = duration_ms / 1000.0

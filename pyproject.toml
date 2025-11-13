@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anaouder-gui"
+version = "1.0rc1"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.28.0",
+    "pyside6",
+    "static-ffmpeg",
+    "pydub",
+    "audioop-lts; python_version>='3.13'",
+    "vosk",
+    "srt",
+    "pyinstaller",
+    "ostilhou @ git+https://github.com/gweltou/ostilhou"
+]

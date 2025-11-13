@@ -1,1 +1,6 @@
-__version__ = "Beta 25.10.09"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("anaouder-gui")
+except PackageNotFoundError:
+    __version__ = "unknown"
