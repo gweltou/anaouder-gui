@@ -998,14 +998,16 @@ class MainWindow(QMainWindow):
     def loadAliFile(self, filepath: Path):
         """Load an ALI file or its more recent backup"""
         # Check if there is more recent backup files
-        load_backup = False
-        if last_backup := self.file_manager.get_last_backup(filepath):
+        backup_to_load = None
+        backup_list = self.file_manager.get_backup_list(filepath)
+        if backup_list:
+            last_backup = backup_list[-1]
             if last_backup.stat().st_mtime > filepath.stat().st_mtime:
                 # Backup file is more recent
-                load_backup = self._promptLoadAutosaved(last_backup)
+                backup_to_load = self._dev_promptLoadAutosaved(backup_list)
 
         try:
-            data = self.file_manager.read_ali_file(last_backup if load_backup else filepath)
+            data = self.file_manager.read_ali_file(backup_to_load or filepath)
         except FileOperationError as e:
             QMessageBox.critical(
                 self,
@@ -1019,7 +1021,7 @@ class MainWindow(QMainWindow):
         self.filepath = filepath
 
         media_path = data.get("media-path", None)
-        if media_path and load_backup:
+        if media_path and backup_to_load:
              # Change the media filepath to point to the parent folder
              media_path = Path(media_path)
              media_path = str(media_path.parent.parent / media_path.name)
@@ -1068,6 +1070,65 @@ class MainWindow(QMainWindow):
 
         return reply == QMessageBox.StandardButton.Yes
     
+
+    def _dev_promptLoadAutosaved(self, backup_files: List[Path]) -> Optional[Path]:
+        """Prompt the user to select which backup file to open"""
+        
+        if not backup_files:
+            return None
+        
+        # If only one backup file, use simple yes/no dialog
+        if len(backup_files) == 1:
+            s1 = self.tr("The autosaved file has more recent changes.")
+            s2 = self.tr("Load autosaved file?")
+            
+            reply = QMessageBox.question(
+                self,
+                strings.TR_AUTOSAVE_BACKUPS,
+                s1 + "\n\n" + s2,
+                buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                defaultButton=QMessageBox.StandardButton.Yes
+            )
+            
+            return backup_files[0] if reply == QMessageBox.StandardButton.Yes else None
+        
+        # Multiple backup files - show selection dialog
+        from PySide6.QtWidgets import QListWidget, QDialogButtonBox
+        from datetime import datetime
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle(strings.TR_AUTOSAVE_BACKUPS)
+        
+        layout = QVBoxLayout(dialog)
+        
+        s1 = self.tr("Multiple autosaved files found.")
+        s2 = self.tr("Select one to load:")
+        label = QLabel(s1 + '\n\n' + s2)
+        layout.addWidget(label)
+        
+        list_widget = QListWidget()
+        for backup_file in backup_files:
+            # Show filename and modification time
+            mod_time = datetime.fromtimestamp(backup_file.stat().st_mtime)
+            item_text = mod_time.strftime('%Y-%m-%d %H:%M:%S')
+            list_widget.addItem(item_text)
+        
+        list_widget.setCurrentRow(len(backup_files) - 1)  # Select most recent by default
+        layout.addWidget(list_widget)
+        
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_index = list_widget.currentRow()
+            return backup_files[selected_index] if selected_index >= 0 else None
+        
+        return None
+
 
     def loadDocumentData(self, data: List[Tuple[str, Optional[Segment]]]) -> None:
         """

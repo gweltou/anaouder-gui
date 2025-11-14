@@ -37,6 +37,7 @@ class Strings(QObject):
         self.TR_ALI_FILES = self.tr("ALI files")
         self.TR_SAVE_ERROR = self.tr("Save Error")
         self.TR_COULD_NOT_SAVE_FILE = self.tr("Could not save file")
+        self.TR_AUTOSAVE_BACKUPS = self.tr("Autosave Backup(s)")
 
         # Parameters Dialog
         self.TR_FRAMES_UNIT = self.tr("frames")

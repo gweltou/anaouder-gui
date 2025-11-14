@@ -18,6 +18,7 @@ from ostilhou.asr.dataset import format_timecode
 
 from src.utils import MEDIA_FORMATS, LINE_BREAK
 from src.interfaces import Segment, WaveformInterface, TextDocumentInterface
+from src.settings import AUTOSAVE_FOLDER_NAME
 
 
 log = logging.getLogger(__name__)
@@ -320,21 +321,26 @@ class FileManager(QObject):
 
     def get_last_backup(self, filepath: Path) -> Optional[Path]:
         """Get the most recent backup of the given ALI file, if any"""
-        autosave_folder = filepath.parent / "autosave"
+        backup_list = self.get_backup_list(filepath)
+        if backup_list:
+            return backup_list[-1]
+        return None
+
+
+    def get_backup_list(self, filepath: Path) -> Optional[List[Path]]:
+        """Get the most recent backup of the given ALI file, if any"""
+        autosave_folder = filepath.parent / AUTOSAVE_FOLDER_NAME
         if not autosave_folder.exists():
             return None
-        
-        old_backups = sorted(autosave_folder.glob(str(filepath.stem) + "@*.ali"))
-        if old_backups:
-            return old_backups[-1]
-        return None
+
+        return list(sorted(autosave_folder.glob(str(filepath.stem) + "@*.ali")))
 
 
     def get_backup_parent(self, filepath: Path) -> Optional[Path]:
         """Returns the path of the original file, if this file is a backup file"""
         timestamp = r"@\d+_\d+"
         
-        if filepath.parent.name == "autosave" and bool(re.search(timestamp + r'$', filepath.stem)):
+        if filepath.parent.name == AUTOSAVE_FOLDER_NAME and bool(re.search(timestamp + r'$', filepath.stem)):
             # Check for parent ALI file
             parent_ali = filepath.parent.parent / re.sub(timestamp, '', filepath.name)
             if parent_ali.exists():

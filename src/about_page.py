@@ -73,7 +73,7 @@ class AboutDialog(QDialog):
 
         # Description
         description = QLabel()
-        description.setText("<p align=\"center\">Treuzskrivañ emgefreek ha lec'hel e brezhoneg.</p>")
+        description.setText("<p align=\"center\">Treuzskrivañ emgefreek ha lec'hel e brezhoneg</p>")
         description.setAlignment(Qt.AlignmentFlag.AlignCenter)
         description.setWordWrap(True)
         scroll_layout.addWidget(description)
@@ -100,7 +100,7 @@ class AboutDialog(QDialog):
         <h4>Darempred</h4>
         <p>anaouder@dizale.bzh</p>
         <h4>Kod mammen</h4>
-        <p>https://github.com/gweltou/anaouder-gui</p>
+        <p><a href="https://github.com/gweltou/anaouder-gui">https://github.com/gweltou/anaouder-gui</a></p>
         <h4>Trugarekaat</h4>
         <p>Anna Duval-Guennoc, Cédric Sinou, Jean-Mari Ollivier, Jeanne Mégly, Karen Treguier, Léane Rumin, Marie Breton, Mevena Guillouzic-Gouret, Samuel Julien</p>
         """)
