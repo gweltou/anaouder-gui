@@ -39,9 +39,10 @@ type Segment = List[float]
 type SegmentId = int
 
 Handle = Enum("Handle", ["LEFT", "RIGHT", "MIDDLE"])
+SegmentSide = Enum("SegmentSide", ["LEFT", "RIGHT"])
+
 
 log = logging.getLogger(__name__)
-
 
 
 
@@ -95,7 +96,7 @@ class WaveformWidget(QWidget):
             for every given pixel between two timecodes
             """
             # assert t_left >= 0.0
-
+            
             # Memoization
             if (t_left, t_right, size) == self.last_request:
                 return self.filtered_audio
@@ -106,12 +107,11 @@ class WaveformWidget(QWidget):
                 self.buffer = np.resize(self.buffer, 2 * len(self.buffer))
 
             samples_per_pix = self.sr / self.ppsec
-            samples_per_pix_floor = int(samples_per_pix)
+            samples_per_pix_floor = int(max(samples_per_pix, 1.0))
 
             si_left = round(t_left * self.sr)
             bi_left = int(si_left / samples_per_pix)
             # bi_right = bi_left + size
-            
             s_step = 1 if samples_per_pix <= 16 else int(samples_per_pix / 16)
             mul = samples_per_pix_floor / s_step
             for i in range(size):
@@ -174,6 +174,8 @@ class WaveformWidget(QWidget):
         self.mouse_pos = None
         self.mouse_prev_pos = None
         self.mouse_dir = 1 # 1 when going right, -1 when going left
+        self.double_click = False # If a double-click was just made
+        self.clicked_side = SegmentSide.LEFT # Which of the 2 halves of the segment was clicked
 
         self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
 
@@ -452,7 +454,10 @@ class WaveformWidget(QWidget):
                 # adapted_ppsec = self.width() / adapted_window_dur
                 # self.scroll_goal = max(0.0, start - 0.1 * adapted_window_dur) # time relative to left of window
                 # self.ppsec_goal = adapted_ppsec
-                self.scroll_goal = max(0.0, start - 0.1 * window_dur) # time relative to left of window
+                if self.clicked_side == SegmentSide.LEFT:
+                    self.scroll_goal = max(0.0, start - 0.15 * window_dur) # time relative to left of window
+                else:
+                    self.scroll_goal = max(0.0, end - 0.85 * window_dur)
 
         self.selection_is_active = False
         self.must_redraw = True
@@ -629,10 +634,10 @@ class WaveformWidget(QWidget):
         return -1
 
 
-    def getSegmentAtPixelPosition(self, position: QPointF, vertical=True) -> int:
+    def getSegmentAtPixelPosition(self, position: QPointF, vertical=True) -> Optional[Tuple[SegmentId, SegmentSide]]:
         """
         Return the segment id of any segment at this window position
-        or -1 if there is no segment at this position.
+        or None if there is no segment at this position.
         
         A given position is inside a segment if it fits both vertically and horizontally.
 
@@ -643,7 +648,7 @@ class WaveformWidget(QWidget):
                 Verify only on the horizontal axis if True
 
         Returns:
-            segment id or -1
+            segment id or None
         """
         if (
             vertical and (
@@ -651,13 +656,13 @@ class WaveformWidget(QWidget):
                 or position.y() > self.inactive_top + self.inactive_height
             )
         ):
-            return -1
+            return None
 
         t = self.t_left + position.x() / self.ppsec
         for id, (start, end) in self.segments.items():
             if start <= t <= end:
-                return id
-        return -1
+                return (id, SegmentSide.LEFT if (t-start) < (end-t) else SegmentSide.RIGHT)
+        return None
 
 
     def isSelectionAtPosition(self, position: QPointF) -> bool:
@@ -864,12 +869,17 @@ class WaveformWidget(QWidget):
 
         if event.button() == Qt.MouseButton.RightButton:
             # Show contextMenu only if right clicking on active segment or selection
-            if self.getSegmentAtPixelPosition(self.click_pos) in self.active_segments:
-                self._must_open_context_menu = True
-            elif self.isSelectionAtPosition(self.click_pos):
-                self._must_open_context_menu = True
-            else:
+            segmentid_and_side = self.getSegmentAtPixelPosition(self.click_pos)
+            if segmentid_and_side is None:
                 self._must_open_context_menu = False
+            elif self.isSelectionAtPosition(self.click_pos):
+                    self._must_open_context_menu = True
+            else:
+                seg_id, _ = segmentid_and_side
+                if seg_id in self.active_segments:
+                    self._must_open_context_menu = True
+                else:
+                    self._must_open_context_menu = False
 
             # Move the playhead
             # When manually moving the playhead from the waveform,
@@ -900,6 +910,11 @@ class WaveformWidget(QWidget):
     
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self.double_click:
+            # Re-arm double-click
+            self.double_click = False
+            return
+
         if self.is_selecting and self.anchor >= 0:
             self.is_selecting = False
             self.anchor = -1
@@ -920,14 +935,41 @@ class WaveformWidget(QWidget):
             if dist < 20:
                 # Mouse release is close to mouse press (no drag)
                 # Select only clicked segment
-                clicked_id = self.getSegmentAtPixelPosition(event.position())
-                self.select_segments.emit( (None if clicked_id == -1 else [clicked_id]) )
-                if clicked_id < 0:
+                clicked_id_and_side = self.getSegmentAtPixelPosition(event.position())
+                if clicked_id_and_side:
+                    clicked_id, side = clicked_id_and_side
+                    # Set the side so the waveform can center on the relevant part for the user
+                    self.clicked_side = side
+                    self.select_segments.emit( [clicked_id] )
+                else:
+                    self.select_segments.emit(None)
                     # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(event.position())
         
         self.must_redraw = True
         return super().mouseReleaseEvent(event)
+
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        """Adjust the zoom level to the selected segment"""
+        active_id = self._dev_getSelectedId()
+        if active_id is None:
+            return super().mouseDoubleClickEvent(event)
+            
+        segment = self.segments[active_id]
+        if segment is None:
+            return super().mouseDoubleClickEvent(event)
+        
+        start, end = segment
+        segment_dur = end - start
+
+        # Choose a zoom level that will fit this segment in 80% of the window width
+        adapted_window_dur = segment_dur / 0.8
+        adapted_ppsec = self.width() / adapted_window_dur
+        self.scroll_goal = max(0.0, min(self.audio_len - adapted_window_dur, start - 0.1 * adapted_window_dur)) # time relative to left of window
+        self.ppsec_goal = adapted_ppsec
+
+        self.double_click = True
 
 
     def mouseMoveEvent(self, event: QMouseEvent):
@@ -998,12 +1040,6 @@ class WaveformWidget(QWidget):
         # Move play head
         elif (event.buttons() == Qt.MouseButton.RightButton):
             self.playhead_moved.emit(time_position)
-
-            # Deactivate currently active segment
-            # if self.getSegmentAtPixelPosition(self.mouse_pos, vertical=False) not in self.active_segments:
-            #     self.active_segments = []
-            #     self.active_segment_id = -1
-            #     self.must_redraw = True
         
         # Selection
         elif self.is_selecting and self.anchor >= 0:
@@ -1434,7 +1470,7 @@ class WaveformWidget(QWidget):
                 t_x = round((t - self.t_left) * self.ppsec)
                 self.painter.drawLine(t_x, self.timecode_margin - 4, t_x, self.timecode_margin)
 
-        ti = ceil(self.t_left / time_step) * time_step
+        ti = ceil(max(0.0, self.t_left) / time_step) * time_step
         for t in range(ti, int(t_right)+1, time_step):
             t_x = round((t - self.t_left) * self.ppsec)
             self.painter.drawLine(t_x, self.timecode_margin, t_x, self.height()-4)

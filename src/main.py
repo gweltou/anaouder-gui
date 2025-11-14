@@ -1004,7 +1004,7 @@ class MainWindow(QMainWindow):
             last_backup = backup_list[-1]
             if last_backup.stat().st_mtime > filepath.stat().st_mtime:
                 # Backup file is more recent
-                backup_to_load = self._dev_promptLoadAutosaved(backup_list)
+                backup_to_load = self._promptLoadAutosaved(backup_list)
 
         try:
             data = self.file_manager.read_ali_file(backup_to_load or filepath)
@@ -1054,24 +1054,7 @@ class MainWindow(QMainWindow):
                     self.openFile(filepath)
 
 
-    def _promptLoadAutosaved(self, backup_file: Path) -> bool:
-        """Prompt the user what file to open, if the backup file is more recent"""
-
-        s1 = self.tr("The autosaved file has more recent changes.")
-        s2 = self.tr("Load autosaved file?")
-
-        reply = QMessageBox.question(
-            self,
-            self.tr("Backup file"),
-            s1 + "\n\n" + s2,
-            buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-            defaultButton=QMessageBox.StandardButton.Yes
-        )
-
-        return reply == QMessageBox.StandardButton.Yes
-    
-
-    def _dev_promptLoadAutosaved(self, backup_files: List[Path]) -> Optional[Path]:
+    def _promptLoadAutosaved(self, backup_files: List[Path]) -> Optional[Path]:
         """Prompt the user to select which backup file to open"""
         
         if not backup_files:
@@ -1110,7 +1093,7 @@ class MainWindow(QMainWindow):
         for backup_file in backup_files:
             # Show filename and modification time
             mod_time = datetime.fromtimestamp(backup_file.stat().st_mtime)
-            item_text = mod_time.strftime('%Y-%m-%d %H:%M:%S')
+            item_text = mod_time.strftime('%Y-%m-%d\t%H:%M:%S')
             list_widget.addItem(item_text)
         
         list_widget.setCurrentRow(len(backup_files) - 1)  # Select most recent by default
@@ -1563,11 +1546,11 @@ class MainWindow(QMainWindow):
         next_segment_id = self.waveform.getNextSegmentId(segment_id)
 
         if next_segment_id != -1:
-            self._dev_selectUtterance(next_segment_id)
+            self.selectUtterance(next_segment_id)
             if next_segment := self.waveform.getSegment(next_segment_id):
                 self.playSegment(next_segment, next_segment_id)
         else:
-            self._dev_deselectUtterance()
+            self.deselectUtterance()
             self.media_controller.stop()
             self.media_controller.seekTo(0.0)
 
@@ -1580,11 +1563,11 @@ class MainWindow(QMainWindow):
         prev_segment_id = self.waveform.getPrevSegmentId(segment_id)
 
         if prev_segment_id != -1:
-            self._dev_selectUtterance(prev_segment_id)
+            self.selectUtterance(prev_segment_id)
             if prev_segment := self.waveform.getSegment(prev_segment_id):
                 self.media_controller.playSegment(prev_segment, prev_segment_id)
         else:
-            self._dev_deselectUtterance()
+            self.deselectUtterance()
             self.media_controller.seekTo(0.0)
     
 
@@ -1592,23 +1575,22 @@ class MainWindow(QMainWindow):
         """Get back to the first segment or to the beginning of the recording"""
         segment_id = self.waveform._dev_getSelectedId()
         if segment_id is None:
-            self._dev_deselectUtterance()
+            self.deselectUtterance()
             self.media_controller.seekTo(0.0)
             return
         
         if (segment := self.waveform.getSegment(segment_id)) != None:
             first_segment_id = self.waveform.getSortedSegments()[0][0]
-            self._dev_selectUtterance(first_segment_id)
+            self.selectUtterance(first_segment_id)
             self.media_controller.playSegment(segment, segment_id)
 
 
-    def _dev_selectUtterance(self, seg_id: SegmentId) -> None:
+    def selectUtterance(self, seg_id: SegmentId) -> None:
         """
-        Source of the cascade of events to select an utterance
-        Highlights a segment on the waveform
-        Sets the text cursor
+        Source of the cascade of events to select an utterance:
+        The cursor change fires onTextCursorChanged
+        onTextCursorChanged sets the segment active on the waveform
         """
-        #self.text_cursor_utterance_id
         log.debug(f"selectUtterance({seg_id=})")
         
         block = self.text_widget.getBlockById(seg_id)
@@ -1619,7 +1601,7 @@ class MainWindow(QMainWindow):
             self.text_widget.cursorPositionChanged.emit() # We need to force it if the block is already selected
 
 
-    def _dev_deselectUtterance(self) -> None:
+    def deselectUtterance(self) -> None:
         self.media_controller.deselectSegment()
         self.waveform.setActive(None)
         self.text_widget.deactivateSentence()
@@ -1639,16 +1621,10 @@ class MainWindow(QMainWindow):
         seg_ids = seg_ids if seg_ids else None
         
         if seg_ids is None:
-            self._dev_deselectUtterance()
+            self.deselectUtterance()
             return
 
-        self._dev_selectUtterance(seg_ids[0])
-        # block = self.text_widget.getBlockById(seg_ids[0])
-        # if block:
-        #     cursor = self.text_widget.textCursor()
-        #     cursor.setPosition(block.position())
-        #     self.text_widget.setTextCursor(cursor)
-        #     self.text_widget.cursorPositionChanged.emit() # We need to force it if the block is already selected
+        self.selectUtterance(seg_ids[0])
 
 
     def onWaveformPlayheadManualyMoved(self, position_sec: float) -> None:
@@ -1660,7 +1636,7 @@ class MainWindow(QMainWindow):
                 start, end = segment
                 if (position_sec < start) or (position_sec > end):
                     # Deactivate segment
-                    self._dev_deselectUtterance()
+                    self.deselectUtterance()
         
         self.media_controller.seekTo(position_sec)
 
