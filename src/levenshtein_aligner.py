@@ -9,7 +9,15 @@ from src.utils import PUNCTUATION
 SPLIT_TOKEN = '|'
 
 
-def smart_split(text: str, position: int, vosk_tokens: list) -> tuple:
+
+class SmartSplitError(Exception):
+    """Custom exception for errors during smart splitting
+    """
+    pass
+
+
+
+def smart_split_text(text: str, position: int, vosk_tokens: list) -> tuple:
     """
     Split a text at a given character position
     while trying to keep it aligned with timecoded tokens
@@ -28,7 +36,7 @@ def smart_split(text: str, position: int, vosk_tokens: list) -> tuple:
     if not can_smart_split(text, vosk_tokens):
         # Will call prepare_sentence, like align_text_with_vosk_token
         # We could take advantage of that to avoid redundant calls
-        raise Exception("CER is too high to smart-split")
+        raise SmartSplitError("CER is too high")
 
     left_text = text[:position].rstrip()
     right_text = text[position:].lstrip()
@@ -91,7 +99,7 @@ def smart_split_time(text: str, timepos: float, vosk_tokens: list) -> tuple:
     if not can_smart_split(text, vosk_tokens):
         # Will call prepare_sentence.
         # We could take advantage of that to avoid redundant calls
-        raise Exception("CER is too high to smart-split")
+        raise SmartSplitError("CER is too high")
 
     # Find the best location to split the transcribed sentence
     idx = 0

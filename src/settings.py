@@ -11,6 +11,7 @@ _is_darwin = platform.system() == "Darwin"
 APP_NAME = "Anaouder"
 DEFAULT_LANGUAGE = 'br'
 MULTI_LANG = False
+AUTOSAVE_FOLDER_NAME = "_anaouder_autosave"
 
 app_settings = QSettings("OTilde", APP_NAME)
 

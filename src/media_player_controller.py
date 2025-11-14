@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 class PlaybackState:
     """Encapsulates the current playback state"""
     def __init__(self):
-        self.playing_segment_id: int = -1
+        self.playing_segment_id: SegmentId = -1
         self.looping: bool = False
         self.is_playing: bool = False
         self.current_position: float = 0.0  # in seconds
@@ -129,7 +129,6 @@ class MediaPlayerController(QObject):
         """Pause playback"""
         if self.isPlaying():
             self.player.pause()
-            # self.state.is_playing = False
             self.log.debug(f"Playback paused at {self.state.current_position:.3f}s")
     
 
@@ -137,7 +136,6 @@ class MediaPlayerController(QObject):
         """Stop playback and reset to beginning"""
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.stop()
-            # self.state.is_playing = False
             self.log.debug("Playback stopped")
     
 

@@ -1,4 +1,4 @@
-from src.levenshtein_aligner import smart_split
+from src.levenshtein_aligner import smart_split_text
 import src.lang as lang
 
 
@@ -42,7 +42,7 @@ def test_aligner_word_boundary():
 
     i = 0
     while (i := text.find(' ', i)) != -1:
-        left, right = smart_split(text, i, vosk_tokens)
+        left, right = smart_split_text(text, i, vosk_tokens)
         i += 1
         print(left, right)
         assert not left or left[0] < left[1]
@@ -87,7 +87,7 @@ def test_aligner_in_word():
     text = "D'am soñj ar pezh a zo bepred em skridoù, met skridoù ar re all, a zo bepred ar fed bezañ euh, feñ... war an hent d'ar- ma- betek ar marv kwa. "
 
     for i in range(len(text)):
-        left, right = smart_split(text, i, vosk_tokens)
+        left, right = smart_split_text(text, i, vosk_tokens)
         print(left, right)
         assert not left or left[0] < left[1]
         assert not right or right[0] < right[1]

@@ -8,7 +8,6 @@ Terminology
     Utterance: The association of an audio `Segment` and a text `Sentence`
 """
 
-import sys
 import os.path
 from pathlib import Path
 from typing import List, Tuple, Optional
@@ -20,10 +19,6 @@ import static_ffmpeg
 static_ffmpeg.add_paths()
 
 import re
-from datetime import timedelta
-import srt
-import numpy as np
-#from scipy.io import wavfile
 
 from ostilhou.asr import (
     load_segments_data, load_text_data,
@@ -41,27 +36,20 @@ from PySide6.QtWidgets import (
     QSplitter, QProgressBar,
     QPushButton, QDial,
     QLabel, QComboBox, QCheckBox, QMessageBox,
-    QScrollArea, QFrame
 )
 from PySide6.QtCore import (
     Qt, QSize, QUrl,
     Signal, Slot, QThread,
-    QSettings,
     QTranslator, QLocale, 
     QEvent, QTimer
 )
 from PySide6.QtGui import (
     QAction, QActionGroup,
-    QKeySequence, QShortcut, QKeyEvent, QCloseEvent,
+    QKeySequence, QShortcut, QCloseEvent,
     QTextBlock, QTextCursor,
-    QUndoStack, QUndoCommand,
-    QCursor,
-    QFont,
+    QUndoStack,
 )
-from PySide6.QtMultimedia import (
-    QAudioFormat, QMediaPlayer,
-    QMediaDevices, QAudioOutput, QMediaMetaData
-)
+from PySide6.QtMultimedia import QMediaDevices
 
 from src.utils import (
     get_resource_path,
@@ -71,12 +59,13 @@ from src.utils import (
 from src.file_manager import FileManager, FileOperationError
 from src.cache_system import CacheSystem
 from src.version import __version__
+from src.about_page import AboutDialog
 from src.theme import theme
 from src.icons import icons, loadIcons, IconWidget
 from src.media_player_controller import MediaPlayerController
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
 from src.text_widget import (
-    TextEditWidget, MyTextBlockUserData, Highlighter,
+    TextEditWidget, Highlighter,
     LINE_BREAK
 )
 from src.video_widget import VideoWidget
@@ -93,7 +82,10 @@ from src.parameters_dialog import ParametersDialog
 from src.export_srt import exportSrt, exportSrtSignals
 from src.export_eaf import exportEaf, exportEafSignals
 from src.export_txt import exportTxt, exportTxtSignals
-from src.levenshtein_aligner import smart_split, smart_split_time, can_smart_split
+from src.levenshtein_aligner import (
+    smart_split_text, smart_split_time,
+    SmartSplitError
+)
 from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
     app_settings, shortcuts,
@@ -104,7 +96,7 @@ from src.settings import (
     BUTTON_SIZE, BUTTON_MEDIA_SIZE, BUTTON_SPACING,
     BUTTON_MARGIN, BUTTON_LABEL_SIZE, DIAL_SIZE,
     FFMPEG_SCENCE_DETECTOR_THRESHOLD,
-    AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER,
+    AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER, AUTOSAVE_FOLDER_NAME,
     RECENT_FILES_LIMIT
 )
 import src.lang as lang
@@ -240,7 +232,7 @@ class MainWindow(QMainWindow):
         self.waveform.delete_utterances.connect(self.deleteUtterances)
         self.waveform.delete_segments.connect(self.deleteSegments)
         self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
-        self.waveform.playhead_moved.connect(self.onWaveformPlayheadMoved)
+        self.waveform.playhead_moved.connect(self.onWaveformPlayheadManualyMoved)
         self.waveform.refresh_segment_info.connect(self.updateSegmentInfo)
         self.waveform.refresh_segment_info_resizing.connect(self.updateSegmentInfoResizing)
         self.waveform.select_segments.connect(self.selectFromWaveform)
@@ -451,7 +443,7 @@ class MainWindow(QMainWindow):
         
         help_menu = menu_bar.addMenu(self.tr("&Help"))
         about_action = QAction(self.tr("&About"), self)
-        about_action.triggered.connect(self.showAbout)
+        about_action.triggered.connect(self.showAboutDialog)
         help_menu.addAction(about_action)
     
 
@@ -871,7 +863,7 @@ class MainWindow(QMainWindow):
             utt_id = self.text_widget.getBlockId(block)
 
             segment = None
-            if utt_id >= 0:
+            if utt_id != -1:
                 segment = self.waveform.getSegment(utt_id)
 
             blocks_data.append((text, segment))
@@ -898,7 +890,7 @@ class MainWindow(QMainWindow):
         
         # Autosave
         time_tag = time.strftime("%Y%m%d_%H%M%S")
-        autosave_folder = self.filepath.parent / "autosave"
+        autosave_folder = self.filepath.parent / AUTOSAVE_FOLDER_NAME
         autosave_path = autosave_folder / f"{self.filepath.stem}@{time_tag}.ali"
         try:
             self.setStatusMessage("Autosaving...", 1000) # Display for 1 second
@@ -1321,6 +1313,11 @@ class MainWindow(QMainWindow):
         self.changeLanguage(old_language)
 
 
+    def showAboutDialog(self):
+        about_dialog = AboutDialog(self)
+        about_dialog.exec()
+
+
     def onTargetDensityChanged(self, cps: float) -> None:
         self.waveform.changeTargetDensity(cps)
         self._target_density = cps
@@ -1337,133 +1334,6 @@ class MainWindow(QMainWindow):
             self.autosave_timer.start(6_000)
         else:
             self.autosave_timer.stop()
-
-
-    def showAbout(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle(self.tr("About"))
-        dialog.setBaseSize(300, 500)
-        
-        layout = QVBoxLayout(dialog)
-        
-        # Create scroll area for ALL content
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)  # Remove border
-        
-        # Enable mouse drag scrolling
-        # scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        
-        # Create a widget to hold ALL the scrollable content
-        scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout(scroll_widget)
-        
-        # Header with logo and title
-        header_layout = QHBoxLayout()
-        header_layout.addStretch()
-        
-        # Application logo
-        app_logo = QLabel()
-        if hasattr(self, 'windowIcon') and not self.windowIcon().isNull():
-            logo_pixmap = self.windowIcon().pixmap(96, 96)
-            app_logo.setPixmap(logo_pixmap)
-            app_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            header_layout.addWidget(app_logo)
-            header_layout.addSpacing(20)
-
-        # Title
-        title_layout = QVBoxLayout()
-        title_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-        title = QLabel("Anaouder")
-        title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        font = QFont()
-        font.setPointSize(16)
-        font.setBold(True)
-        title.setFont(font)
-        title_layout.addWidget(title)
-        
-        # Software version
-        version_label = QLabel(__version__)
-        version_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        title_layout.addWidget(version_label)
-
-        header_layout.addLayout(title_layout)
-        header_layout.addStretch()
-        scroll_layout.addLayout(header_layout)
-        
-        # Combined description and acknowledgments
-        content = QLabel()
-        content.setText("""
-        <p align="center">Treuzskrivañ emgefreek ha lec'hel e brezhoneg.</p>
-        <br>
-        <h4>Darempred</h4>
-        <p>anaouder@dizale.bzh</p>
-        <h4>Kod mammen</h4>
-        <p>https://github.com/gweltou/anaouder-gui</p>
-        <h4>Trugarekaat</h4>
-        <p>Anna Duval-Guennoc, Jean-Mari Ollivier, Jeanne Mégly, Karen Treguier, Léane Rumin, Marie Breton, Mevena Guillouzic-Gouret, Samuel Julien</p>
-        """)
-        content.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        content.setWordWrap(True)
-        scroll_layout.addWidget(content)
-        scroll_layout.addSpacing(20)
-        
-        # Logo section
-        logo_layout = QHBoxLayout()
-        
-        # Add logos
-        for icon_name in ["otile", "dizale", "rannvro"]:
-            if icon_name in icons:
-                label = QLabel()
-                pixmap = icons[icon_name].pixmap(64, 64)
-                label.setPixmap(pixmap)
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                logo_layout.addWidget(label)
-        
-        scroll_layout.addLayout(logo_layout)
-        scroll_layout.addStretch()  # Push content to top
-        
-        # Set the scroll widget as the scroll area's widget
-        scroll_area.setWidget(scroll_widget)
-        
-        # Enable mouse drag scrolling by subclassing or using event handling
-        def mousePressEvent(event):
-            if event.button() == Qt.MouseButton.LeftButton:
-                scroll_area._drag_start_pos = event.position().toPoint()
-                scroll_area._scroll_start_pos = scroll_area.verticalScrollBar().value()
-        
-        def mouseMoveEvent(event):
-            if hasattr(scroll_area, '_drag_start_pos') and event.buttons() == Qt.MouseButton.LeftButton:
-                delta = scroll_area._drag_start_pos.y() - event.position().toPoint().y()
-                scroll_area.verticalScrollBar().setValue(scroll_area._scroll_start_pos + delta)
-        
-        def mouseReleaseEvent(event):
-            if hasattr(scroll_area, '_drag_start_pos'):
-                delattr(scroll_area, '_drag_start_pos')
-                delattr(scroll_area, '_scroll_start_pos')
-        
-        # Install event handlers for drag scrolling
-        scroll_area.mousePressEvent = mousePressEvent
-        scroll_area.mouseMoveEvent = mouseMoveEvent
-        scroll_area.mouseReleaseEvent = mouseReleaseEvent
-        
-        # Add scroll area to main layout
-        layout.addWidget(scroll_area)
-        
-        # OK button
-        ok_button = QPushButton(strings.TR_OK)
-        ok_button.clicked.connect(dialog.accept)
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(ok_button)
-        button_layout.addStretch()
-        
-        layout.addLayout(button_layout)
-        
-        dialog.exec()
 
 
     def getSubtitleAtPosition(self, time: float) -> Tuple[SegmentId, str]:
@@ -1519,8 +1389,8 @@ class MainWindow(QMainWindow):
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
 
         # Check if end of current selected segments is reached
-        playing_segment_id = self.text_cursor_utterance_id
-        if playing_segment_id >= 0:
+        playing_segment_id = self.media_controller.getPlayingSegmentId()
+        if playing_segment_id != -1:
             segment = self.waveform.getSegment(playing_segment_id)
             if segment:
                 start, end = segment
@@ -1528,7 +1398,7 @@ class MainWindow(QMainWindow):
                 if position_sec >= end:
                     # Compare the playing segment with the text cursor position
                     if (
-                        self.text_cursor_utterance_id >= 0
+                        self.text_cursor_utterance_id != -1
                         and (self.text_cursor_utterance_id != playing_segment_id)
                     ):
                         # Position the waveform playhead to the same utterance
@@ -1537,7 +1407,7 @@ class MainWindow(QMainWindow):
 
                     if self.media_controller.isLooping():
                         if (
-                            self.waveform.active_segment_id >= 0
+                            self.waveform.active_segment_id != -1
                             and self.waveform.active_segment_id != playing_segment_id
                         ):
                             # A different segment has been selected on the waveform
@@ -1566,7 +1436,7 @@ class MainWindow(QMainWindow):
                     self.waveform.updatePlayHead(selection_end, self.media_controller.isPlaying())
         
         # Highlight text sentence at this time position
-        if (seg_id := self.waveform.getSegmentAtTime(self.waveform.playhead)) >= 0:
+        if (seg_id := self.waveform.getSegmentAtTime(self.waveform.playhead)) != -1:
             if seg_id != self.text_widget.highlighted_sentence_id:
                 self.text_widget.highlightUtterance(seg_id, scroll_text=False)
         else:
@@ -1576,21 +1446,39 @@ class MainWindow(QMainWindow):
     
 
     def playAction(self) -> None:
+        if not self.media_controller.hasMedia():
+            return
+
         if self.media_controller.isPlaying():
+            play_next = self.text_cursor_utterance_id
+            playing_segment_id = self.media_controller.getPlayingSegmentId()
+            if (play_next != -1) and (playing_segment_id != play_next):
+                segment = self.waveform.getSegment(self.text_cursor_utterance_id)
+                if segment:
+                    self.media_controller.playSegment(segment, self.text_cursor_utterance_id)
+                return
+
             # Stop playback
             self.media_controller.pause()
             self.play_button.setIcon(icons["play"])
-        elif self.media_controller.hasMedia():
-            # Start playback
-            if self.waveform.active_segment_id >= 0:
-                segment = self.waveform.getSegment(self.waveform.active_segment_id)
-                if segment:
+            return
+        
+        # Start playback
+        if self.waveform.active_segment_id != -1:
+            print(f"{self.waveform.active_segment_id=}")
+            segment = self.waveform.getSegment(self.waveform.active_segment_id)
+            if segment:
+                if segment[0] < self.media_controller.getCurrentPosition() < segment[1]:
+                    self.media_controller.play()
+                else:
                     self.media_controller.playSegment(segment, self.waveform.active_segment_id)
-            elif self.waveform.selection_is_active:
-                self.media_controller.playSelection(self.waveform.getSelection())
             else:
-                self.media_controller.play()
-            self.play_button.setIcon(icons["pause"])
+                self.media_controller.playSegment(segment, self.waveform.active_segment_id)
+        elif self.waveform.selection_is_active:
+            self.media_controller.playSelection(self.waveform.getSelection())
+        else:
+            self.media_controller.play()
+        self.play_button.setIcon(icons["pause"])
 
 
     def stop(self) -> None:
@@ -1607,57 +1495,112 @@ class MainWindow(QMainWindow):
 
 
     def playNextSegment(self) -> None:
-        segment_id = self.waveform.active_segments[0] if self.waveform.active_segments else -1
+        segment_id = self.waveform._dev_getSelectedId()
+        if segment_id is None:
+            return
+        
         next_segment_id = self.waveform.getNextSegmentId(segment_id)
 
-        if next_segment_id >= 0:
-            self.waveform.setActive([next_segment_id], is_playing=True)
-            self.text_widget.highlightUtterance(next_segment_id)
-            next_segment = self.waveform.getSegment(next_segment_id)
-            if next_segment:
+        if next_segment_id != -1:
+            self._dev_selectUtterance(next_segment_id)
+            if next_segment := self.waveform.getSegment(next_segment_id):
                 self.playSegment(next_segment, next_segment_id)
         else:
-            self.media_controller.deselectSegment()
-            self.waveform.setActive(None, self.media_controller.isPlaying())
-            self.text_widget.deactivateSentence()
-            self.media_controller.deselectSegment()
+            self._dev_deselectUtterance()
             self.media_controller.stop()
             self.media_controller.seekTo(0.0)
 
 
     def playPreviousSegment(self) -> None:
-        segment_id = self.waveform.active_segments[0] if self.waveform.active_segments else -1
+        segment_id = self.waveform._dev_getSelectedId()
+        if segment_id is None:
+            return
+        
         prev_segment_id = self.waveform.getPrevSegmentId(segment_id)
 
-        if prev_segment_id >= 0:
-            self.waveform.setActive([prev_segment_id], self.media_controller.isPlaying())
-            self.text_widget.highlightUtterance(prev_segment_id)
-            prev_segment = self.waveform.getSegment(prev_segment_id)
-            if prev_segment:
+        if prev_segment_id != -1:
+            self._dev_selectUtterance(prev_segment_id)
+            if prev_segment := self.waveform.getSegment(prev_segment_id):
                 self.media_controller.playSegment(prev_segment, prev_segment_id)
         else:
-            self.waveform.setActive(None, self.media_controller.isPlaying())
-            self.text_widget.deactivateSentence()
-            self.media_controller.deselectSegment()
+            self._dev_deselectUtterance()
             self.media_controller.seekTo(0.0)
     
 
     def backAction(self) -> None:
         """Get back to the first segment or to the beginning of the recording"""
-        segment_id = self.waveform.active_segments[0] if self.waveform.active_segments else -1
-        segment = self.waveform.getSegment(segment_id)
-        if segment:
-            first_segment_id = self.waveform.getSortedSegments()[0][0]
-            self.waveform.setActive([first_segment_id], self.media_controller.isPlaying())
-            self.text_widget.highlightUtterance(first_segment_id)
-            self.media_controller.playSegment(segment, segment_id)
-        else:
-            self.waveform.scroll_vel = 0.0
+        segment_id = self.waveform._dev_getSelectedId()
+        if segment_id is None:
+            self._dev_deselectUtterance()
             self.media_controller.seekTo(0.0)
+            return
+        
+        if (segment := self.waveform.getSegment(segment_id)) != None:
+            first_segment_id = self.waveform.getSortedSegments()[0][0]
+            self._dev_selectUtterance(first_segment_id)
+            self.media_controller.playSegment(segment, segment_id)
 
 
-    @Slot(float)
-    def onWaveformPlayheadMoved(self, position_sec: float) -> None:
+    def _dev_selectUtterance(self, seg_id: SegmentId) -> None:
+        """
+        Source of the cascade of events to select an utterance
+        Highlights a segment on the waveform
+        Sets the text cursor
+        """
+        #self.text_cursor_utterance_id
+        log.debug(f"selectUtterance({seg_id=})")
+        
+        block = self.text_widget.getBlockById(seg_id)
+        if block:
+            cursor = self.text_widget.textCursor()
+            cursor.setPosition(block.position())
+            self.text_widget.setTextCursor(cursor)
+            self.text_widget.cursorPositionChanged.emit() # We need to force it if the block is already selected
+
+
+    def _dev_deselectUtterance(self) -> None:
+        self.media_controller.deselectSegment()
+        self.waveform.setActive(None)
+        self.text_widget.deactivateSentence()
+        self.status_label.clear()
+        self.text_cursor_utterance_id = -1
+
+     
+    def selectFromWaveform(self, seg_ids: List[SegmentId] | None) -> None:
+        """
+        Called when the user clicks on the waveform area
+        Scroll the text widget to display the sentence
+        
+        Args:
+            seg_ids (list): ID of selected segments or None
+        """
+        log.debug(f"selectFromWaveform({seg_ids=})")
+        seg_ids = seg_ids if seg_ids else None
+        
+        if seg_ids is None:
+            self._dev_deselectUtterance()
+            return
+
+        self._dev_selectUtterance(seg_ids[0])
+        # block = self.text_widget.getBlockById(seg_ids[0])
+        # if block:
+        #     cursor = self.text_widget.textCursor()
+        #     cursor.setPosition(block.position())
+        #     self.text_widget.setTextCursor(cursor)
+        #     self.text_widget.cursorPositionChanged.emit() # We need to force it if the block is already selected
+
+
+    def onWaveformPlayheadManualyMoved(self, position_sec: float) -> None:
+        log.debug(f"onWaveformPlayheadManualyMoved({position_sec=})")
+        # Check if the seeked position is inside the currently active segment
+        if self.waveform.active_segment_id != -1:
+            segment = self.waveform.getSegment(self.waveform.active_segment_id)
+            if segment:
+                start, end = segment
+                if (position_sec < start) or (position_sec > end):
+                    # Deactivate segment
+                    self._dev_deselectUtterance()
+        
         self.media_controller.seekTo(position_sec)
 
 
@@ -1707,7 +1650,7 @@ class MainWindow(QMainWindow):
             self.scene_detect_action.setChecked(False)
 
 
-    @Slot(float, tuple)
+    #@Slot(float, tuple)
     def onNewSceneChange(self, time: float, color: tuple) -> None:
         self.waveform.scenes.append((time, color[0], color[1], color[2]))
         self.waveform.must_redraw = True
@@ -1719,7 +1662,8 @@ class MainWindow(QMainWindow):
             self.scene_detector.new_scene.disconnect()
             self.scene_detector.finished.disconnect()
             self.scene_detector = None
-        self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
+        if self.media_path:
+            self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
     
 
     def onUndoStackIndexChanged(self, index: int) -> None:
@@ -1794,19 +1738,19 @@ class MainWindow(QMainWindow):
             block = start_block
             while True:
                 seg_id = self.text_widget.getBlockId(block)
-                if seg_id >= 0:
+                if seg_id != -1:
                     if (fps := self.media_metadata.get("fps", 0)) > 0:
                         # Adjust segment boundaries on frame positions
                         seg_start, seg_end = self.waveform.getSegment(seg_id)
                         frame_start = floor(seg_start * fps) / fps
                         frame_end = ceil(seg_end * fps) / fps
-                        if (prev_id := self.waveform.getPrevSegmentId(seg_id)) >= 0:
+                        if (prev_id := self.waveform.getPrevSegmentId(seg_id)) != -1:
                             prev_end = self.waveform.getSegment(prev_id)[1]
                             if frame_start < prev_end:
                                 # The previous frame position overlaps the previous segment,
                                 # choose next frame
                                 frame_start = ceil(seg_start * fps) / fps
-                        if (next_id := self.waveform.getNextSegmentId(seg_id)) >= 0:
+                        if (next_id := self.waveform.getNextSegmentId(seg_id)) != -1:
                             next_start = self.waveform.getSegment(next_id)[0]
                             right_boundary = floor(next_start * fps) / fps
                             right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL) / fps
@@ -1900,19 +1844,12 @@ class MainWindow(QMainWindow):
         if seg_ids is None:
             self.text_widget.deactivateSentence()
             self.status_label.clear()
+            self.text_cursor_utterance_id = -1
             return
         
         seg_id = seg_ids[0]
-        # self.text_widget.highlightUtterance(seg_id)
         self.text_cursor_utterance_id = seg_id # Set the segment that should be played
 
-        if self.media_controller.isPaused() or self.media_controller.isStopped():
-            # Set the play head at the beggining of the segment
-            segment = self.waveform.getSegment(seg_id)
-            if segment:
-                self.onWaveformPlayheadMoved(segment[0])
-                self.waveform.must_redraw = True
-    
 
     def toggleCreateSelection(self, checked: bool) -> None:
         log.debug(f"Toggle create selection: {checked=}")
@@ -2134,13 +2071,16 @@ class MainWindow(QMainWindow):
                 tokens_range = cached_transcription[i:j]
 
                 try:
-                    log.info("smart splitting")
-                    left_seg, right_seg = smart_split(text, position, tokens_range)
+                    log.info('"Smart" splitting')
+                    left_seg, right_seg = smart_split_text(text, position, tokens_range)
                     left_seg[0] = seg_start
                     right_seg[1] = seg_end
+                except SmartSplitError as e:
+                    log.warning(e)
+                    self.setStatusMessage(strings.TR_CANT_SMART_SPLIT + f": {e}")
                 except Exception as e:
-                    log.error(e)
-                    self.setStatusMessage(strings.TR_CANT_SMART_SPLIT)
+                    log.warning(e)
+                    self.setStatusMessage(strings.TR_CANT_SMART_SPLIT + f": {e}")
 
         if not left_seg or not right_seg:
             # Revert to naive splitting method
@@ -2148,7 +2088,7 @@ class MainWindow(QMainWindow):
             pc = position / len(text)
             left_seg = [seg_start, seg_start + dur*pc - 0.05]
             right_seg = [seg_start + dur*pc + 0.05, seg_end]
-            log.info("ratio splitting")
+            log.info("Ratio splitting")
         
         self.splitUtterance(segment_id, left_text, right_text, left_seg, right_seg)
     
@@ -2404,31 +2344,7 @@ class MainWindow(QMainWindow):
 
         return super().closeEvent(event)
     
-    
-    @Slot(list)
-    def selectFromWaveform(self, seg_ids: List[SegmentId] | None) -> None:
-        """
-        Called when the user clicks on the waveform area
-        Scroll the text widget to display the sentence
-        
-        Args:
-            seg_ids (list): ID of selected segments or None
-        """
-        seg_ids = seg_ids if seg_ids else None
 
-        self.waveform.setActive(seg_ids, self.media_controller.isPlaying())
-        
-        if seg_ids is None:
-            self.media_controller.deselectSegment()
-            self.status_label.clear()
-            return
-        
-        last_id = seg_ids[-1]
-        if last_id != self.text_widget.highlighted_sentence_id:
-            self.text_widget.highlightUtterance(last_id, scroll_text=True)
-
-
-    @Slot(int)
     def updateSegmentInfo(self, segment_id: SegmentId) -> None:
         """Rehighlight sentence in text widget and update status bar info"""
         segment = self.waveform.getSegment(segment_id)
@@ -2446,7 +2362,6 @@ class MainWindow(QMainWindow):
         self.updateSegmentInfoResizing(segment_id, segment, density)
 
 
-    @Slot(int, list, float)
     def updateSegmentInfoResizing(self, seg_id:SegmentId, segment:Segment, density:float) -> None:
         """
         Rehighlight sentence in text widget and update status bar info
@@ -2483,7 +2398,7 @@ class MainWindow(QMainWindow):
         else:
             string_parts.append(duration_string)
 
-        if density >= 0.0:
+        if density != -1.0:
             density_str = f"{density:.1f}{strings.TR_CPS_UNIT}"
             if density >= self._target_density:
                 string_parts.append(f"<span style='{warning_style}'>{density_str}</span>")

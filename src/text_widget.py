@@ -267,7 +267,7 @@ class TextEditWidget(QTextEdit):
         self.undo_stack: QUndoStack = self.main_window.undo_stack
                 
         # Signals
-        self.cursorPositionChanged.connect(self.cursorChanged)
+        self.cursorPositionChanged.connect(self.onCursorChanged)
 
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document(), self)
@@ -480,7 +480,6 @@ class TextEditWidget(QTextEdit):
         This action won't be added to the undo stack.
         """
         log.debug(f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=})")
-        print(f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=}")
 
         assert segment_id in self.main_window.waveform.segments
         doc = self.document()
@@ -930,11 +929,11 @@ class TextEditWidget(QTextEdit):
         super().dropEvent(event)
     
 
-    def cursorChanged(self):
+    def onCursorChanged(self):
         """Get the list of aligned utterances under the text selection
         This signal can be blocked with the `QTextEdit.blockSignals` method
         """
-        #log.debug(f"cursorChanged")
+        log.debug(f"onCursorChanged")
 
         cursor = self.textCursor()
         self.cursor_pos = cursor.position()

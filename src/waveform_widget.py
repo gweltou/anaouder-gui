@@ -422,9 +422,9 @@ class WaveformWidget(QWidget):
 
         Args:
             seg_ids (list): list of segmend ids to select
-            is_playing (bool): 
+            is_playing (bool): True if the selection is caused by playback
         """
-        if seg_ids == None:
+        if seg_ids is None:
             # Clicked outside of any segment, deselect current active segment
             self.active_segments = []
             self.active_segment_id = -1
@@ -495,7 +495,8 @@ class WaveformWidget(QWidget):
         log.debug(f"updatePlayHead({position_sec=}, {is_playing=})")
         self.playhead = position_sec
 
-        if self.follow_playhead and is_playing:
+        # if self.follow_playhead and is_playing:
+        if self.follow_playhead:
             # Center the view on playhead
             self.t_left = position_sec - self.width() * 0.5 / self.ppsec
             self.scroll_vel = 0.0
@@ -609,6 +610,13 @@ class WaveformWidget(QWidget):
             return self.segments[seg_id]
         return None
 
+
+    def _dev_getSelectedId(self) -> Optional[SegmentId]:
+        """Return the currently selected segment, or None"""
+        if self.active_segment_id >= 0:
+            return self.active_segment_id
+        return None
+    
 
     def getSegmentAtTime(self, time: float) -> int:
         """Return the ID of any segment at a given position, or -1 if none is present"""
@@ -863,18 +871,14 @@ class WaveformWidget(QWidget):
             else:
                 self._must_open_context_menu = False
 
-            if self.getSegmentAtPixelPosition(self.click_pos, vertical=False) not in self.active_segments:
-                # Deactivate currently active segment
-                self.active_segments = []
-                self.active_segment_id = -1
-                self.parent.playing_segment = -1
+            # Move the playhead
+            # When manually moving the playhead from the waveform,
+            # it is the main window that is in charge of selecting/deselecting segments
+            self.playhead_moved.emit(self.t_left + self.click_pos.x() / self.ppsec)
 
             if not self.isSelectionAtPosition(self.click_pos):
                 # Deselect current selection
                 self.removeSelection()
-            
-            # Move the playhead
-            self.playhead_moved.emit(self.t_left + self.click_pos.x() / self.ppsec)
 
         # Check if we are resizing or moving the segment
         if any(self.handle_state):
@@ -996,11 +1000,10 @@ class WaveformWidget(QWidget):
             self.playhead_moved.emit(time_position)
 
             # Deactivate currently active segment
-            if self.getSegmentAtPixelPosition(self.mouse_pos, vertical=False) not in self.active_segments:
-                self.active_segments = []
-                self.active_segment_id = -1
-                self.parent.playing_segment = -1
-                self.must_redraw = True
+            # if self.getSegmentAtPixelPosition(self.mouse_pos, vertical=False) not in self.active_segments:
+            #     self.active_segments = []
+            #     self.active_segment_id = -1
+            #     self.must_redraw = True
         
         # Selection
         elif self.is_selecting and self.anchor >= 0:

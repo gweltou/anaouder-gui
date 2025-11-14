@@ -68,28 +68,21 @@ class AboutDialog(QDialog):
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
         scroll_layout.addLayout(header_layout)
-        
-        # Combined description and acknowledgments
-        content = QLabel()
-        content.setText("""
-        <p align="center">Treuzskrivañ emgefreek ha lec'hel e brezhoneg.</p>
-        <br>
-        <h4>Darempred</h4>
-        <p>anaouder@dizale.bzh</p>
-        <h4>Kod mammen</h4>
-        <p>https://github.com/gweltou/anaouder-gui</p>
-        <h4>Trugarekaat</h4>
-        <p>Anna Duval-Guennoc, Jean-Mari Ollivier, Jeanne Mégly, Karen Treguier, Léane Rumin, Marie Breton, Mevena Guillouzic-Gouret, Samuel Julien</p>
-        """)
-        content.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        content.setWordWrap(True)
-        scroll_layout.addWidget(content)
+
         scroll_layout.addSpacing(20)
-        
+
+        # Description
+        description = QLabel()
+        description.setText("<p align=\"center\">Treuzskrivañ emgefreek ha lec'hel e brezhoneg.</p>")
+        description.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        description.setWordWrap(True)
+        scroll_layout.addWidget(description)
+
+        scroll_layout.addSpacing(40)
+
         # Logo section
         logo_layout = QHBoxLayout()
         
-        # Add logos
         for icon_name in ["otile", "dizale", "rannvro"]:
             if icon_name in icons:
                 label = QLabel()
@@ -97,8 +90,24 @@ class AboutDialog(QDialog):
                 label.setPixmap(pixmap)
                 label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 logo_layout.addWidget(label)
-        
         scroll_layout.addLayout(logo_layout)
+
+        scroll_layout.addSpacing(40)
+        
+        # Combined description and acknowledgments
+        content = QLabel()
+        content.setText("""
+        <h4>Darempred</h4>
+        <p>anaouder@dizale.bzh</p>
+        <h4>Kod mammen</h4>
+        <p>https://github.com/gweltou/anaouder-gui</p>
+        <h4>Trugarekaat</h4>
+        <p>Anna Duval-Guennoc, Cédric Sinou, Jean-Mari Ollivier, Jeanne Mégly, Karen Treguier, Léane Rumin, Marie Breton, Mevena Guillouzic-Gouret, Samuel Julien</p>
+        """)
+        content.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        content.setWordWrap(True)
+        scroll_layout.addWidget(content)
+        
         scroll_layout.addStretch()  # Push content to top
         
         # Set the scroll widget as the scroll area's widget

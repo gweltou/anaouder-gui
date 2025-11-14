@@ -134,6 +134,7 @@ class VideoWidget(QGraphicsView):
 
     
     def toggleRectVisibility(self, checked):
+        # Show/Hide subtitles' background rectangle 
         self.background_rect_visible = checked
         if self.current_caption:
             self.background_rect.setVisible(checked)
@@ -144,10 +145,11 @@ class VideoWidget(QGraphicsView):
         """Position subtitles at the bottom of the video"""
         if not self.current_caption:
             return
-            
+        
         # Set text width to match video width with some padding
         text_width = video_rect.width() - 16  # 8px padding on each side
         self.text_item.setTextWidth(text_width)
+        print(f"{video_rect.width()=}")
         
         # Get updated text dimensions
         text_rect = self.text_item.boundingRect()
