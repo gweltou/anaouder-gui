@@ -1093,7 +1093,7 @@ class MainWindow(QMainWindow):
         for backup_file in backup_files:
             # Show filename and modification time
             mod_time = datetime.fromtimestamp(backup_file.stat().st_mtime)
-            item_text = mod_time.strftime('%Y-%m-%d\t%H:%M:%S')
+            item_text = mod_time.strftime('%Y-%m-%d\t %H:%M:%S')
             list_widget.addItem(item_text)
         
         list_widget.setCurrentRow(len(backup_files) - 1)  # Select most recent by default
@@ -1508,16 +1508,16 @@ class MainWindow(QMainWindow):
             return
         
         # Start playback
-        if self.waveform.active_segment_id != -1:
-            print(f"{self.waveform.active_segment_id=}")
-            segment = self.waveform.getSegment(self.waveform.active_segment_id)
+        selected_segment_id = self.waveform._dev_getSelectedId()
+        if selected_segment_id is not None:
+            segment = self.waveform.getSegment(selected_segment_id)
             if segment:
                 if segment[0] < self.media_controller.getCurrentPosition() < segment[1]:
                     self.media_controller.play()
                 else:
-                    self.media_controller.playSegment(segment, self.waveform.active_segment_id)
+                    self.media_controller.playSegment(segment, selected_segment_id)
             else:
-                self.media_controller.playSegment(segment, self.waveform.active_segment_id)
+                self.media_controller.play()
         elif self.waveform.selection_is_active:
             self.media_controller.playSelection(self.waveform.getSelection())
         else:

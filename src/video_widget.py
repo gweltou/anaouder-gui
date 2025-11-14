@@ -2,7 +2,10 @@ from typing import Optional
 import logging
 
 from PySide6.QtCore import Qt, QMargins, QRectF, QSize, QPointF, QTimer
-from PySide6.QtGui import QFont, QPainter, QResizeEvent, QBrush, QPen, QColor, QTextOption
+from PySide6.QtGui import (
+    QFont, QResizeEvent, QBrush, QPen, QColor, QTextOption,
+    QPainter, QPainterPath
+)
 from PySide6.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PySide6.QtWidgets import (
     QFrame, QMainWindow,
@@ -19,11 +22,33 @@ log = logging.getLogger(__name__)
 class CenteredTextItem(QGraphicsTextItem):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.text = ""
+        self.outline_color = QColor(0, 0, 0)  # Default black outline
+        self.outline_width = 2  # Default outline width in pixels
     
-    def setText(self, text):
-        text = text.replace('\n', "<br>").replace('\u2028', "<br>").replace('*', '')
+
+    def sanitizeText(self, text: str) -> str:
+        return text.replace('\n', "<br>").replace('\u2028', "<br>").replace('*', '')
+    
+
+    def highlightWordNumber(self, text: str, word_index: int, color: QColor):
+        """Highlight a specific word in the text item"""
+        words = text.split()
+        if 0 <= word_index < len(words):
+            highlighted_word = f"<span style='background-color: {color.name()};'>{words[word_index]}</span>"
+            words[word_index] = highlighted_word
+            highlighted_text = ' '.join(words)
+            return highlighted_text
+        return text
+
+
+    def setText(self, text: str):
+        self.text = text
+        text = self.sanitizeText(text)
+        # text = self.highlightWordNumber(text, 0, QColor(255, 128, 128))
         html_text = f"<div style='text-align: center;'>{text}</div>"
-        self.setHtml(html_text)    
+        self.setHtml(html_text)
+
 
 
 class VideoWidget(QGraphicsView):
@@ -67,8 +92,8 @@ class VideoWidget(QGraphicsView):
         
         # Configure text appearance
         self.setupTextAppearance()
-        self.adjustFontColor(app_settings.value("subtitles/font_color", QColor(255, 255, 255)))
-        self.adjustRectColor(app_settings.value("subtitles/rect_color", QColor(0, 0, 0, 100)))
+        self.text_item.setDefaultTextColor(app_settings.value("subtitles/font_color", QColor(255, 255, 255)))
+        self.background_rect.setBrush(app_settings.value("subtitles/rect_color", QColor(0, 0, 0, 100)))
 
         self.current_caption = ""
         self.subtitle_margin = 6  # Margin from bottom of video
@@ -95,21 +120,19 @@ class VideoWidget(QGraphicsView):
     def updateLayout(self):
         """Update the layout of video and text items"""
         if self.video_item.boundingRect().isValid():
-            self.video_is_valid = True
-            log.debug("valid video bounding rectangle")
+            video_is_valid = True
         else:
-            self.video_is_valid = False
-            return
+            video_is_valid = False
         
         # Fit video to view while maintaining aspect ratio
         video_rect = self.video_item.boundingRect()
+        if video_rect.isEmpty():
+            video_rect = QRectF(0.0, 0.0, self.size().width(), self.size().height())
+
+        self.adjustFontSize(video_rect)
+        self.positionSubtitles(video_rect, video_is_valid)
         self.scene().setSceneRect(video_rect)
-        self.fitInView(self.scene().sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
-        
-        if not video_rect.isEmpty():
-            log.debug(f"{video_rect=}")
-            self.adjustFontSize(video_rect)
-            self.positionSubtitles(video_rect)
+        self.fitInView(self.scene().sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)            
 
 
     def adjustFontSize(self, video_rect: QRectF):
@@ -141,7 +164,7 @@ class VideoWidget(QGraphicsView):
         self.updateLayout()
 
 
-    def positionSubtitles(self, video_rect: QRectF):
+    def positionSubtitles(self, video_rect: QRectF, video_mode):
         """Position subtitles at the bottom of the video"""
         if not self.current_caption:
             return
@@ -149,7 +172,6 @@ class VideoWidget(QGraphicsView):
         # Set text width to match video width with some padding
         text_width = video_rect.width() - 16  # 8px padding on each side
         self.text_item.setTextWidth(text_width)
-        print(f"{video_rect.width()=}")
         
         # Get updated text dimensions
         text_rect = self.text_item.boundingRect()
@@ -160,10 +182,15 @@ class VideoWidget(QGraphicsView):
             # If text is too tall, we might need to reduce font size or wrap better
             pass
         
-        # Position text at bottom of video with margin
-        text_x = video_rect.x() + (video_rect.width() - text_rect.width()) / 2
-        text_y = video_rect.y() + video_rect.height() - text_rect.height() - self.subtitle_margin
-        
+        if video_mode:
+            # Position text at bottom of video with margin
+            text_x = video_rect.x() + (video_rect.width() - text_rect.width()) / 2
+            text_y = video_rect.y() + video_rect.height() - text_rect.height() - self.subtitle_margin
+        else:
+            # Position text at the center
+            text_x = (video_rect.width() - text_rect.width()) / 2
+            text_y = (video_rect.height() - text_rect.height() ) / 2
+
         self.text_item.setPos(text_x, text_y)
         
         # Update background rectangle if needed
@@ -193,10 +220,10 @@ class VideoWidget(QGraphicsView):
         self.updateLayout()
 
 
-    def setSubtitleMargin(self, margin: int):
-        """Set the margin between subtitles and bottom of video"""
-        self.subtitle_margin = margin
-        self.updateLayout()
+    # def setSubtitleMargin(self, margin: int):
+    #     """Set the margin between subtitles and bottom of video"""
+    #     self.subtitle_margin = margin
+    #     self.updateLayout()
 
 
     def setMaxSubtitleHeightRatio(self, ratio: float):
@@ -218,7 +245,7 @@ class VideoWidget(QGraphicsView):
     def onMediaStatusChanged(self, status):
         """Handle media player status changes"""
         # Update layout when media loads to ensure proper sizing
-        if status in [QMediaPlayer.BufferedMedia]:
+        if status in [QMediaPlayer.MediaStatus.BufferedMedia]:
             QTimer.singleShot(150, self.updateLayout)  # Small delay to ensure video size is available
 
 
