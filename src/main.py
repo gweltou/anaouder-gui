@@ -57,7 +57,6 @@ from src.utils import (
     ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS, SUBTITLES_FILE_FORMATS
 )
 from src.file_manager import FileManager, FileOperationError
-from src.cache_system import CacheSystem
 from src.version import __version__
 from src.about_page import AboutDialog
 from src.theme import theme
@@ -101,6 +100,7 @@ from src.settings import (
 )
 import src.lang as lang
 from src.interfaces import Segment, SegmentId
+from src.cache_system import cache
 from src.strings import strings
 
 
@@ -128,8 +128,6 @@ class MainWindow(QMainWindow):
         # File Manager
         self.file_manager = FileManager()
         self.file_manager.show_status_message.connect(self.setStatusMessage)
-
-        self.cache = CacheSystem()
         
         self.audio_samples = None
         
@@ -155,7 +153,7 @@ class MainWindow(QMainWindow):
         # Current opened file info
         self.filepath = filepath
         self.media_path = None
-        self.media_metadata = dict()
+        # self.media_metadata = dict()
         self.hidden_transcription = False
 
         self.video_widget = VideoWidget(self)
@@ -171,6 +169,7 @@ class MainWindow(QMainWindow):
         self.media_controller.connectVideoWidget(self.video_widget)
 
         self.text_cursor_utterance_id = -1
+        self._last_play_press_time = 0.0
 
         self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
         self._subs_min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
@@ -971,7 +970,7 @@ class MainWindow(QMainWindow):
             if media_path and os.path.exists(media_path) :
                 self.loadMediaFile(media_path)
 
-        doc_metadata = self.cache.get_doc_metadata(str(filepath))
+        doc_metadata = cache.get_doc_metadata(str(filepath))
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
         if "cursor_pos" in doc_metadata:
@@ -1224,53 +1223,54 @@ class MainWindow(QMainWindow):
         ## XXX: Use QAudioDecoder instead maybe ?
         self.toggleSceneDetect(False)
         
-        if self.media_controller.loadMediaToPlayer(filepath):
+        if self.media_controller.loadMedia(filepath):
             self.media_path = filepath
         
         # Load waveform
-        cached_waveform = self.cache.get_waveform(filepath)
+        cached_waveform = cache.get_waveform(filepath)
         if cached_waveform is not None:
             self.log.info("Using cached waveform")
             self.audio_samples = cached_waveform
         else:
             self.log.info("Rendering waveform...")
             self.audio_samples = get_samples(filepath, WAVEFORM_SAMPLERATE)
-            self.cache.update_media_metadata(filepath, {"waveform": self.audio_samples})
+            cache.update_media_metadata(filepath, {"waveform": self.audio_samples})
         
         self.log.info(f"Loaded {len(self.audio_samples)} audio samples")
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
 
-        # Load metadata
-        self.media_metadata = self.cache.get_media_metadata(filepath)
+        # # Load metadata
+        # self.media_metadata = cache.get_media_metadata(filepath)
 
-        if not "fps" in self.media_metadata:
+        media_metadata = self.media_controller.getMetaData()
+        if not "fps" in media_metadata:
             # Check video framerate
             audio_metadata = get_audiofile_info(filepath)
             if "r_frame_rate" in audio_metadata:
                 print(f"Stream {audio_metadata["r_frame_rate"]=}")
                 if match := re.match(r"(\d+)/(\d+)", audio_metadata["r_frame_rate"]):
                     if int(match[1]) > 0:
-                        self.media_metadata["fps"] = int(match[1]) / int(match[2])
-                        self.cache.update_media_metadata(filepath, self.media_metadata)
+                        media_metadata["fps"] = int(match[1]) / int(match[2])
+                        cache.update_media_metadata(filepath, media_metadata)
                     self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
                 else:
                     self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
             # if "avg_frame_rate" in audio_metadata:
             #     print(f"Stream {audio_metadata["avg_frame_rate"]=}")
 
-        if "fps" in self.media_metadata:
-            self.waveform.fps = self.media_metadata["fps"]
+        if "fps" in media_metadata:
+            self.waveform.fps = media_metadata["fps"]
             # Open Video Widget
             self.toggle_video_action.setChecked(True)
 
-        if "transcription_progress" in self.media_metadata:
-            progress_seconds = self.media_metadata["transcription_progress"]
+        if "transcription_progress" in media_metadata:
+            progress_seconds = media_metadata["transcription_progress"]
             self.waveform.recognizer_progress = progress_seconds
-            if "transcription_completed" in self.media_metadata and self.media_metadata["transcription_completed"]:
+            if "transcription_completed" in media_metadata and media_metadata["transcription_completed"]:
                 self._setStatusTranscriptionCompleted()
 
-            if "duration" in self.media_metadata:
-                progress_ratio = progress_seconds / self.media_metadata["duration"]
+            if "duration" in media_metadata:
+                progress_ratio = progress_seconds / media_metadata["duration"]
                 if progress_ratio == 0.0:
                     self._setStatusNoTranscription()
                 elif progress_ratio <= 0.99:
@@ -1282,8 +1282,8 @@ class MainWindow(QMainWindow):
         else:
             self._setStatusNoTranscription()
 
-        if "scenes" in self.media_metadata:
-            self.waveform.scenes = self.media_metadata["scenes"]
+        if "scenes" in media_metadata:
+            self.waveform.scenes = media_metadata["scenes"]
 
         self.transcribe_button.setEnabled(True)
         self.transcription_led.setVisible(True)
@@ -1341,7 +1341,7 @@ class MainWindow(QMainWindow):
             QApplication.instance().switch_language(lang)
 
         old_language = lang.getCurrentLanguage()
-        dialog = ParametersDialog(self, self.media_metadata)
+        dialog = ParametersDialog(self, self.media_controller.getMetaData())
 
         # Connect signals
         dialog.signals.subtitles_margin_size_changed.connect(self.text_widget.onMarginSizeChanged)
@@ -1373,6 +1373,7 @@ class MainWindow(QMainWindow):
 
     
     def onSetAutosave(self, checked: bool) -> None:
+        print("onSetAutosave", checked)
         if checked:
             # Timer resolution is set to the shortest autosave interval
             self.autosave_timer.start(6_000)
@@ -1414,7 +1415,7 @@ class MainWindow(QMainWindow):
         Args:
             time (float): time position in seconds
         """
-        _, text = self.getSubtitleAtPosition(time)
+        seg_id, text = self.getSubtitleAtPosition(time)
 
         if self.video_widget.isVisible():
             self.video_widget.setCaption(text)
@@ -1433,41 +1434,32 @@ class MainWindow(QMainWindow):
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
 
         # Check if end of current selected segments is reached
-        playing_segment_id = self.media_controller.getPlayingSegmentId()
-        if playing_segment_id != -1:
-            segment = self.waveform.getSegment(playing_segment_id)
+        selected_segment_id = self.waveform._dev_getSelectedId()
+        if selected_segment_id is not None:
+            segment = self.waveform.getSegment(selected_segment_id)
             if segment:
+
                 start, end = segment
-
-                if position_sec >= end:
-                    # Compare the playing segment with the text cursor position
-                    if (
-                        self.text_cursor_utterance_id != -1
-                        and (self.text_cursor_utterance_id != playing_segment_id)
-                    ):
-                        # Position the waveform playhead to the same utterance
-                        # as the text cursor
-                        playing_segment_id = self.text_cursor_utterance_id
-
+                if position_sec < start or position_sec >= end:
                     if self.media_controller.isLooping():
-                        if (
-                            self.waveform.active_segment_id != -1
-                            and self.waveform.active_segment_id != playing_segment_id
-                        ):
+                        if selected_segment_id != self.media_controller.getPlayingSegmentId():
                             # A different segment has been selected on the waveform
-                            playing_segment_id = self.waveform.active_segment_id
-                            start, _ = self.waveform.segments[playing_segment_id]
-                        self.media_controller.seekTo(start)
+                            self.media_controller.playSegment(
+                                segment,
+                                selected_segment_id
+                            )
+                        else:
+                            self.media_controller.seekTo(start)
                         return
                     else:
                         self.media_controller.pause()
+                        self.media_controller.seekTo(start)
                         self.play_button.setIcon(icons["play"])
-                        self.waveform.updatePlayHead(end, self.media_controller.isPlaying())
             else:
                 # The segment could have been deleted by the user during playback
                 self.media_controller.deselectSegment()
         
-        # Check if end of active selection is reached
+        # Check if end of selection range is reached (if selection is active)
         elif (segment := self.waveform.getSelection()) != None:
             selection_start, selection_end = segment
             if position_sec >= selection_end:
@@ -1493,9 +1485,27 @@ class MainWindow(QMainWindow):
         if not self.media_controller.hasMedia():
             return
 
+        # Check time passed since last play button press
+        double_press = False
+        current_time = time.time()
+        if (current_time - self._last_play_press_time) < 0.4:
+            double_press = True
+            print("double play action")
+        self._last_play_press_time = current_time
+
+        playing_segment_id = self.media_controller.getPlayingSegmentId()
+
+        if double_press and (playing_segment_id != -1):
+            # On double press, restart the currently playing segment
+            selected_segment_id = self.waveform._dev_getSelectedId()
+            if selected_segment_id is not None:
+                segment = self.waveform.getSegment(selected_segment_id)
+                if segment:
+                    self.media_controller.playSegment(segment, selected_segment_id)
+                    return
+
         if self.media_controller.isPlaying():
             play_next = self.text_cursor_utterance_id
-            playing_segment_id = self.media_controller.getPlayingSegmentId()
             if (play_next != -1) and (playing_segment_id != play_next):
                 segment = self.waveform.getSegment(self.text_cursor_utterance_id)
                 if segment:
@@ -1629,6 +1639,11 @@ class MainWindow(QMainWindow):
 
     def onWaveformPlayheadManualyMoved(self, position_sec: float) -> None:
         log.debug(f"onWaveformPlayheadManualyMoved({position_sec=})")
+
+        # Stop following the playhead
+        if self.waveform.follow_playhead:
+            self.toggleFollowPlayhead()
+
         # Check if the seeked position is inside the currently active segment
         if self.waveform.active_segment_id != -1:
             segment = self.waveform.getSegment(self.waveform.active_segment_id)
@@ -1642,9 +1657,10 @@ class MainWindow(QMainWindow):
 
 
     def onMediaDurationChanged(self, duration_sec: float) -> None:
-        if self.media_path and self.media_metadata and "duration" not in self.media_metadata:
-            self.media_metadata["duration"] = duration_sec
-            self.cache.update_media_metadata(self.media_path, self.media_metadata)
+        media_metadata = self.media_controller.getMetaData()
+        if self.media_path and media_metadata and "duration" not in media_metadata:
+            media_metadata["duration"] = duration_sec
+            cache.update_media_metadata(self.media_path, media_metadata)
 
 
     def toggleVideo(self, checked) -> None:
@@ -1664,11 +1680,12 @@ class MainWindow(QMainWindow):
 
 
     def toggleSceneDetect(self, checked) -> None:
-        if checked and "fps" in self.media_metadata:
+        media_metadata = self.media_controller.getMetaData()
+        if checked and "fps" in media_metadata:
             self.waveform.display_scene_change = True
-            if "scenes" in self.media_metadata and self.media_metadata["scenes"]:
+            if "scenes" in media_metadata and media_metadata["scenes"]:
                 self.log.info("Using cached scene transitions")
-                self.waveform.scenes = self.media_metadata["scenes"]
+                self.waveform.scenes = media_metadata["scenes"]
                 self.waveform.must_redraw = True
             else:
                 self.log.info("Start scene changes detection")
@@ -1700,7 +1717,7 @@ class MainWindow(QMainWindow):
             self.scene_detector.finished.disconnect()
             self.scene_detector = None
         if self.media_path:
-            self.cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
+            cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
     
 
     def onUndoStackIndexChanged(self, index: int) -> None:
@@ -1776,7 +1793,7 @@ class MainWindow(QMainWindow):
             while True:
                 seg_id = self.text_widget.getBlockId(block)
                 if seg_id != -1:
-                    if (fps := self.media_metadata.get("fps", 0)) > 0:
+                    if (fps := self.media_controller.getMetaData().get("fps", 0)) > 0:
                         # Adjust segment boundaries on frame positions
                         seg_start, seg_end = self.waveform.getSegment(seg_id)
                         frame_start = floor(seg_start * fps) / fps
@@ -1952,8 +1969,9 @@ class MainWindow(QMainWindow):
             segment_start = tokens[0]["start"]
             segment_end = tokens[-1]["end"]
 
-            old_progress = self.media_metadata.get("transcription_progress", 0.0)
-            self.media_metadata["transcription_progress"] = max(old_progress, segment_end)
+            media_metadata = self.media_controller.getMetaData()
+            old_progress = media_metadata.get("transcription_progress", 0.0)
+            media_metadata["transcription_progress"] = max(old_progress, segment_end)
 
             if self.hidden_transcription:
                 return
@@ -1993,7 +2011,8 @@ class MainWindow(QMainWindow):
         ]
 
         # Update backend transcription with new tokens
-        old_tokens = self.media_metadata.get("transcription", [])
+        media_metadata = self.media_controller.getMetaData()
+        old_tokens = media_metadata.get("transcription", [])
         updated_tokens = []
         segment_start = tokens[0][0]
         segment_end = tokens[-1][1]
@@ -2017,16 +2036,17 @@ class MainWindow(QMainWindow):
                 # Add latter tokens
                 updated_tokens.append(tok)
         
-        self.media_metadata["transcription"] = updated_tokens
+        media_metadata["transcription"] = updated_tokens
 
         return ' '.join([tok[2] for tok in tokens])
 
 
     @Slot()
     def onRecognizerEOF(self) -> None:
-        self.media_metadata["transcription_completed"] = True
+        media_metadata = self.media_controller.getMetaData()
+        media_metadata["transcription_completed"] = True
         if self.media_path != None:
-            self.cache.update_media_metadata(self.media_path, self.media_metadata)
+            cache.update_media_metadata(self.media_path, media_metadata)
         self._setStatusTranscriptionCompleted()
 
 
@@ -2050,8 +2070,8 @@ class MainWindow(QMainWindow):
             self.transcribe_segments_signal.emit(self.media_path, segments)
         else:
             # Transcribe whole audio file
-            transcription_progress = self.media_metadata.get("transcription_progress", 0.0)
-            transcription_completed = self.media_metadata.get("transcription_completed", False)
+            transcription_progress = self.media_controller.getMetaData().get("transcription_progress", 0.0)
+            transcription_completed = self.media_controller.getMetaData().get("transcription_completed", False)
             if not self.waveform.segments and transcription_completed:
                 # Reset transcription if there is no segment
                 transcription_progress = 0.0
@@ -2094,7 +2114,7 @@ class MainWindow(QMainWindow):
         right_seg = None
 
         # Check if we can "smart split"
-        cached_transcription = self.media_metadata.get("transcription", [])
+        cached_transcription = self.media_controller.getMetaData().get("transcription", [])
         if cached_transcription:
             if seg_end <= cached_transcription[-1][1]:
                 tr_len = len(cached_transcription)
@@ -2148,7 +2168,7 @@ class MainWindow(QMainWindow):
         right_text = None
 
         # Check if we can "smart split"
-        cached_transcription = self.media_metadata.get("transcription", [])
+        cached_transcription = self.media_controller.getMetaData().get("transcription", [])
         if cached_transcription:
             if seg_end <= cached_transcription[-1][1]:
                 tr_len = len(cached_transcription)
@@ -2369,11 +2389,11 @@ class MainWindow(QMainWindow):
                 "show_margin": self.toggle_margin_action.isChecked(),
                 "video_open": self.toggle_video_action.isChecked()
             }
-            self.cache.update_doc_metadata(str(self.filepath), doc_metadata)
+            cache.update_doc_metadata(str(self.filepath), doc_metadata)
         
         # Save media cache
         if self.media_path:
-            self.cache.update_media_metadata(self.media_path, self.media_metadata)
+            cache.update_media_metadata(self.media_path, self.media_controller.getMetaData())
 
         # Save window geometry and state
         app_settings.setValue("main/geometry", self.saveGeometry());
@@ -2424,7 +2444,7 @@ class MainWindow(QMainWindow):
         ]
 
         duration = end - start
-        fps = self.media_metadata.get("fps")
+        fps = self.media_controller.getMetaData().get("fps")
         duration_string = self.tr("dur: {}s").format(f"{duration:.3f}")
         # Highlight value if segment is too short or too long
         if fps and fps > 0 and (

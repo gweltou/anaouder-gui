@@ -370,3 +370,8 @@ class CacheSystem:
         fingerprint = calculate_fingerprint(audio_path)
         del self.media_cache[fingerprint]
         self._save_root_cache_to_disk()
+
+
+
+# Global cache system instance
+cache = CacheSystem()

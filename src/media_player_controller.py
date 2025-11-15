@@ -10,6 +10,7 @@ from PySide6.QtCore import QObject, Signal, Slot, QUrl
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 from src.interfaces import Segment, SegmentId
+from src.cache_system import cache
 
 
 
@@ -67,6 +68,7 @@ class MediaPlayerController(QObject):
         self.state = PlaybackState()
         self.media_path: Optional[str] = None
         self.media_duration: float = 0.0  # in seconds
+        self.media_metadata: dict = {}
         
         # Connect internal signals
         self.player.positionChanged.connect(self._onPositionChanged)
@@ -76,7 +78,7 @@ class MediaPlayerController(QObject):
         self.log.debug("MediaPlayerController initialized")
     
 
-    def loadMediaToPlayer(self, filepath: str) -> bool:
+    def loadMedia(self, filepath: str) -> bool:
         """
         Load a media file for playback.
         
@@ -96,6 +98,9 @@ class MediaPlayerController(QObject):
         
         self.media_path = filepath
         self.player.setSource(QUrl.fromLocalFile(filepath))
+
+        # Load metadata
+        self.media_metadata = cache.get_media_metadata(filepath)
         return True
 
 
@@ -108,6 +113,11 @@ class MediaPlayerController(QObject):
         self.media_duration = 0.0
         self.state.reset()
     
+
+    def getMetaData(self) -> dict:
+        """Get metadata of the currently loaded media"""
+        return self.media_metadata  
+
 
     def play(self) -> bool:
         """

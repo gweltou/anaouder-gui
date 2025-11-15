@@ -43,6 +43,7 @@ from src.settings import (
     AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER
 )
 from src.strings import strings
+from src.cache_system import cache
 
 
 log = logging.getLogger(__name__)
@@ -265,7 +266,7 @@ class ParametersDialog(QDialog):
         self.tabs.addTab(ModelsPanel(self), self.tr("Models"))
         self.tabs.addTab(SubtitlesPanel(self, media_metadata.get("fps", 0)), self.tr("Subtitles"))
         # self.tabs.addTab(UIPanel(parent.video_widget), self.tr("UI"))
-        self.tabs.addTab(CachePanel(self, parent.cache, media_metadata), self.tr("Cache"))
+        self.tabs.addTab(CachePanel(self, media_metadata), self.tr("Cache"))
         # self.tabs.addTab(self.display_tab, "Display")
         # self.tabs.addTab(self.dictionary_tab, "Dictionary")
         
@@ -426,7 +427,7 @@ class GeneralPanel(QWidget):
             self.setColorButtonStyle(self.subs_font_color_button, current_color)
         ui_subs_layout.addWidget(self.subs_font_color_button, 0, 2)
 
-        rect_label = QLabel("Background rectangle")
+        rect_label = QLabel(self.tr("Background rectangle"))
         ui_subs_layout.addWidget(rect_label, 1, 0)
 
         self.rect_visibility_checkbox = QCheckBox("Show")
@@ -449,7 +450,7 @@ class GeneralPanel(QWidget):
 
         # Auto-save
         autosave_group = QGroupBox(self.tr("Auto Save"), checkable=True)
-        autosave_group.setChecked(app_settings.value("autosave/checked", True, type=bool))
+        autosave_group.setChecked(bool(app_settings.value("autosave/checked", True, type=bool)))
         autosave_group.toggled.connect(self.toggleAutosave)
         autosave_layout = QVBoxLayout()
 
@@ -903,11 +904,10 @@ class SubtitlesPanel(QWidget):
 
 class CachePanel(QWidget):
 
-    def __init__(self, parent: ParametersDialog, cache: CacheSystem, media_metadata, *args, **kwargs):
+    def __init__(self, parent: ParametersDialog, media_metadata, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.parent_dialog = parent
         self.media_metadata = media_metadata
-        self.cache = cache
 
         main_layout = QVBoxLayout()
 
@@ -1039,14 +1039,14 @@ class CachePanel(QWidget):
             size_strings.append(
                 f"{strings.TR_WAVEFORM} ({self.simplifySize(size_current_waveform)})"
             )
-            if self.cache._get_transcription_path(fingerprint).exists():
-                size_current_transcription = self.cache._get_transcription_path(fingerprint).stat().st_size
+            if cache._get_transcription_path(fingerprint).exists():
+                size_current_transcription = cache._get_transcription_path(fingerprint).stat().st_size
                 current_total_size += size_current_transcription
                 size_strings.append(
                     f"{strings.TR_TRANSCRIPTION} ({self.simplifySize(size_current_transcription)})"
                 )
-            if self.cache._get_scenes_path(fingerprint).exists():
-                size_current_scenes = self.cache._get_scenes_path(fingerprint).stat().st_size
+            if cache._get_scenes_path(fingerprint).exists():
+                size_current_scenes = cache._get_scenes_path(fingerprint).stat().st_size
                 current_total_size += size_current_scenes
                 size_strings.append(
                     f"{strings.TR_SCENES} ({self.simplifySize(size_current_scenes)})"
@@ -1061,10 +1061,10 @@ class CachePanel(QWidget):
         size_all_scenes = self.getSizeAllScenes()
 
         total_cache_size = size_all_waveforms + size_all_transcriptions + size_all_scenes
-        if self.cache.media_cache_path.exists():
-            total_cache_size += self.cache.media_cache_path.stat().st_size
-        if self.cache.doc_cache_path.exists():
-            total_cache_size += self.cache.doc_cache_path.stat().st_size
+        if cache.media_cache_path.exists():
+            total_cache_size += cache.media_cache_path.stat().st_size
+        if cache.doc_cache_path.exists():
+            total_cache_size += cache.doc_cache_path.stat().st_size
 
         size_strings = [
             f"{strings.TR_WAVEFORMS} ({self.simplifySize(size_all_waveforms)})",
@@ -1086,21 +1086,21 @@ class CachePanel(QWidget):
 
     def getSizeAllWaveforms(self) -> int:
         total_size = 0
-        for file in self.cache.waveforms_dir.iterdir():
+        for file in cache.waveforms_dir.iterdir():
             if file.suffix == '.npy':
                 total_size += file.stat().st_size
         return total_size
 
     def getSizeAllTranscriptions(self) -> int:
         total_size = 0
-        for file in self.cache.transcriptions_dir.iterdir():
+        for file in cache.transcriptions_dir.iterdir():
             if file.suffix == '.tsv':
                 total_size += file.stat().st_size
         return total_size
     
     def getSizeAllScenes(self) -> int:
         total_size = 0
-        for file in self.cache.scenes_dir.iterdir():
+        for file in cache.scenes_dir.iterdir():
             if file.suffix == '.tsv':
                 total_size += file.stat().st_size
         return total_size
@@ -1123,26 +1123,26 @@ class CachePanel(QWidget):
         fingerprint = self.media_metadata["fingerprint"]
 
         if self.current_waveform.isChecked():
-            waveform_path = self.cache._get_waveform_path(fingerprint)
+            waveform_path = cache._get_waveform_path(fingerprint)
             waveform_path.unlink(missing_ok=True)
-            if fingerprint in self.cache.media_cache:
-                self.cache.media_cache[fingerprint].pop("waveform_size", None)
-                self.cache._media_cache_dirty = True
+            if fingerprint in cache.media_cache:
+                cache.media_cache[fingerprint].pop("waveform_size", None)
+                cache._media_cache_dirty = True
             self.media_metadata.pop("waveform_size", None)
 
         if self.current_transcription.isChecked():
-            transcription_path = self.cache._get_transcription_path(fingerprint)
+            transcription_path = cache._get_transcription_path(fingerprint)
             transcription_path.unlink(missing_ok=True)
-            if fingerprint in self.cache.media_cache:
-                self.cache.media_cache[fingerprint].pop("transcription_progress", None)
-                self.cache.media_cache[fingerprint].pop("transcription_completed", None)
-                self.cache._media_cache_dirty = True
+            if fingerprint in cache.media_cache:
+                cache.media_cache[fingerprint].pop("transcription_progress", None)
+                cache.media_cache[fingerprint].pop("transcription_completed", None)
+                cache._media_cache_dirty = True
             self.media_metadata.pop("transcription", None)
             self.media_metadata.pop("transcription_progress", None)
             self.media_metadata.pop("transcription_completed", None)
         
         if self.current_scenes.isChecked():
-            transcription_path = self.cache._get_transcription_path(fingerprint)
+            transcription_path = cache._get_transcription_path(fingerprint)
             transcription_path.unlink(missing_ok=True)
             self.media_metadata.pop("scenes", None)
             self.parent_dialog.signals.cache_scenes_removed.emit()
@@ -1153,10 +1153,10 @@ class CachePanel(QWidget):
             self.current_scenes.isChecked()
         ):
             # Remove media record from cache root
-            self.cache.media_cache.pop(fingerprint, None)
-            self.cache._media_cache_dirty = True
+            cache.media_cache.pop(fingerprint, None)
+            cache._media_cache_dirty = True
 
-        self.cache._save_root_cache_to_disk()
+        cache._save_root_cache_to_disk()
         self.update()
 
     
@@ -1164,26 +1164,26 @@ class CachePanel(QWidget):
         print("Clearing global media cache")
 
         if self.global_waveform.isChecked():
-            for file in self.cache.waveforms_dir.iterdir():
+            for file in cache.waveforms_dir.iterdir():
                 if file.suffix == '.npy':
                     file.unlink()
                 fingerprint = file.stem
-                if fingerprint in self.cache.media_cache:
-                    self.cache.media_cache[fingerprint].pop("waveform_size", None)
-                    self.cache._media_cache_dirty = True
+                if fingerprint in cache.media_cache:
+                    cache.media_cache[fingerprint].pop("waveform_size", None)
+                    cache._media_cache_dirty = True
         
         if self.global_transcription.isChecked():
-            for file in self.cache.transcriptions_dir.iterdir():
+            for file in cache.transcriptions_dir.iterdir():
                 if file.suffix == '.tsv':
                     file.unlink()
                 fingerprint = file.stem
-                if fingerprint in self.cache.media_cache:
-                    self.cache.media_cache[fingerprint].pop("transcription_progress", None)
-                    self.cache.media_cache[fingerprint].pop("transcription_completed", None)
-                    self.cache._media_cache_dirty = True
+                if fingerprint in cache.media_cache:
+                    cache.media_cache[fingerprint].pop("transcription_progress", None)
+                    cache.media_cache[fingerprint].pop("transcription_completed", None)
+                    cache._media_cache_dirty = True
         
         if self.global_scenes.isChecked():
-            for file in self.cache.scenes_dir.iterdir():
+            for file in cache.scenes_dir.iterdir():
                 if file.suffix == '.tsv':
                     file.unlink()
         
@@ -1193,10 +1193,10 @@ class CachePanel(QWidget):
             self.global_scenes.isChecked()
         ):
             # Remove media cache root
-            self.cache.media_cache.clear()
-            self.cache.media_cache_path.unlink()
-            self.cache._media_cache_dirty = False
+            cache.media_cache.clear()
+            cache.media_cache_path.unlink()
+            cache._media_cache_dirty = False
         else:
-            self.cache._save_root_cache_to_disk()
+            cache._save_root_cache_to_disk()
         
         self.update()
