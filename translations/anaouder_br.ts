@@ -57,13 +57,13 @@
     <message>
         <location filename="../src/parameters_dialog.py" line="920"/>
         <source>Media fingerprint</source>
-        <translation type="unfinished">Roud niverel ar media</translation>
+        <translation>Roud niverel ar media</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="928"/>
         <location filename="../src/parameters_dialog.py" line="981"/>
         <source>Size on disk</source>
-        <translation type="unfinished">Ment war ar bladenn</translation>
+        <translation>Ment war ar bladenn</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="935"/>
@@ -84,17 +84,17 @@
     <message>
         <location filename="../src/parameters_dialog.py" line="971"/>
         <source>Open folder</source>
-        <translation type="unfinished">Digeriñ an doser</translation>
+        <translation>Digeriñ an teuliad</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="973"/>
         <source>Open cache folder in file explorer</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Digeriñ teuliad ar memor</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="986"/>
         <source>Size limit</source>
-        <translation type="unfinished"></translation>
+        <translation>Beven ment</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="1011"/>
@@ -177,37 +177,37 @@
     <message>
         <location filename="../src/parameters_dialog.py" line="398"/>
         <source>Language of user interface</source>
-        <translation type="unfinished"></translation>
+        <translation>Yezh an etrefas</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="417"/>
         <source>Subtitles style</source>
-        <translation type="unfinished"></translation>
+        <translation>Stil an istitloù</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="420"/>
         <source>Subtitles font color</source>
-        <translation type="unfinished"></translation>
+        <translation>Liv ar skrid</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="444"/>
         <source>Reset to default</source>
-        <translation type="unfinished"></translation>
+        <translation>Dre ziouer</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="451"/>
         <source>Auto Save</source>
-        <translation type="unfinished"></translation>
+        <translation>Enrollañ Emgefreek</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="464"/>
         <source>Save every</source>
-        <translation type="unfinished"></translation>
+        <translation>Enrollañ bep</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="474"/>
         <source>Keep only</source>
-        <translation type="unfinished"></translation>
+        <translation>Mirout nemet</translation>
     </message>
 </context>
 <context>
@@ -326,7 +326,7 @@
     <message>
         <location filename="../src/main.py" line="320"/>
         <source>Open &amp;recent</source>
-        <translation type="unfinished"></translation>
+        <translation>Digeriñ &amp;nevesañ</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="474"/>
@@ -383,47 +383,47 @@
     <message>
         <location filename="../src/main.py" line="1035"/>
         <source>No media file</source>
-        <translation type="unfinished"></translation>
+        <translation>Restr media ebet</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1036"/>
         <source>Couldn&apos;t find media file for &apos;{filename}&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>N&apos;eo ket bet kavet a restr media evit &apos;{filename}&apos;</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1040"/>
         <source>&apos;{filepath}&apos; doesn&apos;t exist.</source>
-        <translation type="unfinished"></translation>
+        <translation>&apos;{filepath}&apos; n&apos;eus ket anezhi.</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1066"/>
         <source>The autosaved file has more recent changes.</source>
-        <translation type="unfinished"></translation>
+        <translation>An teul emenrollet a zo nevesoc&apos;h.</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1068"/>
         <source>Load autosaved file?</source>
-        <translation type="unfinished"></translation>
+        <translation>Digeriñ an teul emenrollet ?</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1088"/>
         <source>Multiple autosaved files found.</source>
-        <translation type="unfinished"></translation>
+        <translation>Meur a teulioù emenrollet a zo.</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1089"/>
         <source>Select one to load:</source>
-        <translation type="unfinished"></translation>
+        <translation>Dibabit unan :</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1191"/>
         <source>No recent files</source>
-        <translation type="unfinished"></translation>
+        <translation>Teul nevez ebet</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1209"/>
         <source>Clear Recent Files</source>
-        <translation type="unfinished"></translation>
+        <translation>Skarzhañ roll an teulioù nevesañ</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1746"/>
@@ -458,52 +458,52 @@
     <message>
         <location filename="../src/main.py" line="340"/>
         <source>Import a media file (audio or video)</source>
-        <translation type="unfinished"></translation>
+        <translation>Enporzhiañ ur media (aodio pe video)</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="345"/>
         <source>Import a subtitles file, keep current media</source>
-        <translation type="unfinished"></translation>
+        <translation>Enporzhiañ ur restr istitloù, o virout ar media</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="349"/>
         <source>&amp;Export as</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Ezporzhiañ e stumm</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="351"/>
         <source>&amp;SubRip (.srt)</source>
-        <translation type="unfinished"></translation>
+        <translation>istitloù &amp;SubRip (.srt)</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="352"/>
         <source>Subtitle file</source>
-        <translation type="unfinished"></translation>
+        <translation>Restr istitloù</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="361"/>
         <source>Simple text document</source>
-        <translation type="unfinished"></translation>
+        <translation>Un teul skrid simpl, hep framm</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="384"/>
         <source>Auto &amp;Segment</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Didroc&apos;hañ emgefreek</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="385"/>
         <source>Find segments based on sound activity</source>
-        <translation type="unfinished"></translation>
+        <translation>Kavout ar rannoù son hervez an ehanoù</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="389"/>
         <source>&amp;Adapt to subtitles</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Azasaat d&apos;an istitloù</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="390"/>
         <source>Apply subtitles rules to the segments</source>
-        <translation type="unfinished"></translation>
+        <translation>Kemmañ ar rannoù hervez reolennoù an istitlañ</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="396"/>
@@ -518,7 +518,7 @@
     <message>
         <location filename="../src/main.py" line="421"/>
         <source>Coloring</source>
-        <translation type="unfinished"></translation>
+        <translation>Livadur</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="541"/>
@@ -553,37 +553,37 @@
     <message>
         <location filename="../src/main.py" line="840"/>
         <source>Save Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Fazi Enrollañ</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2499"/>
         <source>Transcribed</source>
-        <translation type="unfinished"></translation>
+        <translation>Treuzskrivet</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="933"/>
         <source>Open File</source>
-        <translation type="unfinished"></translation>
+        <translation>Digeriñ ar restr</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1014"/>
         <source>Read Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Fazi Lenn</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1147"/>
         <source>Open Subtitles File</source>
-        <translation type="unfinished"></translation>
+        <translation>Digeriñ ur restr istitloù</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2487"/>
         <source>Switching language</source>
-        <translation type="unfinished"></translation>
+        <translation>Cheñch yezh</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2488"/>
         <source>You need to restart the application to update the UI language.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ret eo deoc&apos;h adloc&apos;hañ ar meziant evit ma vefe cheñchet ar yezh.</translation>
     </message>
     <message>
         <source>View follow playhead</source>
@@ -606,12 +606,12 @@
     <message>
         <location filename="../src/main.py" line="2329"/>
         <source>Unsaved work</source>
-        <translation type="unfinished"></translation>
+        <translation>Labour dienrollet</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2330"/>
         <source>Do you want to save your changes?</source>
-        <translation type="unfinished"></translation>
+        <translation>C&apos;hoant hoc&apos;h eus da enrollañ ho labour ?</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2422"/>
@@ -638,22 +638,22 @@
     <message>
         <location filename="../src/parameters_dialog.py" line="576"/>
         <source>Language</source>
-        <translation type="unfinished">Yezh</translation>
+        <translation>Yezh</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="594"/>
         <source>Online Models</source>
-        <translation type="unfinished">Patromoù enlinenn</translation>
+        <translation>Patromoù enlinenn</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="600"/>
         <source>Download</source>
-        <translation type="unfinished">Pellgargañ</translation>
+        <translation>Pellgargañ</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="608"/>
         <source>Local Models</source>
-        <translation type="unfinished"></translation>
+        <translation>Patromoù lec&apos;hel</translation>
     </message>
 </context>
 <context>
@@ -676,22 +676,22 @@
     <message>
         <location filename="../src/parameters_dialog.py" line="259"/>
         <source>Parameters</source>
-        <translation type="unfinished"></translation>
+        <translation>Arventennoù</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="264"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>Hollek</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="265"/>
         <source>Models</source>
-        <translation type="unfinished"></translation>
+        <translation>Patromoù</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="266"/>
         <source>Subtitles</source>
-        <translation type="unfinished"></translation>
+        <translation>Istitloù</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="268"/>
@@ -757,177 +757,177 @@
     <message>
         <location filename="../src/strings.py" line="17"/>
         <source>Could not smart split</source>
-        <translation type="unfinished"></translation>
+        <translation>Troc&apos;hadur poellek ebet</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="18"/>
         <source>Transcription completed</source>
-        <translation type="unfinished"></translation>
+        <translation>Echu treuzskrivañ</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="19"/>
         <source>No transcription</source>
-        <translation type="unfinished"></translation>
+        <translation>Treuzskrivadur ebet</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="20"/>
         <source>This media file has not been transcribed yet.</source>
-        <translation type="unfinished"></translation>
+        <translation>N&apos;eo ket bet treuzskrivet ar media-mañ c&apos;hoazh.</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="21"/>
         <source>Click on the &apos;Transcribe&apos; button, with no segments selected, to start automatic transcription</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Klikit war an afell &apos;Treuzskrivañ&apos;, hep rann ebet diuzet, evit loc&apos;hañ an treuzskrivañ emgefre</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="24"/>
         <source>Click on the &apos;Transcribe&apos; button, with no segments selected, to continue automatic transcription</source>
-        <translation type="unfinished"></translation>
+        <translation>Klikit war an afell &apos;Treuzskrivañ&apos;, hep rann ebet diuzet, evit kenderc&apos;hel gant an treuzskrivañ emgefre</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="26"/>
         <source>&amp;Open</source>
-        <translation type="unfinished">&amp;Digeriñ</translation>
+        <translation>&amp;Digeriñ</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="27"/>
         <source>&amp;Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Nullañ</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="28"/>
         <source>Close</source>
-        <translation type="unfinished"></translation>
+        <translation>Serriñ</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="29"/>
         <source>Delete</source>
-        <translation type="unfinished"></translation>
+        <translation>Skarzhañ</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="30"/>
         <source>Clear</source>
-        <translation type="unfinished">Diverkañ</translation>
+        <translation>Skarzhañ</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="31"/>
         <source>Zoom in</source>
-        <translation type="unfinished">Zoum brasaat</translation>
+        <translation>Zoum brasaat</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="34"/>
         <source>Zoom out</source>
-        <translation type="unfinished">Zoum bihanaat</translation>
+        <translation>Zoum bihanaat</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="35"/>
         <source>Open Media File</source>
-        <translation type="unfinished"></translation>
+        <translation>Digeriñ ur media</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="36"/>
         <source>Media files</source>
-        <translation type="unfinished"></translation>
+        <translation>Restroù media</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="37"/>
         <source>Save File</source>
-        <translation type="unfinished">Enrollañ ar restr</translation>
+        <translation>Enrollañ ar restr</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="38"/>
         <source>ALI files</source>
-        <translation type="unfinished"></translation>
+        <translation>Restroù ALI</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="39"/>
         <source>Save Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Fazi Enrollañ</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="40"/>
         <source>Could not save file</source>
-        <translation type="unfinished"></translation>
+        <translation>Ur gudenn oc&apos;h enrollañ ar restr</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="43"/>
         <source>Autosave Backup(s)</source>
-        <translation type="unfinished"></translation>
+        <translation>Teul(ioù) emenrollet</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="44"/>
         <source>frames</source>
-        <translation type="unfinished"></translation>
+        <translation>skeudenn</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="45"/>
         <source>c/s</source>
-        <translation type="unfinished"></translation>
+        <translation>a/e</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="46"/>
         <source>s</source>
-        <translation type="unfinished"></translation>
+        <translation>e</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="47"/>
         <source>mn</source>
-        <translation type="unfinished"></translation>
+        <translation>mn</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="48"/>
         <source>fps</source>
-        <translation type="unfinished"></translation>
+        <translation>sde</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="49"/>
         <source>o</source>
-        <translation type="unfinished">e</translation>
+        <translation>o</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="50"/>
         <source>Ko</source>
-        <translation type="unfinished">Ke</translation>
+        <translation>Ko</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="51"/>
         <source>Mo</source>
-        <translation type="unfinished">Me</translation>
+        <translation>Mo</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="53"/>
         <source>file(s)</source>
-        <translation type="unfinished"></translation>
+        <translation>restr(où)</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="56"/>
         <source>Select Color</source>
-        <translation type="unfinished"></translation>
+        <translation>Dibab al liv</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="57"/>
         <source>Waveform</source>
-        <translation type="unfinished">Stumm ar wagenn</translation>
+        <translation>Stumm ar wagenn</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="58"/>
         <source>Waveforms</source>
-        <translation type="unfinished">Gwagennoù son</translation>
+        <translation>Gwagennoù son</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="59"/>
         <source>Transcription</source>
-        <translation type="unfinished">Treuzskrivadur</translation>
+        <translation>Treuzskrivadur</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="60"/>
         <source>Transcriptions</source>
-        <translation type="unfinished">Treuzskrivadurioù</translation>
+        <translation>Treuzskrivadurioù</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="63"/>
         <source>Scenes</source>
-        <translation type="unfinished">Senennoù</translation>
+        <translation>Senennoù</translation>
     </message>
 </context>
 <context>
@@ -935,75 +935,75 @@
     <message>
         <location filename="../src/parameters_dialog.py" line="696"/>
         <source>Preferences</source>
-        <translation type="unfinished"></translation>
+        <translation>Gwellvezioù</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="700"/>
         <source>Netflix default</source>
-        <translation type="unfinished"></translation>
+        <translation>Reolennoù Netflix</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="701"/>
         <source>Custom</source>
-        <translation type="unfinished"></translation>
+        <translation>Dre zibab</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="711"/>
         <source>Subtitles duration</source>
-        <translation type="unfinished"></translation>
+        <translation>Padelezh an istitloù</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="721"/>
         <location filename="../src/parameters_dialog.py" line="750"/>
         <source>Minimum</source>
-        <translation type="unfinished"></translation>
+        <translation>D&apos;an nebeutañ</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="734"/>
         <source>Maximum</source>
-        <translation type="unfinished"></translation>
+        <translation>D&apos;ar muiañ</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="740"/>
         <source>Time gap between subtitles</source>
-        <translation type="unfinished"></translation>
+        <translation>Ehan etre an istitloù</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="756"/>
         <source>Auto extend</source>
-        <translation type="unfinished"></translation>
+        <translation>Hiraat emgefreek</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="770"/>
         <source>when gap is under</source>
-        <translation type="unfinished"></translation>
+        <translation>pa vez an ehan dindan</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="776"/>
         <source>Text length and density</source>
-        <translation type="unfinished"></translation>
+        <translation>Hirder ha stankter an destenn</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="781"/>
         <source>chars</source>
-        <translation type="unfinished">arouez</translation>
+        <translation>arouez</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="784"/>
         <source>Text margin size</source>
-        <translation type="unfinished"></translation>
+        <translation>Ment ar marz</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="795"/>
         <source>Characters per second</source>
-        <translation type="unfinished">Arouez dre eilenn</translation>
+        <translation>Arouez dre eilenn</translation>
     </message>
     <message>
         <location filename="../src/parameters_dialog.py" line="819"/>
         <location filename="../src/parameters_dialog.py" line="830"/>
         <location filename="../src/parameters_dialog.py" line="841"/>
         <source>{time}s @{fps}fps</source>
-        <translation type="unfinished"></translation>
+        <translation>{time}e @{fps}sde</translation>
     </message>
 </context>
 <context>
@@ -1016,22 +1016,22 @@
     <message>
         <location filename="../src/waveform_widget.py" line="226"/>
         <source>Auto transcribe</source>
-        <translation type="unfinished"></translation>
+        <translation>Treuzskrivañ emgefreek</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="236"/>
         <source>Crop head</source>
-        <translation type="unfinished"></translation>
+        <translation>Adlec&apos;hiañ penn ar rann</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="241"/>
         <source>Crop tail</source>
-        <translation type="unfinished"></translation>
+        <translation>Adlec&apos;hiañ lost ar rann</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="246"/>
         <source>Split here</source>
-        <translation type="unfinished"></translation>
+        <translation>Didroc&apos;hañ amañ</translation>
     </message>
 </context>
 <context>
@@ -1039,17 +1039,17 @@
     <message>
         <location filename="../src/main.py" line="2585"/>
         <source>Welcome</source>
-        <translation type="unfinished"></translation>
+        <translation>Donemat</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2587"/>
         <source>A Speech-To-Text model is needed for automatic transcription.</source>
-        <translation type="unfinished"></translation>
+        <translation>Deus ur patrom digejañ ar vouezh a zo ezhomm gant an treuzskrivañ emgefreek.</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2588"/>
         <source>Would you like to download one ?</source>
-        <translation type="unfinished"></translation>
+        <translation>Fellout a ra deoc&apos;h pellgargañ unan ?</translation>
     </message>
 </context>
 </TS>
