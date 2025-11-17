@@ -832,7 +832,7 @@ class SubtitlesPanel(QWidget):
         app_settings.setValue("subtitles/max_frames", max_frames)
         t = max_frames / self.fps
         text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
-        self.min_dur_label.setText(text)
+        self.max_dur_label.setText(text)
         self.parent_dialog.signals.subtitles_max_frames_changed.emit(max_frames)
         if not self.default_params_lock:
             self.user_params["max_frames"] = max_frames

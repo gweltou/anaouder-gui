@@ -10,6 +10,20 @@ from src.icons import icons
 from src.strings import strings
 
 
+trugarekaat = ', '. join(sorted([
+    "An Drouizig",
+    "Anna Duval-Guennoc",
+    "Cédric Sinou",
+    "Jean-Mari Ollivier",
+    "Jeanne Mégly",
+    "Karen Treguier",
+    "Léane Rumin",
+    "Marie Breton",
+    "Mevena Guillouzic-Gouret",
+    "Samuel Julien",
+]))
+
+
 class AboutDialog(QDialog):
 
     def __init__(self, parent=None):
@@ -96,13 +110,13 @@ class AboutDialog(QDialog):
         
         # Combined description and acknowledgments
         content = QLabel()
-        content.setText("""
+        content.setText(f"""
         <h4>Darempred</h4>
         <p>anaouder@dizale.bzh</p>
         <h4>Kod mammen</h4>
         <p><a href="https://github.com/gweltou/anaouder-gui">https://github.com/gweltou/anaouder-gui</a></p>
         <h4>Trugarekaat</h4>
-        <p>Anna Duval-Guennoc, Cédric Sinou, Jean-Mari Ollivier, Jeanne Mégly, Karen Treguier, Léane Rumin, Marie Breton, Mevena Guillouzic-Gouret, Samuel Julien</p>
+        <p>{trugarekaat}</p>
         """)
         content.setAlignment(Qt.AlignmentFlag.AlignCenter)
         content.setWordWrap(True)

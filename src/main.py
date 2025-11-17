@@ -754,16 +754,19 @@ class MainWindow(QMainWindow):
 
 
     def updateWindowTitle(self) -> None:
-        title_parts = []
-        if not self.undo_stack.isClean():
-            title_parts.append("●")
-        title_parts.append(APP_NAME)
+        
+            
+        # title_parts.append(APP_NAME)
 
         path = self.filepath or self.media_path
         if path:
-            title_parts.extend(['-', Path(path).name])
-        
-        self.setWindowTitle(' '.join(title_parts))
+            title_parts = []
+            if not self.undo_stack.isClean():
+                title_parts.append("●")
+            title_parts.append(Path(path).name)
+            self.setWindowTitle(' '.join(title_parts))
+        else:
+            self.setWindowTitle(APP_NAME)
 
 
     def changeLanguage(self, language: str) -> None:
@@ -2611,7 +2614,8 @@ def main(argv: list):
     app.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
 
     # Internationalization
-    if (locale := app_settings.value("ui_language", None, type=str)):
+    if (locale := app_settings.value("ui_language", DEFAULT_LANGUAGE, type=str)):
+        print(f"{locale=}")
         app.switch_language(locale)
     else:
         strings.initialize() # Load strings

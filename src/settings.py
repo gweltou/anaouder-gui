@@ -9,30 +9,9 @@ _is_darwin = platform.system() == "Darwin"
 
 
 APP_NAME = "Anaouder"
-DEFAULT_LANGUAGE = 'br'
+DEFAULT_LANGUAGE = "br"
 MULTI_LANG = False
-AUTOSAVE_FOLDER_NAME = ".anaouder_autosave"
-
-app_settings = QSettings("OTilde", APP_NAME)
-
-
-WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
-
-
-# UI settings
-
-BUTTON_SIZE = 30        # in pixels
-BUTTON_MEDIA_SIZE = 30  # in pixels
-BUTTON_SPACING = 4      # in pixels
-BUTTON_MARGIN = 8       # in pixels
-BUTTON_LABEL_SIZE = 16  # in pixels
-DIAL_SIZE = 30          # in pixels
-
-STATUS_BAR_TIMEOUT = 4000 # Display time of status bar messages (in ms)
-RECENT_FILES_LIMIT = 10  # Number of files kept in "Recent files" menu
-
-# FFMPEG settings
-FFMPEG_SCENCE_DETECTOR_THRESHOLD = 0.2
+AUTOSAVE_FOLDER_NAME = "_anaouder_autosave"
 
 
 UI_LANGUAGES = [
@@ -40,6 +19,41 @@ UI_LANGUAGES = [
     ("en", "english"),
     ("fr", "français")
 ]
+
+app_settings = QSettings("OTilde", APP_NAME)
+
+
+WAVEFORM_SAMPLERATE = 1500 # The cached waveforms break if this value is changed
+STATUS_BAR_TIMEOUT = 4000 # Display time of status bar messages (in ms)
+RECENT_FILES_LIMIT = 10  # Number of files kept in "Recent files" menu
+
+
+# UI settings
+BUTTON_SIZE = 30        # in pixels
+BUTTON_MEDIA_SIZE = 30  # in pixels
+BUTTON_SPACING = 4      # in pixels
+BUTTON_MARGIN = 8       # in pixels
+BUTTON_LABEL_SIZE = 16  # in pixels
+DIAL_SIZE = 30          # in pixels
+
+# FFMPEG settings
+FFMPEG_SCENCE_DETECTOR_THRESHOLD = 0.2
+
+# Default values for subtitles
+SUBTITLES_MIN_FRAMES = 16
+SUBTITLES_MAX_FRAMES = 125
+SUBTITLES_MIN_INTERVAL = 2
+SUBTITLES_AUTO_EXTEND = True
+SUBTITLES_AUTO_EXTEND_MAX_GAP = 12
+SUBTITLES_MARGIN_SIZE = 42         # Text margin (number of chars)
+SUBTITLES_CPS = 16.0               # Speech density (chars per second)
+
+SUBTITLES_DEFAULT_COLOR = QColor(255, 255, 255)
+SUBTITLES_BLOCK_DEFAULT_COLOR = QColor(0, 0, 0, 100)
+
+# Autosave settings
+AUTOSAVE_DEFAULT_INTERVAL = 0.2    # 1 minute
+AUTOSAVE_BACKUP_NUMBER = 3         # Number of files to keep at most
 
 
 shortcuts: Dict[str, QKeySequence] = {
@@ -59,20 +73,3 @@ shortcuts: Dict[str, QKeySequence] = {
     # "zoom_in":      QKeySequence(QKeySequence.StandardKey.ZoomIn),
     # "zoom_out":     QKeySequence(QKeySequence.StandardKey.ZoomOut),
 }
-
-
-# Default values for subtitles
-
-SUBTITLES_MIN_FRAMES = 16
-SUBTITLES_MAX_FRAMES = 125
-SUBTITLES_MIN_INTERVAL = 2
-SUBTITLES_AUTO_EXTEND = True
-SUBTITLES_AUTO_EXTEND_MAX_GAP = 12
-SUBTITLES_MARGIN_SIZE = 42         # Text margin (number of chars)
-SUBTITLES_CPS = 16.0               # Speech density (chars per second)
-
-SUBTITLES_DEFAULT_COLOR = QColor(255, 255, 255)
-SUBTITLES_BLOCK_DEFAULT_COLOR = QColor(0, 0, 0, 100)
-
-AUTOSAVE_DEFAULT_INTERVAL = 1.0    # 1 minute
-AUTOSAVE_BACKUP_NUMBER = 3         # Number of files to keep at most
