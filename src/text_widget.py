@@ -28,7 +28,8 @@ from src.commands import (
     InsertTextCommand,
     DeleteTextCommand,
     InsertBlockCommand,
-    ReplaceTextCommand
+    ReplaceTextCommand,
+    MoveTextCursor
 )
 from src.theme import theme
 from src.utils import (
@@ -1241,8 +1242,12 @@ class TextEditWidget(QTextEdit):
                     return
                 else:
                     # Unaligned block
+                    print("split unaligned block")
                     left_part = text[:pos_in_block].rstrip()
                     right_part = text[pos_in_block:].lstrip()
+
+                    print(f"{cursor_pos=}")
+                    print(f"0 {self.textCursor().position()=}")
                     self.undo_stack.beginMacro("split non aligned")
                     self.undo_stack.push(
                         InsertBlockCommand(
@@ -1251,7 +1256,9 @@ class TextEditWidget(QTextEdit):
                             after=True
                         )
                     )
+                    print(f"1 {self.textCursor().position()=}")
                     cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+                    print(f"{self.textCursor().position()=}")
                     self.undo_stack.push(
                         InsertTextCommand(
                             self,
@@ -1259,6 +1266,7 @@ class TextEditWidget(QTextEdit):
                             cursor.position()
                         )
                     )
+                    print(f"2 {self.textCursor().position()=}")
                     self.undo_stack.push(
                         ReplaceTextCommand(
                             self,
@@ -1266,6 +1274,14 @@ class TextEditWidget(QTextEdit):
                             left_part
                         )
                     )
+                    print(f"3 {self.textCursor().position()=}")
+                    self.undo_stack.push(
+                        MoveTextCursor(
+                            self,
+                            cursor_pos
+                        )
+                    )
+                    print(f"4 {self.textCursor().position()=}")
                     self.undo_stack.endMacro()
                     return
 

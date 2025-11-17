@@ -63,7 +63,7 @@ class TextDocumentInterface(Protocol):
     def insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock:
         ...
 
-    def insertSentenceWithId(self, text: str, seg_id: SegmentId, with_cursor: bool = False) -> None:
+    def insertSentenceWithId(self, text: str, segment_id: SegmentId, with_cursor: bool = False) -> None:
         ...
     
     def setSentenceText(self, text: str, seg_id: SegmentId) -> None:

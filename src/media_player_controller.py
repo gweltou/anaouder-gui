@@ -51,7 +51,7 @@ class MediaPlayerController(QObject):
     playback_started = Signal()
     playback_stopped = Signal()
     segment_ended = Signal(int)       # segment_id
-    subtitle_changed = Signal(float)  # time in seconds
+    # subtitle_changed = Signal(float)  # time in seconds
     media_duration_changed = Signal(float)  # duration in seconds
     
 
@@ -175,25 +175,24 @@ class MediaPlayerController(QObject):
         Returns:
             True if playback started, False otherwise
         """
+        log.debug(f"playSegment({segment=}, {segment_id=})")
         if not self.hasMedia():
             self.log.warning("Cannot play segment: no media loaded")
             return False
         
         start, end = segment
         
-        if start < 0 or end > self.media_duration:
-            self.log.warning(f"Segment out of bounds: [{start:.3f}, {end:.3f}]")
+        if start < 0.0 or end > self.media_duration:
+            self.log.warning(f"Segment out of bounds: [{start}, {end}]")
             return False
         
         if start >= end:
-            self.log.warning(f"Invalid segment: start >= end [{start:.3f}, {end:.3f}]")
+            self.log.warning(f"Invalid segment: start >= end [{start}, {end}]")
             return False
         
         self.state.playing_segment_id = segment_id
         self.seekTo(start)
         self.play()
-        
-        self.log.debug(f"Playing segment {segment_id}: [{start:.3f}, {end:.3f}]")
         return True
     
 
@@ -368,10 +367,7 @@ class MediaPlayerController(QObject):
         self.position_changed.emit(position_sec)
         
         # Emit subtitle update
-        self.subtitle_changed.emit(position_sec)
-        
-        # Check if we need to handle segment/selection end
-        self._checkPlaybackBoundaries(position_sec)
+        # self.subtitle_changed.emit(position_sec)
     
 
     def _onPlaybackStateChanged(self, state: QMediaPlayer.PlaybackState) -> None:
@@ -389,19 +385,6 @@ class MediaPlayerController(QObject):
         self.media_duration = duration_ms / 1000.0
         self.log.info(f"Media duration: {self.media_duration:.2f}s")
         self.media_duration_changed.emit(self.media_duration)
-    
-
-    def _checkPlaybackBoundaries(self, position_sec: float) -> None:
-        """
-        Check if playback has reached the end of a segment or selection.
-        
-        This method should be called with additional context (segment data)
-        by the main window or waveform controller.
-        """
-        # Note: This is intentionally minimal because segment/selection data
-        # is managed by WaveformWidget. The main window should connect to
-        # position_changed signal and handle boundary logic there.
-        pass
     
     
     def cleanup(self) -> None:

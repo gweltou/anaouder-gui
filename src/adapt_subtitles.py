@@ -22,13 +22,13 @@ class AdaptDialog(QDialog):
 
         self.subtitle_rules_checkbox = QCheckBox(self.tr("Apply subtitles length and interval rules"))
         self.subtitle_rules_checkbox.setChecked(
-            app_settings.value("adapt_params/apply_subtitles_rules", True)
+            app_settings.value("adapt_params/apply_subtitles_rules", True, type=bool)
         )
         options_layout.addWidget(self.subtitle_rules_checkbox)
         
         self.remove_fillers_checkbox = QCheckBox(self.tr('Remove verbal fillers ("hum", "err"...)'))
         self.remove_fillers_checkbox.setChecked(
-            app_settings.value("adapt_params/remove_fillers", True)
+            app_settings.value("adapt_params/remove_fillers", True, type=bool)
         )
 
         options_layout.addWidget(self.remove_fillers_checkbox)

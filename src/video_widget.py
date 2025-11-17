@@ -78,7 +78,7 @@ class VideoWidget(QGraphicsView):
         self.video_is_valid = False
         
         # Background rectangle for subtitle area (optional)
-        self.background_rect_visible = app_settings.value("subtitles/rect_visible", True)
+        self.background_rect_visible = app_settings.value("subtitles/rect_visible", True, type=bool)
         self.background_rect = QGraphicsRectItem()
         self.background_rect.setPen(Qt.NoPen)
         self.background_rect.setVisible(False)  # Hidden by default

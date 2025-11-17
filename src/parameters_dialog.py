@@ -241,15 +241,19 @@ class DownloadProgressDialog(QDialog):
 
 
 class ParametersDialog(QDialog):
+
     class Signals(QObject):
-        """Custom signals"""
+        """ Custom signals """
+        update_ui_language = Signal(str)
+        toggle_autosave = Signal(bool)
+
         subtitles_margin_size_changed = Signal(int)
         subtitles_cps_changed = Signal(float)
         subtitles_min_frames_changed = Signal(int)
         subtitles_max_frames_changed = Signal(int)
-        cache_scenes_removed = Signal()
-        update_ui_language = Signal(str)
-        toggle_autosave = Signal(bool)
+
+        cache_scenes_cleared = Signal()
+        cache_transcription_cleared = Signal()
 
 
     def __init__(self, parent, media_metadata: dict):
@@ -264,7 +268,7 @@ class ParametersDialog(QDialog):
 
         self.tabs.addTab(GeneralPanel(self, parent.video_widget), self.tr("General"))
         self.tabs.addTab(ModelsPanel(self), self.tr("Models"))
-        self.tabs.addTab(SubtitlesPanel(self, media_metadata.get("fps", 0)), self.tr("Subtitles"))
+        self.tabs.addTab(SubtitlesPanel(self, media_metadata.get("fps", 0)), self.tr("Subtitles Rules"))
         # self.tabs.addTab(UIPanel(parent.video_widget), self.tr("UI"))
         self.tabs.addTab(CachePanel(self, media_metadata), self.tr("Cache"))
         # self.tabs.addTab(self.display_tab, "Display")
@@ -401,7 +405,7 @@ class GeneralPanel(QWidget):
         lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self.lang_selection = QComboBox()
-        current_language = app_settings.value("ui_language", "en")
+        current_language = app_settings.value("ui_language", "en", type=str)
         current_language_idx = 0
         for i, (short_name, long_name) in enumerate(UI_LANGUAGES):
             self.lang_selection.addItem(long_name.capitalize(), short_name)
@@ -719,7 +723,7 @@ class SubtitlesPanel(QWidget):
         self.min_frames_spin.valueChanged.connect(self.updateMinFrames)
         self.min_dur_label = QLabel()
         min_frames_layout = QHBoxLayout()
-        min_frames_layout.addWidget(QLabel(self.tr("Minimum")))
+        min_frames_layout.addWidget(QLabel(strings.TR_MINIMUM))
         min_frames_layout.addWidget(self.min_frames_spin)
         min_frames_layout.addWidget(self.min_dur_label)
         duration_layout.addLayout(min_frames_layout)
@@ -732,7 +736,7 @@ class SubtitlesPanel(QWidget):
         self.max_frames_spin.valueChanged.connect(self.updateMaxFrames)
         self.max_dur_label = QLabel()
         max_frames_layout = QHBoxLayout()
-        max_frames_layout.addWidget(QLabel(self.tr("Maximum")))
+        max_frames_layout.addWidget(QLabel(strings.TR_MAXIMUM))
         max_frames_layout.addWidget(self.max_frames_spin)
         max_frames_layout.addWidget(self.max_dur_label)
         duration_layout.addLayout(max_frames_layout)
@@ -748,7 +752,7 @@ class SubtitlesPanel(QWidget):
         self.min_interval_spin.valueChanged.connect(self.updateMinInterval)
         self.min_interval_time_label = QLabel()
         min_interval_layout = QHBoxLayout()
-        min_interval_layout.addWidget(QLabel(self.tr("Minimum")))
+        min_interval_layout.addWidget(QLabel(strings.TR_MINIMUM))
         min_interval_layout.addWidget(self.min_interval_spin)
         min_interval_layout.addWidget(self.min_interval_time_label)
         interval_layout.addLayout(min_interval_layout)
@@ -816,8 +820,8 @@ class SubtitlesPanel(QWidget):
         min_frames = self.min_frames_spin.value()
         app_settings.setValue("subtitles/min_frames", min_frames)
         t = min_frames / self.fps
-        self.min_dur_label.setText(self.tr("{time}s @{fps}fps")
-                .format(time=round(t, 3), fps=round(self.fps, 2)))
+        text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
+        self.min_dur_label.setText(text)
         self.parent_dialog.signals.subtitles_min_frames_changed.emit(min_frames)
         if not self.default_params_lock:
             self.user_params["min_frames"] = min_frames
@@ -827,8 +831,8 @@ class SubtitlesPanel(QWidget):
         max_frames = self.max_frames_spin.value()
         app_settings.setValue("subtitles/max_frames", max_frames)
         t = max_frames / self.fps
-        self.max_dur_label.setText(self.tr("{time}s @{fps}fps")
-                .format(time=round(t, 3), fps=round(self.fps, 2)))
+        text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
+        self.min_dur_label.setText(text)
         self.parent_dialog.signals.subtitles_max_frames_changed.emit(max_frames)
         if not self.default_params_lock:
             self.user_params["max_frames"] = max_frames
@@ -838,8 +842,8 @@ class SubtitlesPanel(QWidget):
         min_interval = self.min_interval_spin.value()
         app_settings.setValue("subtitles/min_interval", min_interval)
         t = min_interval / self.fps
-        self.min_interval_time_label.setText(self.tr("{time}s @{fps}fps")
-                .format(time=round(t, 3), fps=round(self.fps, 2)))
+        text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
+        self.min_interval_time_label.setText(text)
         self.extend_max_gap_spin.setMinimum(min_interval + 1)
         if not self.default_params_lock:
             self.user_params["min_interval"] = min_interval
@@ -849,9 +853,8 @@ class SubtitlesPanel(QWidget):
         max_gap = self.extend_max_gap_spin.value()
         app_settings.setValue("subtitles/auto_extend_max_gap", max_gap)
         t = max_gap / self.fps
-        self.extend_max_gap_time_label.setText(
-            f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
-        )
+        text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
+        self.extend_max_gap_time_label.setText(text)
         if not self.default_params_lock:
             self.user_params["auto_extend_max_gap"] = max_gap
             self.switchToUserParams()
@@ -1118,7 +1121,7 @@ class CachePanel(QWidget):
     
 
     def clearCurrentCache(self):
-        print("Clearing current media cache")
+        log.info("Clearing current media cache")
 
         fingerprint = self.media_metadata["fingerprint"]
 
@@ -1140,12 +1143,13 @@ class CachePanel(QWidget):
             self.media_metadata.pop("transcription", None)
             self.media_metadata.pop("transcription_progress", None)
             self.media_metadata.pop("transcription_completed", None)
+            self.parent_dialog.signals.cache_transcription_cleared.emit()
         
         if self.current_scenes.isChecked():
             transcription_path = cache._get_transcription_path(fingerprint)
             transcription_path.unlink(missing_ok=True)
             self.media_metadata.pop("scenes", None)
-            self.parent_dialog.signals.cache_scenes_removed.emit()
+            self.parent_dialog.signals.cache_scenes_cleared.emit()
         
         if (
             self.current_waveform.isChecked() and
@@ -1161,7 +1165,7 @@ class CachePanel(QWidget):
 
     
     def clearGlobalCache(self):
-        print("Clearing global media cache")
+        log.info("Clearing global media cache")
 
         if self.global_waveform.isChecked():
             for file in cache.waveforms_dir.iterdir():
@@ -1181,11 +1185,13 @@ class CachePanel(QWidget):
                     cache.media_cache[fingerprint].pop("transcription_progress", None)
                     cache.media_cache[fingerprint].pop("transcription_completed", None)
                     cache._media_cache_dirty = True
+            self.parent_dialog.signals.cache_transcription_cleared.emit()
         
         if self.global_scenes.isChecked():
             for file in cache.scenes_dir.iterdir():
                 if file.suffix == '.tsv':
                     file.unlink()
+            self.parent_dialog.signals.cache_scenes_cleared.emit()
         
         if (
             self.global_waveform.isChecked() and

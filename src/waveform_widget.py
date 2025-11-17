@@ -23,7 +23,7 @@ from PySide6.QtGui import (
 )
 
 from src.theme import theme
-from src.settings import app_settings, shortcuts, SUBTITLES_CPS
+from src.settings import app_settings, shortcuts
 from src.utils import lerpColor, mapNumber
 from src.commands import ResizeSegmentCommand
 from src.strings import strings
@@ -157,7 +157,6 @@ class WaveformWidget(QWidget):
         self.follow_playhead = True
         self.was_following = False
         self.snapping = True
-        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
 
         self.timecode_margin = 20
 
@@ -248,7 +247,21 @@ class WaveformWidget(QWidget):
         self.split_here_action.triggered.connect(self.splitHere)
         self.addAction(self.split_here_action)
 
+        self.updateSubtitlesRulesParams()
+
         self.clear()
+
+
+    def updateSubtitlesRulesParams(self):
+        from src.settings import (
+            SUBTITLES_CPS, SUBTITLES_MIN_FRAMES,
+            SUBTITLES_MAX_FRAMES,
+            SUBTITLES_MIN_INTERVAL,
+        )
+        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
+        self._min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
+        self._max_frames = app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
+        self._min_interval = app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL, type=int)
 
 
     def updateThemeColors(self):
@@ -734,8 +747,15 @@ class WaveformWidget(QWidget):
     
 
     def resizeActiveSegment(self, time_position, handle):
-        """Resize the representation of the segment on the waveform
-        The actual segment is not modified"""
+        """
+        Resize the representation of the segment on the waveform
+        The actual segment is not modified
+        
+        Args:
+            time_position (float): timecode where the handle is being moved
+                the timecode is already quantized according to snapping settings
+            handle (Handle): which handle is being moved (LEFT, RIGHT, MIDDLE)
+        """
         current_segment = self.segments[self.active_segment_id]
 
         left_boundary = 0.0
@@ -769,10 +789,21 @@ class WaveformWidget(QWidget):
         
         elif handle == Handle.MIDDLE:
             # Time position is the requested middle position in the segment
-            half_seg_len = (current_segment[1] - current_segment[0]) * 0.5
-            time_position = max(time_position, left_boundary + half_seg_len + 0.01)
-            time_position = min(time_position, right_boundary - half_seg_len - 0.01)
-            self.resizing_segment = [time_position - half_seg_len, time_position + half_seg_len]
+            segment_dur = current_segment[1] - current_segment[0]
+            half_dur = segment_dur * 0.5
+            if self.snapping and self.fps > 0:
+                # Snap start of segment to frame
+                time_position = round(time_position * self.fps) / self.fps
+                start_pos = int((time_position - half_dur) * self.fps) / self.fps
+                end_pos = start_pos + segment_dur
+            else:
+                start_pos = time_position - half_dur
+                end_pos = time_position + half_dur
+
+            # Prevent going out of boundaries
+            start_pos = max(start_pos, left_boundary + 0.001)
+            end_pos = min(end_pos, right_boundary - 0.001)
+            self.resizing_segment = [start_pos, end_pos]
         
         self.refresh_segment_info_resizing.emit(
             self.active_segment_id,
@@ -810,10 +841,21 @@ class WaveformWidget(QWidget):
             self._selection[1] = time_position
         elif handle == Handle.MIDDLE:
             # Time position is the requested middle position in the segment
-            half_seg_len = (self._selection[1] - self._selection[0]) * 0.5
-            time_position = max(time_position, left_boundary + half_seg_len + 0.01)
-            time_position = min(time_position, right_boundary - half_seg_len - 0.01)
-            self._selection = [time_position - half_seg_len, time_position + half_seg_len]
+            segment_dur = self._selection[1] - self._selection[0]
+            half_dur = segment_dur * 0.5
+            if self.snapping and self.fps > 0:
+                # Snap start of segment to frame
+                time_position = round(time_position * self.fps) / self.fps
+                start_pos = int((time_position - half_dur) * self.fps) / self.fps
+                end_pos = start_pos + segment_dur
+            else:
+                start_pos = time_position - half_dur
+                end_pos = time_position + half_dur
+
+            # Prevent going out of boundaries
+            start_pos = max(start_pos, left_boundary + 0.001)
+            end_pos = min(end_pos, right_boundary - 0.001)
+            self._selection = [start_pos, end_pos]
 
 
     ###################################
@@ -861,7 +903,10 @@ class WaveformWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.is_selecting and self.anchor == -1:
                 # Start selection
-                self.anchor = self.t_left + self.click_pos.x() / self.ppsec
+                time_position = self.t_left + self.click_pos.x() / self.ppsec
+                if self.snapping and self.fps > 0:
+                    time_position = round(time_position * self.fps) / self.fps
+                self.anchor = time_position
                 return
             elif not any(self.handle_state):
                 # Set "moving waveform" cursor
@@ -912,6 +957,7 @@ class WaveformWidget(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if self.double_click:
             # Re-arm double-click
+            # The double-click event is sent after the mouse release event
             self.double_click = False
             return
 
@@ -1355,28 +1401,38 @@ class WaveformWidget(QWidget):
 
         # Check next segment boundary
         next_segment_id = self.getNextSegmentId(self.active_segment_id)
-        next_segment_start = self.audio_len
-        if next_segment_id >= 0:
-            next_segment_start = self.segments[next_segment_id][0]
+        if next_segment_id != -1:
+            next_segment_boundary = self.segments[next_segment_id][0]
+            next_segment_boundary -= int(self._min_interval) / self.fps
+        else:
+            next_segment_boundary = self.audio_len
 
         # Minimum duration
-        min_dur = 16 / self.fps # 16 frames minimum
+        min_dur = int(self._min_frames) / self.fps
         if current_dur < min_dur:
-            markers.append(start + min_dur)
+            # Draw text
+            t = start + min_dur
+            self._drawMarkerText(t, strings.TR_MIN, ypos=2)
+            
+            markers.append(t)
         
         # Maximum duration
-        # minimum of 5 seconds or 2 frames before next segment
-        max_dur = min(5.0, (next_segment_start - 2 / self.fps) - start)
-        # if current_dur > max_dur:
-        markers.append(start + max_dur)
+        max_dur = int(self._max_frames) / self.fps
+        
+        if next_segment_boundary < (start + max_dur):
+            self._drawMarkerText(next_segment_boundary, self.tr("next"), ypos=2)
+            markers.append(next_segment_boundary)
+        else:
+            t = start + max_dur
+            self._drawMarkerText(t, strings.TR_MAX, ypos=1)
+            markers.append(t)
                 
         # Ideal density
         ideal_density_dur = self.resizing_textlen / self._target_density
         t = start + ideal_density_dur
         tag = str(round(self._target_density, 1)) + strings.TR_CPS_UNIT
-        t_x = round((t - self.t_left) * self.ppsec)
-        self.painter.setPen(QPen(QColor(120, 120, 120)))
-        self.painter.drawText(t_x - 8 * len(tag) // 2, round(self.height() * 0.15 + 15), tag)
+        self._drawMarkerText(t, tag, ypos=-6)
+
         markers.append(t)
         
         self.painter.setPen(QPen(QColor(120, 120, 120), 1))
@@ -1388,7 +1444,13 @@ class WaveformWidget(QWidget):
             )
 
 
-    def _drawSceneChanges(self, t_right: float):
+    def _drawMarkerText(self, t: float, text: str, ypos: int = 0) -> None:
+        t_x = round((t - self.t_left) * self.ppsec)
+        self.painter.setPen(QPen(QColor(120, 120, 120)))
+        self.painter.drawText(t_x - 8 * len(text) // 2, round(self.height() * 0.15) + 15 + ypos, text)
+
+
+    def _drawSceneChanges(self, t_right: float) -> None:
         height = 8
         sep_height = 12
         y_pos = self.height() - height

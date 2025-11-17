@@ -29,6 +29,8 @@ class Strings(QObject):
         self.TR_CLEAR = self.tr("Clear")
         self.TR_ZOOM_IN = self.tr("Zoom in")
         self.TR_ZOOM_OUT = self.tr("Zoom out")
+        self.TR_YES = self.tr("Yes")
+        self.TR_NO = self.tr("No")
 
         # Dialogs
         self.TR_OPEN_MEDIA_FILE = self.tr("Open Media File")
@@ -49,6 +51,10 @@ class Strings(QObject):
         self.TR_KILO_OCTED_UNIT = self.tr("Ko")
         self.TR_MEGA_OCTED_UNIT = self.tr("Mo")
         self.TR_FILES_UNIT = self.tr("file(s)")
+        self.TR_MINIMUM = self.tr("Minimum")
+        self.TR_MAXIMUM = self.tr("Maximum")
+        self.TR_MIN = self.tr("min")
+        self.TR_MAX = self.tr("max")
 
         self.TR_SELECT_COLOR = self.tr("Select Color")
 

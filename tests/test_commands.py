@@ -100,7 +100,7 @@ def undo_redo_command(command: QUndoCommand, random_cursor=False):
         new_pos = random.randint(0, doc_size)
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
     
-    main_window.undo()
+    main_window.undo_stack.undo()
     state3 = getDocumentState()
     assert state3 == state1
 
@@ -109,7 +109,7 @@ def undo_redo_command(command: QUndoCommand, random_cursor=False):
         new_pos = random.randint(0, doc_size)
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
     
-    main_window.redo()
+    main_window.undo_stack.redo()
     state4 = getDocumentState()
     assert state4 == state2
 
@@ -125,7 +125,7 @@ def undo_redo_function(function: callable, *args, random_cursor=False):
         new_pos = random.randint(0, doc_size)
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
     
-    main_window.undo()
+    main_window.undo_stack.undo()
     state3 = getDocumentState()
     assert state3 == state1
 
@@ -134,7 +134,7 @@ def undo_redo_function(function: callable, *args, random_cursor=False):
         new_pos = random.randint(0, doc_size)
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
 
-    main_window.redo()
+    main_window.undo_stack.redo()
     state4 = getDocumentState()
     assert state4 == state2
 
