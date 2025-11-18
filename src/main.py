@@ -15,9 +15,6 @@ import logging
 import time
 from math import floor, ceil
 
-import static_ffmpeg
-static_ffmpeg.add_paths()
-
 import re
 
 from ostilhou.asr import (

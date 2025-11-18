@@ -558,10 +558,10 @@ class WaveformWidget(QWidget):
         if self.scroll_goal >= 0.0:
             # Scrolling
             dist = self.scroll_goal - self.t_left
-            self.scroll_vel += 0.25 * dist
+            self.scroll_vel += 0.4 * dist
             self.scroll_vel *= 0.5
         
-        self.scroll_vel *= 0.9
+        self.scroll_vel *= 0.75
 
         self.t_left += self.scroll_vel
         # Check for outside of wavefom positions
@@ -1077,7 +1077,7 @@ class WaveformWidget(QWidget):
             # Stop movement if drag direction is opposite
             if -1 * mouse_dpos * self.scroll_vel < 0.0:
                 self.scroll_vel = 0.0
-            self.scroll_vel += -0.1 * mouse_dpos / self.ppsec
+            self.scroll_vel += -0.16 * mouse_dpos / self.ppsec
             self.scroll_goal = -1 # Deactivate auto scroll
             
             if self.follow_playhead:
@@ -1503,7 +1503,7 @@ class WaveformWidget(QWidget):
                 
         self.painter.begin(self.pixmap)
 
-        # Draw recognizer progress bar
+        # Draw recognizer background progress bar
         if self.recognizer_progress > self.t_left:
             self.painter.setPen(Qt.PenStyle.NoPen)
             self.painter.setBrush(QBrush(theme.wf_progress))
@@ -1532,6 +1532,13 @@ class WaveformWidget(QWidget):
                 t_x = round((t - self.t_left) * self.ppsec)
                 self.painter.drawLine(t_x, self.timecode_margin - 4, t_x, self.timecode_margin)
 
+        if time_step == 10:
+            # Draw a tick for every seconds
+            ti = ceil(max(0.0, self.t_left))
+            for t in range(ti, int(t_right)+1, 1):
+                t_x = round((t - self.t_left) * self.ppsec)
+                self.painter.drawLine(t_x, self.timecode_margin, t_x, self.timecode_margin + 4)
+
         ti = ceil(max(0.0, self.t_left) / time_step) * time_step
         for t in range(ti, int(t_right)+1, time_step):
             t_x = round((t - self.t_left) * self.ppsec)
@@ -1549,14 +1556,6 @@ class WaveformWidget(QWidget):
         # Draw scene transitions
         if self.display_scene_change and self.scenes:
             self._drawSceneChanges(t_right)
-
-        # Draw head
-        if self.t_left <= self.playhead <= t_right:
-            t_x = round((self.playhead - self.t_left) * self.ppsec)
-            self.painter.setPen(QPen(QColor(255, 20, 20, 40), 3))
-            self.painter.drawLine(t_x, 0, t_x, self.height())
-            self.painter.setPen(QPen(QColor(255, 20, 20, 100)))
-            self.painter.drawLine(t_x, 0, t_x, self.height())
         
         # Draw waveform
         self.painter.setPen(self.wavepen)
@@ -1570,6 +1569,14 @@ class WaveformWidget(QWidget):
 
         # Draw segments
         self._drawSegments(t_right)
+
+        # Draw head
+        if self.t_left <= self.playhead <= t_right:
+            t_x = round((self.playhead - self.t_left) * self.ppsec)
+            self.painter.setPen(QPen(QColor(255, 20, 20, 40), 3))
+            self.painter.drawLine(t_x, 0, t_x, self.height())
+            self.painter.setPen(QPen(QColor(255, 20, 20, 100)))
+            self.painter.drawLine(t_x, 0, t_x, self.height())
         
         self.painter.end()
         self.update()

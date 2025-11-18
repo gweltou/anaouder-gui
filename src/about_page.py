@@ -14,6 +14,7 @@ trugarekaat = ', '. join(sorted([
     "An Drouizig",
     "Anna Duval-Guennoc",
     "Cédric Sinou",
+    "Gwenn Meynier",
     "Jean-Mari Ollivier",
     "Jeanne Mégly",
     "Karen Treguier",
@@ -21,6 +22,7 @@ trugarekaat = ', '. join(sorted([
     "Marie Breton",
     "Mevena Guillouzic-Gouret",
     "Samuel Julien",
+    "Théophile Rousic-Plantec"
 ]))
 
 
