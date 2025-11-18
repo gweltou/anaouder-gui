@@ -141,7 +141,6 @@ if platform.system() == "Darwin":
         exe,
         a.binaries,
         a.datas,
-        #splash.binaries,
         strip=False,
         upx=True,
         upx_exclude=[],
@@ -185,24 +184,45 @@ else:
             text_default='O kargañ...',
         )
 
-    exe = EXE(
-        pyz,
-        a.scripts,
-        splash,
-        splash.binaries,
-        exclude_binaries=True,
-        name='Anaouder',
-        debug=DEBUG,
-        bootloader_ignore_signals=False,
-        strip=False,
-        upx=False,	# Some kind of compression, lighter but slower
-        upx_exclude=[],
-        runtime_tmpdir=None,
-        console=DEBUG,
-        disable_windowed_traceback=False,
-        argv_emulation=True, # Needed by macOS, apparently
-        target_arch=ARCH,
-    )
+    if platform.system() == "Windows":
+        exe = EXE(
+            pyz,
+            a.scripts,
+            splash,
+            splash.binaries,
+            exclude_binaries=True,
+            name='Anaouder',
+            debug=DEBUG,
+            icon='icons/anaouder.ico',
+            bootloader_ignore_signals=False,
+            strip=False,
+            upx=False,	# Some kind of compression, lighter but slower
+            upx_exclude=[],
+            runtime_tmpdir=None,
+            console=DEBUG,
+            disable_windowed_traceback=False,
+            argv_emulation=True, # Needed by macOS, apparently
+            target_arch=ARCH,
+        )
+    else:
+        exe = EXE(
+            pyz,
+            a.scripts,
+            splash,
+            splash.binaries,
+            exclude_binaries=True,
+            name='Anaouder',
+            debug=DEBUG,
+            bootloader_ignore_signals=False,
+            strip=False,
+            upx=False,	# Some kind of compression, lighter but slower
+            upx_exclude=[],
+            runtime_tmpdir=None,
+            console=DEBUG,
+            disable_windowed_traceback=False,
+            argv_emulation=True, # Needed by macOS, apparently
+            target_arch=ARCH,
+        )
     
     coll = COLLECT(
         exe,
