@@ -592,7 +592,7 @@
     <message>
         <location filename="../src/main.py" line="2530"/>
         <source>You need to restart the application to update the UI language.</source>
-        <translation>Un redémarrage est nécessaire pour appliquer le changement de langue.</translation>
+        <translation>Un redémarrage de l'application est nécessaire pour appliquer le changement de langue.</translation>
     </message>
 </context>
 <context>

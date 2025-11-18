@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     Qt, QSize,
-    Signal, Slot, QThread,
+    Signal, Slot, QSignalBlocker,
     QTranslator, QLocale, 
     QEvent, QTimer
 )
@@ -1887,20 +1887,21 @@ class MainWindow(QMainWindow):
     def onTextChanged(self) -> None:
         log.debug("onTextChanged()")
         # Update the utterance density field
-        cursor = self.text_widget.textCursor()
-        block = cursor.block()
-        if self.text_widget.isAligned(block):
-            segment_id = self.text_widget.getBlockId(block)
-            # Update utterance density
-            self.updateUtteranceDensity(segment_id)
-            self.updateSegmentInfo(segment_id)
-            self.waveform.must_redraw = True
-        
-            # Update current subtitles, if needed
-            if segment := self.waveform.getSegment(segment_id):
-                start, end = segment
-                if start <= self.waveform.playhead <= end:
-                    self.updateSubtitle(self.waveform.playhead)
+        with QSignalBlocker(self.text_widget.document()):
+            cursor = self.text_widget.textCursor()
+            block = cursor.block()
+            if self.text_widget.isAligned(block):
+                segment_id = self.text_widget.getBlockId(block)
+                # Update utterance density
+                self.updateUtteranceDensity(segment_id)
+                self.updateSegmentInfo(segment_id)
+                self.waveform.must_redraw = True
+            
+                # Update current subtitles, if needed
+                if segment := self.waveform.getSegment(segment_id):
+                    start, end = segment
+                    if start <= self.waveform.playhead <= end:
+                        self.updateSubtitle(self.waveform.playhead)
 
 
     def onTextCursorChanged(self, seg_ids: List[SegmentId] | None) -> None:
@@ -2491,8 +2492,13 @@ class MainWindow(QMainWindow):
 
 
     def getUtteranceDensity(self, seg_id:SegmentId) -> float:
+        """Get the density (chars/s) field of an utterance"""
+        log.debug(f"getUtteranceDensity({seg_id=})")
+        # If resizing, return the uncommited resizing density
         if self.waveform.resizing_handle and self.waveform.active_segment_id == seg_id:
+            
             return self.waveform.resizing_density
+
         block = self.text_widget.getBlockById(seg_id)
         if not block:
             return 0.0
@@ -2516,8 +2522,9 @@ class MainWindow(QMainWindow):
         start, end = segment
         dur = end - start
         if dur > 0.0:
-            density = num_chars / dur
-            block.userData().data["density"] = density
+            new_density = num_chars / dur
+            # current_density = block.userData().data.get("density", -1.0)
+            block.userData().data["density"] = new_density
     
 
     def changeEvent(self, event) -> None:

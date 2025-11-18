@@ -1,5 +1,10 @@
 # -*- mode: python; coding: utf-8 -*-
 
+"""
+macOs packaging:
+  Comment out lines
+"""
+
 import platform
 import os
 
@@ -75,6 +80,9 @@ a = Analysis(
         ("./icons/add_segment.png", "icons/"),
         ("./icons/del_segment.png", "icons/"),
         ("./icons/follow_playhead.png", "icons/"),
+		("./icons/led_green.png", "icons/"),
+		("./icons/led_orange.png", "icons/"),
+		("./icons/led_red.png", "icons/"),
 
         ("./icons/anaouder_256.png", "icons/"),
         ("./icons/OTilde.png", "icons/"),
@@ -118,36 +126,67 @@ if platform.system() in ("Windows", "Linux"):
 
 pyz = PYZ(a.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    #splash,  # Add splash here
-    #splash.binaries,  # Add splash binaries
-    exclude_binaries=True,  # Important for onedir mode
-    #[],
-    name='Anaouder',
-    debug=DEBUG,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=False,	# Some kind of compression, lighter but slower
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=DEBUG,
-    disable_windowed_traceback=False,
-    argv_emulation=True, # Needed by macOS, apparently
-    target_arch=ARCH,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    #splash.binaries,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='Anaouder',
-)
+if platform.system() == "Darwin":
+    # Without the splash screen, for macOs
+    exe = EXE(
+        pyz,
+        a.scripts,
+        exclude_binaries=True,
+        #[],
+        name='Anaouder',
+        debug=DEBUG,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=False,	# Some kind of compression, lighter but slower
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        console=DEBUG,
+        disable_windowed_traceback=False,
+        argv_emulation=True, # Needed by macOS, apparently
+        target_arch=ARCH,
+    )
+    
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        #splash.binaries,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name='Anaouder',
+    )
+else:
+    exe = EXE(
+        pyz,
+        a.scripts,
+        splash,           # Comment out for macOs
+        splash.binaries,  # Comment out for macOs
+        exclude_binaries=True,
+        #[],
+        name='Anaouder',
+        debug=DEBUG,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=False,	# Some kind of compression, lighter but slower
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        console=DEBUG,
+        disable_windowed_traceback=False,
+        argv_emulation=True, # Needed by macOS, apparently
+        target_arch=ARCH,
+    )
+    
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        splash.binaries,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name='Anaouder',
+    )
 
 # macOS specific configurations
 if platform.system() == "Darwin":

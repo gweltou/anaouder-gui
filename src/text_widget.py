@@ -107,6 +107,8 @@ class Highlighter(QSyntaxHighlighter):
     def setMode(self, mode: ColorMode):
         log.info(f"Set highlighter to {mode}")
         self.mode = mode
+
+        # Rehighlight the whole document
         was_blocked = self.text_edit.document().blockSignals(True)
         self.rehighlight()
         self.text_edit.document().blockSignals(was_blocked)
