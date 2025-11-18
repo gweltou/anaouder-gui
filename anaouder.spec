@@ -112,27 +112,18 @@ a = Analysis(
     noarchive=False,
 )
 
-splash = None
-if platform.system() in ("Windows", "Linux"):
-    splash = Splash(
-        "icons/anaouder_splash.png",
-        binaries=a.binaries,
-        datas=a.datas,
-        text_pos=(516, 134),
-        text_size=12,
-        text_color='black',
-        text_default='O kargañ...',
-    )
-
 pyz = PYZ(a.pure)
 
+
 if platform.system() == "Darwin":
-    # Without the splash screen, for macOs
+    # MAC OS BUILD
+
+    # Without splash screen
+    
     exe = EXE(
         pyz,
         a.scripts,
         exclude_binaries=True,
-        #[],
         name='Anaouder',
         debug=DEBUG,
         bootloader_ignore_signals=False,
@@ -156,14 +147,50 @@ if platform.system() == "Darwin":
         upx_exclude=[],
         name='Anaouder',
     )
+    
+    app = BUNDLE(
+        coll,
+        name='Anaouder.app',
+        icon='icons/icon.icns',
+        bundle_identifier='com.OTilde.Anaouder',
+        info_plist={
+            'CFBundleExecutable': 'Anaouder',
+            'CFBundlePackageType': 'APPL',
+            'NSPrincipalClass': 'NSApplication',
+            'NSAppleScriptEnabled': False,
+            'NSHighResolutionCapable': 'True',
+            'LSMinimumSystemVersion': '10.13.0',
+            'NSRequiresAquaSystemAppearance': 'False',
+    	    'CFBundleDisplayName': 'Anaouder',
+            'CFBundleName': 'Anaouder',
+            'CFBundleIdentifier': 'com.OTilde.Anaouder',
+            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleVersion': '1.0.0',
+            'LSApplicationCategoryType': 'public.app-category.utilities',
+        }
+    )
+
 else:
+    # LINUX AND WINDOWS BUILD
+
+    splash = None
+    if platform.system() in ("Windows", "Linux"):
+        splash = Splash(
+            "icons/anaouder_splash.png",
+            binaries=a.binaries,
+            datas=a.datas,
+            text_pos=(516, 134),
+            text_size=12,
+            text_color='black',
+            text_default='O kargañ...',
+        )
+
     exe = EXE(
         pyz,
         a.scripts,
-        splash,           # Comment out for macOs
-        splash.binaries,  # Comment out for macOs
+        splash,
+        splash.binaries,
         exclude_binaries=True,
-        #[],
         name='Anaouder',
         debug=DEBUG,
         bootloader_ignore_signals=False,
@@ -186,28 +213,4 @@ else:
         upx=True,
         upx_exclude=[],
         name='Anaouder',
-    )
-
-# macOS specific configurations
-if platform.system() == "Darwin":
-    app = BUNDLE(
-        coll,
-        name='Anaouder.app',
-        icon='icons/icon.icns',
-        bundle_identifier='com.OTilde.Anaouder',
-        info_plist={
-            'CFBundleExecutable': 'Anaouder',
-            'CFBundlePackageType': 'APPL',
-            'NSPrincipalClass': 'NSApplication',
-            'NSAppleScriptEnabled': False,
-            'NSHighResolutionCapable': 'True',
-            'LSMinimumSystemVersion': '10.13.0',
-            'NSRequiresAquaSystemAppearance': 'False',
-    	    'CFBundleDisplayName': 'Anaouder',
-            'CFBundleName': 'Anaouder',
-            'CFBundleIdentifier': 'com.OTilde.Anaouder',
-            'CFBundleShortVersionString': '1.0.0',
-            'CFBundleVersion': '1.0.0',
-            'LSApplicationCategoryType': 'public.app-category.utilities',
-        }
     )

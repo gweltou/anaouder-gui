@@ -357,7 +357,7 @@
     <message>
         <location filename="../src/main.py" line="439"/>
         <source>&amp;Help</source>
-        <translation>&amp;Aide</translation>
+        <translation>A&amp;ide</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="440"/>
