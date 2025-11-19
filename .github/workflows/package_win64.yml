@@ -25,13 +25,6 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-      shell: pwsh
-      # If you don't have a requirements.txt, the dependencies will be installed from pyproject.toml
-
     - name: Install project dependencies from pyproject.toml
       run: |
         pip install -e .
