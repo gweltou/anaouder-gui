@@ -84,13 +84,19 @@ class RecognizerWorker(QObject):
             "-f", "s16le",                            # 16-bit signed little-endian PCM
             "-",                                      # Output to stdout
         ]
+
+        subprocess_args = {}
+        if platform.system() == "Windows":
+            # This flag tells Windows: "Don't create a console window for this process"
+            subprocess_args["creationflags"] = subprocess.CREATE_NO_WINDOW
         
         process = None
         try:
             process = subprocess.Popen(
                 ffmpeg_cmd, 
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                **subprocess_args
             )
             
             # Process the audio stream in chunks
@@ -214,13 +220,20 @@ class RecognizerWorker(QObject):
             "-f", "s16le",                            # 16-bit signed little-endian PCM
             "-",                                      # Output to stdout
         ]
+
+        subprocess_args = {}
+        if platform.system() == "Windows":
+            # This flag tells Windows: "Don't create a console window for this process"
+            # It is only available in Python 3.7+ on Windows
+            subprocess_args["creationflags"] = subprocess.CREATE_NO_WINDOW
         
         process = None
         try:
             process = subprocess.Popen(
                 ffmpeg_cmd, 
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                **subprocess_args
             )
             
             # Process the audio stream in chunks
