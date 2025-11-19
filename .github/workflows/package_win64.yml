@@ -39,6 +39,7 @@ jobs:
 
     - name: Build with PyInstaller
       run: |
+        .\.venv\Scripts\Activate.ps1
         $env:ARCH = "x86_64"
         $env:DEBUG = "False"
         pyinstaller anaouder.spec
