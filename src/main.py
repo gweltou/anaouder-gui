@@ -849,6 +849,7 @@ class MainWindow(QMainWindow):
             self.updateWindowTitle()
             self.addRecentFile(filepath)
             return True
+        
         except FileOperationError as e:
             QMessageBox.critical(
                 self,
@@ -1049,7 +1050,6 @@ class MainWindow(QMainWindow):
                 QMessageBox.Icon.Warning,
                 self.tr("No media file"),
                 self.tr("Couldn't find media file for '{filename}'").format(filename=filepath.name),
-                # QMessageBox.StandardButton.NoButton, self
             )
             if media_path:
                 m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
@@ -1086,7 +1086,7 @@ class MainWindow(QMainWindow):
             msg_box.setIcon(QMessageBox.Icon.Question)
             
             yes_button = msg_box.addButton(strings.TR_YES, QMessageBox.ButtonRole.YesRole)
-            _no_button = msg_box.addButton(strings.TR_NO, QMessageBox.ButtonRole.NoRole)
+            msg_box.addButton(strings.TR_NO, QMessageBox.ButtonRole.NoRole)
             msg_box.setDefaultButton(yes_button)
             
             msg_box.exec()
@@ -1121,7 +1121,6 @@ class MainWindow(QMainWindow):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
 
-        # Translate the standard buttons
         button_box.button(QDialogButtonBox.StandardButton.Ok).setText(strings.TR_OK)
         button_box.button(QDialogButtonBox.StandardButton.Cancel).setText(strings.TR_CANCEL)
 
@@ -2400,56 +2399,67 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if not self.undo_stack.isClean():
-            reply = QMessageBox.warning(
-                self, 
-                self.tr("Unsaved work"), 
-                self.tr("Do you want to save your changes?"),
-                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Save,
-            )
-            # Decide whether to close based on user's response
-            if reply == QMessageBox.StandardButton.Save:
-                self.saveFile()
-                event.accept()
-            elif reply == QMessageBox.StandardButton.Discard:
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle(self.tr("Unsaved work"))
+            msg_box.setText(self.tr("Do you want to save your changes?"))
+            
+            save_btn = msg_box.addButton(strings.TR_YES, QMessageBox.ButtonRole.AcceptRole)
+            discard_btn = msg_box.addButton(strings.TR_NO, QMessageBox.ButtonRole.DestructiveRole)
+            cancel_btn = msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
+            msg_box.setDefaultButton(save_btn)
+            
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == save_btn:
+                if self.saveFile():
+                    event.accept()
+                else:
+                    event.ignore()
+                    return
+            elif msg_box.clickedButton() == discard_btn:
                 event.accept()
             else:
                 event.ignore()
                 return
         
-        # Stop and destroy the recognizer
-        self.recognizer.stop()
-        self.recognizer.cleanup()
-        
-        # Stop and destroy the scene detector
-        if self.scene_detector:
-            self.scene_detector.end()
-            self.scene_detector.wait(2000) # 2 second timeout
-            if self.scene_detector.isRunning():
-                self.scene_detector.terminate()
-            self.scene_detector.deleteLater()
-        
-        self.media_controller.cleanup()
-        
-        # Save document state to cache
-        if self.filepath and self.filepath.suffix == ".ali":
-            doc_metadata = {
-                "cursor_pos": self.text_widget.textCursor().position(),
-                "waveform_pos": self.waveform.t_left,
-                "waveform_pps": self.waveform.ppsec,
-                "show_scenes": self.scene_detect_action.isChecked(),
-                "show_margin": self.toggle_margin_action.isChecked(),
-                "video_open": self.toggle_video_action.isChecked()
-            }
-            cache.update_doc_metadata(str(self.filepath), doc_metadata)
-        
-        # Save media cache
-        if self.media_path:
-            cache.update_media_metadata(self.media_path, self.media_controller.getMetaData())
+        try:
+            # Stop and destroy the recognizer
+            self.recognizer.stop()
+            self.recognizer.cleanup()
+            
+            # Stop and destroy the scene detector
+            if self.scene_detector:
+                self.scene_detector.end()
+                if not self.scene_detector.wait(2000): # 2 second timeout
+                    self.scene_detector.terminate()
+                    self.scene_detector.wait()
+                self.scene_detector.deleteLater()
+            
+            self.media_controller.cleanup()
+            
+            # Save document state to cache
+            if self.filepath and self.filepath.suffix == ".ali":
+                doc_metadata = {
+                    "cursor_pos": self.text_widget.textCursor().position(),
+                    "waveform_pos": self.waveform.t_left,
+                    "waveform_pps": self.waveform.ppsec,
+                    "show_scenes": self.scene_detect_action.isChecked(),
+                    "show_margin": self.toggle_margin_action.isChecked(),
+                    "video_open": self.toggle_video_action.isChecked()
+                }
+                cache.update_doc_metadata(str(self.filepath), doc_metadata)
+            
+            # Save media cache
+            if self.media_path:
+                cache.update_media_metadata(self.media_path, self.media_controller.getMetaData())
 
-        # Save window geometry and state
-        app_settings.setValue("main/geometry", self.saveGeometry());
-        app_settings.setValue("main/window_state", self.saveState());
+            # Save window geometry and state
+            app_settings.setValue("main/geometry", self.saveGeometry())
+            app_settings.setValue("main/window_state", self.saveState())
+        
+        except Exception as e:
+            print(f"Error during closeEvent cleanup: {e}")
 
         return super().closeEvent(event)
     
