@@ -1302,7 +1302,8 @@ class MainWindow(QMainWindow):
             progress_seconds = media_metadata["transcription_progress"]
             self.waveform.recognizer_progress = progress_seconds
             if "transcription_completed" in media_metadata and media_metadata["transcription_completed"]:
-                progress_seconds = media_metadata["duration"]
+                if "duration" in media_metadata:
+                    progress_seconds = media_metadata["duration"]
                 self._setStatusTranscriptionCompleted()
 
             if "duration" in media_metadata:
