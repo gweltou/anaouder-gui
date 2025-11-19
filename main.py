@@ -12,17 +12,24 @@ from pstats import SortKey
 if hasattr(sys, '_MEIPASS'):
     # We are running in a PyInstaller bundle
     bundle_dir = sys._MEIPASS
-    if platform.system() == "Linux":
-        # Define paths to the bundled binaries (matches your spec file structure)
+    system_name = platform.system()
+
+    if system_name == "Linux":
         ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "linux", "ffmpeg")
         ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "linux", "ffprobe")
         
-        # Tell static_ffmpeg (and other libs) where to find them
-        # This prevents static_ffmpeg from trying to create a lock file
+    elif system_name == "Windows":
+        ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "win32", "ffmpeg.exe")
+        ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "win32", "ffprobe.exe")
+        
+    elif system_name == "Darwin":
+        ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "darwin", "ffmpeg")
+        ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "darwin", "ffprobe")
+
+    # Apply the environment variables if we found a path
+    if system_name in ("Linux", "Windows", "Darwin"):
         os.environ["FFMPEG_BINARY"] = ffmpeg_path
         os.environ["FFPROBE_BINARY"] = ffprobe_path
-        
-        # Optional: Add to system PATH just in case subprocess calls need it
         os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
 else:
     # Running in normal Python environment

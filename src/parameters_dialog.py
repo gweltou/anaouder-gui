@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QMessageBox, QListWidget,
     QProgressBar,
     QColorDialog,
-    QSizePolicy,
 )
 from PySide6.QtCore import (
     Qt, QObject,
