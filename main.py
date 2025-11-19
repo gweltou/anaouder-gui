@@ -24,6 +24,10 @@ if hasattr(sys, '_MEIPASS'):
         
         # Optional: Add to system PATH just in case subprocess calls need it
         os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_path)
+else:
+    # Running in normal Python environment
+    import static_ffmpeg
+    static_ffmpeg.add_paths()
 
 
 logging.basicConfig(
@@ -55,17 +59,6 @@ if __name__ == "__main__":
         profiler = cProfile.Profile()
         profiler.enable()
     
-    if hasattr(sys, '_MEIPASS'):
-        # We are running in a PyInstaller bundle
-        try:
-            import pyi_splash
-            pyi_splash.close()
-        except ImportError:
-            pass
-    else:
-        import static_ffmpeg
-        static_ffmpeg.add_paths()
-
     ret = main(argv)
     
     if profiling:

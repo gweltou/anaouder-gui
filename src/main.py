@@ -2655,20 +2655,15 @@ def main(argv: list):
     loadIcons()
     window = MainWindow(Path(filepath))
     window.show()
-    window.check_models()
 
-    # if len(window.available_models) == 0:
-    #     # Ask to download a first model
-    #     ret = QMessageBox.question(
-    #         window, 
-    #         window.tr("Welcome"),
-    #         window.tr("A Speech-To-Text model is needed for automatic transcription.") +
-    #         "\n\n" +
-    #         window.tr("Would you like to download one ?"),
-    #         QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
-    #     )
-    #     if ret == QMessageBox.StandardButton.Ok:
-    #         window.showParameters(tab_idx=1)  # Open to the "Models" tab
+    # Close splash screen
+    try:
+        import pyi_splash
+        pyi_splash.close()
+    except ImportError:
+        pass
+    
+    window.check_models()
 
     return app.exec()
 
