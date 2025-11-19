@@ -25,8 +25,15 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
 
-    - name: Install project dependencies from pyproject.toml
+    - name: Create virtual environment
       run: |
+        python -m venv .venv
+      shell: pwsh
+
+    - name: Activate venv and install dependencies
+      run: |
+        .\.venv\Scripts\Activate.ps1
+        python -m pip install --upgrade pip
         pip install -e .
       shell: pwsh
 
