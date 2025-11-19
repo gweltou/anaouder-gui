@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import (
     Qt, QObject,
     Signal, Slot, QUrl,
-    QSettings
 )
 from PySide6.QtGui import QDesktopServices, QPalette, QColor
 
@@ -278,6 +277,11 @@ class ParametersDialog(QDialog):
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabs)
         self.setLayout(main_layout)
+    
+
+    def setCurrentTab(self, tab_idx: int) -> None:
+        """Set the current tab by its index"""
+        self.tabs.setCurrentIndex(tab_idx)
     
 """
     def create_display_tab(self):

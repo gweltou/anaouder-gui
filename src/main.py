@@ -745,6 +745,26 @@ class MainWindow(QMainWindow):
         return media_toolbar_layout
 
 
+    def check_models(self):
+        if len(self.available_models) == 0:
+            # Ask user to download a first model
+
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            msg_box.setWindowTitle(self.tr("Welcome"))
+            msg_box.setText(self.tr("A Speech-To-Text model is needed for automatic transcription."))
+            msg_box.setInformativeText(self.tr("Would you like to download one?"))
+            
+            ok_btn = msg_box.addButton(strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
+            msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
+            msg_box.setDefaultButton(ok_btn)
+            
+            msg_box.exec()
+
+            if msg_box.clickedButton() == ok_btn:
+                self.showParameters(tab_idx=1)
+
+
     def setStatusMessage(self, message: str, timeout=STATUS_BAR_TIMEOUT) -> None:
         """Sets a temporary status message"""
         self.statusBar().showMessage(message, timeout)
@@ -1035,11 +1055,11 @@ class MainWindow(QMainWindow):
                 m = self.tr("'{filepath}' doesn't exist.").format(filepath=os.path.abspath(media_path))
                 msg_box.setInformativeText(m)
 
-            msg_box.addButton(strings.TR_OPEN, QMessageBox.ButtonRole.AcceptRole)
+            ok_btn = msg_box.addButton(strings.TR_OPEN, QMessageBox.ButtonRole.AcceptRole)
             msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
 
-            ret = msg_box.exec()
-            if ret == 0x2:
+            msg_box.exec()
+            if msg_box.clickedButton() == ok_btn:
                 media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
                 media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
                 if media_filepath and os.path.exists(media_filepath):
@@ -1346,7 +1366,13 @@ class MainWindow(QMainWindow):
         exportTxtSignals.message.disconnect()
 
 
-    def showParameters(self):
+    def showParameters(self, tab_idx: int = 0)  -> None:
+        """
+        Show the Parameters dialog
+
+        Args:
+            tab (str): Optional tab name to open directly
+        """
         def _onMinFramesChanged(i: int):
             self._subs_max_frames = i
         
@@ -1368,6 +1394,8 @@ class MainWindow(QMainWindow):
         dialog.signals.cache_transcription_cleared.connect(self._setStatusNoTranscription)
         dialog.signals.update_ui_language.connect(_onUpdateUiLanguage)
         dialog.signals.toggle_autosave.connect(self.onSetAutosave)
+
+        dialog.setCurrentTab(tab_idx)
 
         dialog.exec()
 
@@ -2625,21 +2653,22 @@ def main(argv: list):
         strings.initialize() # Load strings
 
     loadIcons()
-    window = MainWindow(filepath)
+    window = MainWindow(Path(filepath))
     window.show()
+    window.check_models()
 
-    if len(window.available_models) == 0:
-        # Ask to download a first model
-        ret = QMessageBox.question(
-            window, 
-            window.tr("Welcome"),
-            window.tr("A Speech-To-Text model is needed for automatic transcription.") +
-            "\n\n" +
-            window.tr("Would you like to download one ?"),
-            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
-        )
-        if ret == QMessageBox.StandardButton.Ok:
-            window.showParameters()
+    # if len(window.available_models) == 0:
+    #     # Ask to download a first model
+    #     ret = QMessageBox.question(
+    #         window, 
+    #         window.tr("Welcome"),
+    #         window.tr("A Speech-To-Text model is needed for automatic transcription.") +
+    #         "\n\n" +
+    #         window.tr("Would you like to download one ?"),
+    #         QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+    #     )
+    #     if ret == QMessageBox.StandardButton.Ok:
+    #         window.showParameters(tab_idx=1)  # Open to the "Models" tab
 
     return app.exec()
 
