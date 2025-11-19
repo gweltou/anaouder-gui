@@ -1,0 +1,109 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      shell: pwsh
+      # If you don't have a requirements.txt, the dependencies will be installed from pyproject.toml
+
+    - name: Install project dependencies from pyproject.toml
+      run: |
+        pip install -e .
+      shell: pwsh
+
+    - name: Build with PyInstaller
+      run: |
+        $env:ARCH = "x86_64"
+        $env:DEBUG = "False"
+        pyinstaller anaouder.spec
+      shell: pwsh
+
+    - name: Verify build output
+      run: |
+        if (Test-Path "dist\Anaouder\Anaouder.exe") {
+          Write-Host "Build successful - Anaouder.exe found"
+          Get-ChildItem -Path "dist\Anaouder" -Recurse | Select-Object FullName
+        } else {
+          Write-Error "Build failed - Anaouder.exe not found"
+          exit 1
+        }
+      shell: pwsh
+
+    - name: Install Inno Setup
+      run: |
+        choco install innosetup -y
+      shell: pwsh
+
+    - name: Update Inno Setup script paths
+      run: |
+        $issContent = Get-Content "anaouder_installer.iss" -Raw
+        $issContent = $issContent -replace 'D:\\anaouder-gui\\', "$PWD\"
+        $issContent | Set-Content "anaouder_installer_updated.iss"
+      shell: pwsh
+
+    - name: Build installer with Inno Setup
+      run: |
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "anaouder_installer_updated.iss"
+      shell: pwsh
+
+    - name: Rename installer
+      run: |
+        $version = "1.0"
+        if ("${{ github.ref }}" -match "refs/tags/v(.+)") {
+          $version = $matches[1]
+        }
+        if (Test-Path "Output\mysetup.exe") {
+          Rename-Item "Output\mysetup.exe" "Anaouder-${version}-Setup.exe"
+        }
+      shell: pwsh
+
+    - name: Upload PyInstaller artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Anaouder-Windows-Portable
+        path: dist/Anaouder/
+        retention-days: 30
+
+    - name: Upload installer artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Anaouder-Windows-Installer
+        path: Output/*.exe
+        retention-days: 30
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          Output/*.exe
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
