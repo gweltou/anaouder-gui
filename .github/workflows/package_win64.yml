@@ -72,12 +72,12 @@ jobs:
       run: |
         $issContent = Get-Content "building\anaouder_installer.iss" -Raw
         $issContent = $issContent -replace 'D:\\anaouder-gui\\', "$PWD\"
-        $issContent | Set-Content "anaouder_installer_updated.iss"
+        $issContent | Set-Content "building\anaouder_installer_updated.iss"
       shell: pwsh
 
     - name: Build installer with Inno Setup
       run: |
-        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "anaouder_installer_updated.iss"
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "building\anaouder_installer_updated.iss"
       shell: pwsh
 
     - name: Rename installer
