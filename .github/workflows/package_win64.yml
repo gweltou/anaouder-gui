@@ -37,6 +37,13 @@ jobs:
         pip install -e .
       shell: pwsh
 
+    - name: Initialize static_ffmpeg binaries
+      run: |
+        .\.venv\Scripts\Activate.ps1
+        Write-Host "Triggering static_ffmpeg download..."
+        python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
+      shell: pwsh
+
     - name: Build with PyInstaller
       run: |
         .\.venv\Scripts\Activate.ps1
@@ -63,7 +70,7 @@ jobs:
 
     - name: Update Inno Setup script paths
       run: |
-        $issContent = Get-Content "anaouder_installer.iss" -Raw
+        $issContent = Get-Content "building\anaouder_installer.iss" -Raw
         $issContent = $issContent -replace 'D:\\anaouder-gui\\', "$PWD\"
         $issContent | Set-Content "anaouder_installer_updated.iss"
       shell: pwsh
