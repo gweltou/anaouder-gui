@@ -8,7 +8,7 @@
 
 ## Description
 
-**Anaouder** est un logiciel libre et open-source conçu pour faciliter la création automatique de sous-titres en langue bretonne.
+**Anaouder** est un logiciel libre et open-source conçu pour faciliter la création de sous-titres en langue bretonne.
 
 Développé en collaboration avec **Dizale** et financé par la **Région Bretagne**, ce logiciel s’appuie sur un modèle de reconnaissance vocale spécifiquement entraîné pour le breton et fonctionnant localement, sur votre ordinateur.
 
