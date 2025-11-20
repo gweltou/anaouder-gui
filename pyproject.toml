@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anaouder-gui"
-version = "1.0"
+version = "1.0rc3"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [

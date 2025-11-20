@@ -50,54 +50,54 @@
 <context>
     <name>CachePanel</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="921"/>
+        <location filename="../src/parameters_dialog.py" line="920"/>
         <source>Current file cache</source>
         <translation>Cache du fichier actuel</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="927"/>
+        <location filename="../src/parameters_dialog.py" line="926"/>
         <source>Media fingerprint</source>
         <translation>Empreinte digitale du media</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="935"/>
-        <location filename="../src/parameters_dialog.py" line="988"/>
+        <location filename="../src/parameters_dialog.py" line="934"/>
+        <location filename="../src/parameters_dialog.py" line="987"/>
         <source>Size on disk</source>
         <translation>Place sur le disque</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="942"/>
-        <location filename="../src/parameters_dialog.py" line="1007"/>
+        <location filename="../src/parameters_dialog.py" line="941"/>
+        <location filename="../src/parameters_dialog.py" line="1006"/>
         <source>Clear cache</source>
         <translation>Vider le cache</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="952"/>
+        <location filename="../src/parameters_dialog.py" line="951"/>
         <source>Clear cache for current file only</source>
         <translation>Vider le cache pour le fichier actuel uniquement</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="974"/>
+        <location filename="../src/parameters_dialog.py" line="973"/>
         <source>Global cache</source>
         <translation>Cache global</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="978"/>
+        <location filename="../src/parameters_dialog.py" line="977"/>
         <source>Open folder</source>
         <translation>Ouvrir le dossier</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="980"/>
+        <location filename="../src/parameters_dialog.py" line="979"/>
         <source>Open cache folder in file explorer</source>
         <translation>Ouvrir le dossier de cache dans l&apos;explorateur de fichier</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="993"/>
+        <location filename="../src/parameters_dialog.py" line="992"/>
         <source>Size limit</source>
         <translation>Limite de taille</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="1018"/>
+        <location filename="../src/parameters_dialog.py" line="1017"/>
         <source>Clear global cache</source>
         <translation>Vider le cache global</translation>
     </message>
@@ -105,22 +105,22 @@
 <context>
     <name>DownloadProgressDialog</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="87"/>
+        <location filename="../src/parameters_dialog.py" line="86"/>
         <source>Downloading {}</source>
         <translation>Téléchargement {}</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="93"/>
+        <location filename="../src/parameters_dialog.py" line="92"/>
         <source>Downloading {}...</source>
         <translation>Téléchargement {}...</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="168"/>
+        <location filename="../src/parameters_dialog.py" line="167"/>
         <source>Verifying checksum...</source>
         <translation>Vérification de la somme de contrôle...</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="178"/>
+        <location filename="../src/parameters_dialog.py" line="177"/>
         <source>Extracting downloaded files...</source>
         <translation>Extraction des fichiers téléchargés...</translation>
     </message>
@@ -171,42 +171,42 @@
 <context>
     <name>GeneralPanel</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="407"/>
+        <location filename="../src/parameters_dialog.py" line="406"/>
         <source>Language of user interface</source>
         <translation>Langue de l&apos;interface utilisateur</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="426"/>
+        <location filename="../src/parameters_dialog.py" line="425"/>
         <source>Subtitles style</source>
         <translation>Style des sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="429"/>
+        <location filename="../src/parameters_dialog.py" line="428"/>
         <source>Subtitles font color</source>
         <translation>Couleur de la police des sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="438"/>
+        <location filename="../src/parameters_dialog.py" line="437"/>
         <source>Background rectangle</source>
         <translation>Cartouche</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="453"/>
+        <location filename="../src/parameters_dialog.py" line="452"/>
         <source>Reset to default</source>
         <translation>Réglages par défaut</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="460"/>
+        <location filename="../src/parameters_dialog.py" line="459"/>
         <source>Auto Save</source>
         <translation>Sauvegarde Automatique</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="473"/>
+        <location filename="../src/parameters_dialog.py" line="472"/>
         <source>Save every</source>
         <translation>Sauver tous les</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="483"/>
+        <location filename="../src/parameters_dialog.py" line="482"/>
         <source>Keep only</source>
         <translation>Ne garder que</translation>
     </message>
@@ -470,12 +470,12 @@
         <translation>Voulez-vous en télécharger ?</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="948"/>
+        <location filename="../src/main.py" line="949"/>
         <source>Open File</source>
         <translation>Ouvrir le fichier</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1029"/>
+        <location filename="../src/main.py" line="1030"/>
         <source>Read Error</source>
         <translation>Erreur de lecture</translation>
     </message>
@@ -500,32 +500,32 @@
         <translation>Choisissez une sauvegarde à restaurer :</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1170"/>
+        <location filename="../src/main.py" line="1169"/>
         <source>Open Subtitles File</source>
         <translation>Ouvrir le fichier de sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1296"/>
+        <location filename="../src/main.py" line="1295"/>
         <source>Video framerate</source>
         <translation>Cadence d&apos;images à la seconde</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2576"/>
+        <location filename="../src/main.py" line="2587"/>
         <source>Transcribed</source>
         <translation>Transcris</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="855"/>
+        <location filename="../src/main.py" line="856"/>
         <source>Save Error</source>
         <translation>Erreur de sauvegarde</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1050"/>
+        <location filename="../src/main.py" line="1051"/>
         <source>No media file</source>
         <translation>Aucun média</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1051"/>
+        <location filename="../src/main.py" line="1052"/>
         <source>Couldn&apos;t find media file for &apos;{filename}&apos;</source>
         <translation>Impossible de trouver le média pour &apos;{filename}&apos;</translation>
     </message>
@@ -535,12 +535,12 @@
         <translation>&apos;{filepath}&apos; n&apos;existe pas.</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1214"/>
+        <location filename="../src/main.py" line="1213"/>
         <source>No recent files</source>
         <translation>Pas de fichiers récents</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1232"/>
+        <location filename="../src/main.py" line="1231"/>
         <source>Clear Recent Files</source>
         <translation>Effacer les fichiers récents</translation>
     </message>
@@ -585,27 +585,27 @@
         <translation>Voulez-vous enregistrer votre travail ?</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2493"/>
+        <location filename="../src/main.py" line="2504"/>
         <source>start: {}</source>
         <translation>début: {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2494"/>
+        <location filename="../src/main.py" line="2505"/>
         <source>end: {}</source>
         <translation>fin : {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2499"/>
+        <location filename="../src/main.py" line="2510"/>
         <source>dur: {}s</source>
         <translation>durée : {}s</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2564"/>
+        <location filename="../src/main.py" line="2575"/>
         <source>Switching language</source>
         <translation>Changement de langue</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2565"/>
+        <location filename="../src/main.py" line="2576"/>
         <source>You need to restart the application to update the UI language.</source>
         <translation>Un redémarrage de l&apos;application est nécessaire pour appliquer le changement de langue.</translation>
     </message>
@@ -613,22 +613,22 @@
 <context>
     <name>ModelsPanel</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="585"/>
+        <location filename="../src/parameters_dialog.py" line="584"/>
         <source>Language</source>
         <translation>Langue</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="603"/>
+        <location filename="../src/parameters_dialog.py" line="602"/>
         <source>Online Models</source>
         <translation>Modèles en ligne</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="609"/>
+        <location filename="../src/parameters_dialog.py" line="608"/>
         <source>Download</source>
         <translation>Télécharger</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="617"/>
+        <location filename="../src/parameters_dialog.py" line="616"/>
         <source>Local Models</source>
         <translation>Modèles locaux</translation>
     </message>
@@ -636,27 +636,27 @@
 <context>
     <name>ParametersDialog</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="263"/>
+        <location filename="../src/parameters_dialog.py" line="262"/>
         <source>Parameters</source>
         <translation>Paramètres</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="268"/>
+        <location filename="../src/parameters_dialog.py" line="267"/>
         <source>General</source>
         <translation>Général</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="269"/>
+        <location filename="../src/parameters_dialog.py" line="268"/>
         <source>Models</source>
         <translation>Modèles</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="270"/>
+        <location filename="../src/parameters_dialog.py" line="269"/>
         <source>Subtitles Rules</source>
         <translation>Sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="272"/>
+        <location filename="../src/parameters_dialog.py" line="271"/>
         <source>Cache</source>
         <translation>Cache</translation>
     </message>
@@ -699,12 +699,12 @@
         <translation>Transcription du fichier entier</translation>
     </message>
     <message>
-        <location filename="../src/transcriber.py" line="139"/>
+        <location filename="../src/transcriber.py" line="145"/>
         <source>Error during transcription: {error}</source>
         <translation>Problème lors de la transcription: {error}</translation>
     </message>
     <message>
-        <location filename="../src/transcriber.py" line="171"/>
+        <location filename="../src/transcriber.py" line="177"/>
         <source>Transcribing</source>
         <translation>Transcription</translation>
     </message>
@@ -935,57 +935,57 @@
 <context>
     <name>SubtitlesPanel</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="705"/>
+        <location filename="../src/parameters_dialog.py" line="704"/>
         <source>Preferences</source>
         <translation>Préférences</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="709"/>
+        <location filename="../src/parameters_dialog.py" line="708"/>
         <source>Netflix default</source>
         <translation>Règles Netflix</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="710"/>
+        <location filename="../src/parameters_dialog.py" line="709"/>
         <source>Custom</source>
         <translation>Personnalisé</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="720"/>
+        <location filename="../src/parameters_dialog.py" line="719"/>
         <source>Subtitles duration</source>
         <translation>Durée des sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="749"/>
+        <location filename="../src/parameters_dialog.py" line="748"/>
         <source>Time gap between subtitles</source>
         <translation>Intervalle entre les sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="765"/>
+        <location filename="../src/parameters_dialog.py" line="764"/>
         <source>Auto extend</source>
         <translation>Extension automatique</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="779"/>
+        <location filename="../src/parameters_dialog.py" line="778"/>
         <source>when gap is under</source>
         <translation>quand l&apos;intervalle est en-dessous de</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="785"/>
+        <location filename="../src/parameters_dialog.py" line="784"/>
         <source>Text length and density</source>
         <translation>Longueur et densité du texte</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="790"/>
+        <location filename="../src/parameters_dialog.py" line="789"/>
         <source>chars</source>
         <translation>carac.</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="793"/>
+        <location filename="../src/parameters_dialog.py" line="792"/>
         <source>Text margin size</source>
         <translation>Taille de la marge du texte</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="804"/>
+        <location filename="../src/parameters_dialog.py" line="803"/>
         <source>Characters per second</source>
         <translation>Caractères par seconde</translation>
     </message>

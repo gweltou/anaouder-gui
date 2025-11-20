@@ -66,7 +66,7 @@ class ExportSrtDialog(QDialog):
         options_layout = QVBoxLayout()
 
         # Apostrophe normalization
-        apostrophe_label = QLabel("Apostrophe normalization:")
+        apostrophe_label = QLabel(self.tr("Apostrophe normalization") + ':')
         font = QFont()
         font.setPointSize(18)
         apostrophe_norm_label_1 = QLabel("' → ’")
@@ -89,10 +89,10 @@ class ExportSrtDialog(QDialog):
         
         # Buttons
         button_layout = QHBoxLayout()
-        cancel_button = QPushButton("Cancel")
+        cancel_button = QPushButton(self.tr("Cancel"))
         cancel_button.clicked.connect(self.reject)
         
-        export_button = QPushButton("Export")
+        export_button = QPushButton(self.tr("Export"))
         export_button.clicked.connect(self.accept)
         export_button.setDefault(True)
         
@@ -112,7 +112,7 @@ class ExportSrtDialog(QDialog):
     def browse_file(self, default_path: Optional[str]=None):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save SRT File",
+            self.tr("Save TXT File"),
             default_path,
             "SubRip files (*.srt);;All files (*.*)"
         )
@@ -124,6 +124,7 @@ class ExportSrtDialog(QDialog):
 def exportSrt(parent, media_path, utterances) -> None:
     rm_special_tokens = True
 
+    # Path defaults to media basename + .srt
     dir = os.path.split(media_path)[0] if media_path else os.path.expanduser('~')
     default_path = os.path.splitext(media_path)[0] if media_path else "untitled"
     default_path += ".srt"
@@ -138,6 +139,7 @@ def exportSrt(parent, media_path, utterances) -> None:
 
     # Remove unwanted strings from subtitle output
     for i, (text, _) in enumerate(utterances):    
+        print(utterances[i])
         text = re.sub(METADATA_PATTERN, ' ', text)
         text = re.sub(r"\*", '', text)
         text = re.sub(r"<br>", '\n', text, count=0, flags=re.IGNORECASE)
@@ -166,7 +168,7 @@ def exportSrt(parent, media_path, utterances) -> None:
         lines = [' '.join(l.split()) for l in text.split('\n')]
         text = '\n'.join(lines)
         
-        utterances[i][0] = text
+        utterances[i] = (text, utterances[i][1])
 
     try:
         with open(file_path, 'w', encoding='utf-8') as _f:

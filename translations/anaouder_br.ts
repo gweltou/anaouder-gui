@@ -50,54 +50,54 @@
 <context>
     <name>CachePanel</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="921"/>
+        <location filename="../src/parameters_dialog.py" line="920"/>
         <source>Current file cache</source>
         <translation>Memor kuzh ar restr</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="927"/>
+        <location filename="../src/parameters_dialog.py" line="926"/>
         <source>Media fingerprint</source>
         <translation>Roud niverel ar media</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="935"/>
-        <location filename="../src/parameters_dialog.py" line="988"/>
+        <location filename="../src/parameters_dialog.py" line="934"/>
+        <location filename="../src/parameters_dialog.py" line="987"/>
         <source>Size on disk</source>
         <translation>Ment war ar bladenn</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="942"/>
-        <location filename="../src/parameters_dialog.py" line="1007"/>
+        <location filename="../src/parameters_dialog.py" line="941"/>
+        <location filename="../src/parameters_dialog.py" line="1006"/>
         <source>Clear cache</source>
         <translation>Skarzhañ ar memor kuzh</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="952"/>
+        <location filename="../src/parameters_dialog.py" line="951"/>
         <source>Clear cache for current file only</source>
         <translation>Skarzhañ memor kuzh ar restr-mañ nemetken</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="974"/>
+        <location filename="../src/parameters_dialog.py" line="973"/>
         <source>Global cache</source>
         <translation>Memor kuzh hollek</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="978"/>
+        <location filename="../src/parameters_dialog.py" line="977"/>
         <source>Open folder</source>
         <translation>Digeriñ an teuliad</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="980"/>
+        <location filename="../src/parameters_dialog.py" line="979"/>
         <source>Open cache folder in file explorer</source>
         <translation>Digeriñ teuliad ar memor kuzh</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="993"/>
+        <location filename="../src/parameters_dialog.py" line="992"/>
         <source>Size limit</source>
         <translation>Beven ment</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="1018"/>
+        <location filename="../src/parameters_dialog.py" line="1017"/>
         <source>Clear global cache</source>
         <translation>Skarzhañ ar memor kuzh hollek</translation>
     </message>
@@ -105,22 +105,22 @@
 <context>
     <name>DownloadProgressDialog</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="87"/>
+        <location filename="../src/parameters_dialog.py" line="86"/>
         <source>Downloading {}</source>
         <translation>O pellgargañ {}</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="93"/>
+        <location filename="../src/parameters_dialog.py" line="92"/>
         <source>Downloading {}...</source>
         <translation>O pellgargañ {}...</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="168"/>
+        <location filename="../src/parameters_dialog.py" line="167"/>
         <source>Verifying checksum...</source>
         <translation>O wiriekaat ar sammad gwiriañ...</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="178"/>
+        <location filename="../src/parameters_dialog.py" line="177"/>
         <source>Extracting downloaded files...</source>
         <translation>O tiwaskañ ar restroù pellgarget...</translation>
     </message>
@@ -171,42 +171,42 @@
 <context>
     <name>GeneralPanel</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="407"/>
+        <location filename="../src/parameters_dialog.py" line="406"/>
         <source>Language of user interface</source>
         <translation>Yezh an etrefas</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="426"/>
+        <location filename="../src/parameters_dialog.py" line="425"/>
         <source>Subtitles style</source>
         <translation>Stil an istitloù</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="429"/>
+        <location filename="../src/parameters_dialog.py" line="428"/>
         <source>Subtitles font color</source>
         <translation>Liv ar skrid</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="438"/>
+        <location filename="../src/parameters_dialog.py" line="437"/>
         <source>Background rectangle</source>
         <translation>Karitell foñs</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="453"/>
+        <location filename="../src/parameters_dialog.py" line="452"/>
         <source>Reset to default</source>
         <translation>Dre ziouer</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="460"/>
+        <location filename="../src/parameters_dialog.py" line="459"/>
         <source>Auto Save</source>
         <translation>Enrollañ Emgefreek</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="473"/>
+        <location filename="../src/parameters_dialog.py" line="472"/>
         <source>Save every</source>
         <translation>Enrollañ bep</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="483"/>
+        <location filename="../src/parameters_dialog.py" line="482"/>
         <source>Keep only</source>
         <translation>Mirout nemet</translation>
     </message>
@@ -369,12 +369,12 @@
         <translation>Fellout a ra deoc&apos;h pellgargañ unan ?</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1050"/>
+        <location filename="../src/main.py" line="1051"/>
         <source>No media file</source>
         <translation>Restr media ebet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1051"/>
+        <location filename="../src/main.py" line="1052"/>
         <source>Couldn&apos;t find media file for &apos;{filename}&apos;</source>
         <translation>N&apos;eo ket bet kavet a restr media evit &apos;{filename}&apos;</translation>
     </message>
@@ -404,12 +404,12 @@
         <translation>Dibabit unan :</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1214"/>
+        <location filename="../src/main.py" line="1213"/>
         <source>No recent files</source>
         <translation>Teul nevez ebet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1232"/>
+        <location filename="../src/main.py" line="1231"/>
         <source>Clear Recent Files</source>
         <translation>Skarzhañ roll an teulioù nevesañ</translation>
     </message>
@@ -452,12 +452,12 @@
     <message>
         <location filename="../src/main.py" line="341"/>
         <source>&amp;Export as</source>
-        <translation>&amp;Ezporzhiañ e stumm</translation>
+        <translation>E&amp;zporzhiañ e stumm</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="343"/>
         <source>&amp;SubRip (.srt)</source>
-        <translation>istitloù &amp;SubRip (.srt)</translation>
+        <translation>Istitloù &amp;SubRip (.srt)</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="344"/>
@@ -535,42 +535,42 @@
         <translation>Steudañ d&apos;ar skeudennoù video</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="855"/>
+        <location filename="../src/main.py" line="856"/>
         <source>Save Error</source>
         <translation>Fazi Enrollañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1296"/>
+        <location filename="../src/main.py" line="1295"/>
         <source>Video framerate</source>
         <translation>Lusk skeudennoù ar media</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2576"/>
+        <location filename="../src/main.py" line="2587"/>
         <source>Transcribed</source>
         <translation>Treuzskrivet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="948"/>
+        <location filename="../src/main.py" line="949"/>
         <source>Open File</source>
         <translation>Digeriñ ar restr</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1029"/>
+        <location filename="../src/main.py" line="1030"/>
         <source>Read Error</source>
         <translation>Fazi Lenn</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1170"/>
+        <location filename="../src/main.py" line="1169"/>
         <source>Open Subtitles File</source>
         <translation>Digeriñ ur restr istitloù</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2564"/>
+        <location filename="../src/main.py" line="2575"/>
         <source>Switching language</source>
         <translation>Cheñch yezh</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2565"/>
+        <location filename="../src/main.py" line="2576"/>
         <source>You need to restart the application to update the UI language.</source>
         <translation>Ret eo deoc&apos;h adloc&apos;hañ ar meziant evit ma vefe cheñchet ar yezh.</translation>
     </message>
@@ -595,17 +595,17 @@
         <translation>C&apos;hoant hoc&apos;h eus da enrollañ ho labour ?</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2493"/>
+        <location filename="../src/main.py" line="2504"/>
         <source>start: {}</source>
         <translation>krog: {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2494"/>
+        <location filename="../src/main.py" line="2505"/>
         <source>end: {}</source>
         <translation>fin: {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2499"/>
+        <location filename="../src/main.py" line="2510"/>
         <source>dur: {}s</source>
         <translation>pad: {}e</translation>
     </message>
@@ -613,22 +613,22 @@
 <context>
     <name>ModelsPanel</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="585"/>
+        <location filename="../src/parameters_dialog.py" line="584"/>
         <source>Language</source>
         <translation>Yezh</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="603"/>
+        <location filename="../src/parameters_dialog.py" line="602"/>
         <source>Online Models</source>
         <translation>Patromoù enlinenn</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="609"/>
+        <location filename="../src/parameters_dialog.py" line="608"/>
         <source>Download</source>
         <translation>Pellgargañ</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="617"/>
+        <location filename="../src/parameters_dialog.py" line="616"/>
         <source>Local Models</source>
         <translation>Patromoù lec&apos;hel</translation>
     </message>
@@ -651,22 +651,22 @@
 <context>
     <name>ParametersDialog</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="263"/>
+        <location filename="../src/parameters_dialog.py" line="262"/>
         <source>Parameters</source>
         <translation>Arventennoù</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="268"/>
+        <location filename="../src/parameters_dialog.py" line="267"/>
         <source>General</source>
         <translation>Hollek</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="269"/>
+        <location filename="../src/parameters_dialog.py" line="268"/>
         <source>Models</source>
         <translation>Patromoù</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="270"/>
+        <location filename="../src/parameters_dialog.py" line="269"/>
         <source>Subtitles Rules</source>
         <translation>Reolennoù Istitlañ</translation>
     </message>
@@ -675,7 +675,7 @@
         <translation type="vanished">Istitloù</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="272"/>
+        <location filename="../src/parameters_dialog.py" line="271"/>
         <source>Cache</source>
         <translation>Memor kuzh</translation>
     </message>
@@ -714,12 +714,12 @@
         <translation>Treuzskrivañ ar restr a-bezh</translation>
     </message>
     <message>
-        <location filename="../src/transcriber.py" line="139"/>
+        <location filename="../src/transcriber.py" line="145"/>
         <source>Error during transcription: {error}</source>
         <translation>Ur gudenn zo bet o treuzskrivañ: {error}</translation>
     </message>
     <message>
-        <location filename="../src/transcriber.py" line="171"/>
+        <location filename="../src/transcriber.py" line="177"/>
         <source>Transcribing</source>
         <translation>O treuzskrivañ</translation>
     </message>
@@ -950,57 +950,57 @@
 <context>
     <name>SubtitlesPanel</name>
     <message>
-        <location filename="../src/parameters_dialog.py" line="705"/>
+        <location filename="../src/parameters_dialog.py" line="704"/>
         <source>Preferences</source>
         <translation>Gwellvezioù</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="709"/>
+        <location filename="../src/parameters_dialog.py" line="708"/>
         <source>Netflix default</source>
         <translation>Reolennoù Netflix</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="710"/>
+        <location filename="../src/parameters_dialog.py" line="709"/>
         <source>Custom</source>
         <translation>Dre zibab</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="720"/>
+        <location filename="../src/parameters_dialog.py" line="719"/>
         <source>Subtitles duration</source>
         <translation>Padelezh an istitloù</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="749"/>
+        <location filename="../src/parameters_dialog.py" line="748"/>
         <source>Time gap between subtitles</source>
         <translation>Ehan etre an istitloù</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="765"/>
+        <location filename="../src/parameters_dialog.py" line="764"/>
         <source>Auto extend</source>
         <translation>Hiraat emgefreek</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="779"/>
+        <location filename="../src/parameters_dialog.py" line="778"/>
         <source>when gap is under</source>
         <translation>pa vez an ehan dindan</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="785"/>
+        <location filename="../src/parameters_dialog.py" line="784"/>
         <source>Text length and density</source>
         <translation>Hirder ha stankter an destenn</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="790"/>
+        <location filename="../src/parameters_dialog.py" line="789"/>
         <source>chars</source>
         <translation>arouez</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="793"/>
+        <location filename="../src/parameters_dialog.py" line="792"/>
         <source>Text margin size</source>
         <translation>Ment ar marz</translation>
     </message>
     <message>
-        <location filename="../src/parameters_dialog.py" line="804"/>
+        <location filename="../src/parameters_dialog.py" line="803"/>
         <source>Characters per second</source>
         <translation>Arouez dre eilenn</translation>
     </message>

@@ -156,7 +156,7 @@ def exportTxt(parent, media_path, utterances):
             text_segments.append(remainder)
             text = ''.join(text_segments)
         
-        utterances[i][0] = text.strip() + '\n'
+        utterances[i] = (text.strip() + '\n', utterances[i][1])
 
     try:
         with open(file_path, 'w') as _f:
