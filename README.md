@@ -12,7 +12,7 @@
 
 Développé en collaboration avec **Dizale** et financé par la **Région Bretagne**, ce logiciel s’appuie sur un modèle de reconnaissance vocale spécifiquement entraîné pour le breton et fonctionnant localement, sur votre ordinateur.
 
-L’outil intègre également une correction orthographique adaptée grâce au dictionnaire **hunspell-br** de l'association **An Drouizig**.
+L’outil intègre également une correction orthographique adaptée grâce au dictionnaire [hunspell-br](https://github.com/Drouizig/hunspell-br) de l'association **An Drouizig**.
 
 ## Fonctionnalités principales
 
@@ -32,8 +32,9 @@ L'application est disponible pour Windows et Linux et macOs (Apple Silicon ou In
 Ce projet est le fruit d'une collaboration entre développeurs et acteurs culturels bretons.
 
 <div align="center">
-  <img src="res/logo_dizale.png" alt="Dizale" height="100" style="margin: 20px;">
-  <img src="res/logo_rannvro_breizh.png" alt="Région Bretagne" height="100" style="margin: 20px;">
+  <img src="res/logo_dizale.png" alt="Dizale" height="100">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="res/logo_rannvro_breizh.png" alt="Région Bretagne" height="100">
 </div>
 
 ---
