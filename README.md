@@ -1,10 +1,10 @@
 # Anaouder
 
-<img src="res/logo_anaouder.png" alt="Dizale">
+<img src="res/logo_anaouder.png" alt="Logo Anaouder">
 
 **Logiciel d'aide au sous-titrage et à la transcription pour la langue bretonne.**
 
-![Anaouder Logo](res/screenshot.png) <!-- Décommentez et ajustez si vous avez un logo principal pour l'app -->
+![Screenshot](res/screenshot.png) <!-- Décommentez et ajustez si vous avez un logo principal pour l'app -->
 
 ## Description
 
@@ -27,7 +27,7 @@ L'application est disponible pour Windows et Linux et macOs (Apple Silicon ou In
 
 *   Téléchargez la dernière version stable [ici](https://github.com/gweltou/anaouder-gui/releases) ou sur sur [Dizale.bzh](https://www.dizale.bzh/anaouder.html).
 
-## Partenaires et Crédits
+## Partenaires
 
 Ce projet est le fruit d'une collaboration entre développeurs et acteurs culturels bretons.
 
