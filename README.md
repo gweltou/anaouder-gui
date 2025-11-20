@@ -2,9 +2,9 @@
 
 **Logiciel d'aide au sous-titrage et à la transcription pour la langue bretonne.**
 
-![Screenshot](res/screenshot.png)
-
 <img src="res/logo_anaouder.png" alt="Logo Anaouder">
+
+![Screenshot](res/screenshot.png)
 
 ## Description
 
