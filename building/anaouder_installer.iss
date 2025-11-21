@@ -41,7 +41,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 OutputBaseFilename=mysetup
 Compression=lzma
 SolidCompression=yes
-WizardStyle=modern dynamic
+WizardStyle=modern
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
