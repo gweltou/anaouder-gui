@@ -32,9 +32,11 @@ L'application est disponible pour Windows et Linux et macOs (Apple Silicon ou In
 Ce projet est le fruit d'une collaboration entre développeurs et acteurs culturels bretons.
 
 <div align="center">
-  <img src="res/logo_dizale.png" alt="Dizale" height="100">
+  <img src="icons/OTilde.png" alt="Dizale" height="100">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="res/logo_rannvro_breizh.png" alt="Région Bretagne" height="100">
+  <img src="icons/logo_dizale_small.png" alt="Dizale" height="100">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="icons/logo_rannvro_breizh.png" alt="Région Bretagne" height="100">
 </div>
 
 ---
