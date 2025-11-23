@@ -1,43 +1,45 @@
 # Anaouder
 
-**Logiciel d'aide au sous-titrage et à la transcription pour la langue bretonne.**
+<img src="res/gwenn_ha_du_128x85.png" alt="Breton flag" width="16" /> E brezhoneg | 🇫🇷 [Lire en français](README-fr.md) | 🇬🇧 [Read in English](./README-en.md)
+
+**Meziant skoazell d'an istitlañ ha d'an treuskrivañ e brezhoneg.**
 
 <img src="res/logo_anaouder.png" alt="Logo Anaouder">
 
-![Screenshot](res/screenshot.png)
+![Skramm](res/screenshot.png)
 
-## Description
+## Petra eo ?
 
-**Anaouder** est un logiciel libre et open-source conçu pour faciliter la création de sous-titres en langue bretonne.
+Ur meziant frank hag a darzh digor (open-source) eo **Anaouder**, savet evit sikour d'ober istitloù e brezhoneg.
 
-Développé en collaboration avec **Dizale** et financé par la **Région Bretagne**, ce logiciel s’appuie sur un modèle de reconnaissance vocale spécifiquement entraîné pour le breton et fonctionnant localement, sur votre ordinateur.
+Diazezet eo ar meziant war ur patrom digejañ ar vouezh skañv (doare Vosk), a ya en-dro ez-lec'hel war hoc'h urzhiataer.
 
-L’outil intègre également une correction orthographique adaptée grâce au dictionnaire [hunspell-br](https://github.com/Drouizig/hunspell-br) de l'association **An Drouizig**.
+Enframmañ a ra difazier reizhskrivadur [hunspell-br](https://github.com/Drouizig/hunspell-br) ar gevredigezh **An Drouizig**.
 
-## Fonctionnalités principales
+## Arc'hwelioù pennañ
 
-- [x] Transcription audio vers texte (modèle Vosk spécialisé breton).
-- [x] Éditeur de sous-titres intégré.
-- [x] Correction orthographique (Hunspell).
-- [x] Export vers les formats standards (`.srt`, `.eaf`, `.txt`).
+- [x] Treuskrivañ emgefreek diwar un teuliad son e brezhoneg.
+- [x] Aes da gemm ha da reizhañ an istitloù.
+- [x] Sikour gant ar reizhskrivañ (hunspell-br).
+- [x] Ezporzhiañ war-zu stummoù boutin (`.srt`, `.eaf`, `.txt`).
 
-## Téléchargement et Installation
+## Pellgargañ ha Staliañ
 
-L'application est disponible pour Windows et Linux et macOs (Apple Silicon ou Intel).
+A-zere eo ar meziant gant Windows, Linux ha macOS (Apple Silicon pe Intel).
 
-*   Téléchargez la dernière version stable [ici](https://github.com/gweltou/anaouder-gui/releases) ou sur sur [Dizale.bzh](https://www.dizale.bzh/anaouder.html).
+* Posupl eo pellgargañ ar stumm diwezhañ [amañ](https://github.com/gweltou/anaouder-gui/releases) pe war lec'hiennn [Dizale](https://www.dizale.bzh/anaouder.html).
 
-## Partenaires
+## Kevelerien
 
-Ce projet est le fruit d'une collaboration entre développeurs et acteurs culturels bretons.
+Frouezh ur c'henlabour etre ar **Rannvro Breizh**, ar gevredigezh **Dizale** hag an embregerezh **OTilde** eo ar meziant-se.
 
 <div align="center">
   <img src="icons/OTilde.png" alt="Dizale" height="100">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="icons/logo_dizale_small.png" alt="Dizale" height="100">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="icons/logo_rannvro_breizh.png" alt="Région Bretagne" height="100">
+  <img src="icons/logo_rannvro_breizh.png" alt="Rannvro Breizh" height="100">
 </div>
 
 ---
-*Licence : GPLv3*
+*Lañvaz : GPLv3*
