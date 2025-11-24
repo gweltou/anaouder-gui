@@ -17,14 +17,8 @@ from math import floor, ceil
 
 import re
 
-from ostilhou.asr import (
-    load_segments_data, load_text_data,
-    extract_metadata,
-)
-from ostilhou.asr.dataset import format_timecode
-from ostilhou.audio import (
-    convert_to_mp3, get_audiofile_info
-)
+from ostilhou.audio import get_audiofile_info
+
 from ostilhou.audio.audio_numpy import split_to_segments, get_samples
 
 from PySide6.QtWidgets import (
@@ -75,9 +69,7 @@ from src.commands import (
     AlignWithSelectionCommand
 )
 from src.parameters_dialog import ParametersDialog
-from src.export_srt import exportSrt, exportSrtSignals
-from src.export_eaf import exportEaf, exportEafSignals
-from src.export_txt import exportTxt, exportTxtSignals
+from src.export import export, exportSignals
 from src.levenshtein_aligner import (
     smart_split_text, smart_split_time,
     SmartSplitError
@@ -144,7 +136,6 @@ class MainWindow(QMainWindow):
         # Current opened file info
         self.filepath = filepath
         self.media_path = None
-        # self.media_metadata = dict()
         self.hidden_transcription = False
 
         self.video_widget = VideoWidget(self)
@@ -599,7 +590,7 @@ class MainWindow(QMainWindow):
         segment_buttons_layout.addWidget(self.add_segment_button)
 
         self.del_segment_button = QPushButton()
-        self.del_segment_button.setIcon(icons["del_segment"])
+        self.del_segment_button.setIcon(icons["trash"])
         self.del_segment_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.del_segment_button.setToolTip(
             self.tr("Delete segment") + f" &lt;{QKeySequence(Qt.Key.Key_Delete).toString()}&gt;/&lt;{QKeySequence(Qt.Key.Key_Backspace).toString()}&gt;"
@@ -1268,9 +1259,7 @@ class MainWindow(QMainWindow):
         self.log.info(f"Loaded {len(self.audio_samples)} audio samples")
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
 
-        # # Load metadata
-        # self.media_metadata = cache.get_media_metadata(filepath)
-
+        # Parse media metadata
         media_metadata = self.media_controller.getMetaData()
         if not "fps" in media_metadata:
             # Check video framerate
@@ -1349,21 +1338,20 @@ class MainWindow(QMainWindow):
 
 
     def exportSrt(self):
-        exportSrtSignals.message.connect(self.setStatusMessage)
-        exportSrt(self, self.media_path, self.getUtterancesForExport())
-        exportSrtSignals.message.disconnect()
-
+        exportSignals.message.connect(self.setStatusMessage)
+        export(self, self.media_path, self.getUtterancesForExport(), "srt")
+        exportSignals.message.disconnect()
 
     def exportEaf(self):
-        exportEafSignals.message.connect(self.setStatusMessage)
-        exportEaf(self, self.media_path, self.getUtterancesForExport())
-        exportEafSignals.message.disconnect()
+        exportSignals.message.connect(self.setStatusMessage)
+        export(self, self.media_path, self.getUtterancesForExport(), "eaf")
+        exportSignals.message.disconnect()
 
 
     def exportTxt(self):
-        exportTxtSignals.message.connect(self.setStatusMessage)
-        exportTxt(self, self.media_path, self.getUtterancesForExport())
-        exportTxtSignals.message.disconnect()
+        exportSignals.message.connect(self.setStatusMessage)
+        export(self, self.media_path, self.getUtterancesForExport(), "txt")
+        exportSignals.message.disconnect()
 
 
     def showParameters(self, tab_idx: int = 0)  -> None:
@@ -1449,20 +1437,23 @@ class MainWindow(QMainWindow):
             return (-1, "")
 
         html, _ = self.text_widget.getBlockHtml(block)
-        html = extract_metadata(html)[0] if block else ""
+        # html = extract_metadata(html)[0] if block else ""
 
         return (seg_id, html)
     
 
-    def updateSubtitle(self, time: float) -> None:
+    def updateSubtitle(self, position_sec: float) -> None:
         """
         Args:
             time (float): time position in seconds
         """
-        seg_id, text = self.getSubtitleAtPosition(time)
 
-        if self.video_widget.isVisible():
-            self.video_widget.setCaption(text)
+        if not self.video_widget.isVisible():
+            return
+        
+        seg_id, text = self.getSubtitleAtPosition(position_sec)
+        cached_transcription = self.media_controller.getMetaData().get("transcription", [])
+        self.video_widget.setCaption(text, position_sec)
 
 
     def onPlayerPositionChanged(self, position_sec: int) -> None:
