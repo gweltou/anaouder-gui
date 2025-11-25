@@ -1,4 +1,4 @@
-# Anaouder
+# Anaouder - Istitlañ
 
 <img src="res/gwenn_ha_du_128x85.png" alt="Breton flag" width="16" /> [E brezhoneg](README.md) | 🇫🇷 Lire en français | 🇬🇧 [Read in English](./README-en.md)
 
