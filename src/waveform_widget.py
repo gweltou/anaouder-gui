@@ -26,6 +26,7 @@ from src.theme import theme
 from src.settings import app_settings, shortcuts
 from src.utils import lerpColor, mapNumber
 from src.commands import ResizeSegmentCommand
+from src.interfaces import Segment, SegmentId
 from src.strings import strings
 
 
@@ -34,9 +35,6 @@ ZOOM_MIN = 0.2  # In pixels per second
 ZOOM_MAX = 512  # In pixels per second
 SNAPPING_RADIUS = 4 # In pixels
 
-
-type Segment = List[float]
-type SegmentId = int
 
 Handle = Enum("Handle", ["LEFT", "RIGHT", "MIDDLE"])
 SegmentSide = Enum("SegmentSide", ["LEFT", "RIGHT"])
@@ -1179,12 +1177,14 @@ class WaveformWidget(QWidget):
                 multi = True
             
             if multi:
-                join_action = QAction("Join utterances", self)
+                join_action = QAction(self.tr("Join segments"), self)
                 join_action.triggered.connect(lambda: self.join_utterances.emit(self.active_segments))
                 context.addAction(join_action)
             
+            tr_delete_segment = self.tr("Delete segments") if multi else self.tr("Delete segment")
+
             context.addSeparator()
-            delete_action = QAction(f"Delete segment{'s' if multi else ''}", self)
+            delete_action = QAction(tr_delete_segment, self)
             delete_action.triggered.connect(lambda : self.delete_utterances.emit(self.active_segments))
             context.addAction(delete_action)
 

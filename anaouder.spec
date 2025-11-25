@@ -77,7 +77,8 @@ a = Analysis(
 
         ("./icons/magnet.png", "icons/"),
         ("./icons/select_segment.png", "icons/"),
-        ("./icons/add_segment.png", "icons/"),
+        # ("./icons/add_segment.png", "icons/"),
+        ("./icons/trash.png", "icons/"),
         ("./icons/del_segment.png", "icons/"),
         ("./icons/follow_playhead.png", "icons/"),
 		("./icons/led_green.png", "icons/"),

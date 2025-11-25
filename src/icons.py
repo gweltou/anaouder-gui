@@ -1,6 +1,3 @@
-import sys
-import os.path
-
 from PySide6.QtGui import QIcon, QMouseEvent
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QLabel
@@ -48,7 +45,8 @@ def loadIcons():
     icons["magnet"] = QIcon(get_resource_path("icons/magnet.png"))
     icons["select"] = QIcon(get_resource_path("icons/select_segment.png"))
     icons["add_segment"] = QIcon(get_resource_path("icons/add_segment.png"))
-    icons["del_segment"] = QIcon(get_resource_path("icons/del_segment.png"))
+    icons["trash"] = QIcon(get_resource_path("icons/trash.png"))
+    # icons["del_segment"] = QIcon(get_resource_path("icons/del_segment.png"))
     icons["follow_playhead"] = QIcon(get_resource_path("icons/follow_playhead.png"))
 
     icons["led_green"] = QIcon(get_resource_path("icons/led_green.png"))
