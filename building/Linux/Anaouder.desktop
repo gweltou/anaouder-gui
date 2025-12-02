@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Anaouder
+Comment=Automatic transcription for Breton
+Comment[br]=Treuzskrivañ hag istitlañ emgefreek
+Categories=Audio;Video;AudioVideo;AudioVideoEditing;
+Icon=anaouder
+Exec=Anaouder %F
+MimeType=application/x-ali;
+Terminal=false
+StartupNotify=true
