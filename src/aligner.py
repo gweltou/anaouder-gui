@@ -41,7 +41,7 @@ def smart_split_text(text: str, position: int, vosk_tokens: list) -> tuple:
     left_text = text[:position].rstrip()
     right_text = text[position:].lstrip()
 
-    result = align_texts_with_vosk_tokens(' '.join([left_text, SPLIT_TOKEN, right_text]), vosk_tokens)
+    result = align_text_with_vosk_tokens(' '.join([left_text, SPLIT_TOKEN, right_text]), vosk_tokens)
     
     # Find index of split token
     i = 0
@@ -163,7 +163,7 @@ def prep_sentence(sentence: str, remove_spaces=True) -> str:
     return sentence
 
 
-def align_texts_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
+def align_text_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
     """
     Args:
         text: ground truth text
@@ -183,7 +183,7 @@ def align_texts_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
     dp = [[float('inf')] * (m + 1) for _ in range(n + 1)]
     dp[0][0] = 0
 
-    del_cost = 1.0
+    del_cost = 2.0
     ins_cost = 1.0
     
     # Fill the matrix using Levenshtein distance

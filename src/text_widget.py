@@ -3,12 +3,12 @@ from enum import Enum
 import logging
 
 from PySide6.QtWidgets import (
-    QApplication, QMenu, QTextEdit,
+    QApplication, QMenu, QTextEdit, QWidget
 )
 from PySide6.QtCore import (
     Qt, Signal, Slot, QMimeData,
     QRegularExpression,
-    QRect
+    QRect, QSize
 )
 from PySide6.QtGui import (
     QAction, QColor, QFont, QIcon,
@@ -31,6 +31,7 @@ from src.commands import (
     ReplaceTextCommand,
     MoveTextCursor
 )
+from src.document import DocumentController
 from src.theme import theme
 from src.utils import (
     getSentenceRegions,
@@ -239,6 +240,22 @@ class Highlighter(QSyntaxHighlighter):
 
 
 
+class LineNumberArea(QWidget):
+    """
+    The widget that displays line numbers on the left.
+    """
+    def __init__(self, editor):
+        super().__init__(editor)
+        self.editor = editor
+
+    def sizeHint(self):
+        return QSize(self.editor.line_number_area_width(), 0)
+
+    def paintEvent(self, event):
+        self.editor.lineNumberAreaPaintEvent(event)
+
+
+
 
 class TextEditWidget(QTextEdit):
 
@@ -259,11 +276,14 @@ class TextEditWidget(QTextEdit):
     split_utterance = Signal(int, int)
     align_with_selection = Signal(QTextBlock)
     auto_transcribe = Signal()
+    request_auto_align = Signal()
 
 
-    def __init__(self, parent):
+    def __init__(self, parent, document: DocumentController):
         super().__init__(parent)
         self.main_window = parent
+        self.document_controller = document
+        self.line_number_area = LineNumberArea(self)
 
         # Disable default undo stack to use our own instead
         self.setUndoRedoEnabled(False)
@@ -271,6 +291,12 @@ class TextEditWidget(QTextEdit):
                 
         # Signals
         self.cursorPositionChanged.connect(self.onCursorChanged)
+
+        # Signals to update the sidebar        
+        self.document().blockCountChanged.connect(self.updateLineNumberAreaWidth)
+        self.verticalScrollBar().valueChanged.connect(self.updateLineNumberArea)
+        self.document().contentsChanged.connect(self.updateLineNumberArea)
+        self.updateLineNumberAreaWidth()
 
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document(), self)
@@ -343,7 +369,7 @@ class TextEditWidget(QTextEdit):
         user_data = block.userData().data
         if "seg_id" in user_data:
             segment_id = user_data["seg_id"]
-            if segment_id in self.main_window.waveform.segments:
+            if segment_id in self.document_controller.segments:
                 return TextEditWidget.BlockType.ALIGNED
         
         return TextEditWidget.BlockType.NOT_ALIGNED
@@ -359,7 +385,7 @@ class TextEditWidget(QTextEdit):
         return -1
 
 
-    def setBlockId(self, block: QTextBlock, seg_id: SegmentId):
+    def setBlockId(self, block: QTextBlock, seg_id: SegmentId) -> None:
         log.debug(f"setBlockId({block=}, {seg_id=})")
         if not block.userData():
             block.setUserData(MyTextBlockUserData({"seg_id": seg_id}))
@@ -414,7 +440,7 @@ class TextEditWidget(QTextEdit):
     def isAligned(self, block: QTextBlock) -> bool:
         block_data = block.userData()
         if block_data and "seg_id" in block_data.data:
-            if block_data.data["seg_id"] in self.main_window.waveform.segments:
+            if block_data.data["seg_id"] in self.document_controller.segments:
                 return True
         return False
 
@@ -484,9 +510,11 @@ class TextEditWidget(QTextEdit):
         """
         log.debug(f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=})")
 
-        assert segment_id in self.main_window.waveform.segments
+        segment = self.document_controller.getSegment(segment_id)
+        if segment is None:
+            return
+        seg_start, seg_end = segment
         doc = self.document()
-        seg_start, seg_end = self.main_window.waveform.segments[segment_id]
 
         if not with_cursor:
             self.document().blockSignals(True) # Prevent segment info display
@@ -502,11 +530,11 @@ class TextEditWidget(QTextEdit):
             user_data = block.userData().data
             if "seg_id" in user_data:
                 other_id = user_data["seg_id"]
-                if other_id not in self.main_window.waveform.segments:
+                if other_id not in self.document_controller.segments:
                     block = block.next()
                     continue
                 
-                other_start, _ = self.main_window.waveform.segments[other_id]
+                other_start, _ = self.document_controller.segments[other_id]
                 if other_start > seg_end:
                     # Insert new utterance right before this one
                     cursor = QTextCursor(block)
@@ -673,6 +701,10 @@ class TextEditWidget(QTextEdit):
     
 
     def fragmentsToHtml(self, fragments: list) -> Tuple[str, List[bool]]:
+        """
+            Returns:
+                An html string and a mask (list of bools) for special tokens
+        """
         # Convert list of fragments to an html string
         html_text = ""
         mask = []
@@ -881,15 +913,17 @@ class TextEditWidget(QTextEdit):
         """
         clipboard = QApplication.clipboard()
         cursor = self.textCursor()
-        pos = self.cursor_pos
+        pos = cursor.position()
         self.undo_stack.beginMacro("Replace text")
         if cursor.hasSelection():
             self.deleteSelectedText(cursor)
             pos = cursor.selectionStart()
         paragraphs = clipboard.text().split('\n')
         for text in paragraphs:
-            self.undo_stack.push(InsertTextCommand(self, text, pos))
+            # self.undo_stack.push(InsertTextCommand(self, text, pos))
+            self.undo_stack.push(InsertBlockCommand(self, pos, text))
         self.undo_stack.endMacro()
+        self.updateLineNumberAreaWidth()
     
 
     def canInsertFromMimeData(self, mime_data: QMimeData):
@@ -1006,20 +1040,24 @@ class TextEditWidget(QTextEdit):
                 left_time_boundary = 0.0
                 prev_aligned_block = self.getPrevAlignedBlock(block)
                 if prev_aligned_block:
-                    id = self.getBlockId(prev_aligned_block)
-                    left_time_boundary = self.main_window.waveform.segments[id][1]
+                    seg_id = self.getBlockId(prev_aligned_block)
+                    left_time_boundary = self.document_controller.segments[seg_id][1]
 
                 right_time_boundary = self.main_window.waveform.audio_len
                 next_aligned_block = self.getNextAlignedBlock(block)
                 if next_aligned_block:
-                    id = self.getBlockId(next_aligned_block)
-                    right_time_boundary = self.main_window.waveform.segments[id][0]
+                    seg_id = self.getBlockId(next_aligned_block)
+                    right_time_boundary = self.document_controller.segments[seg_id][0]
             
                 if selection[0] >= left_time_boundary and selection[1] <= right_time_boundary:
                     align_action.setEnabled(True)
                     align_action.triggered.connect(lambda checked, b=block: self.align_with_selection.emit(b))
                 context_menu.addSeparator()
-                
+            else:
+                # Auto-alignment
+                auto_align_action = context_menu.addAction("Auto align")
+                auto_align_action.triggered.connect(self.request_auto_align.emit)
+                context_menu.addSeparator()
 
         # Propose spellchecker's suggestions
         if misspelled_word:
@@ -1585,6 +1623,100 @@ class TextEditWidget(QTextEdit):
         finally:
             painter.end()
 
+
+    #### Line Number Area Functions ####
+
+    def _getLineNumberAreaWidth(self):
+        """
+        Calculates the width needed for the line number area 
+        based on the number of digits in the line count.
+        """
+        digits = 1
+        max_value = max(1, self.document().blockCount())
+        while max_value >= 10:
+            max_value //= 10
+            digits += 1
+            
+        # Add some padding (e.g., 3 + font width * digits)
+        space = 8 + self.fontMetrics().horizontalAdvance('9') * digits
+        return space
+
+
+    def updateLineNumberAreaWidth(self) -> None:
+        """Updates the margin of the text edit to make room for the sidebar."""
+        width = self._getLineNumberAreaWidth()
+        self.setViewportMargins(self._getLineNumberAreaWidth(), 0, 0, 0)
+
+
+    def updateLineNumberArea(self) -> None:
+        """Repaints the sidebar area."""
+        self.line_number_area.update()
+
+
+    def lineNumberAreaPaintEvent(self, event) -> None:
+        """ Paints the line numbers in the sidebar """
+
+        painter = QPainter(self.line_number_area)
+        painter.fillRect(event.rect(), QColor("#f4f4f4")) # Light gray background
+
+        doc_layout = self.document().documentLayout()
+        
+        offset_y = self.verticalScrollBar().value()
+        page_bottom = offset_y + self.viewport().height()
+        
+        # Iterate over all text blocks (could be optimized)
+        block = self.document().begin()
+        block_number = 1
+
+        while block.isValid():
+            # Don't count unaligned blocks
+            # if not self.isAligned(block):
+            #     block = block.next()
+            #     continue
+
+            rect = doc_layout.blockBoundingRect(block)
+            
+            # Check if the block is visible in the viewport
+            top_of_block = rect.top() - offset_y
+            bottom_of_block = rect.bottom() - offset_y
+
+            # If the block is visible
+            if top_of_block <= self.viewport().height() and bottom_of_block >= 0:
+                if block.isVisible():
+                    if self.isAligned(block):
+                        # Paint the number
+                        painter.setPen(Qt.GlobalColor.black)
+                        painter.drawText(0, int(top_of_block), 
+                                        self.line_number_area.width() - 5, 
+                                        int(self.fontMetrics().height()),
+                                        Qt.AlignmentFlag.AlignRight, str(block_number))
+                    else:
+                        painter.setPen(Qt.GlobalColor.gray)
+                        painter.drawText(0, int(top_of_block), 
+                                        self.line_number_area.width() - 5, 
+                                        int(self.fontMetrics().height()),
+                                        Qt.AlignmentFlag.AlignRight, '*')
+
+            if top_of_block > self.viewport().height():
+                break
+
+            block = block.next()
+            block_number += 1
+
+        painter.end()
+    
+
+    def resizeEvent(self, event):
+        """
+        When the window is resized, we must resize the sidebar 
+        to match the height of the editor.
+        """
+        super().resizeEvent(event)
+        cr = self.contentsRect()
+        self.line_number_area.setGeometry(QRect(cr.left(), cr.top(),
+                                                self._getLineNumberAreaWidth(), cr.height()))
+
+    #### Debug functions ####
 
     def printDocumentStructure(self):
         """For debug purposes"""

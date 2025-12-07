@@ -19,25 +19,29 @@ type SegmentId = int
 
 
 
+class DocumentInterface(Protocol):
+    segments: Dict[SegmentId, Segment]
+    must_sort: bool
+
+    def addSegment(self, segment: Segment, seg_id: Optional[SegmentId] = None) -> SegmentId:
+        """Add a segment and return its ID"""
+        ...
+    
+    def getNewSegmentId(self) -> SegmentId:
+        """Get a new unique segment ID"""
+        ...
+
+
+
 class WaveformInterface(Protocol):
     """Anything with these methods can be used"""
-    segments: Dict[SegmentId, Segment]
     active_segments: List[SegmentId]
     active_segment_id: SegmentId
-    must_sort: bool
     must_redraw: bool
     _selection: Optional[Segment]
 
     @property
     def refresh_segment_info(self) -> Any:
-        ...
-    
-    def addSegment(self, segment: Segment, seg_id: Optional[SegmentId] = None) -> SegmentId:
-        """Add a segment and return its ID"""
-        ...
-    
-    def getNewId(self) -> SegmentId:
-        """Get a new unique segment ID"""
         ...
     
     def getSelection(self) -> Optional[Segment]:
@@ -75,6 +79,9 @@ class TextDocumentInterface(Protocol):
     def deactivateSentence(self, seg_id: SegmentId) -> None:
         ...
     
+    def getBlockType(self, block: QTextBlock):
+        ...
+    
     def setBlockId(self, block: QTextBlock, seg_id: SegmentId) -> None:
         ...
 
@@ -87,6 +94,9 @@ class TextDocumentInterface(Protocol):
     def getBlockHtml(self, block: QTextBlock) -> Tuple[str, List[bool]]:
         ...
     
+    def updateLineNumberAreaWidth(self) -> None:
+        ...
+
     def getCursorState(self) -> dict:
         ...
     

@@ -28,6 +28,7 @@ from src.utils import lerpColor, mapNumber
 from src.commands import ResizeSegmentCommand
 from src.interfaces import Segment, SegmentId
 from src.strings import strings
+from src.document import DocumentController
 
 
 ZOOM_Y = 3.5    # In pixels per second
@@ -137,9 +138,10 @@ class WaveformWidget(QWidget):
             return self.filtered_audio
     
 
-    def __init__(self, parent=None):
+    def __init__(self, parent, document_controller: DocumentController):
         super().__init__(parent)
         self.parent = parent
+        self.document = document_controller
         self.undo_stack = self.parent.undo_stack
 
         self.waveform = self.ScaledWaveform()
@@ -150,7 +152,6 @@ class WaveformWidget(QWidget):
         self.display_scene_change = False
         
         self.must_sort = False
-        self._sorted_segments = []
 
         self.follow_playhead = True
         self.was_following = False
@@ -232,12 +233,12 @@ class WaveformWidget(QWidget):
 
         self.crop_head_action = QAction(self.tr("Crop head"))
         self.crop_head_action.setShortcut(shortcuts["crop_head"])
-        self.crop_head_action.triggered.connect(self.cropHead)
+        self.crop_head_action.triggered.connect(self.document.cropHead)
         self.addAction(self.crop_head_action)
 
         self.crop_tail_action = QAction(self.tr("Crop tail"))
         self.crop_tail_action.setShortcut(shortcuts["crop_tail"])
-        self.crop_tail_action.triggered.connect(self.cropTail)
+        self.crop_tail_action.triggered.connect(self.document.cropTail)
         self.addAction(self.crop_tail_action)
 
         self.split_here_action = QAction(self.tr("Split here"))
@@ -276,10 +277,9 @@ class WaveformWidget(QWidget):
         self.playhead = 0.0
         self.shift_pressed = False
 
-        self.segments: Dict[SegmentId, Segment] = dict() # Keys are segment ids (int), values are segment [start (float), end (float)]
-        self.active_segments = []
-        self.active_segment_id = -1
         self.scenes = [] # Scene transition timecodes and color channels, in the form [ts, r, g, b]
+        self.active_segment_id = -1
+        self.active_segments = []
 
         self.resizing_handle = None
         self.resizing_segment = []
@@ -288,13 +288,18 @@ class WaveformWidget(QWidget):
 
         self._selection: Optional[Segment] = None
         self.selection_is_active = False
-        self.id_counter = 0
-        self.must_sort = True
         self.audio_len = 0
         self.fps = 0.0
 
         self.must_redraw = True
+    
 
+    # def clearSegments(self) -> None:
+    #     # Keys are segment ids (int), values are segment [start (float), end (float)]
+    #     self.segments: Dict[SegmentId, Segment] = dict()
+    #     self.active_segments = []
+    #     self.active_segment_id = -1
+    
 
     def setSamples(self, samples, sr) -> None:
         self.waveform.setSamples(samples, sr)
@@ -306,21 +311,21 @@ class WaveformWidget(QWidget):
         return self._selection
 
     
-    def getNewId(self) -> SegmentId:
-        """Returns the next available segment ID"""
-        seg_id = self.id_counter
-        self.id_counter += 1
-        return seg_id
+    # def getNewId(self) -> SegmentId:
+    #     """Returns the next available segment ID"""
+    #     seg_id = self.id_counter
+    #     self.id_counter += 1
+    #     return seg_id
     
 
-    def addSegment(self, segment: Segment, seg_id: Optional[SegmentId]=None) -> SegmentId:
-        log.debug(f"addSegment({segment=}, {seg_id=})")
-        if seg_id == None:
-            seg_id = self.getNewId()
-        self.segments[seg_id] = segment
-        self.must_sort = True
-        self.must_redraw = True
-        return seg_id
+    # def addSegment(self, segment: Segment, seg_id: Optional[SegmentId]=None) -> SegmentId:
+    #     log.debug(f"addSegment({segment=}, {seg_id=})")
+    #     if seg_id == None:
+    #         seg_id = self.getNewId()
+    #     self.segments[seg_id] = segment
+    #     self.must_sort = True
+    #     self.must_redraw = True
+    #     return seg_id
 
     
     def newUtteranceFromSelection(self):
@@ -328,38 +333,38 @@ class WaveformWidget(QWidget):
             self.new_utterance_from_selection.emit()
 
 
-    def cropHead(self):
-        log.debug("cropHead")
+    # def cropHead(self):
+    #     log.debug("cropHead")
 
-        if self.active_segment_id >= 0:
-            segment = self.segments[self.active_segment_id]
+    #     if self.active_segment_id >= 0:
+    #         segment = self.segments[self.active_segment_id]
 
-            if segment[0] <= self.playhead <= segment[1]:
-                self.undo_stack.push(
-                    ResizeSegmentCommand(
-                        self,
-                        self.active_segment_id,
-                        self.playhead,
-                        segment[1]
-                    )
-                )
+    #         if segment[0] <= self.playhead <= segment[1]:
+    #             self.undo_stack.push(
+    #                 ResizeSegmentCommand(
+    #                     self,
+    #                     self.active_segment_id,
+    #                     self.playhead,
+    #                     segment[1]
+    #                 )
+    #             )
 
 
-    def cropTail(self):
-        log.debug("cropTail")
+    # def cropTail(self):
+    #     log.debug("cropTail")
         
-        if self.active_segment_id >= 0:
-            segment = self.segments[self.active_segment_id]
+    #     if self.active_segment_id >= 0:
+    #         segment = self.segments[self.active_segment_id]
 
-            if segment[0] <= self.playhead <= segment[1]:
-                self.undo_stack.push(
-                    ResizeSegmentCommand(
-                        self,
-                        self.active_segment_id,
-                        segment[0],
-                        self.playhead
-                    )
-                )
+    #         if segment[0] <= self.playhead <= segment[1]:
+    #             self.undo_stack.push(
+    #                 ResizeSegmentCommand(
+    #                     self,
+    #                     self.active_segment_id,
+    #                     segment[0],
+    #                     self.playhead
+    #                 )
+    #             )
     
 
     def splitHere(self):
@@ -381,7 +386,7 @@ class WaveformWidget(QWidget):
         if segment_id is None:
             segment_id = self.active_segment_id
             
-        sorted_segments = self.getSortedSegments()
+        sorted_segments = self.document.getSortedSegments()
 
         if segment_id == -1:
             # Check relative to playhead position
@@ -410,7 +415,7 @@ class WaveformWidget(QWidget):
         if segment_id is None:
             segment_id = self.active_segment_id
 
-        sorted_segments = self.getSortedSegments()
+        sorted_segments = self.document.getSortedSegments()
 
         if segment_id == -1:
             # Check relative to playhead position
@@ -447,7 +452,12 @@ class WaveformWidget(QWidget):
         
         self.active_segments = seg_ids
         self.active_segment_id = seg_ids[-1]
-        start, end = self.segments[self.active_segment_id]
+        if self.active_segment_id not in self.document.segments:
+            self.active_segment_id = -1
+            self.must_redraw = True
+            self.refresh_segment_info.emit(-1)
+            return
+        start, end = self.document.segments[self.active_segment_id]
 
         if not (is_playing and self.follow_playhead):
             # Center on segment, if necessary
@@ -621,10 +631,10 @@ class WaveformWidget(QWidget):
         super().enterEvent(event)
 
 
-    def getSegment(self, seg_id: SegmentId) -> Optional[Segment]:
-        if seg_id in self.segments:
-            return self.segments[seg_id]
-        return None
+    # def getSegment(self, seg_id: SegmentId) -> Optional[Segment]:
+    #     if seg_id in self.segments:
+    #         return self.segments[seg_id]
+    #     return None
 
 
     def _dev_getSelectedId(self) -> Optional[SegmentId]:
@@ -634,15 +644,15 @@ class WaveformWidget(QWidget):
         return None
     
 
-    def getSegmentAtTime(self, time: float) -> int:
-        """Return the ID of any segment at a given position, or -1 if none is present"""
-        log.debug(f"getSegmentAtTime({time=})")
-        for seg_id, (start, end) in self.getSortedSegments():
-            # Give precedence to the segment that starts at this timecode
-            # rather than the one that ends at this timecode
-            if start - 0.001 <= time < end:
-                return seg_id
-        return -1
+    # def getSegmentAtTime(self, time: float) -> int:
+    #     """Return the ID of any segment at a given position, or -1 if none is present"""
+    #     log.debug(f"getSegmentAtTime({time=})")
+    #     for seg_id, (start, end) in self.getSortedSegments():
+    #         # Give precedence to the segment that starts at this timecode
+    #         # rather than the one that ends at this timecode
+    #         if start - 0.001 <= time < end:
+    #             return seg_id
+    #     return -1
 
 
     def getSegmentAtPixelPosition(self, position: QPointF, vertical=True) -> Optional[Tuple[SegmentId, SegmentSide]]:
@@ -670,7 +680,7 @@ class WaveformWidget(QWidget):
             return None
 
         t = self.t_left + position.x() / self.ppsec
-        for id, (start, end) in self.segments.items():
+        for id, (start, end) in self.document.segments.items():
             if start <= t <= end:
                 return (id, SegmentSide.LEFT if (t-start) < (end-t) else SegmentSide.RIGHT)
         return None
@@ -684,12 +694,12 @@ class WaveformWidget(QWidget):
         return False
 
 
-    def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
-        """Return the list of (SegmentId, Segment), sorted by start time"""
-        if self.must_sort:
-            self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
-            self.must_sort = False
-        return self._sorted_segments
+    # def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
+    #     """Return the list of (SegmentId, Segment), sorted by start time"""
+    #     if self.must_sort:
+    #         self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
+    #         self.must_sort = False
+    #     return self._sorted_segments
 
 
     def setSelecting(self, checked: bool):
@@ -736,6 +746,7 @@ class WaveformWidget(QWidget):
         if self.resizing_handle != None:
             self.undo_stack.push(
                 ResizeSegmentCommand(
+                    self.document,
                     self,
                     self.active_segment_id,
                     self.resizing_segment[0],
@@ -754,12 +765,12 @@ class WaveformWidget(QWidget):
                 the timecode is already quantized according to snapping settings
             handle (Handle): which handle is being moved (LEFT, RIGHT, MIDDLE)
         """
-        current_segment = self.segments[self.active_segment_id]
+        current_segment = self.document.segments[self.active_segment_id]
 
         left_boundary = 0.0
         right_boundary = self.audio_len
 
-        sorted_segments = self.getSortedSegments()
+        sorted_segments = self.document.getSortedSegments()
         for _, (start, end) in sorted_segments:
             if end <= current_segment[0]:
                 left_boundary = end
@@ -875,10 +886,10 @@ class WaveformWidget(QWidget):
             # Create a new segment from selection
             self.new_utterance_from_selection.emit()
 
-        elif event.key() == Qt.Key.Key_J and len(self.active_segments) > 1:
-            # Join multiple segments
-            segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])
-            self.join_utterances.emit(segments_id)
+        # elif event.key() == Qt.Key.Key_J and len(self.active_segments) > 1:
+        #     # Join multiple segments
+        #     segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])
+        #     self.join_utterances.emit(segments_id)
 
         elif event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace) and self.active_segments:
             # Delete segment(s)
@@ -899,16 +910,36 @@ class WaveformWidget(QWidget):
         self.click_pos = event.position()
 
         if event.button() == Qt.MouseButton.LeftButton:
-            if self.is_selecting and self.anchor == -1:
-                # Start selection
-                time_position = self.t_left + self.click_pos.x() / self.ppsec
-                if self.snapping and self.fps > 0:
-                    time_position = round(time_position * self.fps) / self.fps
-                self.anchor = time_position
+            if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+                # Check if we should open context menu based on position
+                segmentid_and_side = self.getSegmentAtPixelPosition(self.click_pos)
+                if segmentid_and_side is None:
+                    self._must_open_context_menu = False
+                elif self.isSelectionAtPosition(self.click_pos):
+                    self._must_open_context_menu = True
+                else:
+                    seg_id, _ = segmentid_and_side
+                    if seg_id in self.active_segments:
+                        self._must_open_context_menu = True
+                    else:
+                        self._must_open_context_menu = False
+                
+                # Open context menu directly
+                if self._must_open_context_menu:
+                    self.showContextMenu(event.globalPosition().toPoint())
+                    self._must_open_context_menu = False
                 return
-            elif not any(self.handle_state):
-                # Set "moving waveform" cursor
-                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            else:
+                if self.is_selecting and self.anchor == -1:
+                    # Start selection
+                    time_position = self.t_left + self.click_pos.x() / self.ppsec
+                    if self.snapping and self.fps > 0:
+                        time_position = round(time_position * self.fps) / self.fps
+                    self.anchor = time_position
+                    return
+                elif not any(self.handle_state):
+                    # Set "moving waveform" cursor
+                    self.setCursor(Qt.CursorShape.ClosedHandCursor)
 
         if event.button() == Qt.MouseButton.RightButton:
             # Show contextMenu only if right clicking on active segment or selection
@@ -916,13 +947,19 @@ class WaveformWidget(QWidget):
             if segmentid_and_side is None:
                 self._must_open_context_menu = False
             elif self.isSelectionAtPosition(self.click_pos):
-                    self._must_open_context_menu = True
+                self._must_open_context_menu = True
             else:
                 seg_id, _ = segmentid_and_side
                 if seg_id in self.active_segments:
                     self._must_open_context_menu = True
                 else:
                     self._must_open_context_menu = False
+            
+            # Open context menu directly
+            if self._must_open_context_menu:
+                self.showContextMenu(event.globalPosition().toPoint())
+                self._must_open_context_menu = False
+                return
 
             # Move the playhead
             # When manually moving the playhead from the waveform,
@@ -940,7 +977,9 @@ class WaveformWidget(QWidget):
             elif self.handle_state[2]: self.resizing_handle = Handle.RIGHT
 
             if self.active_segment_id >= 0:
-                self.resizing_segment = self.segments[self.active_segment_id][:]
+                segment = self.document.getSegment(self.active_segment_id)
+                print(f"{self.active_segment_id=} {segment=}")
+                self.resizing_segment = segment[:]
                 block = self.parent.text_widget.getBlockById(self.active_segment_id)
                 self.resizing_textlen = self.parent.text_widget.getSentenceLength(block)
                 seg_len = self.resizing_segment[1] - self.resizing_segment[0]
@@ -1000,7 +1039,7 @@ class WaveformWidget(QWidget):
         if active_id is None:
             return super().mouseDoubleClickEvent(event)
             
-        segment = self.segments[active_id]
+        segment = self.document.getSegment(active_id)
         if segment is None:
             return super().mouseDoubleClickEvent(event)
         
@@ -1036,7 +1075,7 @@ class WaveformWidget(QWidget):
                 if self.selection_is_active and self._selection:
                     start, end = self._selection
                 else:
-                    start, end = self.segments[self.active_segment_id]
+                    start, end = self.document.segments[self.active_segment_id]
                 if (
                     event.y() >= self.inactive_top
                     and event.y() < self.inactive_top + self.inactive_height
@@ -1152,11 +1191,22 @@ class WaveformWidget(QWidget):
             self.ppsec_goal = self.ppsec
 
 
-    def contextMenuEvent(self, event):
-        if not self._must_open_context_menu:
-            return
-        self._must_open_context_menu = False
+    def shouldOpenContextMenu(self, click_pos) -> bool:
+        segmentid_and_side = self.getSegmentAtPixelPosition(click_pos)
+        if segmentid_and_side is None:
+            return False
+        elif self.isSelectionAtPosition(self.click_pos):
+            return True
+        else:
+            seg_id, _ = segmentid_and_side
+            if seg_id in self.active_segments:
+                return True
+            else:
+                return False
 
+
+    def showContextMenu(self, pos: QPoint):
+        """Show the context menu at the given global position"""
         context = QMenu(self)
 
         if self.selection_is_active:
@@ -1188,11 +1238,12 @@ class WaveformWidget(QWidget):
             delete_action.triggered.connect(lambda : self.delete_utterances.emit(self.active_segments))
             context.addAction(delete_action)
 
-            delete_whole_action = QAction(f"Delete segment{'s' if multi else ''} (keep sentence{'s' if multi else ''})", self)
+            tr_keep_sentence = self.tr("keep sentences") if multi else self.tr("keep sentence")
+            delete_whole_action = QAction(f"{tr_delete_segment} ({tr_keep_sentence})", self)
             delete_whole_action.triggered.connect(lambda : self.delete_segments.emit(self.active_segments))
             context.addAction(delete_whole_action)
 
-        context.exec(event.globalPos())
+        context.exec(pos)
 
 
     def toggleSnapping(self, checked:bool):
@@ -1288,7 +1339,7 @@ class WaveformWidget(QWidget):
 
     def _drawSegments(self, t_right: float):
         # Draw inactive segments
-        for id, (start, end) in self.segments.items():
+        for id, (start, end) in self.document.segments.items():
             if id in self.active_segments:
                 continue
             if end <= self.t_left:
@@ -1348,14 +1399,14 @@ class WaveformWidget(QWidget):
                 
         # Draw selected segment
         for seg_id in self.active_segments:
-            if seg_id not in self.segments:
+            if seg_id not in self.document.segments:
                 continue
 
             # Check if segment is being resized
             if self.resizing_handle != None:
                 start, end = self.resizing_segment
             else:
-                start, end = self.segments[seg_id]
+                start, end = self.document.segments[seg_id]
             
             # Check if segment is in viewport
             if end > self.t_left or start < t_right:
@@ -1395,14 +1446,14 @@ class WaveformWidget(QWidget):
 
 
     def _drawSnappingMarkers(self):
-        start, end = self.segments[self.active_segment_id]
+        start, end = self.document.segments[self.active_segment_id]
         current_dur = end - start
         markers = []
 
         # Check next segment boundary
         next_segment_id = self.getNextSegmentId(self.active_segment_id)
         if next_segment_id != -1:
-            next_segment_boundary = self.segments[next_segment_id][0]
+            next_segment_boundary = self.document.segments[next_segment_id][0]
             next_segment_boundary -= int(self._min_interval) / self.fps
         else:
             next_segment_boundary = self.audio_len

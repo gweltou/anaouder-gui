@@ -6,11 +6,16 @@ Handles all media playback operations
 
 import logging
 from typing import Optional, Tuple
+
 from PySide6.QtCore import QObject, Signal, Slot, QUrl
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 from src.interfaces import Segment, SegmentId
 from src.cache_system import cache
+
+# To trace the segmentation error when playing problematic segments
+import faulthandler
+faulthandler.enable()
 
 
 
@@ -114,7 +119,7 @@ class MediaPlayerController(QObject):
         self.state.reset()
     
 
-    def getMetaData(self) -> dict:
+    def getMediaMetadata(self) -> dict:
         """Get metadata of the currently loaded media"""
         return self.media_metadata  
 
@@ -126,6 +131,7 @@ class MediaPlayerController(QObject):
         Returns:
             True if playback started, False otherwise
         """
+        print("media_controller play")
         if not self.hasMedia():
             self.log.warning("Cannot play: no media loaded")
             return False

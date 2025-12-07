@@ -58,22 +58,25 @@ from src.text_widget import (
     TextEditWidget, Highlighter,
     LINE_BREAK
 )
+from src.splitter import CustomSplitter
 from src.video_widget import VideoWidget
+from src.document import DocumentController, BlockType
 from src.transcriber import TranscriptionService, RecognizerWorker
 from src.scene_detector import SceneDetectWorker
 from src.commands import (
     ReplaceTextCommand, InsertBlockCommand, MoveTextCursor,
     AddSegmentCommand, DeleteSegmentsCommand,
-    DeleteUtterancesCommand, AlignWithSelectionCommand,
+    DeleteUtterancesCommand,
     JoinUtterancesCommand, CreateNewUtteranceCommand,
-    AlignWithSelectionCommand
+    AlignWithSelectionCommand, AlignBlockWithSegment
 )
 from src.parameters_dialog import ParametersDialog
 from src.export import export, exportSignals
-from src.levenshtein_aligner import (
-    smart_split_text, smart_split_time,
+from aligner import (
+    smart_split_text, smart_split_time, align_text_with_vosk_tokens,
     SmartSplitError
 )
+from src.auto_segment import auto_segment
 from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
     app_settings, shortcuts,
@@ -145,7 +148,6 @@ class MainWindow(QMainWindow):
         self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
         # self.media_controller.playback_started.connect(self.onPlaybackStarted)
         # self.media_controller.playback_stopped.connect(self.onPlaybackStopped)
-        # self.media_controller.subtitle_changed.connect(self.updateSubtitle)
         self.media_controller.media_duration_changed.connect(self.onMediaDurationChanged)
         # Connect to video widget
         self.media_controller.connectVideoWidget(self.video_widget)
@@ -168,9 +170,13 @@ class MainWindow(QMainWindow):
         self.autosave_timer.timeout.connect(self.autoSave)
         self.onSetAutosave(app_settings.value("autosave/checked", True, type=bool))
 
-        self.text_widget = TextEditWidget(self)
+        self.document = DocumentController()
+        self.text_widget = TextEditWidget(self, self.document)
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
-        self.waveform = WaveformWidget(self)
+        self.document.setTextWidget(self.text_widget)
+        self.waveform = WaveformWidget(self, self.document)
+        self.document.setWaveformWidget(self.waveform)
+
         
         QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
         self.updateThemeColors()
@@ -205,6 +211,7 @@ class MainWindow(QMainWindow):
         self.text_widget.split_utterance.connect(self.splitFromText)
         self.text_widget.auto_transcribe.connect(self.transcribe_button.toggle)
         self.text_widget.align_with_selection.connect(self.alignWithSelection)
+        self.text_widget.request_auto_align.connect(self.autoAlignSelectedBlocks)
 
         # Waveform Widget Signal connections
         self.waveform.selection_ended.connect(lambda: self.selection_button.setChecked(False))
@@ -252,18 +259,54 @@ class MainWindow(QMainWindow):
         self.text_video_splitter.addWidget(self.text_widget)
         self.text_video_splitter.addWidget(self.video_widget)
         self.text_video_splitter.setSizes([1, 1])
+        self.text_video_splitter.setStyleSheet("""
+            QSplitter::handle:hover {
+                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                stop:0 #00ffffff, stop:0.5 #fff0b020, stop:1 #00ffffff);
+                border-radius: 2px;
+            }
+            QSplitter::handle:pressed {
+                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                stop:0 #00ffffff, stop:0.3 #fff0b020, stop:0.5 #ffffffff, stop:0.7 #fff0b020, stop:1 #00ffffff);
+                border-radius: 2px
+            }
+        """)
         top_layout.addWidget(self.text_video_splitter)
-        
-        # Media toolbar and transport
-        top_layout.addLayout(self._createMediaToolbarLayout())
-        
-        # Waveform
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.setHandleWidth(5)
+
         self.top_widget = QWidget()
         self.top_widget.setLayout(top_layout)
+
+        # Media toolbar and transport
+        bottom_layout = QVBoxLayout()
+        bottom_layout.setSpacing(0)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+
+        bottom_layout.addLayout(self._createMediaToolbarLayout())
+
+        # Waveform
+        bottom_layout.addWidget(self.waveform)
+
+        self.bottom_widget = QWidget()
+        self.bottom_widget.setLayout(bottom_layout)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setHandleWidth(5)
+
+        splitter.setStyleSheet("""
+            QSplitter::handle:hover {
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #00ffffff, stop:0.5 #fff0b020, stop:1 #00ffffff);
+                border-radius: 2px;
+            }
+            QSplitter::handle:pressed {
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #00ffffff, stop:0.3 #fff0b020, stop:0.5 #ffffffff, stop:0.7 #fff0b020, stop:1 #00ffffff);
+                border-radius: 2px
+            }
+        """)
+
         splitter.addWidget(self.top_widget)
-        splitter.addWidget(self.waveform)        
+        splitter.addWidget(self.bottom_widget)        
         splitter.setSizes([400, 140])
         
         self.setCentralWidget(splitter)
@@ -366,7 +409,7 @@ class MainWindow(QMainWindow):
         ## Auto Segment
         auto_segment_action = QAction(self.tr("Auto &Segment"), self)
         auto_segment_action.setStatusTip(self.tr("Find segments based on sound activity"))
-        auto_segment_action.triggered.connect(self.autoSegment)
+        auto_segment_action.triggered.connect(self.onAutoSegment)
         operation_menu.addAction(auto_segment_action)
         ## Adapt to subtitle
         adapt_to_subtitle_action = QAction(self.tr("&Adapt to subtitles"), self)
@@ -791,10 +834,13 @@ class MainWindow(QMainWindow):
 
 
     def saveFile(self) -> bool:
+        # if self.filepath and self.filepath.suffix == ".ali":
+        print(f"{self.filepath=}")
         if self.filepath and self.filepath.suffix == ".ali":
             return self._saveFile(str(self.filepath))
         else:
-            return self.saveFileAs()
+            path = self.filepath.with_suffix(".ali") if self.filepath else Path.home()
+            return self.saveFileAs(str(path))
 
 
     def _get_default_save_location(self) -> tuple[str, str]:
@@ -810,13 +856,15 @@ class MainWindow(QMainWindow):
         return str(default_dir), "nevez.ali"
 
 
-    def saveFileAs(self) -> bool:
+    def saveFileAs(self, filepath: Optional[Path] = None) -> bool:
         directory, default_name = self._get_default_save_location()
         
+        path = filepath or Path(directory) / default_name
+
         filepath, _ = QFileDialog.getSaveFileName(
             self,
             strings.TR_SAVE_FILE,
-            str(Path(directory) / default_name),
+            str(path),
             strings.TR_ALI_FILES + " (*.ali)"
         )
         
@@ -871,7 +919,7 @@ class MainWindow(QMainWindow):
 
             segment = None
             if utt_id != -1:
-                segment = self.waveform.getSegment(utt_id)
+                segment = self.document.getSegment(utt_id)
 
             blocks_data.append((text, segment))
             block = block.next()
@@ -916,7 +964,11 @@ class MainWindow(QMainWindow):
 
 
     def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]:
-        dir = app_settings.value("main/last_opened_folder", "", type=str)
+        if self.filepath:
+            dir = str(self.filepath.parent)
+        else:
+            dir = app_settings.value("main/last_opened_folder", "", type=str)
+
         filepath, _ = QFileDialog.getOpenFileName(self, title, dir, filter)
         if not filepath:
             return None
@@ -958,10 +1010,11 @@ class MainWindow(QMainWindow):
             self.updateWindowTitle()
             return
         
-        if ext == ".ali":
+        elif ext == ".ali":
+            self.filepath = filepath # We need it here because loadAliFile opens a dialog
             self.loadAliFile(filepath)
 
-        if ext in (".seg", ".split"):
+        elif ext in (".seg", ".split"):
             data = self.file_manager.read_split_file(filepath)
             self.loadDocumentData(data["document"])
 
@@ -969,7 +1022,7 @@ class MainWindow(QMainWindow):
             if media_path and os.path.exists(media_path) :
                 self.loadMediaFile(media_path)
         
-        if ext == ".srt":
+        elif ext == ".srt":
             self.log.debug("Opening an SRT file...")
             data = self.file_manager.read_srt_file(str(filepath), find_media=True)
             self.loadDocumentData(data["document"])
@@ -977,6 +1030,10 @@ class MainWindow(QMainWindow):
             media_path = data.get("media-path", None)
             if media_path and os.path.exists(media_path) :
                 self.loadMediaFile(media_path)
+        else:
+            print(f"Bad file type: {filepath}")
+        
+        self.filepath = filepath
 
         doc_metadata = cache.get_doc_metadata(str(filepath))
         if "video_open" in doc_metadata:
@@ -1025,7 +1082,6 @@ class MainWindow(QMainWindow):
         
         self.loadDocumentData(data["document"])
         self.addRecentFile(str(filepath))
-        self.filepath = filepath
 
         media_path = data.get("media-path", None)
         if media_path and backup_to_load:
@@ -1128,7 +1184,7 @@ class MainWindow(QMainWindow):
 
     def loadDocumentData(self, data: List[Tuple[str, Optional[Segment]]]) -> None:
         """
-        Load a document to the text widget
+        Load a document into the text widget and waveform.
         
         Args:
             data (list): List of document blocks (text, Segment)
@@ -1137,12 +1193,17 @@ class MainWindow(QMainWindow):
         self.undo_stack.clear()
         self.last_saved_index = 0
 
+        was_blocked = self.text_widget.document().blockSignals(True)
         self.text_widget.document().clear()
+        self.document.clearSegments()
 
         for text, segment in data:
-            segment_id = self.waveform.addSegment(segment) if segment else None
+            segment_id = self.document.addSegment(segment) if segment else None
             self.text_widget.appendSentence(text, segment_id)
-            
+        
+        self.text_widget.updateLineNumberAreaWidth()
+        self.text_widget.updateLineNumberArea()
+        self.text_widget.document().blockSignals(was_blocked)
         self.waveform.must_redraw = True
     
 
@@ -1260,7 +1321,9 @@ class MainWindow(QMainWindow):
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
 
         # Parse media metadata
-        media_metadata = self.media_controller.getMetaData()
+        media_metadata = self.media_controller.getMediaMetadata()
+        self.document.setMediaMetadata(media_metadata)
+
         if not "fps" in media_metadata:
             # Check video framerate
             audio_metadata = get_audiofile_info(filepath)
@@ -1321,14 +1384,14 @@ class MainWindow(QMainWindow):
         block = self.text_widget.document().firstBlock()
         while block.isValid():            
             if self.text_widget.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
-                text = block.text()
+                text = self.text_widget.getBlockHtml(block)[0]
 
                 # Remove extra spaces
                 lines = [' '.join(l.split()) for l in text.split(LINE_BREAK)]
                 text = LINE_BREAK.join(lines)
             
                 block_id = self.text_widget.getBlockId(block)
-                segment = self.waveform.getSegment(block_id)
+                segment = self.document.getSegment(block_id)
                 if segment:
                     utterances.append( (text, segment) )
             
@@ -1371,7 +1434,7 @@ class MainWindow(QMainWindow):
             QApplication.instance().switch_language(lang)
 
         old_language = lang.getCurrentLanguage()
-        dialog = ParametersDialog(self, self.media_controller.getMetaData())
+        dialog = ParametersDialog(self, self.media_controller.getMediaMetadata())
 
         # Connect signals
         dialog.signals.subtitles_margin_size_changed.connect(self.text_widget.onMarginSizeChanged)
@@ -1427,7 +1490,7 @@ class MainWindow(QMainWindow):
                 Segment ID and HTML formatted sentence
         """
 
-        seg_id = self.waveform.getSegmentAtTime(time)
+        seg_id = self.document.getSegmentAtTime(time)
         if seg_id < 0:
             return (-1, "")
         
@@ -1444,6 +1507,8 @@ class MainWindow(QMainWindow):
 
     def updateSubtitle(self, position_sec: float) -> None:
         """
+        Called at every player position changed
+
         Args:
             time (float): time position in seconds
         """
@@ -1452,18 +1517,22 @@ class MainWindow(QMainWindow):
             return
         
         seg_id, text = self.getSubtitleAtPosition(position_sec)
-        cached_transcription = self.media_controller.getMetaData().get("transcription", [])
+
+        # from src.document import Document
+        # document = Document(self.text_widget, self.waveform.segments)
+        # cached_transcription = document.getTranscriptionFor(seg_id)
+
         self.video_widget.setCaption(text, position_sec)
 
 
     def onPlayerPositionChanged(self, position_sec: int) -> None:
         """
         Called every time the position is changed in the QMediaPlayer
-        Updates the head position on the waveform and highlight the
-        sentence in the text widget if play head is above an aligned segment
+        Updates the head position on the waveform and highlight the sentence
+        in the text widget if play head is above an aligned segment
         """
         log.debug(f"onPlayerPositionChanged({position_sec=})")
-        if self.video_widget.isVisible() and not self.video_widget.video_is_valid:
+        if self.video_widget.isVisible() and not self.video_widget.video_is_valid: # XXX: is this in the right place ?
             self.video_widget.updateLayout() # fixes the video layout updating
 
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
@@ -1471,7 +1540,7 @@ class MainWindow(QMainWindow):
         # Check if end of current selected segments is reached
         selected_segment_id = self.waveform._dev_getSelectedId()
         if selected_segment_id is not None:
-            segment = self.waveform.getSegment(selected_segment_id)
+            segment = self.document.getSegment(selected_segment_id)
             if segment:
                 start, end = segment
                 # Add a tolerance because of rounding errors from the media player
@@ -1486,11 +1555,11 @@ class MainWindow(QMainWindow):
                         else:
                             self.media_controller.seekTo(start)
                         return
-                    else:
-                        self.media_controller.pause()
-                        self.media_controller.seekTo(end)
-                        self.play_button.setIcon(icons["play"])
-                        return
+                    # else:
+                    #     self.media_controller.pause()
+                    #     self.media_controller.seekTo(end)
+                    #     self.play_button.setIcon(icons["play"])
+                    #     return
             else:
                 # The segment could have been deleted by the user during playback
                 self.media_controller.deselectSegment()
@@ -1509,7 +1578,7 @@ class MainWindow(QMainWindow):
                     return
 
         # Highlight text sentence at this time position
-        if (seg_id := self.waveform.getSegmentAtTime(self.waveform.playhead)) != -1:
+        if (seg_id := self.document.getSegmentAtTime(self.waveform.playhead)) != -1:
             if seg_id != self.text_widget.highlighted_sentence_id:
                 self.text_widget.highlightUtterance(seg_id, scroll_text=False)
         else:
@@ -1522,6 +1591,7 @@ class MainWindow(QMainWindow):
         if not self.media_controller.hasMedia():
             return
 
+        print("playAction")
         # Check time passed since last play button press
         double_press = False
         current_time = time.time()
@@ -1536,7 +1606,7 @@ class MainWindow(QMainWindow):
             # On double press, restart the currently playing segment
             selected_segment_id = self.waveform._dev_getSelectedId()
             if selected_segment_id is not None:
-                segment = self.waveform.getSegment(selected_segment_id)
+                segment = self.document.getSegment(selected_segment_id)
                 if segment:
                     self.media_controller.playSegment(segment, selected_segment_id)
                     return
@@ -1544,7 +1614,7 @@ class MainWindow(QMainWindow):
         if self.media_controller.isPlaying():
             play_next = self.text_cursor_utterance_id
             if (play_next != -1) and (playing_segment_id != play_next):
-                segment = self.waveform.getSegment(self.text_cursor_utterance_id)
+                segment = self.document.getSegment(self.text_cursor_utterance_id)
                 if segment:
                     self.media_controller.playSegment(segment, self.text_cursor_utterance_id)
                 return
@@ -1557,7 +1627,7 @@ class MainWindow(QMainWindow):
         # Start playback
         selected_segment_id = self.waveform._dev_getSelectedId()
         if selected_segment_id is not None:
-            segment = self.waveform.getSegment(selected_segment_id)
+            segment = self.document.getSegment(selected_segment_id)
             if segment:
                 if segment[0] < self.media_controller.getCurrentPosition() < segment[1]:
                     self.media_controller.play()
@@ -1595,7 +1665,7 @@ class MainWindow(QMainWindow):
 
         if next_segment_id != -1:
             self.selectUtterance(next_segment_id)
-            if next_segment := self.waveform.getSegment(next_segment_id):
+            if next_segment := self.document.getSegment(next_segment_id):
                 self.playSegment(next_segment, next_segment_id)
         else:
             self.deselectUtterance()
@@ -1612,7 +1682,7 @@ class MainWindow(QMainWindow):
 
         if prev_segment_id != -1:
             self.selectUtterance(prev_segment_id)
-            if prev_segment := self.waveform.getSegment(prev_segment_id):
+            if prev_segment := self.document.getSegment(prev_segment_id):
                 self.playSegment(prev_segment, prev_segment_id)
         else:
             self.deselectUtterance()
@@ -1627,8 +1697,8 @@ class MainWindow(QMainWindow):
             self.media_controller.seekTo(0.0)
             return
         
-        if (segment := self.waveform.getSegment(segment_id)) != None:
-            first_segment_id = self.waveform.getSortedSegments()[0][0]
+        if (segment := self.document.getSegment(segment_id)) != None:
+            first_segment_id = self.document.getSortedSegments()[0][0]
             self.selectUtterance(first_segment_id)
             self.media_controller.playSegment(segment, segment_id)
 
@@ -1684,7 +1754,7 @@ class MainWindow(QMainWindow):
 
         # Check if the seeked position is inside the currently active segment
         if self.waveform.active_segment_id != -1:
-            segment = self.waveform.getSegment(self.waveform.active_segment_id)
+            segment = self.document.getSegment(self.waveform.active_segment_id)
             if segment:
                 start, end = segment
                 if (position_sec < start) or (position_sec > end):
@@ -1695,7 +1765,7 @@ class MainWindow(QMainWindow):
 
 
     def onMediaDurationChanged(self, duration_sec: float) -> None:
-        media_metadata = self.media_controller.getMetaData()
+        media_metadata = self.media_controller.getMediaMetadata()
         if self.media_path and media_metadata and "duration" not in media_metadata:
             media_metadata["duration"] = duration_sec
             cache.update_media_metadata(self.media_path, media_metadata)
@@ -1718,7 +1788,7 @@ class MainWindow(QMainWindow):
 
 
     def toggleSceneDetect(self, checked) -> None:
-        media_metadata = self.media_controller.getMetaData()
+        media_metadata = self.media_controller.getMediaMetadata()
         if checked and "fps" in media_metadata:
             self.waveform.display_scene_change = True
             if "scenes" in media_metadata and media_metadata["scenes"]:
@@ -1768,11 +1838,7 @@ class MainWindow(QMainWindow):
             self.redo_button.setEnabled(False)
 
 
-    def autoSegment(self) -> None:
-        SEGMENTS_MAXIMUM_LENGTH = 10 # Seconds
-        RATIO_THRESHOLD = 0.05
-
-        log.info("Finding segments...")
+    def onAutoSegment(self) -> None:
         if self.audio_samples is None:
             return
         
@@ -1785,17 +1851,8 @@ class MainWindow(QMainWindow):
             end_frame = int(selection_end * WAVEFORM_SAMPLERATE)
             self.waveform.removeSelection()
 
-        segments = split_to_segments(
-            self.audio_samples[start_frame:end_frame],
-            WAVEFORM_SAMPLERATE,
-            SEGMENTS_MAXIMUM_LENGTH,
-            RATIO_THRESHOLD
-        )
-        segments = [
-            (start+start_frame/WAVEFORM_SAMPLERATE, end+start_frame/WAVEFORM_SAMPLERATE)
-            for start, end in segments
-        ]
-        log.debug("Segments found:", segments)
+        segments = auto_segment(self.audio_samples, start_frame, end_frame)
+
         self.setStatusMessage(self.tr("{n} segments found").format(n=len(segments)))
 
         self.undo_stack.beginMacro("Auto segment")
@@ -1804,7 +1861,7 @@ class MainWindow(QMainWindow):
                 CreateNewUtteranceCommand(
                     self.media_controller,
                     self.text_widget,
-                    self.waveform
+                    self.waveform,
                     [start, end],
                     None
                 )
@@ -1829,19 +1886,19 @@ class MainWindow(QMainWindow):
             while True:
                 seg_id = self.text_widget.getBlockId(block)
                 if seg_id != -1:
-                    if (fps := self.media_controller.getMetaData().get("fps", 0)) > 0:
+                    if (fps := self.media_controller.getMediaMetadata().get("fps", 0)) > 0:
                         # Adjust segment boundaries on frame positions
-                        seg_start, seg_end = self.waveform.getSegment(seg_id)
+                        seg_start, seg_end = self.document.getSegment(seg_id)
                         frame_start = floor(seg_start * fps) / fps
                         frame_end = ceil(seg_end * fps) / fps
                         if (prev_id := self.waveform.getPrevSegmentId(seg_id)) != -1:
-                            prev_end = self.waveform.getSegment(prev_id)[1]
+                            prev_end = self.document.getSegment(prev_id)[1]
                             if frame_start < prev_end:
                                 # The previous frame position overlaps the previous segment,
                                 # choose next frame
                                 frame_start = ceil(seg_start * fps) / fps
                         if (next_id := self.waveform.getNextSegmentId(seg_id)) != -1:
-                            next_start = self.waveform.getSegment(next_id)[0]
+                            next_start = self.document.getSegment(next_id)[0]
                             right_boundary = floor(next_start * fps) / fps
                             right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL, type=int) / fps
                             if frame_end > right_boundary:
@@ -1914,7 +1971,7 @@ class MainWindow(QMainWindow):
                 self.waveform.must_redraw = True
             
                 # Update current subtitles, if needed
-                if segment := self.waveform.getSegment(segment_id):
+                if segment := self.document.getSegment(segment_id):
                     start, end = segment
                     if start <= self.waveform.playhead <= end:
                         self.updateSubtitle(self.waveform.playhead)
@@ -1953,7 +2010,7 @@ class MainWindow(QMainWindow):
         if self.waveform.selection_is_active:
             # Check if selection doesn't overlap other existing segments
             selection_start, selection_end = self.waveform.getSelection()
-            for _, (seg_start, seg_end) in self.waveform.getSortedSegments():
+            for _, (seg_start, seg_end) in self.document.getSortedSegments():
                 if (
                     (seg_start < selection_start < seg_end)
                     or (seg_start < selection_end < seg_end)
@@ -1980,7 +2037,7 @@ class MainWindow(QMainWindow):
         segment: Segment,
         segment_id: SegmentId,
     ) -> None:
-        if segment_id not in self.waveform.segments:
+        if segment_id not in self.document.segments:
             # Create segment as a undoable action
             self.undo_stack.push(
                 CreateNewUtteranceCommand(
@@ -2011,7 +2068,7 @@ class MainWindow(QMainWindow):
                 segment_start = round( round(segment_start * self.waveform.fps) / self.waveform.fps , 3)
                 segment_end = round( round(segment_end * self.waveform.fps) / self.waveform.fps , 3)
 
-            media_metadata = self.media_controller.getMetaData()
+            media_metadata = self.media_controller.getMediaMetadata()
             old_progress = media_metadata.get("transcription_progress", 0.0)
             media_metadata["transcription_progress"] = max(old_progress, segment_end)
 
@@ -2019,7 +2076,7 @@ class MainWindow(QMainWindow):
                 return
 
             # This action should not be added to the undo stack
-            segment_id = self.waveform.addSegment([segment_start, segment_end])
+            segment_id = self.document.addSegment([segment_start, segment_end])
             self.text_widget.insertSentenceWithId(text, segment_id, with_cursor=False)
             self.waveform.must_redraw = True
 
@@ -2053,7 +2110,7 @@ class MainWindow(QMainWindow):
         ]
 
         # Update backend transcription with new tokens
-        media_metadata = self.media_controller.getMetaData()
+        media_metadata = self.media_controller.getMediaMetadata()
         old_tokens = media_metadata.get("transcription", [])
         updated_tokens = []
         segment_start = tokens[0][0]
@@ -2085,7 +2142,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def onRecognizerEOF(self) -> None:
-        media_metadata = self.media_controller.getMetaData()
+        media_metadata = self.media_controller.getMediaMetadata()
         media_metadata["transcription_completed"] = True
         if self.media_path != None:
             cache.update_media_metadata(self.media_path, media_metadata)
@@ -2105,25 +2162,25 @@ class MainWindow(QMainWindow):
 
         if self.waveform.selection_is_active:
             # Transcribe current audio selection
-            seg_id = self.waveform.getNewId()
+            seg_id = self.document.getNewSegmentId()
             segments = [(seg_id, *self.waveform.getSelection())]
             self.recognizer.transcribeSegments(self.media_path, segments)
             self.waveform.removeSelection()
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
-            segments = [(seg_id, *self.waveform.segments[seg_id]) for seg_id in self.waveform.active_segments]
+            segments = [(seg_id, *self.document.segments[seg_id]) for seg_id in self.waveform.active_segments]
             self.recognizer.transcribeSegments(self.media_path, segments)
         else:
             # Transcribe whole audio file
-            transcription_progress = self.media_controller.getMetaData().get("transcription_progress", 0.0)
-            transcription_completed = self.media_controller.getMetaData().get("transcription_completed", False)
-            if not self.waveform.segments and transcription_completed:
+            transcription_progress = self.media_controller.getMediaMetadata().get("transcription_progress", 0.0)
+            transcription_completed = self.media_controller.getMediaMetadata().get("transcription_completed", False)
+            if not self.document.segments and transcription_completed:
                 # Reset transcription if there is no segment
                 transcription_progress = 0.0
                 self.hidden_transcription = False
             elif (
-                not self.waveform.segments
-                or transcription_progress >= self.waveform.getSortedSegments()[-1][1][1]
+                not self.document.segments
+                or transcription_progress >= self.document.getSortedSegments()[-1][1][1]
             ):
                 # And create utterances
                 self.hidden_transcription = False
@@ -2146,7 +2203,7 @@ class MainWindow(QMainWindow):
         if block is None:
             return
 
-        segment = self.waveform.getSegment(segment_id)
+        segment = self.document.getSegment(segment_id)
         if not segment:
             return
         
@@ -2159,7 +2216,7 @@ class MainWindow(QMainWindow):
         right_seg = None
 
         # Check if we can "smart split"
-        cached_transcription = self.media_controller.getMetaData().get("transcription", [])
+        cached_transcription = self.media_controller.getMediaMetadata().get("transcription", [])
         if cached_transcription:
             if seg_end <= cached_transcription[-1][1]:
                 tr_len = len(cached_transcription)
@@ -2200,7 +2257,7 @@ class MainWindow(QMainWindow):
         if block is None:
             return
         
-        segment = self.waveform.getSegment(segment_id)
+        segment = self.document.getSegment(segment_id)
         if not segment:
             return
         
@@ -2213,7 +2270,7 @@ class MainWindow(QMainWindow):
         right_text = None
 
         # Check if we can "smart split"
-        cached_transcription = self.media_controller.getMetaData().get("transcription", [])
+        cached_transcription = self.media_controller.getMediaMetadata().get("transcription", [])
         if cached_transcription:
             if seg_end <= cached_transcription[-1][1]:
                 tr_len = len(cached_transcription)
@@ -2247,12 +2304,12 @@ class MainWindow(QMainWindow):
             left_text: str, right_text: str,
             left_seg: list, right_seg: list
         ) -> None:
-        left_id = self.waveform.getNewId()
-        right_id = self.waveform.getNewId()
+        left_id = self.document.getNewSegmentId()
+        right_id = self.document.getNewSegmentId()
         
         self.undo_stack.beginMacro("split utterance")
-        self.undo_stack.push(DeleteUtterancesCommand(self.text_widget, self.waveform, [seg_id]))
-        self.undo_stack.push(AddSegmentCommand(self.waveform, left_seg, left_id))
+        self.undo_stack.push(DeleteUtterancesCommand(self.document, self.text_widget, self.waveform, [seg_id]))
+        self.undo_stack.push(AddSegmentCommand(self.document, self.waveform, left_seg, left_id))
         print(f"{self.text_widget.textCursor().position()=}")
         self.undo_stack.push(
             InsertBlockCommand(
@@ -2263,7 +2320,7 @@ class MainWindow(QMainWindow):
                 after=True
             )
         )
-        self.undo_stack.push(AddSegmentCommand(self.waveform, right_seg, right_id))
+        self.undo_stack.push(AddSegmentCommand(self.document, self.waveform, right_seg, right_id))
         self.undo_stack.push(
             InsertBlockCommand(
                 self.text_widget,
@@ -2291,13 +2348,141 @@ class MainWindow(QMainWindow):
         Join many segments in one.
         Keep the segment ID of the earliest segment among the selected ones.
         """
-        self.undo_stack.push(JoinUtterancesCommand(self.text_widget, self.waveform, segments_id))
+        self.undo_stack.push(JoinUtterancesCommand(self.document, self.text_widget, self.waveform, segments_id))
 
 
     def alignWithSelection(self, block:QTextBlock) -> None:
         self.undo_stack.push(AlignWithSelectionCommand(self, self.text_widget, self.waveform, block))
         if self.selection_button.isChecked():
             self.selection_button.setChecked(False)
+
+
+    def autoAlignCurrentUtterance(self) -> None:
+        print("autoAlignCurrentUtterance")
+        if self.document is None:
+            return
+        
+        cursor = self.text_widget.textCursor()
+        block = cursor.block()
+        if self.text_widget.getBlockType(block) != TextEditWidget.BlockType.NOT_ALIGNED:
+            return
+        
+        text = block.text()
+        segments = self.autoAlignSentences([text], range=None)
+        for segment in segments:
+            self.undo_stack.push(AlignBlockWithSegment(self.document, block, segment))
+
+
+    def autoAlignSelectedBlocks(self) -> None:
+        print("autoAlignSelectedBlocks")
+        if self.document is None:
+            return
+        
+        start_range = 0.0
+        end_range = self.media_controller.getDuration()
+
+        cursor = self.text_widget.textCursor()
+
+        # Stop at aligned blocks
+        to_align: List[QTextBlock] = []
+        if cursor.hasSelection():
+            block = self.document.findBlock(cursor.selectionStart())
+            end_block = self.document.findBlock(cursor.selectionEnd())
+            assert block.blockNumber() <= end_block.blockNumber()
+
+            while block.isValid() and block is not end_block:
+                block_type = self.document.getBlockType(block)
+                if block_type is BlockType.NOT_ALIGNED:
+                    to_align.append(block)
+                elif block_type == BlockType.ALIGNED:
+                    break
+                block = block.next()
+        else:
+            block = cursor.block()
+            block_type = self.document.getBlockType(block)
+            if block_type is BlockType.NOT_ALIGNED:
+                to_align.append(block)
+        
+        if not to_align:
+            return
+
+        # Find previous aligned block
+        block = to_align[0].previous()
+        while block.isValid():
+            block_type = self.document.getBlockType(block)
+            if block_type is BlockType.ALIGNED:
+                block_id = self.document.getBlockId(block)
+                block_segment = self.document.getSegment(block_id)
+                if block_segment is not None:
+                    start_range = block_segment[1]
+                    break
+            block = block.previous()
+        
+        # Find next aligned block
+        block = to_align[-1].next()
+        while block.isValid():
+            block_type = self.document.getBlockType(block)
+            if block_type is BlockType.ALIGNED:
+                block_id = self.document.getBlockId(block)
+                block_segment = self.document.getSegment(block_id)
+                if block_segment is not None:
+                    end_range = block_segment[0]
+                    break
+            block = block.next()
+        
+        texts = [ b.text() for b in to_align ]
+        range = [start_range, end_range]
+        segments = self.autoAlignSentences(texts, range)
+        print(segments)
+        for i, segment in enumerate(segments):
+            block = to_align[i]
+            self.undo_stack.push(AlignBlockWithSegment(self.document, block, segment))
+    
+
+    def autoAlignSentences(self, sentences: List[str], range: Optional[Segment] = None) -> List[Segment]:
+        text = "|| " + " || ".join(sentences) + " || "
+        
+        if range and self.document is not None:
+            tokens = self.document.getTranscriptionForSegment(range[0], range[1])
+        else:
+            tokens = self.media_controller.getMediaMetadata().get("transcription", [])
+
+        alignment = align_text_with_vosk_tokens(text, tokens)
+        # for al in alignment:
+        #     print(al)
+
+        # Separating into segments
+        segments = []
+        segment_tokens = []
+        for al in alignment:
+            if al[0] is None:
+                continue
+            if al[0] == "||":
+                print("||")
+                if segment_tokens:
+                    print(segment_tokens[0])
+                    print(segment_tokens[-1])
+                    first_idx = 0
+                    last_idx = len(segment_tokens) - 1
+                    first_token = segment_tokens[first_idx][1]
+                    last_token = segment_tokens[last_idx][1]
+                    # Skip first tokens if they align to None
+                    while (first_token is None) and (first_idx < last_idx):
+                        first_idx += 1
+                        first_token = segment_tokens[first_idx][1]
+                    # Skip last tokens if they align to None
+                    while (last_token is None) and (first_idx < last_idx):
+                        last_idx -= 1
+                        last_token = segment_tokens[last_idx][1]
+
+                    segment_start = first_token[1]
+                    segment_end = last_token[2]
+                    segments.append([segment_start, segment_end])
+                    segment_tokens.clear()
+                continue
+            segment_tokens.append(al)
+        print(segments)
+        return segments
 
 
     def deleteUtterances(self, segments_id: List[SegmentId]) -> None:
@@ -2316,7 +2501,7 @@ class MainWindow(QMainWindow):
 
 
     def selectAll(self) -> None:
-        selection = [ id for id, _ in self.waveform.getSortedSegments() ]
+        selection = [ id for id, _ in self.document.getSortedSegments() ]
         self.waveform.active_segments = selection
         self.waveform.active_segment_id = selection[-1] if selection else -1
         self.waveform.must_redraw = True
@@ -2380,7 +2565,11 @@ class MainWindow(QMainWindow):
                 elif ext == ".srt":
                     self.openFile(filepath, keep_media=True)
                 elif ext in MEDIA_FORMATS:
-                    self.openFile(filepath)
+                    self.loadMediaFile(str(filepath))
+                    print(f"{self.filepath=}")
+                    if self.filepath is None:
+                        self.filepath = filepath
+                    print(f"{self.filepath=}")
                 else:
                     print(f"Wrong file type {filepath}")
                     return
@@ -2443,7 +2632,7 @@ class MainWindow(QMainWindow):
             
             # Save media cache
             if self.media_path:
-                cache.update_media_metadata(self.media_path, self.media_controller.getMetaData())
+                cache.update_media_metadata(self.media_path, self.media_controller.getMediaMetadata())
 
             # Save window geometry and state
             app_settings.setValue("main/geometry", self.saveGeometry())
@@ -2457,7 +2646,7 @@ class MainWindow(QMainWindow):
 
     def updateSegmentInfo(self, segment_id: SegmentId) -> None:
         """Rehighlight sentence in text widget and update status bar info"""
-        segment = self.waveform.getSegment(segment_id)
+        segment = self.document.getSegment(segment_id)
         if not segment:
             self.statusBar().clearMessage()
             return
@@ -2497,7 +2686,7 @@ class MainWindow(QMainWindow):
         ]
 
         duration = end - start
-        fps = self.media_controller.getMetaData().get("fps")
+        fps = self.media_controller.getMediaMetadata().get("fps")
         duration_string = self.tr("dur: {}s").format(f"{duration:.3f}")
         # Highlight value if segment is too short or too long
         if fps and fps > 0 and (
@@ -2542,7 +2731,7 @@ class MainWindow(QMainWindow):
 
         num_chars = self.text_widget.getSentenceLength(block)
 
-        segment = self.waveform.getSegment(segment_id)
+        segment = self.document.getSegment(segment_id)
         if not segment:
             return
         

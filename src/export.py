@@ -163,6 +163,7 @@ class ExportDialog(QDialog):
         )
         
         if file_path:
+            file_path = os.path.abspath(file_path)
             self.file_path_input.setText(file_path)
 
 
