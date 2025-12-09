@@ -4,8 +4,8 @@ from enum import Enum
 
 from ostilhou.asr import extract_metadata
 
-from PySide6.QtGui import QTextBlock
-
+from PySide6.QtGui import QTextBlock, QUndoStack
+from PySide6.QtCore import QObject
 from src.interfaces import (
     Segment, SegmentId,
     WaveformInterface, TextDocumentInterface
@@ -15,6 +15,7 @@ from src.utils import (
     LINE_BREAK
 )
 from src.commands import ResizeSegmentCommand
+from src.aligner import align_text_with_vosk_tokens
 
 
 log = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ class BlockType(Enum):
 
 
 
-class DocumentController:
+class DocumentController(QObject):
 
     def __init__(self) -> None:
         self.media_metadata = {}
@@ -41,6 +42,7 @@ class DocumentController:
 
         self.must_sort = False
         self.id_counter = 0
+        self.undo_stack = QUndoStack()
 
         self.memoized_segment = None # Memoized transcription for one segment
         self.memoized_transcription_tokens = []
@@ -118,7 +120,7 @@ class DocumentController:
         return -1
     
 
-    def getBlockById(self, seg_id: SegmentId) -> Optional[QTextBlock]:
+    def getBlockById(self, segment_id: SegmentId) -> Optional[QTextBlock]:
         if self.text_widget is None:
             return None
         
@@ -126,7 +128,7 @@ class DocumentController:
         block = document.firstBlock()
         while block.isValid():
             if block.userData():
-                if block.userData().data["seg_id"] == seg_id:
+                if block.userData().data["seg_id"] == segment_id:
                     return block
             block = block.next()
         return None
@@ -174,6 +176,7 @@ class DocumentController:
             segment_id = self.getNewSegmentId()
         self.segments[segment_id] = segment
 
+        self.must_sort = True
         self.waveform_widget.must_redraw = True
         return segment_id
         
@@ -187,8 +190,8 @@ class DocumentController:
     def removeSegment(self, segment_id: SegmentId) -> None:
         if segment_id in self.segments:
             del self.segments[segment_id]
-        
-        self.waveform_widget.must_redraw = True
+            self.must_sort = True
+            self.waveform_widget.must_redraw = True
     
 
     def clearSegments(self) -> None:
@@ -196,6 +199,7 @@ class DocumentController:
         self.segments: Dict[SegmentId, Segment] = dict()
         self.waveform_widget.active_segments = []
         self.waveform_widget.active_segment_id = -1
+        self.waveform_widget.must_redraw = True
 
     
     def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
@@ -374,6 +378,61 @@ class DocumentController:
         
         return utterances
 
+
+    def autoAlignSentences(self, sentences: List[str], range: Optional[Segment] = None) -> List[Segment]:
+        text = "|| " + " || ".join(sentences) + " || "
+        
+        if range:
+            tokens = self.getTranscriptionForSegment(range[0], range[1])
+        else:
+            tokens = self.media_metadata.get("transcription", [])
+
+        alignment = align_text_with_vosk_tokens(text, tokens)
+
+        # Separating into segments
+        segments = []
+        segment_tokens = []
+        for al in alignment:
+            if al[0] is None:
+                continue
+            if al[0] == "||":
+                # print("||")
+                if segment_tokens:
+                    # print(segment_tokens[0])
+                    # print(segment_tokens[-1])
+                    first_idx = 0
+                    last_idx = len(segment_tokens) - 1
+                    first_token = segment_tokens[first_idx][1]
+                    last_token = segment_tokens[last_idx][1]
+                    # Skip first tokens if they align to None
+                    while (first_token is None) and (first_idx < last_idx):
+                        first_idx += 1
+                        first_token = segment_tokens[first_idx][1]
+                    # Skip last tokens if they align to None
+                    while (last_token is None) and (first_idx < last_idx):
+                        last_idx -= 1
+                        last_token = segment_tokens[last_idx][1]
+
+                    print(f"{first_token=} {last_token=}")
+                    if not (first_token or last_token):
+                        segments.append(None)
+                        continue
+                    
+                    if first_token:
+                        segment_start = first_token[1]
+                    else:
+                        segment_start = last_token[1]
+                    
+                    if last_token:
+                        segment_end = last_token[2]
+                    else:
+                        segment_end = first_token[2]
+                    
+                    segments.append([segment_start, segment_end])
+                    segment_tokens.clear()
+                continue
+            segment_tokens.append(al)
+        return segments
 
 
 class Block:

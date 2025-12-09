@@ -23,14 +23,22 @@ class DocumentInterface(Protocol):
     segments: Dict[SegmentId, Segment]
     must_sort: bool
 
-    def addSegment(self, segment: Segment, seg_id: Optional[SegmentId] = None) -> SegmentId:
+    def addSegment(self, segment: Segment, segment_id: Optional[SegmentId] = None) -> SegmentId:
         """Add a segment and return its ID"""
+        ...
+    
+    def removeSegment(self, segment_id: SegmentId) -> None:
         ...
     
     def getNewSegmentId(self) -> SegmentId:
         """Get a new unique segment ID"""
         ...
-
+    
+    def getBlockById(self, segment_id: SegmentId) -> Optional[QTextBlock]:
+        ...
+    
+    def setBlockId(self, block: QTextBlock, segment_id: Optional[SegmentId]) -> None:
+        ...
 
 
 class WaveformInterface(Protocol):
@@ -70,7 +78,7 @@ class TextDocumentInterface(Protocol):
     def insertSentenceWithId(self, text: str, segment_id: SegmentId, with_cursor: bool = False) -> None:
         ...
     
-    def setSentenceText(self, text: str, seg_id: SegmentId) -> None:
+    def setSentenceText(self, text: str, segment_id: SegmentId) -> None:
         ...
 
     def deleteSentence(self, seg_id: SegmentId) -> None:

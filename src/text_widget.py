@@ -287,7 +287,7 @@ class TextEditWidget(QTextEdit):
 
         # Disable default undo stack to use our own instead
         self.setUndoRedoEnabled(False)
-        self.undo_stack: QUndoStack = self.main_window.undo_stack
+        self.undo_stack: QUndoStack = self.document_controller.undo_stack
                 
         # Signals
         self.cursorPositionChanged.connect(self.onCursorChanged)
@@ -385,13 +385,13 @@ class TextEditWidget(QTextEdit):
         return -1
 
 
-    def setBlockId(self, block: QTextBlock, seg_id: SegmentId) -> None:
-        log.debug(f"setBlockId({block=}, {seg_id=})")
-        if not block.userData():
-            block.setUserData(MyTextBlockUserData({"seg_id": seg_id}))
-        else:
-            user_data = block.userData().data
-            user_data["seg_id"] = seg_id
+    # def setBlockId(self, block: QTextBlock, seg_id: SegmentId) -> None:
+    #     log.debug(f"setBlockId({block=}, {seg_id=})")
+    #     if not block.userData():
+    #         block.setUserData(MyTextBlockUserData({"seg_id": seg_id}))
+    #     else:
+    #         user_data = block.userData().data
+    #         user_data["seg_id"] = seg_id
 
 
     def getBlockById(self, seg_id: SegmentId) -> Optional[QTextBlock]:
@@ -916,12 +916,17 @@ class TextEditWidget(QTextEdit):
         pos = cursor.position()
         self.undo_stack.beginMacro("Replace text")
         if cursor.hasSelection():
-            self.deleteSelectedText(cursor)
             pos = cursor.selectionStart()
-        paragraphs = clipboard.text().split('\n')
-        for text in paragraphs:
-            # self.undo_stack.push(InsertTextCommand(self, text, pos))
-            self.undo_stack.push(InsertBlockCommand(self, pos, text))
+            self.deleteSelectedText(cursor)
+        if '\n' in clipboard.text():
+            paragraphs = clipboard.text().split('\n')
+            print(f"pasting {paragraphs}")
+            for text in paragraphs:
+                self.undo_stack.push(InsertBlockCommand(self, pos, text, after=True))
+                pos += len(text) + 1
+        else:
+            text = clipboard.text()
+            self.undo_stack.push(InsertTextCommand(self, text, pos))
         self.undo_stack.endMacro()
         self.updateLineNumberAreaWidth()
     

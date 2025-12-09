@@ -1,4 +1,4 @@
-from src.levenshtein_aligner import smart_split_text
+from aligner import smart_split_text
 import src.lang as lang
 
 

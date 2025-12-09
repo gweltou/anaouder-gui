@@ -154,7 +154,7 @@ class AlignWithSelectionCommand(QUndoCommand):
     def __init__(
             self,
             parent,
-            text_widget: TextDocumentInterface,
+            document_controller: DocumentInterface,
             waveform: WaveformInterface,
             block
         ):
@@ -162,35 +162,30 @@ class AlignWithSelectionCommand(QUndoCommand):
         print(f"{block.text()=}")
         super().__init__()
         self.parent = parent # MainWindow
-        self.text_widget = text_widget
+        self.document_controller = document_controller
         self.waveform = waveform
         self.block: QTextBlock = block
         self.old_block_data = self.block.userData().data.copy() if block.userData() else None
         s = self.waveform.getSelection()
         self.selection: Optional[Segment] = s.copy() if s is not None else None
-        # self.prev_active_segments = self.parent.waveform.active_segments[:]
-        # self.prev_active_segment_id = self.parent.waveform.active_segment_id
-        self.segment_id = self.waveform.getNewId()
+        self.segment_id = self.document_controller.getNewSegmentId()
     
     def undo(self):
         # self.parent.text_widget.highlightUtterance(self.prev_active_segment_id)
         if self.old_block_data:
-            self.block.setUserData(MyTextBlockUserData(self.old_block_data))
+            self.document_controller.setBlockId(self.block, self.old_block_data)
         else:
-            self.block.setUserData(None)
-        self.text_widget.highlighter.rehighlightBlock(self.block)
+            self.document_controller.setBlockId(self.block, None)
         self.waveform._selection = self.selection
+        self.document_controller.removeSegment(self.segment_id)
         self.parent.statusBar().clearMessage()
-        del self.waveform.segments[self.segment_id]
-        self.waveform.must_redraw = True
 
     def redo(self):
         if self.selection:
-            self.waveform.addSegment(self.selection, self.segment_id)
+            self.document_controller.addSegment(self.selection, self.segment_id)
         self.waveform.removeSelection()
-        self.text_widget.setBlockId(self.block, self.segment_id)
+        self.document_controller.setBlockId(self.block, self.segment_id)
         self.parent.updateUtteranceDensity(self.segment_id)
-        self.text_widget.highlighter.rehighlightBlock(self.block)
 
 
 
@@ -667,36 +662,42 @@ class ResizeSegmentCommand(QUndoCommand):
 
 
 class DeleteSegmentsCommand(QUndoCommand):
-    def __init__(self, parent, seg_ids):
+    def __init__(
+            self,
+            document_controller: DocumentInterface,
+            parent,
+            seg_ids: List[SegmentId]
+        ):
         super().__init__()
+        self.document_controller = document_controller
         self.text_edit: TextDocumentInterface = parent.text_widget
         self.waveform: WaveformInterface = parent.waveform
         self.seg_ids = seg_ids
         self.segments = {
-            id: self.waveform.segments[id]
-            for id in seg_ids if id in self.waveform.segments
+            seg_id: self.document_controller.segments[seg_id]
+            for seg_id in seg_ids if seg_id in self.document_controller.segments
         }
     
     def undo(self):
         for seg_id, segment in self.segments.items():
-            self.waveform.segments[seg_id] = segment
-            block = self.text_edit.getBlockById(seg_id)
+            self.document_controller.segments[seg_id] = segment
+            block = self.document_controller.getBlockById(seg_id)
             if block:
                 self.text_edit.highlighter.rehighlightBlock(block)
 
+        self.document_controller.must_sort = True
         self.waveform.active_segments = list(self.segments.keys())
-        self.waveform.must_sort = True
         self.waveform.must_redraw = True
 
     def redo(self):
         for seg_id in self.segments:
-            block = self.text_edit.getBlockById(seg_id)
-            if seg_id in self.waveform.segments:
-                del self.waveform.segments[seg_id]
+            block = self.document_controller.getBlockById(seg_id)
+            if seg_id in self.document_controller.segments:
+                del self.document_controller.segments[seg_id]
             if block:
                 self.text_edit.highlighter.rehighlightBlock(block)
         
+        self.document_controller.must_sort = True
         self.waveform.active_segment_id = -1
         self.waveform.active_segments = []
-        self.waveform.must_sort = True
         self.waveform.must_redraw = True

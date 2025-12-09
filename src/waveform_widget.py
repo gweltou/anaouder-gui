@@ -142,7 +142,7 @@ class WaveformWidget(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.document = document_controller
-        self.undo_stack = self.parent.undo_stack
+        self.undo_stack = self.document.undo_stack
 
         self.waveform = self.ScaledWaveform()
         self.pixmap = QPixmap()
@@ -292,14 +292,7 @@ class WaveformWidget(QWidget):
         self.fps = 0.0
 
         self.must_redraw = True
-    
 
-    # def clearSegments(self) -> None:
-    #     # Keys are segment ids (int), values are segment [start (float), end (float)]
-    #     self.segments: Dict[SegmentId, Segment] = dict()
-    #     self.active_segments = []
-    #     self.active_segment_id = -1
-    
 
     def setSamples(self, samples, sr) -> None:
         self.waveform.setSamples(samples, sr)
@@ -309,23 +302,6 @@ class WaveformWidget(QWidget):
 
     def getSelection(self) -> Optional[Segment]:
         return self._selection
-
-    
-    # def getNewId(self) -> SegmentId:
-    #     """Returns the next available segment ID"""
-    #     seg_id = self.id_counter
-    #     self.id_counter += 1
-    #     return seg_id
-    
-
-    # def addSegment(self, segment: Segment, seg_id: Optional[SegmentId]=None) -> SegmentId:
-    #     log.debug(f"addSegment({segment=}, {seg_id=})")
-    #     if seg_id == None:
-    #         seg_id = self.getNewId()
-    #     self.segments[seg_id] = segment
-    #     self.must_sort = True
-    #     self.must_redraw = True
-    #     return seg_id
 
     
     def newUtteranceFromSelection(self):
@@ -404,7 +380,7 @@ class WaveformWidget(QWidget):
         return -1
 
 
-    def getNextSegmentId(self, segment_id: SegmentId) -> SegmentId:
+    def getNextSegmentId(self, segment_id: Optional[SegmentId] = None) -> SegmentId:
         """
         Returns the ID of the segment after the currently selected one, or -1.
         If no segment are selected, return the next one relative to the playhead.
@@ -631,29 +607,12 @@ class WaveformWidget(QWidget):
         super().enterEvent(event)
 
 
-    # def getSegment(self, seg_id: SegmentId) -> Optional[Segment]:
-    #     if seg_id in self.segments:
-    #         return self.segments[seg_id]
-    #     return None
-
-
     def _dev_getSelectedId(self) -> Optional[SegmentId]:
         """Return the currently selected segment, or None"""
         if self.active_segment_id >= 0:
             return self.active_segment_id
         return None
     
-
-    # def getSegmentAtTime(self, time: float) -> int:
-    #     """Return the ID of any segment at a given position, or -1 if none is present"""
-    #     log.debug(f"getSegmentAtTime({time=})")
-    #     for seg_id, (start, end) in self.getSortedSegments():
-    #         # Give precedence to the segment that starts at this timecode
-    #         # rather than the one that ends at this timecode
-    #         if start - 0.001 <= time < end:
-    #             return seg_id
-    #     return -1
-
 
     def getSegmentAtPixelPosition(self, position: QPointF, vertical=True) -> Optional[Tuple[SegmentId, SegmentSide]]:
         """
@@ -692,14 +651,6 @@ class WaveformWidget(QWidget):
             start, end = self._selection
             return start < t < end
         return False
-
-
-    # def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
-    #     """Return the list of (SegmentId, Segment), sorted by start time"""
-    #     if self.must_sort:
-    #         self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
-    #         self.must_sort = False
-    #     return self._sorted_segments
 
 
     def setSelecting(self, checked: bool):
@@ -886,10 +837,10 @@ class WaveformWidget(QWidget):
             # Create a new segment from selection
             self.new_utterance_from_selection.emit()
 
-        # elif event.key() == Qt.Key.Key_J and len(self.active_segments) > 1:
-        #     # Join multiple segments
-        #     segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])
-        #     self.join_utterances.emit(segments_id)
+        elif event.key() == Qt.Key.Key_J and len(self.active_segments) > 1:
+            # Join multiple segments
+            segments_id = sorted(self.active_segments, key=lambda x: self.segments[x][0])
+            self.join_utterances.emit(segments_id)
 
         elif event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace) and self.active_segments:
             # Delete segment(s)

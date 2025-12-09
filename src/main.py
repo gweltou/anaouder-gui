@@ -72,8 +72,8 @@ from src.commands import (
 )
 from src.parameters_dialog import ParametersDialog
 from src.export import export, exportSignals
-from aligner import (
-    smart_split_text, smart_split_time, align_text_with_vosk_tokens,
+from src.aligner import (
+    smart_split_text, smart_split_time,
     SmartSplitError
 )
 from src.auto_segment import auto_segment
@@ -159,10 +159,6 @@ class MainWindow(QMainWindow):
         self._subs_min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
         self._subs_max_frames = app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
 
-        self.undo_stack = QUndoStack(self)
-        self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
-        self.undo_stack.indexChanged.connect(self.onUndoStackIndexChanged)
-
         # Autosave
         self.last_saved_index = 0
         self.last_saved_time = time.time()
@@ -170,6 +166,7 @@ class MainWindow(QMainWindow):
         self.autosave_timer.timeout.connect(self.autoSave)
         self.onSetAutosave(app_settings.value("autosave/checked", True, type=bool))
 
+        # Document Controller
         self.document = DocumentController()
         self.text_widget = TextEditWidget(self, self.document)
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
@@ -177,6 +174,9 @@ class MainWindow(QMainWindow):
         self.waveform = WaveformWidget(self, self.document)
         self.document.setWaveformWidget(self.waveform)
 
+        self.undo_stack = self.document.undo_stack
+        self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
+        self.undo_stack.indexChanged.connect(self.onUndoStackIndexChanged)
         
         QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
         self.updateThemeColors()
@@ -245,6 +245,8 @@ class MainWindow(QMainWindow):
 
     def initUI(self):
         # Main Menu
+        SPLITTER_SIZE = 8
+
         self._createMainMenu()
 
         # Top toolbar
@@ -254,23 +256,13 @@ class MainWindow(QMainWindow):
         top_layout.addLayout(self._createTopToolbarLayout())
 
         # Text widget (left) and Video widget (right)
-        self.text_video_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.text_video_splitter.setHandleWidth(5)
+        # self.text_video_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.text_video_splitter = CustomSplitter(Qt.Orientation.Horizontal)
+        self.text_video_splitter.setHandleWidth(SPLITTER_SIZE)
         self.text_video_splitter.addWidget(self.text_widget)
         self.text_video_splitter.addWidget(self.video_widget)
         self.text_video_splitter.setSizes([1, 1])
-        self.text_video_splitter.setStyleSheet("""
-            QSplitter::handle:hover {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                stop:0 #00ffffff, stop:0.5 #fff0b020, stop:1 #00ffffff);
-                border-radius: 2px;
-            }
-            QSplitter::handle:pressed {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                stop:0 #00ffffff, stop:0.3 #fff0b020, stop:0.5 #ffffffff, stop:0.7 #fff0b020, stop:1 #00ffffff);
-                border-radius: 2px
-            }
-        """)
+
         top_layout.addWidget(self.text_video_splitter)
 
         self.top_widget = QWidget()
@@ -289,21 +281,8 @@ class MainWindow(QMainWindow):
         self.bottom_widget = QWidget()
         self.bottom_widget.setLayout(bottom_layout)
 
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.setHandleWidth(5)
-
-        splitter.setStyleSheet("""
-            QSplitter::handle:hover {
-                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                stop:0 #00ffffff, stop:0.5 #fff0b020, stop:1 #00ffffff);
-                border-radius: 2px;
-            }
-            QSplitter::handle:pressed {
-                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                stop:0 #00ffffff, stop:0.3 #fff0b020, stop:0.5 #ffffffff, stop:0.7 #fff0b020, stop:1 #00ffffff);
-                border-radius: 2px
-            }
-        """)
+        splitter = CustomSplitter(Qt.Orientation.Vertical)
+        splitter.setHandleWidth(SPLITTER_SIZE)
 
         splitter.addWidget(self.top_widget)
         splitter.addWidget(self.bottom_widget)        
@@ -983,6 +962,7 @@ class MainWindow(QMainWindow):
             keep_media=False
         ) -> None:
         """Hub function for opening files"""
+        log.info(f"openFile({filepath=})")
 
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         media_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
@@ -1004,6 +984,8 @@ class MainWindow(QMainWindow):
 
         ext = filepath.suffix.lower()
 
+        self.filepath = filepath
+
         if ext in MEDIA_FORMATS:
             # Selected file is an audio of video file
             self.loadMediaFile(str(filepath))
@@ -1011,7 +993,6 @@ class MainWindow(QMainWindow):
             return
         
         elif ext == ".ali":
-            self.filepath = filepath # We need it here because loadAliFile opens a dialog
             self.loadAliFile(filepath)
 
         elif ext in (".seg", ".split"):
@@ -1033,7 +1014,6 @@ class MainWindow(QMainWindow):
         else:
             print(f"Bad file type: {filepath}")
         
-        self.filepath = filepath
 
         doc_metadata = cache.get_doc_metadata(str(filepath))
         if "video_open" in doc_metadata:
@@ -1204,7 +1184,6 @@ class MainWindow(QMainWindow):
         self.text_widget.updateLineNumberAreaWidth()
         self.text_widget.updateLineNumberArea()
         self.text_widget.document().blockSignals(was_blocked)
-        self.waveform.must_redraw = True
     
 
     def onImportMedia(self):
@@ -1306,6 +1285,8 @@ class MainWindow(QMainWindow):
         
         if self.media_controller.loadMedia(filepath):
             self.media_path = filepath
+        if self.filepath is None:
+            self.filepath = filepath
         
         # Load waveform
         cached_waveform = cache.get_waveform(filepath)
@@ -1662,6 +1643,7 @@ class MainWindow(QMainWindow):
             return
         
         next_segment_id = self.waveform.getNextSegmentId(segment_id)
+        print(f"{next_segment_id=}")
 
         if next_segment_id != -1:
             self.selectUtterance(next_segment_id)
@@ -1905,7 +1887,7 @@ class MainWindow(QMainWindow):
                                 # The next frame position overlaps the next segment,
                                 # choose previous frame
                                 frame_end = right_boundary
-                        self.undo_stack.push(ResizeSegmentCommand(self.waveform, seg_id, frame_start, frame_end))
+                        self.undo_stack.push(ResizeSegmentCommand(self.document, self.waveform, seg_id, frame_start, frame_end))
 
                     text = block.text()
                     splits = splitForSubtitle(text, line_max_size)
@@ -2352,29 +2334,13 @@ class MainWindow(QMainWindow):
 
 
     def alignWithSelection(self, block:QTextBlock) -> None:
-        self.undo_stack.push(AlignWithSelectionCommand(self, self.text_widget, self.waveform, block))
+        self.undo_stack.push(AlignWithSelectionCommand(self, self.document, self.waveform, block))
         if self.selection_button.isChecked():
             self.selection_button.setChecked(False)
 
 
-    def autoAlignCurrentUtterance(self) -> None:
-        print("autoAlignCurrentUtterance")
-        if self.document is None:
-            return
-        
-        cursor = self.text_widget.textCursor()
-        block = cursor.block()
-        if self.text_widget.getBlockType(block) != TextEditWidget.BlockType.NOT_ALIGNED:
-            return
-        
-        text = block.text()
-        segments = self.autoAlignSentences([text], range=None)
-        for segment in segments:
-            self.undo_stack.push(AlignBlockWithSegment(self.document, block, segment))
-
-
     def autoAlignSelectedBlocks(self) -> None:
-        print("autoAlignSelectedBlocks")
+        log.info("autoAlignSelectedBlocks()")
         if self.document is None:
             return
         
@@ -2432,57 +2398,13 @@ class MainWindow(QMainWindow):
         
         texts = [ b.text() for b in to_align ]
         range = [start_range, end_range]
-        segments = self.autoAlignSentences(texts, range)
+        segments = self.document.autoAlignSentences(texts, range)
         print(segments)
         for i, segment in enumerate(segments):
+            if segment is None:
+                continue
             block = to_align[i]
             self.undo_stack.push(AlignBlockWithSegment(self.document, block, segment))
-    
-
-    def autoAlignSentences(self, sentences: List[str], range: Optional[Segment] = None) -> List[Segment]:
-        text = "|| " + " || ".join(sentences) + " || "
-        
-        if range and self.document is not None:
-            tokens = self.document.getTranscriptionForSegment(range[0], range[1])
-        else:
-            tokens = self.media_controller.getMediaMetadata().get("transcription", [])
-
-        alignment = align_text_with_vosk_tokens(text, tokens)
-        # for al in alignment:
-        #     print(al)
-
-        # Separating into segments
-        segments = []
-        segment_tokens = []
-        for al in alignment:
-            if al[0] is None:
-                continue
-            if al[0] == "||":
-                print("||")
-                if segment_tokens:
-                    print(segment_tokens[0])
-                    print(segment_tokens[-1])
-                    first_idx = 0
-                    last_idx = len(segment_tokens) - 1
-                    first_token = segment_tokens[first_idx][1]
-                    last_token = segment_tokens[last_idx][1]
-                    # Skip first tokens if they align to None
-                    while (first_token is None) and (first_idx < last_idx):
-                        first_idx += 1
-                        first_token = segment_tokens[first_idx][1]
-                    # Skip last tokens if they align to None
-                    while (last_token is None) and (first_idx < last_idx):
-                        last_idx -= 1
-                        last_token = segment_tokens[last_idx][1]
-
-                    segment_start = first_token[1]
-                    segment_end = last_token[2]
-                    segments.append([segment_start, segment_end])
-                    segment_tokens.clear()
-                continue
-            segment_tokens.append(al)
-        print(segments)
-        return segments
 
 
     def deleteUtterances(self, segments_id: List[SegmentId]) -> None:
@@ -2490,14 +2412,14 @@ class MainWindow(QMainWindow):
         if segments_id:
             if self.text_widget.highlighted_sentence_id in segments_id:
                 self.statusBar().clearMessage()
-            self.undo_stack.push(DeleteUtterancesCommand(self.text_widget, self.waveform, segments_id))
+            self.undo_stack.push(DeleteUtterancesCommand(self.document, self.text_widget, self.waveform, segments_id))
         else:
             self.setStatusMessage(self.tr("Select one or more utterances first"))
 
 
     def deleteSegments(self, segments_id: List[SegmentId]) -> None:
         """ Delete segments but keep sentences """
-        self.undo_stack.push(DeleteSegmentsCommand(self, segments_id))
+        self.undo_stack.push(DeleteSegmentsCommand(self.document, self, segments_id))
 
 
     def selectAll(self) -> None:
@@ -2566,10 +2488,6 @@ class MainWindow(QMainWindow):
                     self.openFile(filepath, keep_media=True)
                 elif ext in MEDIA_FORMATS:
                     self.loadMediaFile(str(filepath))
-                    print(f"{self.filepath=}")
-                    if self.filepath is None:
-                        self.filepath = filepath
-                    print(f"{self.filepath=}")
                 else:
                     print(f"Wrong file type {filepath}")
                     return
@@ -2844,7 +2762,7 @@ def main(argv: list):
         strings.initialize() # Load strings
 
     loadIcons()
-    window = MainWindow(Path(filepath))
+    window = MainWindow(Path(filepath) if filepath else None)
     window.show()
 
     # Close splash screen

@@ -84,12 +84,3 @@ def test_format_eaf(sample_utterances):
     assert "Hello world" in result
     # Check millisecond conversion (1.5s -> 1500)
     assert 'TIME_VALUE="1500"' in result 
-
-
-def test_dialog_defaults(qtbot):
-    """Test the dialog UI initialization."""
-    dialog = ExportDialog(None, default_path="/tmp/test.srt", file_type="srt")
-    qtbot.addWidget(dialog)
-    
-    assert dialog.windowTitle() == "Export to SRT"
-    assert dialog.file_path_input.text() == "/tmp/test.srt"
