@@ -35,7 +35,7 @@ class FileManager(QObject):
     """Manages file I/O operations for the application"""
 
     # Signals
-    show_status_message = Signal(str)    # Sends a message to be displayed in the status bar
+    message = Signal(str)    # Sends a message to be displayed in the status bar
 
 
     def __init__(

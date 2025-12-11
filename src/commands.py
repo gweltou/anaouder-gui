@@ -60,15 +60,12 @@ class CreateNewUtteranceCommand(QUndoCommand):
         self.document_controller.must_sort = True
         self.waveform_widget.must_redraw = True
         self.text_widget.setCursorState(self.prev_cursor)
-        self.text_widget.updateLineNumberAreaWidth()
 
 
     def redo(self):
         self.document_controller.addSegment(self.segment, self.segment_id)
         self.text_widget.insertSentenceWithId('*', self.segment_id)
-        self.text_widget.updateLineNumberAreaWidth()
         self.text_widget.highlightUtterance(self.segment_id)
-
 
 
 class JoinUtterancesCommand(QUndoCommand):

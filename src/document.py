@@ -48,6 +48,18 @@ class DocumentController(QObject):
         self.memoized_transcription_tokens = []
     
 
+    def clear(self) -> None:
+        """ Clears the document """
+        self.clearSegments()
+        
+        if self.text_widget is not None:
+            self.text_widget.document().clear()
+            self.text_widget.updateLineNumberAreaWidth()
+            self.text_widget.updateLineNumberArea()
+        
+        self.undo_stack.clear()
+
+
     def setTextWidget(self, text_widget: TextDocumentInterface) -> None:
         self.text_widget = text_widget
     

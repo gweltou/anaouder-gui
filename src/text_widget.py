@@ -214,7 +214,7 @@ class Highlighter(QSyntaxHighlighter):
         
 
         # Check misspelled words
-        if not self.show_misspelling:
+        if not (self.show_misspelling and self.hunspell):
             self.text_edit.document().blockSignals(doc_was_blocked)
             self.text_edit.blockSignals(was_blocked)
             return
@@ -233,10 +233,10 @@ class Highlighter(QSyntaxHighlighter):
         self.text_edit.blockSignals(was_blocked)
 
 
-    def toggleMisspelling(self, checked):
-        self.hunspell = get_hunspell_spylls()
-        self.show_misspelling = checked
-        self.rehighlight()
+    def setHunspellDictionary(self, hunspell) -> None:
+        self.hunspell = hunspell
+        if self.show_misspelling:
+            self.rehighlight()
 
 
 
@@ -1649,12 +1649,14 @@ class TextEditWidget(QTextEdit):
 
     def updateLineNumberAreaWidth(self) -> None:
         """Updates the margin of the text edit to make room for the sidebar."""
+        print("updateLineNumberAreaWidth")
         width = self._getLineNumberAreaWidth()
-        self.setViewportMargins(self._getLineNumberAreaWidth(), 0, 0, 0)
+        self.setViewportMargins(width, 0, 0, 0)
 
 
     def updateLineNumberArea(self) -> None:
         """Repaints the sidebar area."""
+        print("updateLineNumberArea")
         self.line_number_area.update()
 
 

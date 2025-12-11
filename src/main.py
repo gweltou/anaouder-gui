@@ -32,7 +32,8 @@ from PySide6.QtCore import (
     Qt, QSize,
     Signal, Slot, QSignalBlocker,
     QTranslator, QLocale, 
-    QEvent, QTimer
+    QEvent, QTimer,
+    QThreadPool
 )
 from PySide6.QtGui import (
     QAction, QActionGroup,
@@ -77,6 +78,7 @@ from src.aligner import (
     SmartSplitError
 )
 from src.auto_segment import auto_segment
+from src.hunspell import HunspellLoader
 from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
     app_settings, shortcuts,
@@ -117,7 +119,7 @@ class MainWindow(QMainWindow):
         
         # File Manager
         self.file_manager = FileManager()
-        self.file_manager.show_status_message.connect(self.setStatusMessage)
+        self.file_manager.message.connect(self.setStatusMessage)
         
         self.audio_samples = None
         
@@ -405,11 +407,12 @@ class MainWindow(QMainWindow):
             lambda checked: self.toggleVideo(checked))
         display_menu.addAction(self.toggle_video_action)
 
-        toggle_misspelling = QAction(self.tr("&Misspelling"), self)
-        toggle_misspelling.setCheckable(True)
-        toggle_misspelling.toggled.connect(
-            lambda checked: self.text_widget.highlighter.toggleMisspelling(checked))
-        display_menu.addAction(toggle_misspelling)
+        self.toggle_misspelling_action = QAction(self.tr("&Misspelling"), self)
+        self.toggle_misspelling_action.setCheckable(True)
+        # toggle_misspelling.toggled.connect(
+        #     lambda checked: self.text_widget.highlighter.toggleMisspelling(checked))
+        self.toggle_misspelling_action.toggled.connect(self.toggleMisspelling)
+        display_menu.addAction(self.toggle_misspelling_action)
 
         self.toggle_margin_action = QAction(self.tr("Subtitle margin"), self)
         self.toggle_margin_action.setCheckable(True)
@@ -784,8 +787,6 @@ class MainWindow(QMainWindow):
 
 
     def updateWindowTitle(self) -> None:
-        
-            
         # title_parts.append(APP_NAME)
 
         path = self.filepath or self.media_path
@@ -1035,6 +1036,8 @@ class MainWindow(QMainWindow):
             self.scene_detect_action.setChecked(True)
         if "show_margin" in doc_metadata:
             self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
+        if "show_misspelling" in doc_metadata:
+            self.toggle_misspelling_action.setChecked(doc_metadata["show_misspelling"])
 
         self.updateWindowTitle()
     
@@ -1170,20 +1173,17 @@ class MainWindow(QMainWindow):
             data (list): List of document blocks (text, Segment)
         """
         # TODO: This function seems quite slow
-        self.undo_stack.clear()
         self.last_saved_index = 0
+        self.document.clear()
 
         was_blocked = self.text_widget.document().blockSignals(True)
-        self.text_widget.document().clear()
-        self.document.clearSegments()
-
         for text, segment in data:
             segment_id = self.document.addSegment(segment) if segment else None
             self.text_widget.appendSentence(text, segment_id)
+        self.text_widget.document().blockSignals(was_blocked)
         
         self.text_widget.updateLineNumberAreaWidth()
         self.text_widget.updateLineNumberArea()
-        self.text_widget.document().blockSignals(was_blocked)
     
 
     def onImportMedia(self):
@@ -1286,7 +1286,7 @@ class MainWindow(QMainWindow):
         if self.media_controller.loadMedia(filepath):
             self.media_path = filepath
         if self.filepath is None:
-            self.filepath = filepath
+            self.filepath = Path(filepath)
         
         # Load waveform
         cached_waveform = cache.get_waveform(filepath)
@@ -2033,14 +2033,14 @@ class MainWindow(QMainWindow):
             
         block = self.text_widget.getBlockById(segment_id)
         if block:
-            text = self.onRecognizerOutput(tokens)
+            text = self.saveTranscriptionToCache(tokens)
             text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
             self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
 
 
     def newSegmentTranscribed(self, tokens) -> None:
         if tokens:
-            text = self.onRecognizerOutput(tokens)
+            text = self.saveTranscriptionToCache(tokens)
             text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
             segment_start = tokens[0]["start"]
             segment_end = tokens[-1]["end"]
@@ -2060,20 +2060,10 @@ class MainWindow(QMainWindow):
             # This action should not be added to the undo stack
             segment_id = self.document.addSegment([segment_start, segment_end])
             self.text_widget.insertSentenceWithId(text, segment_id, with_cursor=False)
-            self.waveform.must_redraw = True
-
-        # Check if there is already an utterance over this segment
-        # existing_segments = self.waveform.getSortedSegments()
-        # idx = 0
-        # while idx < len(existing_segments) and existing_segments[idx][1][1] < segment_start:
-        #     idx += 1
-        # if idx >= len(existing_segments) or existing_segments[idx][1][0] >= segment_end:
-        #     text = ' '.join([tok[2] for tok in tokens])
-        #     text = lang.postProcessText(text)
-        #     self.addUtterance(text, [segment_start, segment_end])
+            self.text_widget.updateLineNumberAreaWidth()
 
 
-    def onRecognizerOutput(self, tokens: list) -> str:
+    def saveTranscriptionToCache(self, tokens: list) -> str:
         """
         Backup transcription in cache and
         return a string from a list of tokens
@@ -2437,6 +2427,18 @@ class MainWindow(QMainWindow):
         # anim.setStartValue(QPoint(0, 0))
         # anim.setEndValue(QPoint(100, 250))
         # anim.start()
+    
+
+    def toggleMisspelling(self, checked: bool) -> None:
+        self.text_widget.highlighter.show_misspelling = checked
+        
+        if checked:
+            loader = HunspellLoader()
+            loader.signals.finished.connect(self.text_widget.highlighter.setHunspellDictionary)
+            loader.signals.message.connect(self.setStatusMessage)
+            QThreadPool.globalInstance().start(loader)
+        else:
+            self.text_widget.highlighter.setHunspellDictionary(None)
 
 
     def toggleLooping(self) -> None:
@@ -2544,7 +2546,8 @@ class MainWindow(QMainWindow):
                     "waveform_pps": self.waveform.ppsec,
                     "show_scenes": self.scene_detect_action.isChecked(),
                     "show_margin": self.toggle_margin_action.isChecked(),
-                    "video_open": self.toggle_video_action.isChecked()
+                    "video_open": self.toggle_video_action.isChecked(),
+                    "show_misspelling": self.toggle_misspelling_action.isChecked()
                 }
                 cache.update_doc_metadata(str(self.filepath), doc_metadata)
             
