@@ -3,10 +3,13 @@ from typing import (
     Dict, List, Tuple, Any,
     Optional
 )
+from enum import Enum
+
 from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import (
+    QUndoStack,
     QTextBlock, QTextDocument, QTextCursor,
     QSyntaxHighlighter
 )
@@ -18,10 +21,21 @@ type Segment = List[float]
 type SegmentId = int
 
 
+class BlockType(Enum):
+    EMPTY_OR_COMMENT = 0
+    METADATA_ONLY = 1
+    ALIGNED = 2
+    NOT_ALIGNED = 3
+
+
 
 class DocumentInterface(Protocol):
+    undo_stack: QUndoStack
     segments: Dict[SegmentId, Segment]
     must_sort: bool
+
+    def getSegment(self, segment_id: SegmentId) -> Optional[Segment]:
+        ...
 
     def addSegment(self, segment: Segment, segment_id: Optional[SegmentId] = None) -> SegmentId:
         """Add a segment and return its ID"""
@@ -30,8 +44,14 @@ class DocumentInterface(Protocol):
     def removeSegment(self, segment_id: SegmentId) -> None:
         ...
     
+    def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
+        ...
+    
     def getNewSegmentId(self) -> SegmentId:
         """Get a new unique segment ID"""
+        ...
+    
+    def getBlockType(self, block: QTextBlock) -> BlockType:
         ...
     
     def getBlockById(self, segment_id: SegmentId) -> Optional[QTextBlock]:
@@ -72,6 +92,9 @@ class TextDocumentInterface(Protocol):
     def setTextCursor(self, cursor: QTextCursor, /) -> None:
         ... 
     
+    def appendSentence(self, text: str, segment_id: Optional[SegmentId]) -> QTextBlock:
+        ...
+    
     def insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock:
         ...
 
@@ -87,12 +110,6 @@ class TextDocumentInterface(Protocol):
     def deactivateSentence(self, seg_id: SegmentId) -> None:
         ...
     
-    def getBlockType(self, block: QTextBlock):
-        ...
-    
-    def setBlockId(self, block: QTextBlock, seg_id: SegmentId) -> None:
-        ...
-
     def getBlockById(self, seg_id: SegmentId) -> Optional[QTextBlock]:
         ...
     
@@ -103,6 +120,9 @@ class TextDocumentInterface(Protocol):
         ...
     
     def updateLineNumberAreaWidth(self) -> None:
+        ...
+
+    def updateLineNumberArea(self) -> None:
         ...
 
     def getCursorState(self) -> dict:

@@ -1,4 +1,4 @@
-from PySide6.QtCore import QRunnable, QThreadPool, Signal, QObject
+from PySide6.QtCore import QRunnable, QThreadPool, Signal, QObject, QThread
 
 from ostilhou.hspell import hs_dic_path
 
@@ -31,8 +31,11 @@ class HunspellLoader(QRunnable):
         self.signals = HunspellSignals()
     
     def run(self):
+        QThread.currentThread().setPriority(QThread.Priority.LowPriority)
+
         self.signals.message.emit(QObject.tr("Loading hunspell dictionary") + "...")
         hunspell = get_hunspell_spylls_br()
+
         self.signals.finished.emit(hunspell)
         self.signals.message.emit(QObject.tr("Hunspell dictionary loaded"))
 

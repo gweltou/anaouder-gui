@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Optional
 from math import ceil
 from enum import Enum
 import numpy as np
@@ -17,7 +17,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap,
-    QColor, QResizeEvent, QWheelEvent, QUndoCommand,
+    QColor, QResizeEvent, QWheelEvent,
     QKeyEvent, QEnterEvent,
     QMouseEvent, QKeySequence, QShortcut
 )
@@ -26,9 +26,8 @@ from src.theme import theme
 from src.settings import app_settings, shortcuts
 from src.utils import lerpColor, mapNumber
 from src.commands import ResizeSegmentCommand
-from src.interfaces import Segment, SegmentId
+from src.interfaces import Segment, SegmentId, DocumentInterface
 from src.strings import strings
-from src.document import DocumentController
 
 
 ZOOM_Y = 3.5    # In pixels per second
@@ -138,7 +137,7 @@ class WaveformWidget(QWidget):
             return self.filtered_audio
     
 
-    def __init__(self, parent, document_controller: DocumentController):
+    def __init__(self, parent, document_controller: DocumentInterface):
         super().__init__(parent)
         self.parent = parent
         self.document = document_controller
@@ -269,7 +268,7 @@ class WaveformWidget(QWidget):
 
     def clear(self):
         """Reset Waveform"""
-        self.ppsec: float = 50.0        # pixels per second of audio
+        self.ppsec: float = 40.0        # pixels per second of audio
         self.ppsec_goal: float = self.ppsec
         self.t_left = 0.0      # timecode of left border (in seconds)
         self.scroll_vel = 0.0

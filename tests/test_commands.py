@@ -9,7 +9,7 @@ from PySide6.QtGui import QUndoCommand, QTextCursor
 
 from src.main import (
     MainWindow,
-    AddSegmentCommand, CreateNewUtteranceCommand,
+    AddSegmentCommand, CreateNewEmptyUtteranceCommand,
     DeleteUtterancesCommand,
     JoinUtterancesCommand, AlignWithSelectionCommand,
     DeleteSegmentsCommand, InsertBlockCommand,
@@ -147,7 +147,7 @@ def test_add_segment():
 def test_create_new_utterance():
     load_document()
     undo_redo_command(
-        CreateNewUtteranceCommand(
+        CreateNewEmptyUtteranceCommand(
             main_window.media_controller,
             main_window.text_widget,
             main_window.waveform,

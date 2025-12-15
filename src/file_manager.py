@@ -33,8 +33,6 @@ class FileOperationError(Exception):
 
 class FileManager(QObject):
     """Manages file I/O operations for the application"""
-
-    # Signals
     message = Signal(str)    # Sends a message to be displayed in the status bar
 
 

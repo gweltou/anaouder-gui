@@ -31,7 +31,7 @@ from src.commands import (
     ReplaceTextCommand,
     MoveTextCursor
 )
-from src.document import DocumentController
+from src.interfaces import DocumentInterface
 from src.theme import theme
 from src.utils import (
     getSentenceRegions,
@@ -279,7 +279,7 @@ class TextEditWidget(QTextEdit):
     request_auto_align = Signal()
 
 
-    def __init__(self, parent, document: DocumentController):
+    def __init__(self, parent, document: DocumentInterface):
         super().__init__(parent)
         self.main_window = parent
         self.document_controller = document
@@ -1649,14 +1649,12 @@ class TextEditWidget(QTextEdit):
 
     def updateLineNumberAreaWidth(self) -> None:
         """Updates the margin of the text edit to make room for the sidebar."""
-        print("updateLineNumberAreaWidth")
         width = self._getLineNumberAreaWidth()
         self.setViewportMargins(width, 0, 0, 0)
 
 
     def updateLineNumberArea(self) -> None:
         """Repaints the sidebar area."""
-        print("updateLineNumberArea")
         self.line_number_area.update()
 
 

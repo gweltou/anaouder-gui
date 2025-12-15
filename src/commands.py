@@ -22,7 +22,7 @@ from src.media_player_controller import MediaPlayerController
 log = logging.getLogger(__name__)
 
 
-class CreateNewUtteranceCommand(QUndoCommand):
+class CreateNewEmptyUtteranceCommand(QUndoCommand):
     """
     Create a new utterance with empty text,
     the segment will be added to the waveform.

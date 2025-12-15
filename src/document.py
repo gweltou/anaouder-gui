@@ -1,44 +1,55 @@
 from typing import List, Tuple, Dict, Optional
 import logging
-from enum import Enum
 
 from ostilhou.asr import extract_metadata
 
-from PySide6.QtGui import QTextBlock, QUndoStack
-from PySide6.QtCore import QObject
-from src.interfaces import (
-    Segment, SegmentId,
-    WaveformInterface, TextDocumentInterface
+from PySide6.QtGui import (
+    QTextBlock, QUndoStack,
+    QTextCursor
 )
+from PySide6.QtCore import QObject, Signal
+from src.interfaces import (
+    BlockType,
+    Segment, SegmentId,
+)
+from src.text_widget import TextEditWidget
+from src.waveform_widget import WaveformWidget
 from src.utils import (
     MyTextBlockUserData,
     LINE_BREAK
 )
-from src.commands import ResizeSegmentCommand
-from src.aligner import align_text_with_vosk_tokens
+from src.commands import (
+    AddSegmentCommand, ResizeSegmentCommand,
+    DeleteUtterancesCommand, JoinUtterancesCommand,
+    InsertBlockCommand,
+    MoveTextCursor
+)
+from src.aligner import (
+    align_text_with_vosk_tokens,
+    smart_split_text, smart_split_time,
+    SmartSplitError
+)
+from src.strings import strings
+
 
 
 log = logging.getLogger(__name__)
 
 
 
-class BlockType(Enum):
-    EMPTY_OR_COMMENT = 0
-    METADATA_ONLY = 1
-    ALIGNED = 2
-    NOT_ALIGNED = 3
-
-
-
 class DocumentController(QObject):
+    message = Signal(str)
 
-    def __init__(self) -> None:
+
+    def __init__(self, parent: Optional[QObject] = None) -> None:
+        super().__init__(parent)
+
         self.media_metadata = {}
         self.segments = {}
         self._sorted_segments = []
 
-        self.text_widget = None
-        self.waveform_widget = None
+        self.text_widget: Optional[TextEditWidget] = None
+        self.waveform_widget: Optional[WaveformWidget] = None
 
         self.must_sort = False
         self.id_counter = 0
@@ -60,11 +71,35 @@ class DocumentController(QObject):
         self.undo_stack.clear()
 
 
-    def setTextWidget(self, text_widget: TextDocumentInterface) -> None:
+    def setTextWidget(self, text_widget: TextEditWidget) -> None:
         self.text_widget = text_widget
     
-    def setWaveformWidget(self, waveform_widget: WaveformInterface) -> None:
+    def setWaveformWidget(self, waveform_widget: WaveformWidget) -> None:
         self.waveform_widget = waveform_widget
+    
+
+    def loadDocumentData(self, data: List[Tuple[str, Optional[Segment]]]) -> None:
+        """
+        Load a document into the text widget and waveform.
+        
+        Args:
+            data (list): List of document blocks (text, Segment)
+        """
+        # TODO: This function seems quite slow
+
+        if self.text_widget is None:
+            return
+
+        self.clear()
+
+        was_blocked = self.text_widget.document().blockSignals(True)
+        for text, segment in data:
+            segment_id = self.addSegment(segment) if segment else None
+            self.text_widget.appendSentence(text, segment_id)
+        self.text_widget.document().blockSignals(was_blocked)
+        
+        self.text_widget.updateLineNumberAreaWidth()
+        self.text_widget.updateLineNumberArea()
 
 
     def setMediaMetadata(self, metadata: dict) -> None:
@@ -72,6 +107,7 @@ class DocumentController(QObject):
     
 
     def getMediaMetadata(self) -> dict:
+        print(f"{self.media_metadata=}")
         return self.media_metadata
     
     
@@ -146,7 +182,7 @@ class DocumentController(QObject):
         return None
     
 
-    def getBlockType(self, block : QTextBlock) -> BlockType:
+    def getBlockType(self, block: QTextBlock) -> BlockType:
         text = block.text()
 
         # Find and crop comments
@@ -389,6 +425,168 @@ class DocumentController(QObject):
             block = block.next()
         
         return utterances
+    
+
+    def splitFromText(self, segment_id: SegmentId, position: int) -> None:
+        """
+        Split audio segment, given a char relative position in sentence
+        Called from the textEdit widget
+        """
+        log.debug(f"splitFromText({segment_id=}, {position=})")
+
+        block = self.getBlockById(segment_id)
+        segment = self.getSegment(segment_id)
+        
+        if block is None or segment is None:
+            return
+        
+        seg_start, seg_end = segment
+        text = block.text()
+
+        left_text = text[:position].rstrip()
+        right_text = text[position:].lstrip()
+        left_seg = None
+        right_seg = None
+
+        # Check if we can "smart split"
+        cached_transcription = self.getMediaMetadata().get("transcription", [])
+        if cached_transcription:
+            if seg_end <= cached_transcription[-1][1]:
+                tr_len = len(cached_transcription)
+                # Get tokens range corresponding to current segment
+                i = 0
+                while i < tr_len and cached_transcription[i][1] < seg_start:
+                    i += 1
+                j = i
+                while j < tr_len and cached_transcription[j][0] < seg_end:
+                    j += 1
+                tokens_range = cached_transcription[i:j]
+
+                try:
+                    log.info('"Smart" splitting')
+                    left_seg, right_seg = smart_split_text(text, position, tokens_range)
+                    left_seg[0] = seg_start
+                    right_seg[1] = seg_end
+                except SmartSplitError as e:
+                    log.warning(e)
+                    self.message.emit(strings.TR_CANT_SMART_SPLIT + f": {e}")
+                except Exception as e:
+                    log.warning(e)
+                    self.message.emit(strings.TR_CANT_SMART_SPLIT + f": {e}")
+
+        if not left_seg or not right_seg:
+            # Revert to naive splitting method
+            dur = seg_end - seg_start
+            pc = position / len(text)
+            left_seg = [seg_start, seg_start + dur*pc - 0.05]
+            right_seg = [seg_start + dur*pc + 0.05, seg_end]
+            log.info("Ratio splitting")
+        
+        self.splitUtterance(segment_id, left_text, right_text, left_seg, right_seg)
+
+
+    def splitFromWaveform(self, segment_id: SegmentId, timepos: float) -> None:
+        block = self.getBlockById(segment_id)
+        if block is None:
+            return
+        
+        segment = self.getSegment(segment_id)
+        if not segment:
+            return
+        
+        seg_start, seg_end = segment
+        text = block.text()
+
+        left_seg = [seg_start, timepos]
+        right_seg = [timepos, seg_end]
+        left_text = None
+        right_text = None
+
+        # Check if we can "smart split"
+        cached_transcription = self.getMediaMetadata().get("transcription", [])
+        if cached_transcription:
+            if seg_end <= cached_transcription[-1][1]:
+                tr_len = len(cached_transcription)
+                # Get tokens range corresponding to current segment
+                i = 0
+                while i < tr_len and cached_transcription[i][1] < seg_start:
+                    i += 1
+                j = i
+                while j < tr_len and cached_transcription[j][0] < seg_end:
+                    j += 1
+                tokens_range = cached_transcription[i:j]
+
+                try:
+                    log.info("smart splitting")
+                    left_text, right_text = smart_split_time(text, timepos, tokens_range)
+                except Exception as e:
+                    self.message.emit(strings.TR_CANT_SMART_SPLIT)
+                    log.error(f"Could not smart split: {e}")
+
+        if left_text is None or right_text is None:
+            # Add en empty sentence after
+            left_text = text[:]
+            right_text = ""
+
+        self.splitUtterance(segment_id, left_text, right_text, left_seg, right_seg)
+    
+
+    def splitUtterance(
+            self,
+            seg_id: SegmentId,
+            left_text: str, right_text: str,
+            left_seg: list, right_seg: list
+        ) -> None:
+
+        if self.text_widget is None or self.waveform_widget is None:
+            return
+
+        left_id = self.getNewSegmentId()
+        right_id = self.getNewSegmentId()
+        
+        self.undo_stack.beginMacro("split utterance")
+        self.undo_stack.push(DeleteUtterancesCommand(self, self.text_widget, self.waveform_widget, [seg_id]))
+        self.undo_stack.push(AddSegmentCommand(self, self.waveform_widget, left_seg, left_id))
+        print(f"{self.text_widget.textCursor().position()=}")
+        self.undo_stack.push(
+            InsertBlockCommand(
+                self.text_widget,
+                self.text_widget.textCursor().position(),
+                seg_id=left_id,
+                text=left_text,
+                after=True
+            )
+        )
+        self.undo_stack.push(AddSegmentCommand(self, self.waveform_widget, right_seg, right_id))
+        self.undo_stack.push(
+            InsertBlockCommand(
+                self.text_widget,
+                self.text_widget.textCursor().position(),
+                seg_id=right_id,
+                text=right_text,
+                after=True
+            )
+        )
+        # Set cursor at the beggining of the right utterance
+        cursor = self.text_widget.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+        self.undo_stack.push(
+            MoveTextCursor(self.text_widget, cursor.position())
+        )
+        self.undo_stack.endMacro()
+
+        # self.text_edit.setTextCursor(cursor)
+        self.text_widget.highlightUtterance(right_id)
+        self.waveform_widget.must_redraw = True
+
+
+    def joinUtterances(self, segments_id) -> None:
+        """
+        Join many segments in one.
+        Keep the segment ID of the earliest segment among the selected ones.
+        """
+        self.undo_stack.push(JoinUtterancesCommand(self, self.text_widget, self.waveform_widget, segments_id))
+
 
 
     def autoAlignSentences(self, sentences: List[str], range: Optional[Segment] = None) -> List[Segment]:

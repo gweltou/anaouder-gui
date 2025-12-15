@@ -131,7 +131,6 @@ class MediaPlayerController(QObject):
         Returns:
             True if playback started, False otherwise
         """
-        print("media_controller play")
         if not self.hasMedia():
             self.log.warning("Cannot play: no media loaded")
             return False
