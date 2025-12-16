@@ -1,8 +1,26 @@
 """
-Media Player Controller Module
+Anaouder - Automatic transcription and subtitling for the Breton language
+Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
 
-Handles all media playback operations
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+----
+
+Media Player Controller Module.
+Handles all media playback operations.
 """
+
 
 import logging
 from typing import Optional, Tuple

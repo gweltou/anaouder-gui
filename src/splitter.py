@@ -1,3 +1,22 @@
+"""
+Anaouder - Automatic transcription and subtitling for the Breton language
+Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+
 from PySide6.QtWidgets import QSplitterHandle, QSplitter, QApplication, QTextEdit
 from PySide6.QtGui import QPainter, QColor, QColorConstants
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QPointF
@@ -66,15 +85,21 @@ class CustomHandle(QSplitterHandle):
         center_x = self.width() / 2
         center_y = self.height() / 2
         size = 4
-        max_spread = 3  # How far dots move apart
+        max_spread = 2  # How far dots move apart
         spread = max_spread * self._hover_progress
         
         if self.orientation() == Qt.Orientation.Horizontal:
             # Draw vertical dots
+            #  .
+            #  *
+            #  *
+            #  *
+            #  .
+
             for i in range(3):
                 # Calculate position with spreading effect
                 offset = (i - 1) * 8  # -8, 0, 8
-                spread_offset = (i - 1) * spread  # Additional spread when hovering
+                spread_offset = (i - 1) * spread
                 y = round(center_y + offset + spread_offset)
                 
                 # Draw ellipse centered at position
@@ -82,10 +107,12 @@ class CustomHandle(QSplitterHandle):
         
         elif self.orientation() == Qt.Orientation.Vertical:
             # Draw horizontal dots
+            # . * . * . * .
+
             for i in range(3):
                 # Calculate position with spreading effect
                 offset = (i - 1) * 8  # -10, 0, 10
-                spread_offset = (i - 1) * spread  # Additional spread when hovering
+                spread_offset = (i - 1) * spread
                 x = round(center_x + offset + spread_offset)
                 
                 # Draw ellipse centered at position

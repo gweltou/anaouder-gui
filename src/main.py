@@ -2,11 +2,30 @@
 # -*- coding: utf-8 -*-
 
 """
+Anaouder - Automatic transcription and subtitling for the Breton language
+Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+----
+
 Terminology
     Segment: A span of audio, with a `start` and an `end`
     Sentence: The textual component of an utterance
     Utterance: The association of an audio `Segment` and a text `Sentence`
 """
+
 
 import os.path
 from pathlib import Path
@@ -249,7 +268,7 @@ class MainWindow(QMainWindow):
 
     def initUI(self):
         # Main Menu
-        SPLITTER_SIZE = 8
+        SPLITTER_SIZE = 10
 
         self._createMainMenu()
 
@@ -2162,7 +2181,8 @@ class MainWindow(QMainWindow):
 
         cursor = self.text_widget.textCursor()
 
-        # Stop at aligned blocks
+        # Find the range of non-aligned blocks to align
+        # Stop at first aligned block, if there is any in the cursor selection
         to_align: List[QTextBlock] = []
         if cursor.hasSelection():
             block = self.document_controller.findBlock(cursor.selectionStart())
@@ -2185,7 +2205,7 @@ class MainWindow(QMainWindow):
         if not to_align:
             return
 
-        # Find previous aligned block
+        # Find previous aligned block to get the audio range start time
         block = to_align[0].previous()
         while block.isValid():
             block_type = self.document_controller.getBlockType(block)
@@ -2197,7 +2217,7 @@ class MainWindow(QMainWindow):
                     break
             block = block.previous()
         
-        # Find next aligned block
+        # Find next aligned block to get the audio range end time
         block = to_align[-1].next()
         while block.isValid():
             block_type = self.document_controller.getBlockType(block)
