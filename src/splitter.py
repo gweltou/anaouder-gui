@@ -24,21 +24,26 @@ import sys
 
 
 class CustomHandle(QSplitterHandle):
+    
     def __init__(self, orientation, parent):
         super().__init__(orientation, parent)
         self._hover_progress = 0.0
         self._animation = None
         self.setMouseTracking(True)
     
+
     def get_hover_progress(self):
         return self._hover_progress
     
+
     def set_hover_progress(self, value):
         self._hover_progress = value
         self.update()
     
+
     hover_progress = Property(float, get_hover_progress, set_hover_progress)
     
+
     def enterEvent(self, event):
         """Animate dots growing when mouse enters"""
         if self._animation:
@@ -48,9 +53,10 @@ class CustomHandle(QSplitterHandle):
         self._animation.setDuration(300)
         self._animation.setStartValue(self._hover_progress)
         self._animation.setEndValue(1.0)
-        self._animation.setEasingCurve(QEasingCurve.OutBack)  # Bouncy effect
+        self._animation.setEasingCurve(QEasingCurve.Type.OutBack)  # Bouncy effect
         self._animation.start()
     
+
     def leaveEvent(self, event):
         """Animate dots shrinking when mouse leaves"""
         if self._animation:
@@ -60,12 +66,13 @@ class CustomHandle(QSplitterHandle):
         self._animation.setDuration(200)
         self._animation.setStartValue(self._hover_progress)
         self._animation.setEndValue(0.0)
-        self._animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self._animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._animation.start()
     
+
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         
         # Interpolate color based on hover progress
@@ -119,6 +126,8 @@ class CustomHandle(QSplitterHandle):
                 painter.drawEllipse(x, center_y - 2, size, size)
 
 
+
 class CustomSplitter(QSplitter):
+    
     def createHandle(self):
         return CustomHandle(self.orientation(), self)

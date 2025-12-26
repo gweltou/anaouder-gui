@@ -66,7 +66,7 @@ def test_save_ali_replace_media(tmp_path: Path):
     load_document()
 
     output_file = tmp_path / "test.ali"
-    main_window._performSave(str(output_file), "media.mp3")
+    main_window._performSave(output_file, "media.mp3")
 
     data = output_file.read_text()
 

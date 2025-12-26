@@ -67,9 +67,9 @@ class FileManager(QObject):
 
     def save_ali_file(
             self,
-            filepath,
+            file_path: Path,
             blocks_data: List[Tuple[str, Optional[Segment]]],
-            media_path: Optional[str] = None
+            media_path: Optional[Path] = None
         ) -> None:
         """
         Save ALI file to disk
@@ -83,22 +83,22 @@ class FileManager(QObject):
             FileOperationError
         """
 
-        filepath = os.path.abspath(filepath)
-        self.log.info(f"Saving file to {filepath}")
+        file_path = file_path.absolute()
+        self.log.info(f"Saving file to {file_path}")
 
         # Get a copy of the old file, if it already exist
         backup = None
-        if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
-            with open(filepath, 'r', encoding="utf-8") as _fin:
+        if file_path.exists() and file_path.stat().st_size > 0:
+            with file_path.open('r', encoding="utf-8") as _fin:
                 backup = _fin.read()
 
         error = False
         try:
-            with open(filepath, 'w', encoding="utf-8") as _fout:
+            with file_path.open('w', encoding="utf-8") as _fout:
                 if media_path:
                     print(f"{media_path=}")
                     # Write media-path metadata if provided
-                    _fout.write(f"{{media-path: {os.path.split(media_path)[1]}}}\n")
+                    _fout.write(f"{{media-path: {media_path.name}}}\n")
 
                 for text, segment in blocks_data:
                     # Remove the previous media-path metadata if necessary
@@ -124,11 +124,12 @@ class FileManager(QObject):
         
         if error and backup:
             # Create a backup copy of the previous version of the file
-            dir, filename = os.path.split(filepath)
-            basename, ext = os.path.splitext(filename)
-            bck_filepath = os.path.join(dir, f"{basename}_bck{ext}")
+            dir = file_path.parent
+            basename = file_path.stem
+            ext = file_path.suffix
+            bck_filepath = dir / f"{basename}_bck{ext}"
             try:
-                with open(bck_filepath, 'w', encoding="utf-8") as _fout:
+                with bck_filepath.open('w', encoding="utf-8") as _fout:
                     _fout.write(backup)
                 print(f"Backup file written to '{bck_filepath}'")
             except Exception as e:

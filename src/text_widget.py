@@ -906,11 +906,9 @@ class TextEditWidget(QTextEdit):
 
 
     def _updateSubtitleMargin(self):
-        if not self._text_margin:
-            return
-        
-        font_metrics = QFontMetricsF(self.font())
-        self._char_width = font_metrics.averageCharWidth()
+        if self._text_margin:
+            font_metrics = QFontMetricsF(self.font())
+            self._char_width = font_metrics.averageCharWidth()
         self.viewport().update()
 
 
@@ -1693,13 +1691,13 @@ class TextEditWidget(QTextEdit):
         
         # Iterate over all text blocks (could be optimized)
         block = self.document().begin()
-        block_number = 1
+        utterance_number = 0
 
         while block.isValid():
-            # Don't count unaligned blocks
-            # if not self.isAligned(block):
-            #     block = block.next()
-            #     continue
+            is_aligned = False
+            if self.isAligned(block):
+                utterance_number += 1
+                is_aligned = True
 
             rect = doc_layout.blockBoundingRect(block)
             
@@ -1710,13 +1708,13 @@ class TextEditWidget(QTextEdit):
             # If the block is visible
             if top_of_block <= self.viewport().height() and bottom_of_block >= 0:
                 if block.isVisible():
-                    if self.isAligned(block):
+                    if is_aligned:
                         # Paint the number
                         painter.setPen(Qt.GlobalColor.black)
                         painter.drawText(0, int(top_of_block), 
                                         self.line_number_area.width() - 5, 
                                         int(self.fontMetrics().height()),
-                                        Qt.AlignmentFlag.AlignRight, str(block_number))
+                                        Qt.AlignmentFlag.AlignRight, str(utterance_number))
                     else:
                         painter.setPen(Qt.GlobalColor.gray)
                         painter.drawText(0, int(top_of_block), 
@@ -1728,7 +1726,6 @@ class TextEditWidget(QTextEdit):
                 break
 
             block = block.next()
-            block_number += 1
 
         painter.end()
     

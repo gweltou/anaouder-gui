@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from typing import List, Tuple, Dict, Optional
 import logging
+from pathlib import Path
 
 from ostilhou.asr import extract_metadata
 
@@ -38,17 +39,22 @@ from src.utils import (
     LINE_BREAK
 )
 from src.commands import (
-    AddSegmentCommand, ResizeSegmentCommand,
+    AddSegmentCommand, DeleteSegmentsCommand, ResizeSegmentCommand,
     DeleteUtterancesCommand, JoinUtterancesCommand,
     InsertBlockCommand,
-    MoveTextCursor
+    MoveTextCursor,
+    # ReplaceTextCommand,
+    # CreateNewEmptyUtteranceCommand,
+    AlignWithSelectionCommand, AlignBlockWithSegment
 )
 from src.aligner import (
     align_text_with_vosk_tokens,
     smart_split_text, smart_split_time,
     SmartSplitError
 )
+from src.cache_system import cache
 from src.strings import strings
+
 
 
 
@@ -63,7 +69,7 @@ class DocumentController(QObject):
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
 
-        self.media_metadata = {}
+        self.media_path: Optional[Path]
         self.segments = {}
         self._sorted_segments = []
 
@@ -92,14 +98,27 @@ class DocumentController(QObject):
 
     def setTextWidget(self, text_widget: TextEditWidget) -> None:
         self.text_widget = text_widget
+        self.text_widget.join_utterances.connect(self.joinUtterances)
+        self.text_widget.delete_utterances.connect(self.deleteUtterances)
+        self.text_widget.split_utterance.connect(self.splitFromText)
+        self.text_widget.request_auto_align.connect(self.autoAlignSelectedBlocks)
     
+
     def setWaveformWidget(self, waveform_widget: WaveformWidget) -> None:
         self.waveform_widget = waveform_widget
+        self.waveform_widget.join_utterances.connect(self.joinUtterances)
+        self.waveform_widget.delete_utterances.connect(self.deleteUtterances)
+        self.waveform_widget.delete_segments.connect(self.deleteSegments)
+        self.waveform_widget.split_utterance.connect(self.splitFromWaveform)
     
+
+    def setMediaPath(self, media_path: Path) -> None:
+        self.media_path = media_path
+
 
     def loadDocumentData(self, data: List[Tuple[str, Optional[Segment]]]) -> None:
         """
-        Load a document into the text widget and waveform.
+        Load a document into the text widget and waveform widget.
         
         Args:
             data (list): List of document blocks (text, Segment)
@@ -121,13 +140,13 @@ class DocumentController(QObject):
         self.text_widget.updateLineNumberArea()
 
 
-    def setMediaMetadata(self, metadata: dict) -> None:
-        self.media_metadata = metadata
-    
-
     def getMediaMetadata(self) -> dict:
-        print(f"{self.media_metadata=}")
-        return self.media_metadata
+        if self.media_path is None:
+            return {}
+        
+        media_metadata = cache.get_media_metadata(self.media_path)
+        print(f"{media_metadata=}")
+        return media_metadata
     
     
     def getBlockByNumber(self, block_number: int) -> Optional[QTextBlock]:
@@ -405,7 +424,7 @@ class DocumentController(QObject):
         
         assert segment_start < segment_end
 
-        cached_transcription = self.media_metadata.get("transcription", [])
+        cached_transcription = cache.get_media_transcription(self.media_path) if self.media_path else None
         if cached_transcription:
             # if segment_end <= cached_transcription[-1][1]:
             tr_len = len(cached_transcription)
@@ -468,7 +487,7 @@ class DocumentController(QObject):
         right_seg = None
 
         # Check if we can "smart split"
-        cached_transcription = self.getMediaMetadata().get("transcription", [])
+        cached_transcription = cache.get_media_transcription(self.media_path) if self.media_path else None
         if cached_transcription:
             if seg_end <= cached_transcription[-1][1]:
                 tr_len = len(cached_transcription)
@@ -522,7 +541,7 @@ class DocumentController(QObject):
         right_text = None
 
         # Check if we can "smart split"
-        cached_transcription = self.getMediaMetadata().get("transcription", [])
+        cached_transcription = cache.get_media_transcription(self.media_path) if self.media_path else None
         if cached_transcription:
             if seg_end <= cached_transcription[-1][1]:
                 tr_len = len(cached_transcription)
@@ -662,6 +681,101 @@ class DocumentController(QObject):
                 continue
             segment_tokens.append(al)
         return segments
+
+
+    def autoAlignSelectedBlocks(self) -> None:
+        if self.text_widget is None or self.waveform_widget is None:
+            return
+        
+        log.info("autoAlignSelectedBlocks()")
+        
+        start_range = 0.0
+        # end_range = self.media_controller.getDuration()
+        end_range = self.waveform_widget.audio_len
+
+        cursor = self.text_widget.textCursor()
+
+        # Find the range of non-aligned blocks to align
+        # Stop at first aligned block, if there is any in the cursor selection
+        to_align: List[QTextBlock] = []
+        if cursor.hasSelection():
+            block = self.findBlock(cursor.selectionStart())
+            end_block = self.findBlock(cursor.selectionEnd())
+            assert block is not None and (block.blockNumber() <= end_block.blockNumber())
+
+            while block.isValid() and block is not end_block:
+                block_type = self.getBlockType(block)
+                if block_type is BlockType.NOT_ALIGNED:
+                    to_align.append(block)
+                elif block_type == BlockType.ALIGNED:
+                    break
+                block = block.next()
+        else:
+            block = cursor.block()
+            block_type = self.getBlockType(block)
+            if block_type is BlockType.NOT_ALIGNED:
+                to_align.append(block)
+        
+        if not to_align:
+            return
+
+        # Find previous aligned block to get the audio range start time
+        block = to_align[0].previous()
+        while block.isValid():
+            block_type = self.getBlockType(block)
+            if block_type is BlockType.ALIGNED:
+                block_id = self.getBlockId(block)
+                block_segment = self.getSegment(block_id)
+                if block_segment is not None:
+                    start_range = block_segment[1]
+                    break
+            block = block.previous()
+        
+        # Find next aligned block to get the audio range end time
+        block = to_align[-1].next()
+        while block.isValid():
+            block_type = self.getBlockType(block)
+            if block_type is BlockType.ALIGNED:
+                block_id = self.getBlockId(block)
+                block_segment = self.getSegment(block_id)
+                if block_segment is not None:
+                    end_range = block_segment[0]
+                    break
+            block = block.next()
+        
+        texts = [ b.text() for b in to_align ]
+        range = [start_range, end_range]
+        segments = self.autoAlignSentences(texts, range)
+        print(segments)
+        for i, segment in enumerate(segments):
+            if segment is None:
+                continue
+            block = to_align[i]
+            self.undo_stack.push(AlignBlockWithSegment(self, block, segment))
+
+
+    def deleteUtterances(self, segments_ids: List[SegmentId]) -> None:
+        """ Delete both segments and sentences """
+
+        if (self.text_widget is None) or (self.waveform_widget is None):
+            return
+        
+        if segments_ids:
+            self.undo_stack.push(DeleteUtterancesCommand(self, self.text_widget, self.waveform_widget, segments_ids))
+
+
+    def deleteSegments(self, segments_id: List[SegmentId]) -> None:
+        """ Delete segments but keep sentences """
+
+        self.undo_stack.push(DeleteSegmentsCommand(self, self, segments_id))
+
+
+    def selectAll(self) -> None:
+        selection = [ id for id, _ in self.getSortedSegments() ]
+        self.waveform_widget.active_segments = selection
+        self.waveform_widget.active_segment_id = selection[-1] if selection else -1
+        self.waveform_widget.must_redraw = True
+
 
 
 class Block:

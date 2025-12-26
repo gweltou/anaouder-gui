@@ -24,6 +24,7 @@ Handles all media playback operations.
 
 import logging
 from typing import Optional, Tuple
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot, QUrl
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -89,7 +90,7 @@ class MediaPlayerController(QObject):
         
         # State
         self.state = PlaybackState()
-        self.media_path: Optional[str] = None
+        self.media_path: Optional[Path] = None
         self.media_duration: float = 0.0  # in seconds
         self.media_metadata: dict = {}
         
@@ -101,7 +102,7 @@ class MediaPlayerController(QObject):
         self.log.debug("MediaPlayerController initialized")
     
 
-    def loadMedia(self, filepath: str) -> bool:
+    def loadMedia(self, file_path: Path) -> bool:
         """
         Load a media file for playback.
         
@@ -111,19 +112,19 @@ class MediaPlayerController(QObject):
         Returns:
             True if loading initiated successfully, False otherwise
         """
-        if not filepath:
+        if not file_path:
             self.log.warning("Attempted to load media with empty filepath")
             return False
         
-        self.log.info(f"Loading media file: {filepath}")
+        self.log.info(f"Loading media file: {file_path}")
         self.stop()
         self.state.reset()
         
-        self.media_path = filepath
-        self.player.setSource(QUrl.fromLocalFile(filepath))
+        self.media_path = file_path
+        self.player.setSource(QUrl.fromLocalFile(file_path))
 
         # Load metadata
-        self.media_metadata = cache.get_media_metadata(filepath)
+        self.media_metadata = cache.get_media_metadata(file_path)
         return True
 
 
@@ -139,7 +140,10 @@ class MediaPlayerController(QObject):
 
     def getMediaMetadata(self) -> dict:
         """Get metadata of the currently loaded media"""
-        return self.media_metadata  
+        if self.media_path is None:
+            return {}
+        
+        return cache.get_media_metadata(self.media_path)
 
 
     def play(self) -> bool:

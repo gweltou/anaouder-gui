@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+
 from typing import List, Tuple, Optional
 from math import ceil
 from enum import Enum
@@ -48,7 +49,7 @@ from src.strings import strings
 ZOOM_Y = 3.5    # In pixels per second
 ZOOM_MIN = 0.2  # In pixels per second
 ZOOM_MAX = 512  # In pixels per second
-SNAPPING_RADIUS = 4 # In pixels
+SNAPPING_RADIUS = 4 # In pixels (not used !)
 
 
 Handle = Enum("Handle", ["LEFT", "RIGHT", "MIDDLE"])
@@ -237,7 +238,7 @@ class WaveformWidget(QWidget):
 
         self.transcribe_action = QAction(self.tr("Auto transcribe"), self)
         self.transcribe_action.setShortcut(shortcuts["transcribe"])
-        self.transcribe_action.triggered.connect(self.parent.transcribeAction)
+        self.transcribe_action.triggered.connect(self.parent.transcribeAction) # TODO: use signal
 
         zoom_in_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.ZoomIn), self)
         zoom_in_shortcut.activated.connect(self.zoomIn)
@@ -247,12 +248,12 @@ class WaveformWidget(QWidget):
 
         self.crop_head_action = QAction(self.tr("Crop head"))
         self.crop_head_action.setShortcut(shortcuts["crop_head"])
-        self.crop_head_action.triggered.connect(self.document.cropHead)
+        self.crop_head_action.triggered.connect(self.document.cropHead) # TODO: use signal
         self.addAction(self.crop_head_action)
 
         self.crop_tail_action = QAction(self.tr("Crop tail"))
         self.crop_tail_action.setShortcut(shortcuts["crop_tail"])
-        self.crop_tail_action.triggered.connect(self.document.cropTail)
+        self.crop_tail_action.triggered.connect(self.document.cropTail) # TODO: use signal
         self.addAction(self.crop_tail_action)
 
         self.split_here_action = QAction(self.tr("Split here"))
@@ -360,8 +361,8 @@ class WaveformWidget(QWidget):
     def splitHere(self):
         log.debug("splitHere")
         if self.active_segment_id >= 0:
-            segment = self.segments[self.active_segment_id]
-            if segment[0] <= self.playhead <= segment[1]:
+            segment = self.document.getSegment(self.active_segment_id)
+            if segment and (segment[0] <= self.playhead <= segment[1]):
                 self.split_utterance.emit(self.active_segment_id, self.playhead)
 
 
@@ -598,11 +599,14 @@ class WaveformWidget(QWidget):
             self.waveform.ppsec = self.ppsec
         
         # Recalculate the graphical elements heights
+        ACTIVE_SEGMENT_HEIGHT = 0.28
+        INACTIVE_SEGMENT_HEIGHT = 0.24
+
         wf_max_height = self.height() - self.timecode_margin
-        self.active_top = round(self.timecode_margin + 0.22 * wf_max_height)
-        self.active_height = round(self.timecode_margin + 0.78 * wf_max_height - self.active_top)
-        self.inactive_top = round(self.timecode_margin + 0.26 * wf_max_height)
-        self.inactive_height = round(self.timecode_margin + 0.74 * wf_max_height - self.inactive_top)
+        self.active_top = round(self.timecode_margin + (0.5 - ACTIVE_SEGMENT_HEIGHT) * wf_max_height)
+        self.active_height = round(self.timecode_margin + (0.5 + ACTIVE_SEGMENT_HEIGHT) * wf_max_height - self.active_top)
+        self.inactive_top = round(self.timecode_margin + (0.5 - INACTIVE_SEGMENT_HEIGHT) * wf_max_height)
+        self.inactive_height = round(self.timecode_margin + (0.5 + INACTIVE_SEGMENT_HEIGHT) * wf_max_height - self.inactive_top)
         self.selection_top = round(self.timecode_margin + 0.16 * wf_max_height)
         self.selection_height = round(self.timecode_margin + 0.84 * wf_max_height - self.selection_top)
         self.selection_inactive_top = round(self.timecode_margin + 0.18 * wf_max_height)

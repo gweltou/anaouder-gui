@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
+from typing import Optional
 import os
 import threading
 import logging
@@ -49,7 +50,6 @@ from PySide6.QtGui import QDesktopServices, QPalette, QColor
 
 import src.lang as lang
 from src.video_widget import VideoWidget
-from src.cache_system import CacheSystem
 from src.utils import get_cache_directory
 from src.settings import (
     MULTI_LANG, app_settings, UI_LANGUAGES,
@@ -273,8 +273,13 @@ class ParametersDialog(QDialog):
         cache_transcription_cleared = Signal()
 
 
-    def __init__(self, parent, media_metadata: dict):
+    def __init__(self, parent, media_path: Optional[str]):
         super().__init__(parent)
+
+        if media_path:
+            media_metadata = cache.get_media_metadata(media_path)
+        else:
+            media_metadata = {}
 
         self.signals = self.Signals()
 
@@ -287,7 +292,7 @@ class ParametersDialog(QDialog):
         self.tabs.addTab(ModelsPanel(self), self.tr("Models"))
         self.tabs.addTab(SubtitlesPanel(self, media_metadata.get("fps", 0)), self.tr("Subtitles Rules"))
         # self.tabs.addTab(UIPanel(parent.video_widget), self.tr("UI"))
-        self.tabs.addTab(CachePanel(self, media_metadata), self.tr("Cache"))
+        self.tabs.addTab(CachePanel(self, media_path), self.tr("Cache"))
         # self.tabs.addTab(self.display_tab, "Display")
         # self.tabs.addTab(self.dictionary_tab, "Dictionary")
         
@@ -929,10 +934,11 @@ class SubtitlesPanel(QWidget):
 
 class CachePanel(QWidget):
 
-    def __init__(self, parent: ParametersDialog, media_metadata, *args, **kwargs):
+    def __init__(self, parent: ParametersDialog, media_path: Optional[Path], *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.parent_dialog = parent
-        self.media_metadata = media_metadata
+        
+        self.media_metadata = cache.get_media_metadata(media_path) if media_path else {}
 
         main_layout = QVBoxLayout()
 
@@ -944,7 +950,7 @@ class CachePanel(QWidget):
             label = QLabel(self.media_metadata["fingerprint"])
             label.setToolTip(self.tr("Media fingerprint"))
         else:
-            label = QLabel("No media file loaded")
+            label = QLabel(self.tr("No media file loaded"))
         current_file_layout.addWidget(label)
 
         # Current media size layout
