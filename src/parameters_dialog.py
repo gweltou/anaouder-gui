@@ -181,15 +181,16 @@ class DownloadProgressDialog(QDialog):
                         self.signals.progress.emit(percent)
                         self.last_percent = percent
             
-            # Checking MD5 sum
+            # Verifying checksum
             if not self.cancelled:
                 self.status_label.setText(self.tr("Verifying checksum..."))
-                md5sum = hashlib.file_digest(open(self.download_target, 'rb'), "md5").hexdigest()
-                if md5sum != lang.getMd5Sum(self.model_name):
-                    log.info(f"Mismatch in md5 sum:\n\tExpected: {lang.getMd5Sum(self.model_name)}\n\tCalculated: {md5sum}")
+                expected_sum = lang.getSHA256(self.model_name)
+                file_checksum = hashlib.file_digest(open(self.download_target, 'rb'), "sha256").hexdigest()
+                if file_checksum != expected_sum:
+                    log.info(f"Mismatch in sha256 sum:\n\tExpected: {expected_sum}\n\tCalculated: {file_checksum}")
                     # Remove corrupted archive
                     os.remove(self.download_target)
-                    raise Exception("Wrong MD5 sum !")
+                    raise Exception("Wrong checksum!")
 
             # Extract the archive
             if not self.cancelled:
@@ -655,7 +656,6 @@ class ModelsPanel(QWidget):
         models_layout.addWidget(online_group)
         models_layout.addWidget(local_group)
         
-        # main_layout.addLayout(lang_layout)
         if MULTI_LANG:
             main_layout.addWidget(lang_group)
         main_layout.addLayout(models_layout)
@@ -676,7 +676,7 @@ class ModelsPanel(QWidget):
         progress_dialog = DownloadProgressDialog(url, root, model_name, self)
         result = progress_dialog.exec()
         
-        if result == QDialog.Accepted:
+        if result == QDialog.DialogCode.Accepted:
             self.updateLanguage()
 
 
