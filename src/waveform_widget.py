@@ -156,8 +156,8 @@ class WaveformWidget(QWidget):
     def __init__(self, parent, document_controller: DocumentInterface):
         super().__init__(parent)
         self.parent = parent
-        self.document = document_controller
-        self.undo_stack = self.document.undo_stack
+        self.document_controller = document_controller
+        self.undo_stack = self.document_controller.undo_stack
 
         self.waveform = self.ScaledWaveform()
         self.pixmap = QPixmap()
@@ -248,12 +248,12 @@ class WaveformWidget(QWidget):
 
         self.crop_head_action = QAction(self.tr("Crop head"))
         self.crop_head_action.setShortcut(shortcuts["crop_head"])
-        self.crop_head_action.triggered.connect(self.document.cropHead) # TODO: use signal
+        self.crop_head_action.triggered.connect(self.document_controller.cropHead) # TODO: use signal
         self.addAction(self.crop_head_action)
 
         self.crop_tail_action = QAction(self.tr("Crop tail"))
         self.crop_tail_action.setShortcut(shortcuts["crop_tail"])
-        self.crop_tail_action.triggered.connect(self.document.cropTail) # TODO: use signal
+        self.crop_tail_action.triggered.connect(self.document_controller.cropTail) # TODO: use signal
         self.addAction(self.crop_tail_action)
 
         self.split_here_action = QAction(self.tr("Split here"))
@@ -324,104 +324,12 @@ class WaveformWidget(QWidget):
             self.new_utterance_from_selection.emit()
 
 
-    # def cropHead(self):
-    #     log.debug("cropHead")
-
-    #     if self.active_segment_id >= 0:
-    #         segment = self.segments[self.active_segment_id]
-
-    #         if segment[0] <= self.playhead <= segment[1]:
-    #             self.undo_stack.push(
-    #                 ResizeSegmentCommand(
-    #                     self,
-    #                     self.active_segment_id,
-    #                     self.playhead,
-    #                     segment[1]
-    #                 )
-    #             )
-
-
-    # def cropTail(self):
-    #     log.debug("cropTail")
-        
-    #     if self.active_segment_id >= 0:
-    #         segment = self.segments[self.active_segment_id]
-
-    #         if segment[0] <= self.playhead <= segment[1]:
-    #             self.undo_stack.push(
-    #                 ResizeSegmentCommand(
-    #                     self,
-    #                     self.active_segment_id,
-    #                     segment[0],
-    #                     self.playhead
-    #                 )
-    #             )
-    
-
     def splitHere(self):
         log.debug("splitHere")
         if self.active_segment_id >= 0:
-            segment = self.document.getSegment(self.active_segment_id)
+            segment = self.document_controller.getSegment(self.active_segment_id)
             if segment and (segment[0] <= self.playhead <= segment[1]):
                 self.split_utterance.emit(self.active_segment_id, self.playhead)
-
-
-    def getPrevSegmentId(self, segment_id: SegmentId) -> SegmentId:
-        """
-        Returns the ID of the segment before the currently selected one, or -1.
-        If no segment are selected, return the previous one relative to the playhead.
-
-        Returns:
-            A segment ID or -1
-        """
-        if segment_id is None:
-            segment_id = self.active_segment_id
-            
-        sorted_segments = self.document.getSortedSegments()
-
-        if segment_id == -1:
-            # Check relative to playhead position
-            for i, (seg_id, (start, _)) in enumerate(sorted_segments):
-                if start > self.playhead:
-                    if i > 0:
-                        return sorted_segments[i - 1][0]
-                    return -1
-        else:
-            for i, (seg_id, _) in enumerate(sorted_segments):
-                if seg_id == segment_id:
-                    if i > 0:
-                        return sorted_segments[i - 1][0]
-                    return -1
-        return -1
-
-
-    def getNextSegmentId(self, segment_id: Optional[SegmentId] = None) -> SegmentId:
-        """
-        Returns the ID of the segment after the currently selected one, or -1.
-        If no segment are selected, return the next one relative to the playhead.
-
-        Returns:
-            A segment ID or -1
-        """
-        if segment_id is None:
-            segment_id = self.active_segment_id
-
-        sorted_segments = self.document.getSortedSegments()
-
-        if segment_id == -1:
-            # Check relative to playhead position
-            for i, (segment_id, (_, end)) in enumerate(sorted_segments):
-                if end > self.playhead:
-                    if i < len(sorted_segments) - 1:
-                        return sorted_segments[i][0]
-                    return -1
-        else:
-            for i, (seg_id, _) in enumerate(sorted_segments):
-                if seg_id == segment_id:
-                    if i < len(sorted_segments) - 1:
-                        return sorted_segments[i + 1][0]
-                    return -1
-        return -1
 
 
     def setActive(self, seg_ids: List[SegmentId] | None, is_playing = False) -> None:
@@ -443,12 +351,12 @@ class WaveformWidget(QWidget):
         
         self.active_segments = seg_ids
         self.active_segment_id = seg_ids[-1]
-        if self.active_segment_id not in self.document.segments:
+        if self.active_segment_id not in self.document_controller.segments:
             self.active_segment_id = -1
             self.must_redraw = True
             self.refresh_segment_info.emit(-1)
             return
-        start, end = self.document.segments[self.active_segment_id]
+        start, end = self.document_controller.segments[self.active_segment_id]
 
         if not (is_playing and self.follow_playhead):
             # Center on segment, if necessary
@@ -657,7 +565,7 @@ class WaveformWidget(QWidget):
             return None
 
         t = self.t_left + position.x() / self.ppsec
-        for id, (start, end) in self.document.segments.items():
+        for id, (start, end) in self.document_controller.segments.items():
             if start <= t <= end:
                 return (id, SegmentSide.LEFT if (t-start) < (end-t) else SegmentSide.RIGHT)
         return None
@@ -715,7 +623,7 @@ class WaveformWidget(QWidget):
         if self.resizing_handle != None:
             self.undo_stack.push(
                 ResizeSegmentCommand(
-                    self.document,
+                    self.document_controller,
                     self,
                     self.active_segment_id,
                     self.resizing_segment[0],
@@ -734,12 +642,12 @@ class WaveformWidget(QWidget):
                 the timecode is already quantized according to snapping settings
             handle (Handle): which handle is being moved (LEFT, RIGHT, MIDDLE)
         """
-        current_segment = self.document.segments[self.active_segment_id]
+        current_segment = self.document_controller.segments[self.active_segment_id]
 
         left_boundary = 0.0
         right_boundary = self.audio_len
 
-        sorted_segments = self.document.getSortedSegments()
+        sorted_segments = self.document_controller.getSortedSegments()
         for _, (start, end) in sorted_segments:
             if end <= current_segment[0]:
                 left_boundary = end
@@ -834,6 +742,8 @@ class WaveformWidget(QWidget):
             start_pos = max(start_pos, left_boundary + 0.001)
             end_pos = min(end_pos, right_boundary - 0.001)
             self._selection = [start_pos, end_pos]
+        
+        self.must_redraw = True
 
 
     ###################################
@@ -946,10 +856,10 @@ class WaveformWidget(QWidget):
             elif self.handle_state[2]: self.resizing_handle = Handle.RIGHT
 
             if self.active_segment_id >= 0:
-                segment = self.document.getSegment(self.active_segment_id)
+                segment = self.document_controller.getSegment(self.active_segment_id)
                 print(f"{self.active_segment_id=} {segment=}")
                 self.resizing_segment = segment[:]
-                block = self.parent.text_widget.getBlockById(self.active_segment_id)
+                block = self.document_controller.getBlockById(self.active_segment_id)
                 self.resizing_textlen = self.parent.text_widget.getSentenceLength(block)
                 seg_len = self.resizing_segment[1] - self.resizing_segment[0]
                 self.resizing_density = self.resizing_textlen / seg_len
@@ -1008,7 +918,7 @@ class WaveformWidget(QWidget):
         if active_id is None:
             return super().mouseDoubleClickEvent(event)
             
-        segment = self.document.getSegment(active_id)
+        segment = self.document_controller.getSegment(active_id)
         if segment is None:
             return super().mouseDoubleClickEvent(event)
         
@@ -1044,7 +954,7 @@ class WaveformWidget(QWidget):
                 if self.selection_is_active and self._selection:
                     start, end = self._selection
                 else:
-                    start, end = self.document.segments[self.active_segment_id]
+                    start, end = self.document_controller.segments[self.active_segment_id]
                 if (
                     event.y() >= self.inactive_top
                     and event.y() < self.inactive_top + self.inactive_height
@@ -1308,7 +1218,7 @@ class WaveformWidget(QWidget):
 
     def _drawSegments(self, t_right: float):
         # Draw inactive segments
-        for id, (start, end) in self.document.segments.items():
+        for id, (start, end) in self.document_controller.segments.items():
             if id in self.active_segments:
                 continue
             if end <= self.t_left:
@@ -1368,14 +1278,14 @@ class WaveformWidget(QWidget):
                 
         # Draw selected segment
         for seg_id in self.active_segments:
-            if seg_id not in self.document.segments:
+            if seg_id not in self.document_controller.segments:
                 continue
 
             # Check if segment is being resized
             if self.resizing_handle != None:
                 start, end = self.resizing_segment
             else:
-                start, end = self.document.segments[seg_id]
+                start, end = self.document_controller.segments[seg_id]
             
             # Check if segment is in viewport
             if end > self.t_left or start < t_right:
@@ -1415,14 +1325,14 @@ class WaveformWidget(QWidget):
 
 
     def _drawSnappingMarkers(self):
-        start, end = self.document.segments[self.active_segment_id]
+        start, end = self.document_controller.segments[self.active_segment_id]
         current_dur = end - start
         markers = []
 
         # Check next segment boundary
-        next_segment_id = self.getNextSegmentId(self.active_segment_id)
+        next_segment_id = self.document_controller.getNextSegmentId(self.active_segment_id)
         if next_segment_id != -1:
-            next_segment_boundary = self.document.segments[next_segment_id][0]
+            next_segment_boundary = self.document_controller.segments[next_segment_id][0]
             next_segment_boundary -= int(self._min_interval) / self.fps
         else:
             next_segment_boundary = self.audio_len

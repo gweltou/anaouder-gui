@@ -81,7 +81,7 @@ from src.text_widget import (
 )
 from src.splitter import CustomSplitter
 from src.video_widget import VideoWidget
-from src.document import DocumentController
+from document_controller import DocumentController
 from src.transcriber import TranscriptionService
 from src.scene_detector import SceneDetectWorker
 from src.commands import (
@@ -107,7 +107,7 @@ from src.settings import (
     RECENT_FILES_LIMIT
 )
 import src.lang as lang
-from src.interfaces import Segment, SegmentId
+from src.interfaces import Segment, SegmentId, BlockType
 from src.cache_system import cache
 from src.strings import strings
 
@@ -183,7 +183,7 @@ class MainWindow(QMainWindow):
         self.onSetAutosave(app_settings.value("autosave/checked", True, type=bool))
 
         # Document Controller
-        self.document_controller = DocumentController()
+        self.document_controller = DocumentController(self)
         self.text_widget = TextEditWidget(self, self.document_controller)
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
         self.document_controller.setTextWidget(self.text_widget)
@@ -753,7 +753,8 @@ class MainWindow(QMainWindow):
         self.follow_playhead_button.setIcon(icons["follow_playhead"])
         self.follow_playhead_button.setFixedWidth(BUTTON_SIZE)
         self.follow_playhead_button.setCheckable(True)
-        self.follow_playhead_button.setToolTip(self.tr("Follow playhead"))
+        follow_playhead_tooltip_str = shortcuts["follow_playhead"].toString().replace("Up", '⬆️')
+        self.follow_playhead_button.setToolTip(self.tr("Follow playhead") + f" &lt;{follow_playhead_tooltip_str}&gt;")
         self.follow_playhead_button.setChecked(self.waveform.follow_playhead)
         self.follow_playhead_button.toggled.connect(self.toggleFollowPlayhead)
         view_buttons_layout.addWidget(self.follow_playhead_button)
@@ -925,7 +926,7 @@ class MainWindow(QMainWindow):
         block = doc.firstBlock()
         while block.isValid():
             text = self.text_widget.getBlockHtml(block)[0]
-            utt_id = self.text_widget.getBlockId(block)
+            utt_id = self.document_controller.getBlockId(block)
 
             segment = None
             if utt_id != -1:
@@ -994,7 +995,7 @@ class MainWindow(QMainWindow):
             keep_media = False
         ) -> None:
         """Hub function for opening files"""
-        log.info(f"openFile({file_path=})")
+        log.info(f"openFile({str(file_path)})")
 
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         media_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
@@ -1356,7 +1357,7 @@ class MainWindow(QMainWindow):
 
         if not "fps" in media_metadata:
             # Check video framerate
-            audio_metadata = get_audiofile_info(file_path)
+            audio_metadata = get_audiofile_info(str(file_path))
             print(f"{audio_metadata}")
             if "r_frame_rate" in audio_metadata:
                 print(f"Stream {audio_metadata["r_frame_rate"]=}")
@@ -1415,14 +1416,14 @@ class MainWindow(QMainWindow):
         utterances = []
         block = self.text_widget.document().firstBlock()
         while block.isValid():            
-            if self.text_widget.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
+            if self.document_controller.getBlockType(block) == BlockType.ALIGNED:
                 text = self.text_widget.getBlockHtml(block)[0]
 
                 # Remove extra spaces
                 lines = [' '.join(l.split()) for l in text.split(LINE_BREAK)]
                 text = LINE_BREAK.join(lines)
             
-                block_id = self.text_widget.getBlockId(block)
+                block_id = self.document_controller.getBlockId(block)
                 segment = self.document_controller.getSegment(block_id)
                 if segment:
                     utterances.append( (text, segment) )
@@ -1434,18 +1435,18 @@ class MainWindow(QMainWindow):
 
     def exportSrt(self):
         exportSignals.message.connect(self.setStatusMessage)
-        export(self, self.media_path, self.getUtterancesForExport(), "srt")
+        export(self, str(self.media_path), self.getUtterancesForExport(), "srt")
         exportSignals.message.disconnect()
 
     def exportEaf(self):
         exportSignals.message.connect(self.setStatusMessage)
-        export(self, self.media_path, self.getUtterancesForExport(), "eaf")
+        export(self, str(self.media_path), self.getUtterancesForExport(), "eaf")
         exportSignals.message.disconnect()
 
 
     def exportTxt(self):
         exportSignals.message.connect(self.setStatusMessage)
-        export(self, self.media_path, self.getUtterancesForExport(), "txt")
+        export(self, str(self.media_path), self.getUtterancesForExport(), "txt")
         exportSignals.message.disconnect()
 
 
@@ -1527,7 +1528,7 @@ class MainWindow(QMainWindow):
             return (-1, "")
         
         # Remove metadata from subtitle text
-        block = self.text_widget.getBlockById(seg_id)
+        block = self.document_controller.getBlockById(seg_id)
         if block is None:
             return (-1, "")
 
@@ -1549,10 +1550,6 @@ class MainWindow(QMainWindow):
             return
         
         seg_id, text = self.getSubtitleAtPosition(position_sec)
-
-        # from src.document import Document
-        # document = Document(self.text_widget, self.waveform.segments)
-        # cached_transcription = document.getTranscriptionFor(seg_id)
 
         self.video_widget.setCaption(text, position_sec)
 
@@ -1692,7 +1689,7 @@ class MainWindow(QMainWindow):
         if segment_id is None:
             return
         
-        next_segment_id = self.waveform.getNextSegmentId(segment_id)
+        next_segment_id = self.document_controller.getNextSegmentId(segment_id)
         print(f"{next_segment_id=}")
 
         if next_segment_id != -1:
@@ -1710,7 +1707,7 @@ class MainWindow(QMainWindow):
         if segment_id is None:
             return
         
-        prev_segment_id = self.waveform.getPrevSegmentId(segment_id)
+        prev_segment_id = self.document_controller.getPrevSegmentId(segment_id)
 
         if prev_segment_id != -1:
             self.selectUtterance(prev_segment_id)
@@ -1743,7 +1740,7 @@ class MainWindow(QMainWindow):
         """
         log.debug(f"selectUtterance({seg_id=})")
         
-        block = self.text_widget.getBlockById(seg_id)
+        block = self.document_controller.getBlockById(seg_id)
         if block:
             cursor = self.text_widget.textCursor()
             cursor.setPosition(block.position())
@@ -1893,6 +1890,7 @@ class MainWindow(QMainWindow):
             self.undo_stack.push(
                 CreateNewEmptyUtteranceCommand(
                     self.media_controller,
+                    self.document_controller,
                     self.text_widget,
                     self.waveform,
                     [start, end],
@@ -1917,22 +1915,23 @@ class MainWindow(QMainWindow):
             
             block = start_block
             while True:
-                seg_id = self.text_widget.getBlockId(block)
+                seg_id = self.document_controller.getBlockId(block)
                 if seg_id != -1:
                     if (fps := self.media_controller.getMediaMetadata().get("fps", 0)) > 0:
                         # Adjust segment boundaries on frame positions
                         seg_start, seg_end = self.document_controller.getSegment(seg_id)
                         frame_start = floor(seg_start * fps) / fps
                         frame_end = ceil(seg_end * fps) / fps
-                        if (prev_id := self.waveform.getPrevSegmentId(seg_id)) != -1:
-                            prev_end = self.document_controller.getSegment(prev_id)[1]
-                            if frame_start < prev_end:
+                        prev_segment_id = self.document_controller.getPrevSegmentId(seg_id)
+                        if segment := self.document_controller.getSegment(prev_segment_id):
+                            if frame_start < segment[1]:
                                 # The previous frame position overlaps the previous segment,
                                 # choose next frame
                                 frame_start = ceil(seg_start * fps) / fps
-                        if (next_id := self.waveform.getNextSegmentId(seg_id)) != -1:
-                            next_start = self.document_controller.getSegment(next_id)[0]
-                            right_boundary = floor(next_start * fps) / fps
+                        
+                        next_segment_id = self.document_controller.getNextSegmentId(seg_id)
+                        if segment := self.document_controller.getSegment(next_segment_id):
+                            right_boundary = floor(segment[0] * fps) / fps
                             right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL, type=int) / fps
                             if frame_end > right_boundary:
                                 # The next frame position overlaps the next segment,
@@ -1997,9 +1996,9 @@ class MainWindow(QMainWindow):
             cursor = self.text_widget.textCursor()
             block = cursor.block()
             if self.text_widget.isAligned(block):
-                segment_id = self.text_widget.getBlockId(block)
+                segment_id = self.document_controller.getBlockId(block)
                 # Update utterance density
-                self.updateUtteranceDensity(segment_id)
+                self.document_controller.updateUtteranceDensity(segment_id)
                 self.updateSegmentInfo(segment_id)
                 self.waveform.must_redraw = True
             
@@ -2076,6 +2075,7 @@ class MainWindow(QMainWindow):
             self.undo_stack.push(
                 CreateNewEmptyUtteranceCommand(
                     self.media_controller,
+                    self.document_controller,
                     self.text_widget,
                     self.waveform,
                     segment,
@@ -2083,7 +2083,7 @@ class MainWindow(QMainWindow):
                 )
             )
             
-        block = self.text_widget.getBlockById(segment_id)
+        block = self.document_controller.getBlockById(segment_id)
         if block:
             text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
             self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
@@ -2189,12 +2189,12 @@ class MainWindow(QMainWindow):
             # Transcribe current audio selection
             seg_id = self.document_controller.getNewSegmentId()
             segments = [(seg_id, *self.waveform.getSelection())]
-            self.recognizer.transcribeSegments(self.media_path, segments)
+            self.recognizer.transcribeSegments(str(self.media_path), segments)
             self.waveform.removeSelection()
         elif len(self.waveform.active_segments) > 0:
             # Transcribe selected segments
             segments = [(seg_id, *self.document_controller.segments[seg_id]) for seg_id in self.waveform.active_segments]
-            self.recognizer.transcribeSegments(self.media_path, segments)
+            self.recognizer.transcribeSegments(str(self.media_path), segments)
         else:
             # Transcribe whole audio file
             transcription_progress = self.media_controller.getMediaMetadata().get("transcription_progress", 0.0)
@@ -2213,7 +2213,7 @@ class MainWindow(QMainWindow):
                 # Needed for "smart splitting"
                 hidden_transcription = True
             self._setStatusTranscriptionStarted()
-            self.recognizer.transcribeFile(self.media_path, transcription_progress, hidden_transcription)
+            self.recognizer.transcribeFile(str(self.media_path), transcription_progress, hidden_transcription)
 
 
     def alignWithSelection(self, block:QTextBlock) -> None:
@@ -2403,11 +2403,11 @@ class MainWindow(QMainWindow):
 
         # Refresh block color in density mode
         if self.text_widget.highlighter.mode == Highlighter.ColorMode.DENSITY:
-            block = self.text_widget.getBlockById(segment_id)
+            block = self.document_controller.getBlockById(segment_id)
             if block:
                 self.text_widget.highlighter.rehighlightBlock(block)
         
-        density = self.getUtteranceDensity(segment_id)
+        density = self.document_controller.getUtteranceDensity(segment_id)
         self.updateSegmentInfoResizing(segment_id, segment, density)
 
 
@@ -2455,42 +2455,6 @@ class MainWindow(QMainWindow):
                 string_parts.append(density_str)
 
         self.status_label.setText("&nbsp;&nbsp;&nbsp;&nbsp;".join(string_parts))
-
-
-    def getUtteranceDensity(self, seg_id:SegmentId) -> float:
-        """Get the density (chars/s) field of an utterance"""
-        log.debug(f"getUtteranceDensity({seg_id=})")
-        # If resizing, return the uncommited resizing density
-        if self.waveform.resizing_handle and self.waveform.active_segment_id == seg_id:
-            
-            return self.waveform.resizing_density
-
-        block = self.text_widget.getBlockById(seg_id)
-        if not block:
-            return 0.0
-        return block.userData().data.get("density", 0.0)
-    
-
-    def updateUtteranceDensity(self, segment_id: SegmentId) -> None:
-        """Update the density (chars/s) field of an utterance"""
-        log.debug(f"updateUtteranceDensity({segment_id=})")
-        # Count the number of characters in sentence
-        block = self.text_widget.getBlockById(segment_id)
-        if block is None:
-            return
-
-        num_chars = self.text_widget.getSentenceLength(block)
-
-        segment = self.document_controller.getSegment(segment_id)
-        if not segment:
-            return
-        
-        start, end = segment
-        dur = end - start
-        if dur > 0.0:
-            new_density = num_chars / dur
-            # current_density = block.userData().data.get("density", -1.0)
-            block.userData().data["density"] = new_density
     
 
     def changeEvent(self, event) -> None:

@@ -44,7 +44,7 @@ log = logging.getLogger(__name__)
 
 
 def commit_transcription_to_cache(media_path: str, tokens: list) -> None:
-    """ Backup transcription in cache """
+    """Backup transcription in cache"""
 
     if not tokens:
         return
@@ -61,9 +61,7 @@ def commit_transcription_to_cache(media_path: str, tokens: list) -> None:
     ]
 
     # Update backend transcription with new tokens
-    old_tokens = cache.get_media_transcription(Path(media_path))
-    if old_tokens is None:
-        old_tokens = []
+    old_tokens = cache.get_media_transcription(Path(media_path)) or []
     updated_tokens = []
     segment_start = tokens[0][0]
     segment_end = tokens[-1][1]
@@ -94,7 +92,7 @@ def commit_transcription_to_cache(media_path: str, tokens: list) -> None:
     old_progress = cache.get_media_metadata(Path(media_path)).get("transcription_progress", 0.0)
     cache.update_media_metadata(
         Path(media_path),
-        { "transcription_progress": max(0.0, old_progress) }
+        { "transcription_progress": max(segment_end, old_progress) }
     )
 
 
@@ -233,7 +231,7 @@ class RecognizerWorker(QObject):
         
         except Exception as e:
             log.error(e)
-            self.message.emit(self.tr("Error during transcription: {error}").format(error=e))
+            self.message.emit(self.tr("Error during transcription: {error}").format(error = e))
 
         finally:
             if process:

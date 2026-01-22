@@ -256,7 +256,7 @@ class DeleteUtterancesCommand(QUndoCommand):
         self.seg_ids = seg_ids[:]
         self.segments = [ self.document_controller.segments[seg_id][:] for seg_id in self.seg_ids ]
         
-        blocks = [ block for seg_id in seg_ids if (block := self.text_widget.getBlockById(seg_id)) is not None ]
+        blocks = [ block for seg_id in seg_ids if (block := self.document_controller.getBlockById(seg_id)) is not None ]
         self.texts = [ block.text() for block in blocks ]
         self.datas = [ block.userData() for block in blocks ]
         self.datas = [ m.data.copy() if m else None for m in self.datas ]
@@ -400,7 +400,7 @@ class DeleteTextCommand(QUndoCommand):
 class InsertBlockCommand(QUndoCommand):
     """Create a new text block in the document
     
-    Parameters:
+    Args:
         position (int):
             The reference position in the text document
         text (str, optional):
@@ -681,13 +681,14 @@ class DeleteSegmentsCommand(QUndoCommand):
     def __init__(
             self,
             document_controller: DocumentInterface,
-            parent,
+            text_edit: TextDocumentInterface,
+            waveform_widget: WaveformInterface,
             seg_ids: List[SegmentId]
         ):
         super().__init__()
         self.document_controller = document_controller
-        self.text_edit: TextDocumentInterface = parent.text_widget
-        self.waveform: WaveformInterface = parent.waveform
+        self.text_edit: TextDocumentInterface = text_edit
+        self.waveform: WaveformInterface = waveform_widget
         self.seg_ids = seg_ids
         self.segments = {
             seg_id: self.document_controller.segments[seg_id]

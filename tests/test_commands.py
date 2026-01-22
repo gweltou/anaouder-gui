@@ -9,17 +9,17 @@ from PySide6.QtGui import QUndoCommand, QTextCursor
 
 from src.main import (
     MainWindow,
-    AddSegmentCommand, CreateNewEmptyUtteranceCommand,
-    DeleteUtterancesCommand,
-    JoinUtterancesCommand, AlignWithSelectionCommand,
-    DeleteSegmentsCommand, InsertBlockCommand,
+    CreateNewEmptyUtteranceCommand,
+    AlignWithSelectionCommand
 )
 from src.waveform_widget import (
     ResizeSegmentCommand, Handle,
 )
 from src.commands import (
+    AddSegmentCommand,
     InsertTextCommand,
-    DeleteTextCommand,
+    DeleteTextCommand, DeleteUtterancesCommand, DeleteSegmentsCommand,
+    JoinUtterancesCommand,
     InsertBlockCommand,
     ReplaceTextCommand
 )
@@ -59,7 +59,7 @@ def load_document():
         ("Pevare linenn", (32, 35)),
         ("Pempvet linenn", (40, 41))
     ]:
-        seg_id = main_window.waveform.addSegment(list(segment))
+        seg_id = main_window.document_controller.addSegment(list(segment))
         main_window.text_widget.appendSentence(text, seg_id)
 
 
@@ -68,7 +68,7 @@ def load_document_2():
     main_window.text_widget.document().clear()
     main_window.undo_stack.clear()
 
-    main_window.openFile(Path("Meli_mila_Malou_1.ali"))
+    main_window.openFile(Path("tests/Meli_mila_Malou_1.ali"))
 
 
 def getDocumentState() -> dict:
@@ -200,7 +200,7 @@ def test_align_with_selection():
     # cursor.movePosition(QTextCursor.NextBlock, QTextCursor.MoveAnchor, 2)
     # print(cursor.position())
 
-    block_id = main_window.text_widget.getBlockId(block)
+    block_id = main_window.document_controller.getBlockId(block)
     segment = main_window.waveform.segments[block_id][:]
     main_window.undo_stack.push(DeleteSegmentsCommand(main_window, [block_id]))
     main_window.waveform._selection = segment

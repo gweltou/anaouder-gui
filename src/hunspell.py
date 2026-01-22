@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-from PySide6.QtCore import QRunnable, QThreadPool, Signal, QObject, QThread
+from PySide6.QtCore import QRunnable, Signal, QObject, QThread
 
 from ostilhou.hspell import hs_dic_path
 
@@ -57,21 +57,3 @@ class HunspellLoader(QRunnable):
 
         self.signals.finished.emit(hunspell)
         self.signals.message.emit(QObject.tr("Hunspell dictionary loaded"))
-
-
-def toggleMisspelling(self, checked):
-    self.show_misspelling = checked
-    
-    if checked:
-        loader = HunspellLoader()
-        loader.signals.finished.connect(self._on_hunspell_loaded)
-        QThreadPool.globalInstance().start(loader)
-    else:
-        self.hunspell = None
-        self.rehighlight()
-
-
-def _on_hunspell_loaded(self, hunspell):
-    self.hunspell = hunspell
-    if self.show_misspelling:
-        self.rehighlight()

@@ -33,7 +33,7 @@ from src.interfaces import (
     Segment, SegmentId,
 )
 from src.text_widget import TextEditWidget
-from src.waveform_widget import WaveformWidget
+from src.waveform_widget import WaveformWidget, Handle
 from src.utils import (
     MyTextBlockUserData,
     LINE_BREAK
@@ -70,7 +70,7 @@ class DocumentController(QObject):
         super().__init__(parent)
 
         self.media_path: Optional[Path]
-        self.segments = {}
+        self.segments: Dict[SegmentId, Segment] = dict()
         self._sorted_segments = []
 
         self.text_widget: Optional[TextEditWidget] = None
@@ -78,7 +78,7 @@ class DocumentController(QObject):
 
         self.must_sort = False
         self.id_counter = 0
-        self.undo_stack = QUndoStack()
+        self.undo_stack = QUndoStack(parent)
 
         self.memoized_segment = None # Memoized transcription for one segment
         self.memoized_transcription_tokens = []
@@ -258,7 +258,7 @@ class DocumentController(QObject):
 
     def addSegment(self, segment: Segment, segment_id: Optional[SegmentId] = None) -> SegmentId:
         log.debug(f"addSegment({segment=}, {segment_id=})")
-        if segment_id == None:
+        if segment_id is None:
             segment_id = self.getNewSegmentId()
         self.segments[segment_id] = segment
 
@@ -282,7 +282,7 @@ class DocumentController(QObject):
 
     def clearSegments(self) -> None:
         # Keys are segment ids (int), values are segment [start (float), end (float)]
-        self.segments: Dict[SegmentId, Segment] = dict()
+        self.segments.clear()
         self.waveform_widget.active_segments = []
         self.waveform_widget.active_segment_id = -1
         self.waveform_widget.must_redraw = True
@@ -294,6 +294,64 @@ class DocumentController(QObject):
             self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
             self.must_sort = False
         return self._sorted_segments
+
+
+    def getPrevSegmentId(self, segment_id: SegmentId) -> SegmentId:
+        """
+        Returns the ID of the segment before the currently selected one, or -1.
+        If no segment are selected, return the previous one relative to the playhead.
+
+        Returns:
+            A segment ID or -1
+        """
+        if segment_id is None:
+            segment_id = self.active_segment_id
+            
+        sorted_segments = self.getSortedSegments()
+
+        if segment_id == -1:
+            # Check relative to playhead position
+            for i, (seg_id, (start, _)) in enumerate(sorted_segments):
+                if start > self.waveform_widget.playhead:
+                    if i > 0:
+                        return sorted_segments[i - 1][0]
+                    return -1
+        else:
+            for i, (seg_id, _) in enumerate(sorted_segments):
+                if seg_id == segment_id:
+                    if i > 0:
+                        return sorted_segments[i - 1][0]
+                    return -1
+        return -1
+
+
+    def getNextSegmentId(self, segment_id: Optional[SegmentId] = None) -> SegmentId:
+        """
+        Returns the ID of the segment after the currently selected one, or -1.
+        If no segment are selected, return the next one relative to the playhead.
+
+        Returns:
+            A segment ID or -1
+        """
+        if segment_id is None:
+            segment_id = self.waveform_widget.active_segment_id
+
+        sorted_segments = self.getSortedSegments()
+
+        if segment_id == -1:
+            # Check relative to playhead position
+            for i, (segment_id, (_, end)) in enumerate(sorted_segments):
+                if end > self.waveform_widget.playhead:
+                    if i < len(sorted_segments) - 1:
+                        return sorted_segments[i][0]
+                    return -1
+        else:
+            for i, (seg_id, _) in enumerate(sorted_segments):
+                if seg_id == segment_id:
+                    if i < len(sorted_segments) - 1:
+                        return sorted_segments[i + 1][0]
+                    return -1
+        return -1
 
 
     def getNextAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
@@ -329,17 +387,68 @@ class DocumentController(QObject):
         return -1
     
 
-    def cropHead(self):
+    def getUtteranceDensity(self, segment_id: SegmentId) -> float:
+        """Get the density (chars/s) field of an utterance"""
+        log.debug(f"getUtteranceDensity({segment_id=})")
+        if self.waveform_widget is None:
+            return 0.0
+        
+        # If resizing, return the uncommited resizing density
+        if self.waveform_widget.resizing_handle and self.waveform_widget.active_segment_id == segment_id:
+            return self.waveform_widget.resizing_density
+
+        block = self.getBlockById(segment_id)
+        if not block:
+            log.warning("No block found for id: {seg_id}")
+            return 0.0
+        block_metadata = block.userData().data
+        if "density" not in block_metadata:
+            self.updateUtteranceDensity(segment_id)
+
+        return block_metadata.get("density", 0.0)
+    
+
+    def updateUtteranceDensity(self, segment_id: SegmentId) -> None:
+        """Update the density (chars/s) field of an utterance"""
+        log.debug(f"updateUtteranceDensity({segment_id=})")
+
+        if self.text_widget is None:
+            return
+                
+        block = self.getBlockById(segment_id)
+        if block is None:
+            return
+
+        # Count the number of characters in sentence
+        num_chars = self.text_widget.getSentenceLength(block)
+
+        segment = self.getSegment(segment_id)
+        if not segment:
+            return
+        
+        start, end = segment
+        dur = end - start
+        if dur > 0.0:
+            new_density = num_chars / dur
+            # current_density = block.userData().data.get("density", -1.0)
+            block.userData().data["density"] = new_density
+
+
+    def cropHead(self) -> None:
         log.debug("cropHead")
         if self.waveform_widget is None:
             return
         
-        if self.waveform_widget.active_segment_id >= 0:
-            active_segment_id = self.waveform_widget.active_segment_id
-            playhead = self.waveform_widget.playhead
-            segment = self.segments[active_segment_id]
+        active_segment_id = self.waveform_widget.active_segment_id
+        playhead = self.waveform_widget.playhead
+        
+        if segment := self.getSegment(active_segment_id):
+            if playhead < segment[1]:
+                # Stop at the previous segment
+                prev_segment_id = self.getPrevSegmentId(active_segment_id)
+                if prev_segment := self.getSegment(prev_segment_id):
+                    playhead = max(playhead, prev_segment[1])
 
-            if segment[0] <= playhead <= segment[1]:
                 self.undo_stack.push(
                     ResizeSegmentCommand(
                         self,
@@ -349,9 +458,11 @@ class DocumentController(QObject):
                         segment[1]
                     )
                 )
+        elif self.waveform_widget.selection_is_active:
+            self.waveform_widget.resizeSelection(playhead, Handle.LEFT)
 
 
-    def cropTail(self):
+    def cropTail(self) -> None:
         log.debug("cropTail")
         if self.waveform_widget is None:
             return
@@ -359,10 +470,13 @@ class DocumentController(QObject):
         active_segment_id = self.waveform_widget.active_segment_id
         playhead = self.waveform_widget.playhead
         
-        if active_segment_id >= 0:
-            segment = self.getSegment(active_segment_id)
-
-            if segment and (segment[0] <= playhead <= segment[1]):
+        if segment := self.getSegment(active_segment_id):
+            if playhead > segment[0]:
+                # Stop at the next segment
+                next_segment_id = self.getNextSegmentId(active_segment_id)
+                if next_segment := self.getSegment(next_segment_id):
+                    playhead = min(playhead, next_segment[0])
+                
                 self.undo_stack.push(
                     ResizeSegmentCommand(
                         self,
@@ -372,6 +486,9 @@ class DocumentController(QObject):
                         playhead
                     )
                 )
+        elif self.waveform_widget.selection_is_active:
+            self.waveform_widget.resizeSelection(playhead, Handle.RIGHT)
+
 
     def getSubtitleAtPosition(self, position_sec: float) -> Tuple[SegmentId, str]:
         """
@@ -618,12 +735,15 @@ class DocumentController(QObject):
         self.waveform_widget.must_redraw = True
 
 
-    def joinUtterances(self, segments_id) -> None:
+    def joinUtterances(self, segment_ids) -> None:
         """
         Join many segments in one.
         Keep the segment ID of the earliest segment among the selected ones.
         """
-        self.undo_stack.push(JoinUtterancesCommand(self, self.text_widget, self.waveform_widget, segments_id))
+        if self.text_widget is None or self.waveform_widget is None:
+            return
+        
+        self.undo_stack.push(JoinUtterancesCommand(self, self.text_widget, self.waveform_widget, segment_ids))
 
 
 
@@ -646,8 +766,6 @@ class DocumentController(QObject):
             if al[0] == "||":
                 # print("||")
                 if segment_tokens:
-                    # print(segment_tokens[0])
-                    # print(segment_tokens[-1])
                     first_idx = 0
                     last_idx = len(segment_tokens) - 1
                     first_token = segment_tokens[first_idx][1]
@@ -755,7 +873,7 @@ class DocumentController(QObject):
 
 
     def deleteUtterances(self, segments_ids: List[SegmentId]) -> None:
-        """ Delete both segments and sentences """
+        """Delete both segments and sentences"""
 
         if (self.text_widget is None) or (self.waveform_widget is None):
             return
@@ -765,9 +883,8 @@ class DocumentController(QObject):
 
 
     def deleteSegments(self, segments_id: List[SegmentId]) -> None:
-        """ Delete segments but keep sentences """
-
-        self.undo_stack.push(DeleteSegmentsCommand(self, self, segments_id))
+        """Delete segments but keep sentences"""
+        self.undo_stack.push(DeleteSegmentsCommand(self, self.text_widget, self.waveform_widget, segments_id))
 
 
     def selectAll(self) -> None:

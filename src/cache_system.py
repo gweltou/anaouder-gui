@@ -251,6 +251,7 @@ class CacheSystem:
     def update_media_metadata(self, media_path: Path, metadata: dict = {}) -> None:
         """Save media metadatas on disk"""
         log.info(f"Update media metadata cache for {media_path}")
+        log.debug(f"{metadata=}")
         fingerprint = calculate_fingerprint(media_path)
 
         metadata["file_path"] = str(media_path.absolute())
@@ -269,7 +270,7 @@ class CacheSystem:
         """ Get cached metadata for document file and update access time """
 
         file_path = file_path.absolute()
-        if file_path in self.doc_cache:
+        if str(file_path) in self.doc_cache:
             metadata = self.doc_cache[str(file_path)]
             metadata["last_access"] = datetime.now().timestamp()
             self._doc_cache_dirty = True
@@ -338,7 +339,7 @@ class CacheSystem:
             Fields: word, start time, end time, confidence
         """
 
-        log.debug(f"update_media_transcription, {tokens=}")
+        log.debug(f"set_media_transcription {tokens=}")
         fingerprint = calculate_fingerprint(media_path)
 
         self.transcriptions_cache[fingerprint] = tokens
@@ -349,6 +350,7 @@ class CacheSystem:
                 tok = [ str(t) for t in tok ]
                 _fout.write('\t'.join(tok) + '\n')
 
+        # Update modification time
         self.update_media_metadata(media_path)
  
 

@@ -59,7 +59,7 @@ from src.utils import (
     MEDIA_FORMATS, ALL_COMPATIBLE_FORMATS,
     color_yellow,
 )
-from src.settings import app_settings, shortcuts, SUBTITLES_MARGIN_SIZE
+from src.settings import app_settings, shortcuts, SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
 
 
 log = logging.getLogger(__name__)
@@ -77,9 +77,10 @@ class Highlighter(QSyntaxHighlighter):
 
     utt_block_margin = 8
 
-    def __init__(self, parent, text_edit):
+    def __init__(self, parent, text_edit, document_controller):
         super().__init__(parent)
         self.text_edit: TextEditWidget = text_edit
+        self.document_controller: DocumentInterface = document_controller
         self.mode = self.ColorMode.ALIGNMENT
         self.hunspell = None
         self.show_misspelling = False
@@ -174,9 +175,10 @@ class Highlighter(QSyntaxHighlighter):
 
         if self.currentBlockUserData():
             if self.text_edit.isAligned(block):
-                utt_id = self.text_edit.getBlockId(block)
-                density = self.text_edit.main_window.getUtteranceDensity(utt_id)
-                if density < 17.0:
+                utt_id = self.document_controller.getBlockId(block)
+                density = self.document_controller.getUtteranceDensity(utt_id)
+                target_density: float = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
+                if density < target_density:
                     if self.text_edit.highlighted_sentence_id == self.text_edit.getBlockId(block):
                         cursor.setBlockFormat(self.active_green_block_format)
                     else:
@@ -298,10 +300,10 @@ class TextEditWidget(QTextEdit):
     request_auto_align = Signal()
 
 
-    def __init__(self, parent, document: DocumentInterface):
+    def __init__(self, parent, document_controller: DocumentInterface):
         super().__init__(parent)
         self.main_window = parent
-        self.document_controller = document
+        self.document_controller = document_controller
         self.line_number_area = LineNumberArea(self)
 
         # Disable default undo stack to use our own instead
@@ -318,7 +320,7 @@ class TextEditWidget(QTextEdit):
         self.updateLineNumberAreaWidth()
 
         #self.document().setDefaultStyleSheet()
-        self.highlighter = Highlighter(self.document(), self)
+        self.highlighter = Highlighter(self.document(), self, document_controller)
 
         # self.defaultBlockFormat = QTextBlockFormat()
         # self.defaultCharFormat = QTextCharFormat()
@@ -328,7 +330,7 @@ class TextEditWidget(QTextEdit):
 
         # Subtitles margin
         self._text_margin = False
-        self._margin_size = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
+        self._margin_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
         self._char_width = -1
         self.margin_color = theme.margin
 
@@ -413,33 +415,33 @@ class TextEditWidget(QTextEdit):
     #         user_data["seg_id"] = seg_id
 
 
-    def getBlockById(self, seg_id: SegmentId) -> Optional[QTextBlock]:
-        doc = self.document()
-        block = doc.firstBlock()
-        while block.isValid():
-            if block.userData():
-                if block.userData().data["seg_id"] == seg_id:
-                    return block
-            block = block.next()
-        return None
+    # def getBlockById(self, seg_id: SegmentId) -> Optional[QTextBlock]:
+    #     doc = self.document()
+    #     block = doc.firstBlock()
+    #     while block.isValid():
+    #         if block.userData():
+    #             if block.userData().data["seg_id"] == seg_id:
+    #                 return block
+    #         block = block.next()
+    #     return None
     
 
-    def getNextAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
-        while True:
-            block = block.next()
-            if block.blockNumber() == -1:
-                return None
-            if self.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
-                return block
+    # def getNextAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
+    #     while True:
+    #         block = block.next()
+    #         if block.blockNumber() == -1:
+    #             return None
+    #         if self.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
+    #             return block
 
 
-    def getPrevAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
-        while True:
-            block = block.previous()
-            if block.blockNumber() == -1:
-                return None
-            if self.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
-                return block
+    # def getPrevAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
+    #     while True:
+    #         block = block.previous()
+    #         if block.blockNumber() == -1:
+    #             return None
+    #         if self.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
+    #             return block
 
 
     def getBlockNumber(self, position: int) -> int:
@@ -468,13 +470,14 @@ class TextEditWidget(QTextEdit):
         """
         TODO: move this to a private method of JoinUtterancesCommand? It is not used anywhere else
         """
-        block = self.getBlockById(segment_id)
+        block = self.document_controller.getBlockById(segment_id)
         if not block:
             return
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock, QTextCursor.MoveMode.KeepAnchor)
         cursor.insertText(text)
+        self.document_controller.updateUtteranceDensity(segment_id)
 
 
     def appendSentence(self, text: str, segment_id: Optional[SegmentId]) -> QTextBlock:
@@ -586,7 +589,7 @@ class TextEditWidget(QTextEdit):
         This is not a undoable command.
         """
         # TODO: fix this (userData is not deleted)
-        block = self.getBlockById(seg_id)
+        block = self.document_controller.getBlockById(seg_id)
         if not block:
             return
         
@@ -768,7 +771,7 @@ class TextEditWidget(QTextEdit):
             return
         
         self.highlighted_sentence_id = -1 # Needs to be set before rehighlighting
-        block = self.getBlockById(seg_id)
+        block = self.document_controller.getBlockById(seg_id)
         if block:
             self.highlighter.rehighlightBlock(block)
 
@@ -786,7 +789,7 @@ class TextEditWidget(QTextEdit):
         # Reset previously selected utterance
         self.deactivateSentence()
 
-        block = self.getBlockById(segment_id)
+        block = self.document_controller.getBlockById(segment_id)
         if block == None:
             return
         
@@ -1063,13 +1066,13 @@ class TextEditWidget(QTextEdit):
                 # Check if the selection is between the previous aligned
                 # block's segment and the next aligned block's segment
                 left_time_boundary = 0.0
-                prev_aligned_block = self.getPrevAlignedBlock(block)
+                prev_aligned_block = self.document_controller.getPrevAlignedBlock(block)
                 if prev_aligned_block:
                     seg_id = self.getBlockId(prev_aligned_block)
                     left_time_boundary = self.document_controller.segments[seg_id][1]
 
                 right_time_boundary = self.main_window.waveform.audio_len
-                next_aligned_block = self.getNextAlignedBlock(block)
+                next_aligned_block = self.document_controller.getNextAlignedBlock(block)
                 if next_aligned_block:
                     seg_id = self.getBlockId(next_aligned_block)
                     right_time_boundary = self.document_controller.segments[seg_id][0]

@@ -160,3 +160,10 @@ def deleteModel(model_name: str):
 def getMd5Sum(model_name: str) -> str:
     if model_name in _current_language.model_dict:
         return _current_language.model_dict[model_name].get("md5", "")
+    return ""
+
+
+def getSHA256(model_name: str) -> str:
+    if model_name in _current_language.model_dict:
+        return _current_language.model_dict[model_name].get("sha256", "")
+    return ""
