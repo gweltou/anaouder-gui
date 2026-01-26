@@ -249,7 +249,7 @@ class CacheSystem:
 
 
     def update_media_metadata(self, media_path: Path, metadata: dict = {}) -> None:
-        """Save media metadatas on disk"""
+        """Update given metadata fields and save updated metadata on disk"""
         log.info(f"Update media metadata cache for {media_path}")
         log.debug(f"{metadata=}")
         fingerprint = calculate_fingerprint(media_path)

@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QMenuBar,
     QWidget, QVBoxLayout, QHBoxLayout,
     QProgressBar,
-    QPushButton, QDial,
+    QPushButton, QToolButton, QDial,
     QLabel, QComboBox, QCheckBox, QMessageBox,
     QListWidget, QDialogButtonBox
 )
@@ -116,6 +116,23 @@ from src.strings import strings
 log = logging.getLogger(__name__)
 
 
+def getActionTooltip(action: QAction) -> str:
+    return f"{action.text()} <{action.shortcut().toString()}>"
+
+
+# def createButton(icon_key: str, tooltip: str,
+#                   action: QAction, checkable=False) -> QToolButton:
+#     """Factory method for creating buttons"""
+#     button = QToolButton()
+#     button.setIcon(icons[icon_key])
+#     button.setFixedWidth(BUTTON_SIZE)
+#     button.setToolTip(tooltip)
+#     if checkable:
+#         button.setCheckable(True)
+#     if callback:
+#         button.clicked.connect(callback)
+#     return button
+
 
 ###############################################################################
 ####                                                                       ####
@@ -125,94 +142,23 @@ log = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    """ Main application window """
 
     def __init__(self, file_path: Optional[Path] = None) -> None:
+        """Initialize MainWindow"""
+
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         super().__init__()
-        
-        # File Manager
-        self.file_manager = FileManager()
-        self.file_manager.message.connect(self.setStatusMessage)
-        
-        self.audio_samples = None
-        
-        self.input_devices = QMediaDevices.audioInputs()
 
-        self.languages = lang.getLanguages()
-        self.available_models = []
-
-        self.recognizer = TranscriptionService(self)
-        # Signals from the recognizer worker
-        self.recognizer.message.connect(self.setStatusMessage)
-        self.recognizer.segment_transcribed.connect(self.updateUtteranceTranscription)
-        self.recognizer.new_segment_transcribed.connect(self.newSegmentTranscribed)
-        self.recognizer.progress.connect(self.updateProgressBar)
-        self.recognizer.end_of_file.connect(self.onRecognizerEOF)
-        
-        self.scene_detector = None
-
-        # Current opened file info
-        self.file_path = file_path
-        self.media_path: Optional[Path] = None
-        self.hidden_transcription = False
-
-        self.video_widget = VideoWidget(self)
-
-        # Media Controller
-        self.media_controller = MediaPlayerController(self)
-        self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
-        # self.media_controller.playback_started.connect(self.onPlaybackStarted)
-        # self.media_controller.playback_stopped.connect(self.onPlaybackStopped)
-        self.media_controller.media_duration_changed.connect(self.onMediaDurationChanged)
-        # Connect to video widget
-        self.media_controller.connectVideoWidget(self.video_widget)
-
-        self.text_cursor_utterance_id = -1
-        self._last_play_press_time = 0.0
-
-        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
-        self._subs_min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
-        self._subs_max_frames = app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
-
-        # Autosave
-        self.last_saved_index = 0
-        self.last_saved_time = time.time()
-        self.autosave_timer = QTimer()
-        self.autosave_timer.timeout.connect(self.autoSave)
-        self.onSetAutosave(app_settings.value("autosave/checked", True, type=bool))
-
-        # Document Controller
-        self.document_controller = DocumentController(self)
-        self.text_widget = TextEditWidget(self, self.document_controller)
-        self.text_widget.document().contentsChanged.connect(self.onTextChanged)
-        self.document_controller.setTextWidget(self.text_widget)
-        self.waveform = WaveformWidget(self, self.document_controller)
-        self.document_controller.setWaveformWidget(self.waveform)
-
-        # self.document_controller.message.connect(self.setStatusMessage)
-
-        self.undo_stack = self.document_controller.undo_stack
-        self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
-        self.undo_stack.indexChanged.connect(self.onUndoStackIndexChanged)
-        
-        QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
-        self.updateThemeColors()
-
-        self.setWindowIcon(icons["anaouder"])
-        self.updateWindowTitle()
-        self.setGeometry(50, 50, 800, 600)
-
-        # For file drag&drops
-        self.setAcceptDrops(True)
-
-        # INITIALIZE UI
-        self.initUI()
-        self.updateRecentMenu()
-        self.video_widget.setVisible(False)
+        self._initializeState()
+        self._initializeComponents()
+        self._createActions()
+        self._configureWindow()
+        self._initializeUI()
+        self._connectSignals()
+        self._restoreSettings()
 
         # Keyboard shortcuts
-        ## Search
+        ## Search TODO
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
         shortcut.activated.connect(self.search)
         ## Play
@@ -222,26 +168,7 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.document_controller.selectAll)
 
-        # Text Widget Signal connections
-        self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
-        self.text_widget.auto_transcribe.connect(self.transcribe_button.toggle)
-        self.text_widget.align_with_selection.connect(self.alignWithSelection)
-
-        # Waveform Widget Signal connections
-        self.waveform.selection_ended.connect(lambda: self.selection_button.setChecked(False))
-        self.waveform.toggle_selection.connect(self.selection_button.toggle)
-        self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
-        self.waveform.playhead_moved.connect(self.onWaveformPlayheadManualyMoved)
-        self.waveform.refresh_segment_info.connect(self.updateSegmentInfo)
-        self.waveform.refresh_segment_info_resizing.connect(self.updateSegmentInfoResizing)
-        self.waveform.select_segments.connect(self.selectFromWaveform)
-        self.waveform.stop_follow.connect(self.toggleFollowPlayhead)
-
-        # Restore window geometry and state
-        self.restoreGeometry(app_settings.value("main/geometry"))
-        self.restoreState(app_settings.value("main/window_state"))
-
-        if file_path:
+        if file_path is not None:
             self.openFile(file_path)
 
         self.changeLanguage(DEFAULT_LANGUAGE)
@@ -253,53 +180,199 @@ class MainWindow(QMainWindow):
          self.waveform.updateThemeColors()
 
 
-    def initUI(self) -> None:
-        # Main Menu
+    def _initializeState(self) -> None:
+        # Current opened file info
+        self.file_path: Optional[Path] = None
+        self.media_path: Optional[Path] = None
+        self.audio_samples = None   # For displaying the waveform
+
+        self._text_cursor_utterance_id = -1
+        self._last_play_press_time = 0.0
+
+        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
+        self._subs_min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
+        self._subs_max_frames = app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
+
+
+    def _initializeComponents(self) -> None:
+        """Initialize primary components of the application"""
+
+        # File Manager
+        self.file_manager = FileManager()
+        
+        # self.input_devices = QMediaDevices.audioInputs()
+
+        # Languages an models
+        self.languages = lang.getLanguages()
+        self.available_models = []
+
+        # Transcription service
+        self.recognizer = TranscriptionService(self)
+
+        # TODO: reverse dependencies of document_controller and text/waveform widgets
+        self.document_controller = DocumentController(self)
+        self.text_widget = TextEditWidget(self, self.document_controller)
+        self.waveform = WaveformWidget(self, self.document_controller)
+        self.document_controller.setTextWidget(self.text_widget)
+        self.document_controller.setWaveformWidget(self.waveform)
+
+        self.video_widget = VideoWidget(self)
+        self.video_widget.setVisible(False)
+
+        # Media Controller
+        self.media_controller = MediaPlayerController(self)
+        self.media_controller.connectVideoWidget(self.video_widget)
+
+        # Scenes
+        self.scene_detector = None
+
+        # Undo stack
+        self.undo_stack = self.document_controller.undo_stack
+        self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
+        self.undo_stack.indexChanged.connect(self.onUndoStackIndexChanged)
+
+        # Autosave
+        self.autosave_timer = QTimer()
+        self.autosave_timer.timeout.connect(self.autoSave)
+        self.onSetAutosave(app_settings.value("autosave/checked", True, type=bool))
+        self.last_saved_index = 0
+        self.last_saved_time = time.time()
+
+
+    def _createActions(self) -> None:
+        ## File menu actions
+        self.action_open = QAction(self.tr("&Open") + "...", self)
+        self.action_open.setShortcut(QKeySequence.StandardKey.Open)
+        self.action_open.triggered.connect(lambda _: self.openFile())
+
+        self.action_save = QAction(self.tr("&Save"), self)
+        self.action_save.setShortcut(QKeySequence.StandardKey.Save)
+        self.action_save.triggered.connect(self.saveFile)
+
+        self.action_saveAs = QAction(self.tr("Save as") + "...", self)
+        self.action_saveAs.setShortcut(QKeySequence.StandardKey.SaveAs)
+        self.action_saveAs.triggered.connect(self.saveFileAs)
+
+        self.action_import_media = QAction(strings.TR_IMPORT_MEDIA + '...', self)
+        self.action_import_media.setStatusTip(self.tr("Import a media file (audio or video)"))
+        self.action_import_media.triggered.connect(self.onImportMedia)
+
+        self.action_import_subtitles = QAction(strings.TR_IMPORT_SUBTITLES + '...', self)
+        self.action_import_subtitles.setStatusTip(self.tr("Import a subtitles file, keep current media"))
+        self.action_import_subtitles.triggered.connect(self.onImportSubtitles)
+
+        self.action_export_srt = QAction(self.tr("&SubRip (.srt)"), self)
+        self.action_export_srt.setStatusTip(self.tr("Export as SubRip subtitle file"))
+        self.action_export_srt.triggered.connect(self.exportSrt)
+
+        self.action_export_eaf = QAction("&Elan (.eaf)", self)
+        self.action_export_eaf.setStatusTip(self.tr("Export as ELAN annotation file"))
+        self.action_export_eaf.triggered.connect(self.exportEaf)
+
+        self.action_export_txt = QAction(self.tr("Raw &text (.txt)"), self)
+        self.action_export_txt.setStatusTip(self.tr("Export as simple text document"))
+        self.action_export_txt.triggered.connect(self.exportTxt)
+
+        self.action_open_parameters = QAction(self.tr("&Parameters") + "...", self)
+        self.action_open_parameters.setShortcut(QKeySequence.StandardKey.Print)
+        self.action_open_parameters.triggered.connect(self.showParameters)
+
+        self.action_exit = QAction(self.tr("E&xit"), self)
+        self.action_exit.setShortcut(QKeySequence.StandardKey.Quit)
+        self.action_exit.triggered.connect(self.close)
+
+        ## About menu action
+        self.action_about = QAction(self.tr("&About"), self)
+        self.action_about.triggered.connect(self.showAboutDialog)
+
+        ## Undo/Redo
+        self.action_undo = QAction(self.tr("Undo"), self)
+        self.action_undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.action_undo.setIcon(icons["undo"])
+        self.action_undo.setToolTip(getActionTooltip(self.action_undo))
+        self.action_undo.triggered.connect(self.undo_stack.undo)
+
+        self.action_redo = QAction(self.tr("Redo"), self)
+        self.action_redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self.action_redo.setIcon(icons["redo"])
+        self.action_redo.setToolTip(getActionTooltip(self.action_redo))
+        self.action_redo.triggered.connect(self.undo_stack.redo)
+
+        ## Transcribe actions
+        self.action_transcribe = QAction(self.tr("Transcribe"), self)
+        self.action_transcribe.setShortcut(shortcuts["transcribe"])
+        self.action_transcribe.setIcon(icons["sparkles"])
+        self.action_transcribe.setToolTip(getActionTooltip(self.action_transcribe))
+        self.action_transcribe.setCheckable(True)
+        self.action_transcribe.setChecked(False)
+        self.action_transcribe.setEnabled(False)
+        self.action_transcribe.toggled.connect(
+            lambda checked: self.toggleTranscribe(checked, is_hidden=False)
+        )
+        self.action_hidden_transcription = QAction(self.tr("&Hidden transcription"), self)
+        self.action_hidden_transcription.setStatusTip(self.tr("Allow for smart splitting and auto-alignment operations"))
+        self.action_hidden_transcription.setCheckable(True)
+        self.action_hidden_transcription.setChecked(False)
+        self.action_hidden_transcription.toggled.connect(
+            lambda checked: self.toggleHiddenTranscription(checked)
+        )
+
+        ## Follow playhead
+        self.action_follow_playhead = QAction(self.tr("Follow playhead"), self)
+        self.action_follow_playhead.setShortcut(shortcuts["follow_playhead"])
+        self.action_follow_playhead.setIcon(icons["follow_playhead"])
+        self.action_follow_playhead.setToolTip(getActionTooltip(self.action_follow_playhead))
+        self.action_follow_playhead.setCheckable(True)
+        self.action_follow_playhead.setChecked(self.waveform.follow_playhead)
+        self.action_follow_playhead.triggered.connect(self.toggleFollowPlayhead)
+
+
+    def _configureWindow(self) -> None:
+        self.setWindowIcon(icons["anaouder"])
+        self.updateWindowTitle()
+        self.setGeometry(50, 50, 800, 600)  # Default window size
+        self.setAcceptDrops(True)           # For file drag&drops
+        self.updateThemeColors()
+
+
+    def _initializeUI(self) -> None:
         SPLITTER_SIZE = 10
 
         self._createMainMenu()
 
-        # Top toolbar
+        ## Top toolbar
         top_layout = QVBoxLayout()
         top_layout.setSpacing(0)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.addLayout(self._createTopToolbarLayout())
 
-        # Text widget (left) and Video widget (right)
+        ## Text widget (left) and Video widget (right)
         self.text_video_splitter = CustomSplitter(Qt.Orientation.Horizontal)
         self.text_video_splitter.setHandleWidth(SPLITTER_SIZE)
         self.text_video_splitter.addWidget(self.text_widget)
         self.text_video_splitter.addWidget(self.video_widget)
         self.text_video_splitter.setSizes([1, 1])
-
         top_layout.addWidget(self.text_video_splitter)
-
         self.top_widget = QWidget()
         self.top_widget.setLayout(top_layout)
 
-        # Media toolbar and transport
+        ## Media toolbar, transport and waveform widget
         bottom_layout = QVBoxLayout()
         bottom_layout.setSpacing(0)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
-
         bottom_layout.addLayout(self._createMediaToolbarLayout())
-
-        # Waveform
         bottom_layout.addWidget(self.waveform)
-
         self.bottom_widget = QWidget()
         self.bottom_widget.setLayout(bottom_layout)
 
         splitter = CustomSplitter(Qt.Orientation.Vertical)
         splitter.setHandleWidth(SPLITTER_SIZE)
-
         splitter.addWidget(self.top_widget)
         splitter.addWidget(self.bottom_widget)        
         splitter.setSizes([400, 140])
-        
         self.setCentralWidget(splitter)
 
-        # To add color to the status bar text
+        ## Bottom status bar
         self.status_label = QLabel()
         self.status_label.setTextFormat(Qt.TextFormat.RichText)
         self.statusBar().addWidget(self.status_label)
@@ -320,102 +393,116 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(spacer)
         
     
+    def _connectSignals(self) -> None:
+        """Connect all signals and slots"""
+        # Application-level
+        QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
+
+        # File manager
+        self.file_manager.message.connect(self.setStatusMessage)
+
+        # Media controller
+        self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
+        self.media_controller.media_duration_changed.connect(self.onMediaDurationChanged)
+
+        # Document controller
+        self.document_controller.message.connect(self.setStatusMessage)
+
+        # Recognizer
+        self.recognizer.message.connect(self.setStatusMessage)
+        self.recognizer.segment_transcribed.connect(self.updateUtteranceTranscription)
+        self.recognizer.new_segment_transcribed.connect(self.newSegmentTranscribed)
+        self.recognizer.progress.connect(self.updateProgressBar)
+        self.recognizer.finished.connect(self.finishTranscriptionAction)
+        self.recognizer.end_of_file.connect(self.onRecognizerEOF)
+
+        # Text widgets
+        self.text_widget.auto_transcribe.connect(self.action_transcribe.trigger)
+        self.text_widget.document().contentsChanged.connect(self.onTextChanged)
+        self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
+        self.text_widget.align_with_selection.connect(self.alignWithSelection)
+
+        # Waveform widget
+        self.waveform.selection_ended.connect(lambda: self.selection_button.setChecked(False))
+        self.waveform.toggle_selection.connect(self.selection_button.toggle)
+        self.waveform.new_utterance_from_selection.connect(self.newUtteranceFromSelection)
+        self.waveform.playhead_moved.connect(self.onWaveformPlayheadManualyMoved)
+        self.waveform.refresh_segment_info.connect(self.updateSegmentInfo)
+        self.waveform.refresh_segment_info_resizing.connect(self.updateSegmentInfoResizing)
+        self.waveform.select_segments.connect(self.selectFromWaveform)
+        self.waveform.stop_follow.connect(self.toggleFollowPlayhead)
+
+
+    def _restoreSettings(self) -> None:
+        # Restore window geometry and state
+        geometry = app_settings.value("main/geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+        
+        state = app_settings.value("main/window_state")
+        if state:
+            self.restoreState(state)
+        
+        self.updateRecentMenu()
+
+
     def _createMainMenu(self) -> None:
         menu_bar = self.menuBar()
 
-        file_menu = menu_bar.addMenu(self.tr("&File"))
-        ## Open
-        open_action = QAction(self.tr("&Open") + "...", self)
-        open_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(lambda: self.openFile())
-        file_menu.addAction(open_action)
-
-        # Recent files
-        self.recent_menu = file_menu.addMenu(self.tr("Open &recent"))
-
-        file_menu.addSeparator() # -------------------------
-
-        ## Save
-        save_action = QAction(self.tr("&Save"), self)
-        save_action.setShortcut(QKeySequence.StandardKey.Save)
-        save_action.triggered.connect(self.saveFile)
-        file_menu.addAction(save_action)
-        ## Save as
-        saveAs_action = QAction(self.tr("Save as") + "...", self)
-        saveAs_action.setShortcut(QKeySequence.StandardKey.SaveAs)
-        saveAs_action.triggered.connect(self.saveFileAs)
-        file_menu.addAction(saveAs_action)
-
-        file_menu.addSeparator() # -------------------------
-
-        ## Import / Export Menu
-        import_media_action = QAction(strings.TR_IMPORT_MEDIA + '...', self)
-        import_media_action.setStatusTip(self.tr("Import a media file (audio or video)"))
-        import_media_action.triggered.connect(self.onImportMedia)
-        file_menu.addAction(import_media_action)
-
-        import_subtitles_action = QAction(strings.TR_IMPORT_SUBTITLES + '...', self)
-        import_subtitles_action.setStatusTip(self.tr("Import a subtitles file, keep current media"))
-        import_subtitles_action.triggered.connect(self.onImportSubtitles)
-        file_menu.addAction(import_subtitles_action)
-
-        import_export_submenu = file_menu.addMenu(self.tr("&Export as"))
-
-        export_srt_action = QAction(self.tr("&SubRip (.srt)"), self)
-        export_srt_action.setStatusTip(self.tr("Subtitle file"))
-        export_srt_action.triggered.connect(self.exportSrt)
-        import_export_submenu.addAction(export_srt_action)
-
-        export_eaf_action = QAction("&Elan (.eaf)", self)
-        export_eaf_action.triggered.connect(self.exportEaf)
-        import_export_submenu.addAction(export_eaf_action)
-
-        export_txt_action = QAction(self.tr("Raw &text (.txt)"), self)
-        export_txt_action.setStatusTip(self.tr("Simple text document"))
-        export_txt_action.triggered.connect(self.exportTxt)
-        import_export_submenu.addAction(export_txt_action)
-
-        file_menu.addSeparator() # -------------------------
-
-        ## Parameters
-        parameters_action = QAction(self.tr("&Parameters") + "...", self)
-        parameters_action.setShortcut(QKeySequence.StandardKey.Print)
-        parameters_action.triggered.connect(self.showParameters)
-        file_menu.addAction(parameters_action)
-
-        file_menu.addSeparator() # -------------------------
-
-        ## Exit
-        exit_action = QAction(self.tr("E&xit"), self)
-        exit_action.setShortcut(QKeySequence.StandardKey.Quit)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-
-        # Operation Menu
-        self._buildOperationsMenu(menu_bar)
-
-        # Display Menu
-        self._buildDisplayMenu(menu_bar)
+        self._createFileMenu(menu_bar)
+        self._createOperationsMenu(menu_bar)
+        self._createDisplayMenu(menu_bar)
 
         # deviceMenu = menu_bar.addMenu("Device")
         # for dev in self.input_devices:
         #     deviceMenu.addAction(QAction(dev.description(), self))
         
         help_menu = menu_bar.addMenu(self.tr("&Help"))
-        about_action = QAction(self.tr("&About"), self)
-        about_action.triggered.connect(self.showAboutDialog)
-        help_menu.addAction(about_action)
+        help_menu.addAction(self.action_about)
     
 
-    def _buildOperationsMenu(self, menu_bar: QMenuBar) -> None:
+    def _createFileMenu(self, menu_bar: QMenuBar) -> None:
+        file_menu = menu_bar.addMenu(self.tr("&File"))
+        
+        ## Open
+        file_menu.addAction(self.action_open)
+        ## Recent files
+        self.recent_menu = file_menu.addMenu(self.tr("Open &recent"))
+        file_menu.addSeparator()
+        # -------------------------
+        file_menu.addAction(self.action_save)
+        file_menu.addAction(self.action_saveAs)
+        file_menu.addSeparator()
+        # -------------------------
+        ## Import / Export Menu
+        file_menu.addAction(self.action_import_media)
+        file_menu.addAction(self.action_import_subtitles)
+
+        import_export_submenu = file_menu.addMenu(self.tr("&Export as"))
+        import_export_submenu.addAction(self.action_export_srt)
+        import_export_submenu.addAction(self.action_export_eaf)
+        import_export_submenu.addAction(self.action_export_txt)
+        file_menu.addSeparator()
+        # -------------------------
+        ## Parameters
+        file_menu.addAction(self.action_open_parameters)
+        file_menu.addSeparator()
+        # -------------------------
+        ## Exit
+        file_menu.addAction(self.action_exit)
+
+
+    def _createOperationsMenu(self, menu_bar: QMenuBar) -> None:
         # Operation Menu
         operation_menu = menu_bar.addMenu(self.tr("&Operations"))
-        
-        ## Do background transcription
-        hidden_transcription_action = QAction(self.tr("&Hidden transcription"), self)
-        hidden_transcription_action.setStatusTip(self.tr("Allow for smart splitting and auto-alignment operations"))
-        hidden_transcription_action.triggered.connect(self.startBackgroundTranscription)
-        operation_menu.addAction(hidden_transcription_action)
+
+        ## Undo / Redo
+        operation_menu.addAction(self.action_undo)
+        operation_menu.addAction(self.action_redo)
+        operation_menu.addSeparator()
+        # -------------------------
+        ## Hidden transcription
+        operation_menu.addAction(self.action_hidden_transcription)
         
         ## Auto Segment
         auto_segment_action = QAction(self.tr("Auto &Segment"), self)
@@ -430,7 +517,7 @@ class MainWindow(QMainWindow):
         operation_menu.addAction(adapt_to_subtitle_action)
 
 
-    def _buildDisplayMenu(self, menu_bar: QMenuBar) -> None:
+    def _createDisplayMenu(self, menu_bar: QMenuBar) -> None:
         display_menu = menu_bar.addMenu(self.tr("&Display"))
 
         # Toggle Video widget
@@ -480,8 +567,6 @@ class MainWindow(QMainWindow):
         coloring_subMenu.addAction(color_density_action)
         coloring_action_group.addAction(color_density_action)
 
-        display_menu.addSeparator() # -------------------------
-
 
     def _createTopToolbarLayout(self):
         top_bar_layout = QHBoxLayout()
@@ -489,27 +574,21 @@ class MainWindow(QMainWindow):
         top_bar_layout.setSpacing(BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # Undo/Redo buttons
+        # Undo/Redo actions and buttons
         undo_redo_layout = QHBoxLayout()
         undo_redo_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
         undo_redo_layout.setSpacing(BUTTON_SPACING)
         undo_redo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.undo_button = QPushButton()
-        self.undo_button.setIcon(icons["undo"])
+        self.undo_button = QToolButton()
         self.undo_button.setFixedWidth(BUTTON_SIZE)
-        self.undo_button.setToolTip(self.tr("Undo") + f" <{QKeySequence(QKeySequence.StandardKey.Undo).toString()}>")
-        self.undo_button.clicked.connect(self.undo_stack.undo)
-        self.undo_button.setShortcut(QKeySequence.StandardKey.Undo)
+        self.undo_button.setDefaultAction(self.action_undo)
         self.undo_button.setEnabled(False)
         undo_redo_layout.addWidget(self.undo_button)
 
-        self.redo_button = QPushButton()
-        self.redo_button.setIcon(icons["redo"])
+        self.redo_button = QToolButton()
         self.redo_button.setFixedWidth(BUTTON_SIZE)
-        self.redo_button.setToolTip(self.tr("Redo") + f" <{QKeySequence(QKeySequence.StandardKey.Redo).toString()}>")
-        self.redo_button.clicked.connect(self.undo_stack.redo)
-        self.redo_button.setShortcut(QKeySequence.StandardKey.Redo)
+        self.redo_button.setDefaultAction(self.action_redo)
         self.redo_button.setEnabled(False)
         undo_redo_layout.addWidget(self.redo_button)
 
@@ -522,15 +601,10 @@ class MainWindow(QMainWindow):
         transcription_buttons_layout.setSpacing(BUTTON_SPACING)
         transcription_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.transcribe_button = QPushButton()
-        self.transcribe_button.setIcon(icons["sparkles"])
+        self.transcribe_button = QToolButton()
         self.transcribe_button.setFixedWidth(BUTTON_SIZE)
-        self.transcribe_button.setCheckable(True)
-        self.transcribe_button.setToolTip(self.tr("Transcribe") + f" <{shortcuts["transcribe"].toString()}>")
-        self.transcribe_button.setShortcut(shortcuts["transcribe"])
-        self.transcribe_button.setEnabled(False)
-        self.transcribe_button.toggled.connect(self.toggleTranscribe)
-        self.recognizer.finished.connect(self.transcribe_button.toggle)
+        self.transcribe_button.setDefaultAction(self.action_transcribe)
+
         transcription_buttons_layout.addSpacing(4)
         transcription_buttons_layout.addWidget(self.transcribe_button)
 
@@ -571,7 +645,7 @@ class MainWindow(QMainWindow):
         format_buttons_layout.setSpacing(BUTTON_SPACING)
         format_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        italic_button = QPushButton()
+        italic_button = QToolButton()
         italic_button.setIcon(icons["italic"])
         italic_button.setFixedWidth(BUTTON_SIZE)
         italic_button.setToolTip(self.tr("Italic") + f" <{QKeySequence(QKeySequence.StandardKey.Italic).toString()}>")
@@ -579,7 +653,7 @@ class MainWindow(QMainWindow):
         italic_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.ITALIC))
         format_buttons_layout.addWidget(italic_button)
 
-        bold_button = QPushButton()
+        bold_button = QToolButton()
         bold_button.setIcon(icons["bold"])
         bold_button.setFixedWidth(BUTTON_SIZE)
         bold_button.setToolTip(self.tr("Bold") + f" <{QKeySequence(QKeySequence.StandardKey.Bold).toString()}>")
@@ -597,14 +671,14 @@ class MainWindow(QMainWindow):
         view_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         view_buttons_layout.addWidget(IconWidget(icons["font"], BUTTON_LABEL_SIZE))
-        text_zoom_out_button = QPushButton()
+        text_zoom_out_button = QToolButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
         text_zoom_out_button.setFixedWidth(BUTTON_SIZE)
         text_zoom_out_button.setToolTip(strings.TR_ZOOM_OUT)
         text_zoom_out_button.clicked.connect(lambda: self.text_widget.zoomOut(1))
         view_buttons_layout.addWidget(text_zoom_out_button)
 
-        text_zoom_in_button = QPushButton()
+        text_zoom_in_button = QToolButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
         text_zoom_in_button.setFixedWidth(BUTTON_SIZE)
         text_zoom_out_button.setToolTip(strings.TR_ZOOM_IN)
@@ -612,7 +686,6 @@ class MainWindow(QMainWindow):
         view_buttons_layout.addWidget(text_zoom_in_button)
 
         top_bar_layout.addLayout(view_buttons_layout)
-
         return top_bar_layout
     
 
@@ -627,7 +700,7 @@ class MainWindow(QMainWindow):
         segment_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
         segment_buttons_layout.setSpacing(BUTTON_SPACING)
 
-        self.selection_button = QPushButton()
+        self.selection_button = QToolButton()
         self.selection_button.setIcon(icons["select"])
         self.selection_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.selection_button.setToolTip(self.tr("Create a selection") + f" &lt;{shortcuts["select"].toString()}&gt;")
@@ -635,14 +708,14 @@ class MainWindow(QMainWindow):
         self.selection_button.toggled.connect(self.toggleCreateSelection)
         segment_buttons_layout.addWidget(self.selection_button)
 
-        self.add_segment_button = QPushButton()
+        self.add_segment_button = QToolButton()
         self.add_segment_button.setIcon(icons["add_segment"])
         self.add_segment_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.add_segment_button.setToolTip(self.tr("Create segment from selection") + f" &lt;A&gt;")
         self.add_segment_button.clicked.connect(self.newUtteranceFromSelection)
         segment_buttons_layout.addWidget(self.add_segment_button)
 
-        self.del_segment_button = QPushButton()
+        self.del_segment_button = QToolButton()
         self.del_segment_button.setIcon(icons["trash"])
         self.del_segment_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.del_segment_button.setToolTip(
@@ -668,7 +741,7 @@ class MainWindow(QMainWindow):
         play_buttons_layout.setSpacing(BUTTON_SPACING)
         play_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        back_button = QPushButton()
+        back_button = QToolButton()
         back_button.setIcon(icons["back"])
         back_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         back_button.setToolTip(self.tr("Go to first utterance"))
@@ -676,7 +749,7 @@ class MainWindow(QMainWindow):
         play_buttons_layout.addWidget(back_button)
 
         #buttonsLayout.addSpacerItem(QSpacerItem())
-        prev_button = QPushButton()
+        prev_button = QToolButton()
         prev_button.setIcon(icons["previous"])
         prev_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         shortcut_tooltip_str = shortcuts["play_prev"].toString().replace("Up", '⬆️')
@@ -685,14 +758,14 @@ class MainWindow(QMainWindow):
         prev_button.clicked.connect(self.playPreviousSegment)
         play_buttons_layout.addWidget(prev_button)
 
-        self.play_button = QPushButton()
+        self.play_button = QToolButton()
         self.play_button.setIcon(icons["play"])
         self.play_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         self.play_button.setToolTip(self.tr("Play current utterance") + f" &lt;{shortcuts["play_stop"].toString()}&gt;")
         self.play_button.clicked.connect(self.playAction)
         play_buttons_layout.addWidget(self.play_button)
 
-        next_button = QPushButton()
+        next_button = QToolButton()
         next_button.setIcon(icons["next"])
         next_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         shortcut_tooltip_str = shortcuts["play_next"].toString().replace("Down", '⬇️')
@@ -701,7 +774,7 @@ class MainWindow(QMainWindow):
         next_button.clicked.connect(self.playNextSegment)
         play_buttons_layout.addWidget(next_button)
 
-        self.looping_button = QPushButton()
+        self.looping_button = QToolButton()
         self.looping_button.setCheckable(True)
         self.looping_button.setIcon(icons["loop"])
         self.looping_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
@@ -749,27 +822,16 @@ class MainWindow(QMainWindow):
         view_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         ## Follow playhead button
-        self.follow_playhead_button = QPushButton()
-        self.follow_playhead_button.setIcon(icons["follow_playhead"])
+        self.addAction(self.action_follow_playhead)
+        self.follow_playhead_button = QToolButton()
         self.follow_playhead_button.setFixedWidth(BUTTON_SIZE)
-        self.follow_playhead_button.setCheckable(True)
-        follow_playhead_tooltip_str = shortcuts["follow_playhead"].toString().replace("Up", '⬆️')
-        self.follow_playhead_button.setToolTip(self.tr("Follow playhead") + f" &lt;{follow_playhead_tooltip_str}&gt;")
-        self.follow_playhead_button.setChecked(self.waveform.follow_playhead)
-        self.follow_playhead_button.toggled.connect(self.toggleFollowPlayhead)
+        self.follow_playhead_button.setDefaultAction(self.action_follow_playhead)
         view_buttons_layout.addWidget(self.follow_playhead_button)
-
-        self.follow_playhead_action = QAction(self.tr("Follow playhead"))
-        self.follow_playhead_action.setCheckable(True)
-        self.follow_playhead_action.setChecked(self.follow_playhead_button.isChecked())
-        self.follow_playhead_action.setShortcut(shortcuts["follow_playhead"])
-        self.follow_playhead_action.triggered.connect(self.toggleFollowPlayhead)
-        self.addAction(self.follow_playhead_action)
 
         ## Zoom out
         view_buttons_layout.addSpacing(8)
         view_buttons_layout.addWidget(IconWidget(icons["waveform"], BUTTON_LABEL_SIZE))
-        wave_zoom_out_button = QPushButton()
+        wave_zoom_out_button = QToolButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
         wave_zoom_out_button.setFixedWidth(BUTTON_SIZE)
         wave_zoom_out_button.setToolTip(strings.TR_ZOOM_OUT + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;")
@@ -777,7 +839,7 @@ class MainWindow(QMainWindow):
         view_buttons_layout.addWidget(wave_zoom_out_button)
         
         ## Zoom in
-        wave_zoom_in_button = QPushButton()
+        wave_zoom_in_button = QToolButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
         wave_zoom_in_button.setFixedWidth(BUTTON_SIZE)
         wave_zoom_in_button.setToolTip(strings.TR_ZOOM_IN + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;")
@@ -1284,7 +1346,7 @@ class MainWindow(QMainWindow):
         """Update the recent files submenu"""
         self.recent_menu.clear()
         
-        recent_files: list = app_settings.value("recent_files", [], type=list)
+        recent_files: List[str] = app_settings.value("recent_files", [], type=list)
         
         if not recent_files:
             # Show "No recent files" when list is empty
@@ -1406,7 +1468,7 @@ class MainWindow(QMainWindow):
         if scenes:
             self.waveform.scenes = scenes
 
-        self.transcribe_button.setEnabled(True)
+        self.action_transcribe.setEnabled(True)
         self.transcription_led.setVisible(True)
         self.waveform.must_redraw = True
 
@@ -1539,12 +1601,7 @@ class MainWindow(QMainWindow):
     
 
     def updateSubtitle(self, position_sec: float) -> None:
-        """
-        Called at every player position changed
-
-        Args:
-            time (float): time position in seconds
-        """
+        """Called at every player position changes"""
 
         if not self.video_widget.isVisible():
             return
@@ -1640,11 +1697,11 @@ class MainWindow(QMainWindow):
                     return
 
         if self.media_controller.isPlaying():
-            play_next = self.text_cursor_utterance_id
+            play_next = self._text_cursor_utterance_id
             if (play_next != -1) and (playing_segment_id != play_next):
-                segment = self.document_controller.getSegment(self.text_cursor_utterance_id)
+                segment = self.document_controller.getSegment(self._text_cursor_utterance_id)
                 if segment:
-                    self.media_controller.playSegment(segment, self.text_cursor_utterance_id)
+                    self.media_controller.playSegment(segment, self._text_cursor_utterance_id)
                 return
 
             # Stop playback
@@ -1753,7 +1810,7 @@ class MainWindow(QMainWindow):
         self.waveform.setActive(None)
         self.text_widget.deactivateSentence()
         self.status_label.clear()
-        self.text_cursor_utterance_id = -1
+        self._text_cursor_utterance_id = -1
 
      
     def selectFromWaveform(self, seg_ids: List[SegmentId] | None) -> None:
@@ -2024,11 +2081,11 @@ class MainWindow(QMainWindow):
         if seg_ids is None:
             self.text_widget.deactivateSentence()
             self.status_label.clear()
-            self.text_cursor_utterance_id = -1
+            self._text_cursor_utterance_id = -1
             return
         
         seg_id = seg_ids[0]
-        self.text_cursor_utterance_id = seg_id # Set the segment that should be played
+        self._text_cursor_utterance_id = seg_id # Set the segment that should be played
 
 
     def toggleCreateSelection(self, checked: bool) -> None:
@@ -2070,6 +2127,7 @@ class MainWindow(QMainWindow):
         segment: Segment,
         segment_id: SegmentId,
     ) -> None:
+        log.debug(f"updateUtteranceTranscription({text=}, {segment=}, {segment_id=})")
         if segment_id not in self.document_controller.segments:
             # Create a new segment as a undoable action
             self.undo_stack.push(
@@ -2082,10 +2140,12 @@ class MainWindow(QMainWindow):
                     segment_id
                 )
             )
-            
+        
         block = self.document_controller.getBlockById(segment_id)
         if block:
             text = lang.postProcessText(text, self.normalization_checkbox.isChecked())
+            if not text:
+                text = '*'
             self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
 
 
@@ -2155,31 +2215,53 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def onRecognizerEOF(self) -> None:
-        media_metadata = self.media_controller.getMediaMetadata()
-        media_metadata["transcription_completed"] = True
         if self.media_path != None:
-            cache.update_media_metadata(self.media_path, media_metadata)
+            cache.update_media_metadata(self.media_path, {"transcription_completed": True})
         self._setStatusTranscriptionCompleted()
 
 
-    def toggleTranscribe(self, toggled) -> None:
+    def toggleTranscribe(self, toggled, is_hidden) -> None:
+        print(f"calling toggletranscribe({toggled=}, {is_hidden=})")
         if toggled:
-            self.transcribeAction()
+            if is_hidden:
+                self.toggleHiddenTranscription(toggled)
+            else:
+                self.transcribeAction()
         else:
             self.recognizer.stop()
-    
 
-    def startBackgroundTranscription(self):
-        print("startBackgroundTranscription")
+
+    def toggleHiddenTranscription(self, checked: bool):
+        print(f"calling startHiddenTranscription({checked})")
+        if not checked:
+            self.recognizer.stop()
+            return
+
         if self.media_path is None:
             return
         
         media_metadata = cache.get_media_metadata(self.media_path)
-        transcription_progress = media_metadata.get("transcription_progress", 0.0)
-        self.recognizer.transcribeFile(str(self.media_path), transcription_progress, True)
+        if media_metadata.get("transcription_completed", False):
+            # Restart from beginning
+            start_time = 0.0
+            cache.update_media_metadata(
+                self.media_path,
+                {"transcription_completed": False, "transcription_progress": 0.0}
+            )
+        else:
+            # Continue from where it was interrupted
+            start_time = media_metadata.get("transcription_progress", 0.0)
+        
+        self._setStatusTranscriptionStarted()
+        self.recognizer.transcribeFile(
+            str(self.media_path),
+            start_time,
+            is_hidden=True
+        )
 
 
     def transcribeAction(self) -> None:
+        print("calling transcribeAction")
         if self.media_path is None:
             return
     
@@ -2209,11 +2291,23 @@ class MainWindow(QMainWindow):
                 # And create utterances
                 hidden_transcription = False
             else:
-                # Don't create utterances
+                # Don't create visible utterances
                 # Needed for "smart splitting"
                 hidden_transcription = True
             self._setStatusTranscriptionStarted()
             self.recognizer.transcribeFile(str(self.media_path), transcription_progress, hidden_transcription)
+
+
+    def finishTranscriptionAction(self) -> None:
+        """Single method to uncheck both regular and hidden transcriptions"""
+        print("finishtranscriptionAction")
+        if self.action_transcribe.isChecked():
+            print("uncheck transcribe action")
+            self.action_transcribe.setChecked(False)
+        if self.action_hidden_transcription.isChecked():
+            print("uncheck hidden transcription action")
+            self.action_hidden_transcription.setChecked(False)
+        # self.transcribe_button.setChecked(False)
 
 
     def alignWithSelection(self, block:QTextBlock) -> None:
@@ -2264,7 +2358,7 @@ class MainWindow(QMainWindow):
     def toggleFollowPlayhead(self) -> None:
         new_state = not self.waveform.follow_playhead
         self.follow_playhead_button.setChecked(new_state)
-        self.follow_playhead_action.setChecked(new_state)
+        self.action_follow_playhead.setChecked(new_state)
         self.waveform.toggleFollowPlayHead(new_state)
 
 

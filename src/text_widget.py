@@ -262,9 +262,7 @@ class Highlighter(QSyntaxHighlighter):
 
 
 class LineNumberArea(QWidget):
-    """
-    The widget that displays line numbers on the left.
-    """
+    """The widget that displays line numbers on the left"""
     def __init__(self, editor):
         super().__init__(editor)
         self.editor = editor
@@ -1052,9 +1050,9 @@ class TextEditWidget(QTextEdit):
         context_menu = QMenu(self)
 
         if block_type == TextEditWidget.BlockType.ALIGNED:
-            auto_transcribe_action = context_menu.addAction("Auto transcribe")
-            # auto_transcribe.triggered.connect(lambda: self.main_window.transcribe_button.setChecked(True))
-            auto_transcribe_action.triggered.connect(self.auto_transcribe.emit)
+            # auto_transcribe_action = context_menu.addAction("Auto transcribe")
+            context_menu.addAction(self.main_window.transcribe_action)
+            # auto_transcribe_action.triggered.connect(self.auto_transcribe.emit)
             context_menu.addSeparator()
 
         elif block_type == TextEditWidget.BlockType.NOT_ALIGNED:
@@ -1741,7 +1739,7 @@ class TextEditWidget(QTextEdit):
         super().resizeEvent(event)
         cr = self.contentsRect()
         self.line_number_area.setGeometry(QRect(cr.left(), cr.top(),
-                                                self._getLineNumberAreaWidth(), cr.height()))
+                            self._getLineNumberAreaWidth(), cr.height()))
 
     #### Debug functions ####
 

@@ -257,7 +257,6 @@ class RecognizerWorker(QObject):
             file_path (str): Path to the audio file
             segments (list): List of tuples (segment_id, start_time, end_time)
         """
-
         current_language = getCurrentLanguage()
 
         self._must_stop = False
@@ -340,10 +339,14 @@ class RecognizerWorker(QObject):
                     break
                     
                 if self.recognizer.AcceptWaveform(data):
-                    tokens.extend(json.loads(self.recognizer.Result())["result"])
+                    result = json.loads(self.recognizer.Result())
+                    if "result" in result:
+                        tokens.extend(result["result"])
             
             if not self._must_stop:
-                tokens.extend(json.loads(self.recognizer.FinalResult())["result"])
+                result = json.loads(self.recognizer.FinalResult())
+                if "result" in result:
+                    tokens.extend(result["result"])
         
         except Exception as e:
             self.message.emit(f"Error during transcription: {e}")

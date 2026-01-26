@@ -236,10 +236,12 @@ class VideoWidget(QGraphicsView):
         if caption_text != self.current_caption:
             self.current_caption = caption_text
             if not caption_text:
+                self.background_rect.setVisible(False)
                 self.text_item.updateText("", position_sec)
                 return
             data = self.metadata_parser.parse_sentence(caption_text)
             if data is None:
+                self.background_rect.setVisible(False)
                 self.text_item.updateText("", position_sec)
                 return
             regions, _ = data

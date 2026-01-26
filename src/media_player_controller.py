@@ -30,6 +30,7 @@ from PySide6.QtCore import QObject, Signal, Slot, QUrl
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 from src.interfaces import Segment, SegmentId
+from src.video_widget import VideoWidget
 from src.cache_system import cache
 
 # To trace the segmentation error when playing problematic segments
@@ -370,7 +371,7 @@ class MediaPlayerController(QObject):
         return self.media_duration
     
 
-    def connectVideoWidget(self, video_widget) -> None:
+    def connectVideoWidget(self, video_widget: VideoWidget) -> None:
         """
         Connect a video widget to the media player.
         
