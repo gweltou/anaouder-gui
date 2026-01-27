@@ -65,7 +65,6 @@ log = logging.getLogger(__name__)
 class DocumentController(QObject):
     message = Signal(str)
 
-
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
 
@@ -138,15 +137,6 @@ class DocumentController(QObject):
         
         self.text_widget.updateLineNumberAreaWidth()
         self.text_widget.updateLineNumberArea()
-
-
-    def getMediaMetadata(self) -> dict:
-        if self.media_path is None:
-            return {}
-        
-        media_metadata = cache.get_media_metadata(self.media_path)
-        print(f"{media_metadata=}")
-        return media_metadata
     
     
     def getBlockByNumber(self, block_number: int) -> Optional[QTextBlock]:

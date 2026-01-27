@@ -137,14 +137,6 @@ class MediaPlayerController(QObject):
         self.media_path = None
         self.media_duration = 0.0
         self.state.reset()
-    
-
-    def getMediaMetadata(self) -> dict:
-        """Get metadata of the currently loaded media"""
-        if self.media_path is None:
-            return {}
-        
-        return cache.get_media_metadata(self.media_path)
 
 
     def play(self) -> bool:

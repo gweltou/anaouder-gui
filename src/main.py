@@ -1425,8 +1425,9 @@ class MainWindow(QMainWindow):
                 print(f"Stream {audio_metadata["r_frame_rate"]=}")
                 if match := re.match(r"(\d+)/(\d+)", audio_metadata["r_frame_rate"]):
                     if int(match[1]) > 0:
-                        media_metadata["fps"] = int(match[1]) / int(match[2])
-                        cache.update_media_metadata(file_path, media_metadata)
+                        fps = int(match[1]) / int(match[2])
+                        media_metadata["fps"] = fps
+                        cache.update_media_metadata(file_path, {"fps": fps})
                     self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
                 else:
                     self.log.info(f"Unrecognized FPS: {audio_metadata["r_frame_rate"]}")
@@ -1851,10 +1852,9 @@ class MainWindow(QMainWindow):
 
 
     def onMediaDurationChanged(self, duration_sec: float) -> None:
-        media_metadata = self.media_controller.getMediaMetadata()
-        if self.media_path and media_metadata and "duration" not in media_metadata:
-            media_metadata["duration"] = duration_sec
-            cache.update_media_metadata(self.media_path, media_metadata)
+        if not self.media_path:
+            return
+        cache.update_media_metadata(self.media_path, {"duration": duration_sec})
 
 
     def toggleVideo(self, checked) -> None:
@@ -1874,7 +1874,11 @@ class MainWindow(QMainWindow):
 
 
     def toggleSceneDetect(self, checked) -> None:
-        media_metadata = self.media_controller.getMediaMetadata()
+        if self.media_path is None:
+            return
+        
+        media_metadata = cache.get_media_metadata(self.media_path)
+        # Verify if the media is a video file
         if checked and "fps" in media_metadata:
             self.waveform.display_scene_change = True
             if "scenes" in media_metadata and media_metadata["scenes"]:
@@ -1969,12 +1973,12 @@ class MainWindow(QMainWindow):
         def apply_subtitle_rules(self: MainWindow, start_block: QTextBlock, end_block: QTextBlock):
             print("applying subs rules")
             line_max_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
-            
+            media_metadata = cache.get_media_metadata(self.media_path)
             block = start_block
             while True:
                 seg_id = self.document_controller.getBlockId(block)
                 if seg_id != -1:
-                    if (fps := self.media_controller.getMediaMetadata().get("fps", 0)) > 0:
+                    if (fps := self.waveform.fps) > 0.0:
                         # Adjust segment boundaries on frame positions
                         seg_start, seg_end = self.document_controller.getSegment(seg_id)
                         frame_start = floor(seg_start * fps) / fps
@@ -2164,55 +2168,6 @@ class MainWindow(QMainWindow):
         self.text_widget.updateLineNumberAreaWidth()
 
 
-    def saveTranscriptionToCache(self, tokens: list) -> str:
-        """
-        Backup transcription in cache and
-        return a string from a list of tokens
-        """
-        if not tokens:
-            return '*'
-        
-        tokens = [
-            (
-                round(t["start"], 3),
-                round(t["end"], 3),
-                t["word"],
-                round(t["conf"], 3),
-                t["lang"]
-            ) for t in tokens
-        ]
-
-        # Update backend transcription with new tokens
-        media_metadata = self.media_controller.getMediaMetadata()
-        old_tokens = media_metadata.get("transcription", [])
-        updated_tokens = []
-        segment_start = tokens[0][0]
-        segment_end = tokens[-1][1]
-        idx = 0
-        if not old_tokens or segment_start >= old_tokens[-1][1]:
-            # Add tokens at the end
-            updated_tokens = old_tokens + tokens
-        else:
-            for tok in old_tokens:
-                # Skip preceding tokens
-                if tok[1] > segment_start:
-                    break
-                updated_tokens.append(tok)
-                idx += 1
-            for tok in tokens:
-                updated_tokens.append(tok)
-            while idx < len(old_tokens) and old_tokens[idx][0] < segment_end:
-                # Go over old tokens in the same location
-                idx += 1
-            for tok in old_tokens[idx:]:
-                # Add latter tokens
-                updated_tokens.append(tok)
-        
-        media_metadata["transcription"] = updated_tokens
-
-        return ' '.join([tok[2] for tok in tokens])
-
-
     @Slot()
     def onRecognizerEOF(self) -> None:
         if self.media_path != None:
@@ -2279,8 +2234,9 @@ class MainWindow(QMainWindow):
             self.recognizer.transcribeSegments(str(self.media_path), segments)
         else:
             # Transcribe whole audio file
-            transcription_progress = self.media_controller.getMediaMetadata().get("transcription_progress", 0.0)
-            transcription_completed = self.media_controller.getMediaMetadata().get("transcription_completed", False)
+            media_metadata = cache.get_media_metadata(self.media_path)
+            transcription_progress = media_metadata.get("transcription_progress", 0.0)
+            transcription_completed = media_metadata.get("transcription_completed", False)
             if not self.document_controller.segments and transcription_completed:
                 # Reset transcription if there is no segment
                 transcription_progress = 0.0
@@ -2476,7 +2432,7 @@ class MainWindow(QMainWindow):
             
             # Save media cache
             if self.media_path:
-                cache.update_media_metadata(self.media_path, self.media_controller.getMediaMetadata())
+                cache.update_media_metadata(self.media_path)
 
             # Save window geometry and state
             app_settings.setValue("main/geometry", self.saveGeometry())
@@ -2530,10 +2486,10 @@ class MainWindow(QMainWindow):
         ]
 
         duration = end - start
-        fps = self.media_controller.getMediaMetadata().get("fps")
         duration_string = self.tr("dur: {}s").format(f"{duration:.3f}")
         # Highlight value if segment is too short or too long
-        if fps and fps > 0 and (
+        fps = self.waveform.fps
+        if fps > 0.0 and (
             duration < (self._subs_min_frames / fps)
             or duration > (self._subs_max_frames / fps)
         ):
