@@ -60,6 +60,9 @@ class DocumentInterface(Protocol):
         """Add a segment and return its ID"""
         ...
     
+    def updateSegment(self, segment_id: SegmentId, segment: Segment) -> None:
+        ...
+
     def removeSegment(self, segment_id: SegmentId) -> None:
         ...
     
@@ -151,6 +154,9 @@ class TextDocumentInterface(Protocol):
         ...
 
     def deleteSentence(self, seg_id: SegmentId) -> None:
+        ...
+    
+    def deleteUtterances(self, segment_ids: List[SegmentId]) -> None:
         ...
     
     def deactivateSentence(self, seg_id: SegmentId) -> None:

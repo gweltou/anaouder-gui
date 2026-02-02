@@ -73,11 +73,9 @@ class CreateNewEmptyUtteranceCommand(QUndoCommand):
         if self.media_controller.getPlayingSegmentId() == self.segment_id:
             self.media_controller.deselectSegment()
         self.text_widget.deleteSentence(self.segment_id)
-        del self.document_controller.segments[self.segment_id]
+        self.document_controller.removeSegment(self.segment_id)
         if self.segment_id in self.waveform_widget.active_segments:
             self.waveform_widget.active_segments.remove(self.segment_id)
-        self.document_controller.must_sort = True
-        self.waveform_widget.must_redraw = True
         self.text_widget.setCursorState(self.prev_cursor)
 
 
@@ -108,7 +106,7 @@ class JoinUtterancesCommand(QUndoCommand):
         # Restore first utterance
         first_id = self.seg_ids[0]
         self.text_widget.setSentenceText(self.segments_text[0], first_id)
-        self.document_controller.segments[first_id] = self.segments[0]
+        self.document_controller.updateSegment(first_id, self.segments[0])
         
         block = self.document_controller.getBlockById(first_id)
         assert block != None
@@ -116,13 +114,13 @@ class JoinUtterancesCommand(QUndoCommand):
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
         
         # Restore other utterances
-        for i, id in enumerate(self.seg_ids[1:]):
+        for i, seg_id in enumerate(self.seg_ids[1:]):
             cursor.insertBlock()
             cursor.insertText(self.segments_text[i+1])
-            user_data = {"seg_id": id}
+            user_data = {"seg_id": seg_id}
             cursor.block().setUserData(MyTextBlockUserData(user_data))
-            self.document_controller.segments[id] = self.segments[i+1]
-            self.text_widget.deactivateSentence(id)
+            self.document_controller.segments[seg_id] = self.segments[i+1]
+            self.text_widget.deactivateSentence(seg_id)
         
         self.text_widget.setCursorState(self.prev_cursor)
         self.document_controller.must_sort = True
@@ -132,26 +130,27 @@ class JoinUtterancesCommand(QUndoCommand):
     def redo(self):
         print(f"JoinUtterancesCommand {self.seg_ids=}")
         # TODO: fix bug when joining (sometimes)
-        self.segments = [self.document_controller.segments[id] for id in self.seg_ids]
-        self.segments_text = [self.document_controller.getBlockById(id).text() for id in self.seg_ids]
+        self.segments = [self.document_controller.segments[seg_id] for seg_id in self.seg_ids]
+        self.segments_text = [self.document_controller.getBlockById(seg_id).text() for seg_id in self.seg_ids]
         # Remove all sentences except the first one
-        for id in self.seg_ids[1:]:
-            block = self.document_controller.getBlockById(id)
+        for seg_id in self.seg_ids[1:]:
+            block = self.document_controller.getBlockById(seg_id)
             assert block != None
             cursor = QTextCursor(block)
             cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
             cursor.removeSelectedText()
         
-        joined_text = ' '.join( [ t.strip() for t in self.segments_text ] )
-        self.text_widget.setSentenceText(joined_text, self.seg_ids[0])
-
         # Join waveform segments
         first_id = self.seg_ids[0]
         new_seg_start = self.document_controller.segments[first_id][0]
         new_seg_end = self.document_controller.segments[self.seg_ids[-1]][1]
-        self.document_controller.segments[first_id] = [new_seg_start, new_seg_end]
-        for id in self.seg_ids[1:]:
-            del self.document_controller.segments[id]
+        self.document_controller.updateSegment(first_id, [new_seg_start, new_seg_end])
+        for seg_id in self.seg_ids[1:]:
+            self.document_controller.removeSegment(seg_id)
+        
+        # Join all text in first utterance
+        joined_text = ' '.join( [ t.strip() for t in self.segments_text ] )
+        self.text_widget.setSentenceText(joined_text, self.seg_ids[0])
         
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, len(self.segments_text[0]))
@@ -160,7 +159,6 @@ class JoinUtterancesCommand(QUndoCommand):
         self.waveform.active_segments = [first_id]
         self.waveform.must_redraw = True
         self.document_controller.must_sort = True
-        # self.waveform.refreshSegmentInfo()
 
 
 
@@ -271,8 +269,6 @@ class DeleteUtterancesCommand(QUndoCommand):
             block = self.text_widget.insertBlock(text, data, pos - 1)
             self.text_widget.highlighter.rehighlightBlock(block)
 
-        self.waveform.must_redraw = True
-        # self.waveform.refreshSegmentInfo()
         self.text_widget.setCursorState(self.prev_cursor)        
 
     def redo(self):
@@ -284,14 +280,11 @@ class DeleteUtterancesCommand(QUndoCommand):
         
         for seg_id in self.seg_ids:
             self.text_widget.deleteSentence(seg_id)
-            del self.document_controller.segments[seg_id]
+            self.document_controller.removeSegment(seg_id)
         self.text_widget.document().blockSignals(False)
 
         self.waveform.active_segments = []
         self.waveform.active_segment_id = -1
-        # self.waveform.refreshSegmentInfo()
-        self.waveform.must_redraw = True
-        self.document_controller.must_sort = True
 
 
 
@@ -531,6 +524,7 @@ class ReplaceTextCommand(QUndoCommand):
             block: QTextBlock,
             new_text: str,
         ):
+        log.debug(f"ReplaceTextCommand({new_text=})")
         super().__init__()
         self.text_edit = text_edit
         self.block = block
@@ -624,16 +618,10 @@ class AddSegmentCommand(QUndoCommand):
     
     def undo(self):
         assert self.seg_id != None
-        del self.document_controller.segments[self.seg_id]
-        self.document_controller.must_sort = True
-        self.waveform_widget.must_redraw = True
-        # self.waveform_widget.refreshSegmentInfo()
+        self.document_controller.removeSegment(self.seg_id)
 
     def redo(self):
         self.seg_id = self.document_controller.addSegment(self.segment, self.seg_id)
-        self.document_controller.must_sort = True
-        self.waveform_widget.must_redraw = True
-        # self.waveform_widget.refreshSegmentInfo()
 
 
 
@@ -641,30 +629,22 @@ class ResizeSegmentCommand(QUndoCommand):
     def __init__(
             self,
             document_controller: DocumentInterface,
-            waveform_widget: WaveformInterface,
             segment_id: SegmentId,
             seg_start: float,
             seg_end: float,
         ):
         super().__init__()
         self.document_controller = document_controller
-        self.waveform_widget = waveform_widget
         self.segment_id = segment_id
         self.old_segment: Segment = document_controller.segments[segment_id][:]
         self.seg_start = seg_start
         self.seg_end = seg_end
     
     def undo(self):
-        self.document_controller.segments[self.segment_id] = self.old_segment[:]
-        self.document_controller.must_sort = True
-        self.waveform_widget.refresh_segment_info.emit(self.segment_id)
-        self.waveform_widget.must_redraw = True
+        self.document_controller.updateSegment(self.segment_id, self.old_segment[:])
     
     def redo(self):
-        self.document_controller.segments[self.segment_id] = [self.seg_start, self.seg_end]
-        self.document_controller.must_sort = True
-        self.waveform_widget.refresh_segment_info.emit(self.segment_id)
-        self.waveform_widget.must_redraw = True
+        self.document_controller.updateSegment(self.segment_id, [self.seg_start, self.seg_end])
         
     # def id(self):
     #     return 21
@@ -697,24 +677,20 @@ class DeleteSegmentsCommand(QUndoCommand):
     
     def undo(self):
         for seg_id, segment in self.segments.items():
-            self.document_controller.segments[seg_id] = segment
+            self.document_controller.addSegment(segment, seg_id)
             block = self.document_controller.getBlockById(seg_id)
             if block:
                 self.text_edit.highlighter.rehighlightBlock(block)
 
-        self.document_controller.must_sort = True
         self.waveform.active_segments = list(self.segments.keys())
-        self.waveform.must_redraw = True
 
     def redo(self):
         for seg_id in self.segments:
             block = self.document_controller.getBlockById(seg_id)
-            if seg_id in self.document_controller.segments:
-                del self.document_controller.segments[seg_id]
+            self.document_controller.removeSegment(seg_id)
             if block:
                 self.text_edit.highlighter.rehighlightBlock(block)
         
-        self.document_controller.must_sort = True
         self.waveform.active_segment_id = -1
         self.waveform.active_segments = []
         self.waveform.must_redraw = True

@@ -38,6 +38,7 @@ from PySide6.QtGui import (
     QMouseEvent, QKeySequence, QShortcut
 )
 
+from src.actions import ActionManager
 from src.theme import theme
 from src.settings import app_settings, shortcuts
 from src.utils import lerpColor, mapNumber
@@ -153,10 +154,16 @@ class WaveformWidget(QWidget):
             return self.filtered_audio
     
 
-    def __init__(self, parent, document_controller: DocumentInterface):
+    def __init__(
+            self,
+            parent,
+            document_controller: DocumentInterface,
+            action: ActionManager
+        ):
         super().__init__(parent)
-        self.parent = parent
+        self.main_window = parent
         self.document_controller = document_controller
+        self.action = action
         self.undo_stack = self.document_controller.undo_stack
 
         self.waveform = self.ScaledWaveform()
@@ -235,10 +242,6 @@ class WaveformWidget(QWidget):
         self.create_segment_action = QAction(self.tr("Add utterance"), self)
         self.create_segment_action.setShortcut(shortcuts["segment_from_selection"])
         self.create_segment_action.triggered.connect(self.newUtteranceFromSelection)
-
-        self.transcribe_action = QAction(self.tr("Auto transcribe"), self)
-        self.transcribe_action.setShortcut(shortcuts["transcribe"])
-        self.transcribe_action.triggered.connect(self.parent.transcribeAction) # TODO: use signal
 
         zoom_in_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.ZoomIn), self)
         zoom_in_shortcut.activated.connect(self.zoomIn)
@@ -620,16 +623,14 @@ class WaveformWidget(QWidget):
         if self.active_segment_id  < 0:
             return
         
-        if self.resizing_handle != None:
-            self.undo_stack.push(
-                ResizeSegmentCommand(
-                    self.document_controller,
-                    self,
-                    self.active_segment_id,
-                    self.resizing_segment[0],
-                    self.resizing_segment[1]
-                )
+        self.undo_stack.push(
+            ResizeSegmentCommand(
+                self.document_controller,
+                self.active_segment_id,
+                self.resizing_segment[0],
+                self.resizing_segment[1]
             )
+        )
     
 
     def resizeActiveSegment(self, time_position, handle):
@@ -860,7 +861,7 @@ class WaveformWidget(QWidget):
                 print(f"{self.active_segment_id=} {segment=}")
                 self.resizing_segment = segment[:]
                 block = self.document_controller.getBlockById(self.active_segment_id)
-                self.resizing_textlen = self.parent.text_widget.getSentenceLength(block)
+                self.resizing_textlen = self.main_window.text_widget.getSentenceLength(block)
                 seg_len = self.resizing_segment[1] - self.resizing_segment[0]
                 self.resizing_density = self.resizing_textlen / seg_len
                 self.must_redraw = True
@@ -884,9 +885,10 @@ class WaveformWidget(QWidget):
         
         # Commit current move or resize operation
         if self.resizing_handle != None:
-            if self.active_segment_id >= 0:
-                self._commitResizeSegment()
             self.resizing_handle = None
+            if self.active_segment_id >= 0:
+                # resizing_handle must be reset to None before calling _commitResizeSegment
+                self._commitResizeSegment()
 
         if event.button() == Qt.MouseButton.LeftButton:
             self.unsetCursor()
@@ -1086,20 +1088,20 @@ class WaveformWidget(QWidget):
 
     def showContextMenu(self, pos: QPoint):
         """Show the context menu at the given global position"""
-        context = QMenu(self)
+        context_menu = QMenu(self)
 
         if self.selection_is_active:
             # Context menu for selection segment
-            context.addAction(self.create_segment_action)
-            context.addAction(self.transcribe_action)
+            context_menu.addAction(self.create_segment_action)
+            context_menu.addAction(self.action.transcribe)
         else:
             # Context menu for regular segment(s)
-            context.addAction(self.split_here_action)
-            context.addAction(self.crop_head_action)
-            context.addAction(self.crop_tail_action)
-            context.addSeparator()
-
-            context.addAction(self.transcribe_action)
+            context_menu.addAction(self.split_here_action)
+            context_menu.addAction(self.crop_head_action)
+            context_menu.addAction(self.crop_tail_action)
+            context_menu.addSeparator()
+            # -------------------------
+            context_menu.addAction(self.action.transcribe)
 
             multi = False
             if len(self.active_segments) > 1:
@@ -1108,21 +1110,19 @@ class WaveformWidget(QWidget):
             if multi:
                 join_action = QAction(self.tr("Join segments"), self)
                 join_action.triggered.connect(lambda: self.join_utterances.emit(self.active_segments))
-                context.addAction(join_action)
-            
-            tr_delete_segment = self.tr("Delete segments") if multi else self.tr("Delete segment")
+                context_menu.addAction(join_action)
+            context_menu.addSeparator()
+            # -------------------------
+            tr_delete_utterance = self.tr("Delete utterances") if multi else self.tr("Delete utterance")
+            tr_delete_segment = self.tr("Delete audio segments") if multi else self.tr("Delete audio segment")
 
-            context.addSeparator()
-            delete_action = QAction(tr_delete_segment, self)
-            delete_action.triggered.connect(lambda : self.delete_utterances.emit(self.active_segments))
-            context.addAction(delete_action)
+            self.action.delete_segment.setText(tr_delete_utterance)
+            context_menu.addAction(self.action.delete_utterance)
 
-            tr_keep_sentence = self.tr("keep sentences") if multi else self.tr("keep sentence")
-            delete_whole_action = QAction(f"{tr_delete_segment} ({tr_keep_sentence})", self)
-            delete_whole_action.triggered.connect(lambda : self.delete_segments.emit(self.active_segments))
-            context.addAction(delete_whole_action)
+            self.action.delete_segment.setText(tr_delete_segment)
+            context_menu.addAction(self.action.delete_segment)
 
-        context.exec(pos)
+        context_menu.exec(pos)
 
 
     def toggleSnapping(self, checked:bool):

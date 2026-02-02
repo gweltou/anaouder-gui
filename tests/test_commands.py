@@ -184,7 +184,7 @@ def test_delete_segments():
 def test_resize_segment():
     load_document()
     undo_redo_command(ResizeSegmentCommand(
-                    main_window.waveform,
+                    main_window.document_controller,
                     2,
                     24,
                     30

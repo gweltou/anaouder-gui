@@ -43,6 +43,7 @@ from PySide6.QtGui import (
 from ostilhou.asr import extract_metadata
 from ostilhou.hspell import get_hunspell_spylls
 
+from src.actions import ActionManager
 from src.commands import (
     InsertTextCommand,
     DeleteTextCommand,
@@ -289,6 +290,7 @@ class TextEditWidget(QTextEdit):
         ALIGNED = 2
         NOT_ALIGNED = 3
 
+
     cursor_changed_signal = Signal(list) # Utterance ids of segment under cursor or selection
     join_utterances = Signal(list)
     delete_utterances = Signal(list)
@@ -298,10 +300,16 @@ class TextEditWidget(QTextEdit):
     request_auto_align = Signal()
 
 
-    def __init__(self, parent, document_controller: DocumentInterface):
+    def __init__(
+            self,
+            parent,
+            document_controller: DocumentInterface,
+            action: ActionManager
+        ):
         super().__init__(parent)
         self.main_window = parent
         self.document_controller = document_controller
+        self.action = action
         self.line_number_area = LineNumberArea(self)
 
         # Disable default undo stack to use our own instead
@@ -1031,8 +1039,10 @@ class TextEditWidget(QTextEdit):
 
     
     def contextMenuEvent(self, event):
+        te_cursor = self.textCursor()
+        print(f"context_menu {te_cursor.position()}")
+        print(f"event pos: {event.pos()}")
         cursor = self.cursorForPosition(event.pos())
-        # self.setTextCursor(cursor)
         block = cursor.block()
         block_type = self.getBlockType(block)
 
@@ -1049,12 +1059,28 @@ class TextEditWidget(QTextEdit):
         # context = self.createStandardContextMenu(event.pos())
         context_menu = QMenu(self)
 
+        # Propose spellchecker's suggestions
+        if misspelled_word:
+            cursor = self.cursorForPosition(event.pos())
+            n_suggestion = 0
+            for suggestion in self.highlighter.hunspell.suggest(misspelled_word):
+                n_suggestion += 1
+                action = context_menu.addAction(suggestion)
+                action.triggered.connect(lambda checked, c=cursor, s=suggestion: self.replaceWord(c, s))
+                if n_suggestion >= 6:
+                    break
+            if n_suggestion > 0:
+                context_menu.addSeparator()
+                # -------------------------
         if block_type == TextEditWidget.BlockType.ALIGNED:
-            # auto_transcribe_action = context_menu.addAction("Auto transcribe")
-            context_menu.addAction(self.main_window.transcribe_action)
-            # auto_transcribe_action.triggered.connect(self.auto_transcribe.emit)
-            context_menu.addSeparator()
+            context_menu.addAction(self.action.transcribe)
 
+            # tr_delete_utterance = self.tr("Delete utterances") if multi else self.tr("Delete utterance")
+            # tr_delete_segment = self.tr("Delete audio segments") if multi else self.tr("Delete audio segment")
+            context_menu.addAction(self.action.delete_utterance)
+            context_menu.addAction(self.action.delete_segment)
+            context_menu.addSeparator()
+            # -------------------------
         elif block_type == TextEditWidget.BlockType.NOT_ALIGNED:
             align_action = context_menu.addAction("Align with selection")
             align_action.setEnabled(False)
@@ -1079,25 +1105,13 @@ class TextEditWidget(QTextEdit):
                     align_action.setEnabled(True)
                     align_action.triggered.connect(lambda checked, b=block: self.align_with_selection.emit(b))
                 context_menu.addSeparator()
+                # -------------------------
             else:
                 # Auto-alignment
                 auto_align_action = context_menu.addAction("Auto align")
                 auto_align_action.triggered.connect(self.request_auto_align.emit)
                 context_menu.addSeparator()
-
-        # Propose spellchecker's suggestions
-        if misspelled_word:
-            cursor = self.cursorForPosition(event.pos())
-            n_suggestion = 0
-            for suggestion in self.highlighter.hunspell.suggest(misspelled_word):
-                n_suggestion += 1
-                action = context_menu.addAction(suggestion)
-                action.triggered.connect(lambda checked, c=cursor, s=suggestion: self.replaceWord(c, s))
-                if n_suggestion >= 6:
-                    break
-            if n_suggestion > 0:
-                context_menu.addSeparator()
-
+                # -------------------------
         cut_action = QAction(QIcon.fromTheme("edit-cut"), "Cut", self)
         cut_action.setShortcut(QKeySequence.StandardKey.Cut)
         cut_action.triggered.connect(self.cut)
@@ -1114,8 +1128,8 @@ class TextEditWidget(QTextEdit):
         paste_action.setShortcut(QKeySequence.StandardKey.Paste)
         paste_action.triggered.connect(self.paste)
         context_menu.addAction(paste_action)
-
         context_menu.addSeparator()
+        # -------------------------
 
         # Select All Action
         select_all_action = QAction(QIcon.fromTheme("edit-select-all"), "Select All", self)
@@ -1174,7 +1188,6 @@ class TextEditWidget(QTextEdit):
             )
         )
         return
-
     
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
@@ -1240,116 +1253,8 @@ class TextEditWidget(QTextEdit):
         
         # ENTER
         if event.key() == Qt.Key.Key_Return:
-            if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-                # Prevent Ctrl + ENTER
+            if self._handleReturnKey(event, block, cursor):
                 return
-
-            if cursor.hasSelection():
-                # TODO: Unintuitive behaviour
-                self.deleteSelectedText(cursor)
-                return
-
-            text = block.text()
-
-            if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                html, mask = self.getBlockHtml(block)
-                
-                # Hack to account for line-breaks that count for 2 chars
-                pos_in_block -= text[:pos_in_block].count('\u2028')
-                
-                # Find position in html string
-                html_idx = 0
-                mask_idx = 0
-                while mask_idx < pos_in_block:
-                    if mask[html_idx] == True:
-                        mask_idx += 1
-                    html_idx += 1
-                
-                left_part = html[:html_idx].rstrip()
-                right_part = html[html_idx:].lstrip()
-                new_text = left_part + "<BR>" + right_part
-                
-                self.undo_stack.push(
-                    ReplaceTextCommand(
-                        self,
-                        block,
-                        new_text
-                    )
-                )
-                return
-
-            last_letter_idx = len(text.rstrip())
-            first_letter_idx = 0
-            while first_letter_idx < len(text) and text[first_letter_idx].isspace():
-                first_letter_idx += 1
-            
-            # Cursor at the beginning of sentence
-            if pos_in_block <= first_letter_idx:
-                # Create an empty block before
-                self.undo_stack.push(InsertBlockCommand(self, cursor_pos))
-                return
-            
-            # Cursor at the end of sentence
-            if pos_in_block >= last_letter_idx:
-                # Create an empty block after
-                self.undo_stack.push(InsertBlockCommand(self, cursor_pos, after=True))
-                return
-            
-            # Cursor in the middle of the sentence
-            if (
-                pos_in_block > first_letter_idx
-                and pos_in_block < last_letter_idx
-                and not cursor.hasSelection()
-            ):
-                # Check if current block has an associated segment
-                if self.isAligned(block):
-                    seg_id = block_data.data["seg_id"]
-                    self.split_utterance.emit(seg_id, pos_in_block)
-                    return
-                else:
-                    # Unaligned block
-                    print("split unaligned block")
-                    left_part = text[:pos_in_block].rstrip()
-                    right_part = text[pos_in_block:].lstrip()
-
-                    print(f"{cursor_pos=}")
-                    print(f"0 {self.textCursor().position()=}")
-                    self.undo_stack.beginMacro("split non aligned")
-                    self.undo_stack.push(
-                        InsertBlockCommand(
-                            self,
-                            cursor_pos,
-                            after=True
-                        )
-                    )
-                    print(f"1 {self.textCursor().position()=}")
-                    cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
-                    print(f"{self.textCursor().position()=}")
-                    self.undo_stack.push(
-                        InsertTextCommand(
-                            self,
-                            right_part,
-                            cursor.position()
-                        )
-                    )
-                    print(f"2 {self.textCursor().position()=}")
-                    self.undo_stack.push(
-                        ReplaceTextCommand(
-                            self,
-                            block,
-                            left_part
-                        )
-                    )
-                    print(f"3 {self.textCursor().position()=}")
-                    self.undo_stack.push(
-                        MoveTextCursor(
-                            self,
-                            cursor_pos
-                        )
-                    )
-                    print(f"4 {self.textCursor().position()=}")
-                    self.undo_stack.endMacro()
-                    return
 
         elif event.key() == Qt.Key.Key_Delete:
             print("Delete")
@@ -1548,9 +1453,138 @@ class TextEditWidget(QTextEdit):
                 return
 
         return super().keyPressEvent(event)
+
+
+    def _handleReturnKey(
+            self,
+            event: QKeyEvent,
+            block: QTextBlock,
+            cursor: QTextCursor
+        ) -> bool:
+        """
+        Returns True if the key is captures, False otherwise
+        """
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            # Prevent Ctrl + ENTER
+            return True
+
+        if cursor.hasSelection():
+            # TODO: Unintuitive behaviour
+            self.deleteSelectedText(cursor)
+            return True
+
+        text = block.text()
+        cursor_pos = cursor.position()
+        pos_in_block = cursor.positionInBlock()
+        block_data: MyTextBlockUserData = block.userData()
+
+        if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+            html, mask = self.getBlockHtml(block)
+            
+            # Hack to account for line-breaks that count for 2 chars
+            pos_in_block -= text[:pos_in_block].count('\u2028')
+            
+            # Find position in html string
+            html_idx = 0
+            mask_idx = 0
+            while mask_idx < pos_in_block:
+                if mask[html_idx] == True:
+                    mask_idx += 1
+                html_idx += 1
+            
+            left_part = html[:html_idx].rstrip()
+            right_part = html[html_idx:].lstrip()
+            new_text = left_part + "<BR>" + right_part
+            
+            self.undo_stack.push(
+                ReplaceTextCommand(
+                    self,
+                    block,
+                    new_text
+                )
+            )
+            return True
+
+        last_letter_idx = len(text.rstrip())
+        first_letter_idx = 0
+        while first_letter_idx < len(text) and text[first_letter_idx].isspace():
+            first_letter_idx += 1
+        
+        # Cursor at the beginning of sentence
+        if pos_in_block <= first_letter_idx:
+            # Create an empty block before
+            self.undo_stack.push(InsertBlockCommand(self, cursor_pos))
+            return True
+        
+        # Cursor at the end of sentence
+        if pos_in_block >= last_letter_idx:
+            # Create an empty block after
+            self.undo_stack.push(InsertBlockCommand(self, cursor_pos, after=True))
+            return True
+        
+        # Cursor in the middle of the sentence
+        if (
+            pos_in_block > first_letter_idx
+            and pos_in_block < last_letter_idx
+            and not cursor.hasSelection()
+        ):
+            # Check if current block has an associated segment
+            if self.isAligned(block):
+                seg_id = block_data.data["seg_id"]
+                self.split_utterance.emit(seg_id, pos_in_block)
+                return True
+            else:
+                # Unaligned block
+                print("split unaligned block")
+                left_part = text[:pos_in_block].rstrip()
+                right_part = text[pos_in_block:].lstrip()
+
+                print(f"{cursor_pos=}")
+                print(f"0 {self.textCursor().position()=}")
+                self.undo_stack.beginMacro("split non aligned")
+                self.undo_stack.push(
+                    InsertBlockCommand(
+                        self,
+                        cursor_pos,
+                        after=True
+                    )
+                )
+                print(f"1 {self.textCursor().position()=}")
+                cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+                print(f"{self.textCursor().position()=}")
+                self.undo_stack.push(
+                    InsertTextCommand(
+                        self,
+                        right_part,
+                        cursor.position()
+                    )
+                )
+                print(f"2 {self.textCursor().position()=}")
+                self.undo_stack.push(
+                    ReplaceTextCommand(
+                        self,
+                        block,
+                        left_part
+                    )
+                )
+                print(f"3 {self.textCursor().position()=}")
+                self.undo_stack.push(
+                    MoveTextCursor(
+                        self,
+                        cursor_pos
+                    )
+                )
+                print(f"4 {self.textCursor().position()=}")
+                self.undo_stack.endMacro()
+                return True
+        return False
     
 
     def mouseReleaseEvent(self, event):
+        """
+        This allow for double and triple clicks,
+        to select a whole word or a whole paragraph.
+        """
         if event.button() == Qt.MouseButton.LeftButton:
             if self._last_click is not None:
                 time_since_last = event.timestamp() - self._last_click
@@ -1588,7 +1622,7 @@ class TextEditWidget(QTextEdit):
                 self.setTextCursor(cursor)
                 return
                 
-        super().mousePressEvent(event)
+        super().mouseReleaseEvent(event)
     
 
     def mouseDoubleClickEvent(self, event):
@@ -1650,8 +1684,6 @@ class TextEditWidget(QTextEdit):
             painter.end()
 
 
-    #### Line Number Area Functions ####
-
     def _getLineNumberAreaWidth(self):
         """
         Calculates the width needed for the line number area 
@@ -1683,12 +1715,12 @@ class TextEditWidget(QTextEdit):
         """ Paints the line numbers in the sidebar """
 
         painter = QPainter(self.line_number_area)
-        painter.fillRect(event.rect(), QColor("#f4f4f4")) # Light gray background
+        painter.fillRect(event.rect(), theme.line_number) # Light gray background
 
         doc_layout = self.document().documentLayout()
         
         offset_y = self.verticalScrollBar().value()
-        page_bottom = offset_y + self.viewport().height()
+        # page_bottom = offset_y + self.viewport().height()
         
         # Iterate over all text blocks (could be optimized)
         block = self.document().begin()
@@ -1740,6 +1772,7 @@ class TextEditWidget(QTextEdit):
         cr = self.contentsRect()
         self.line_number_area.setGeometry(QRect(cr.left(), cr.top(),
                             self._getLineNumberAreaWidth(), cr.height()))
+
 
     #### Debug functions ####
 

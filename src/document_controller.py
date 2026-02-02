@@ -64,6 +64,7 @@ log = logging.getLogger(__name__)
 
 class DocumentController(QObject):
     message = Signal(str)
+    refresh_segment_info = Signal(int)
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
@@ -263,11 +264,22 @@ class DocumentController(QObject):
         return None
 
 
+    def updateSegment(self, segment_id: SegmentId, segment: Segment) -> None:
+        """Updates a segment already present in document"""
+        assert segment_id in self.segments
+        self.segments[segment_id] = segment
+        self.updateUtteranceDensity(segment_id)
+
+        self.must_sort = True
+        self.waveform_widget.must_redraw = True
+        self.refresh_segment_info.emit(segment_id)
+
+
     def removeSegment(self, segment_id: SegmentId) -> None:
-        if segment_id in self.segments:
-            del self.segments[segment_id]
-            self.must_sort = True
-            self.waveform_widget.must_redraw = True
+        assert segment_id in self.segments
+        del self.segments[segment_id]
+        self.must_sort = True
+        self.waveform_widget.must_redraw = True
     
 
     def clearSegments(self) -> None:
@@ -276,6 +288,7 @@ class DocumentController(QObject):
         self.waveform_widget.active_segments = []
         self.waveform_widget.active_segment_id = -1
         self.waveform_widget.must_redraw = True
+        self.must_sort = True
 
     
     def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
@@ -380,6 +393,7 @@ class DocumentController(QObject):
     def getUtteranceDensity(self, segment_id: SegmentId) -> float:
         """Get the density (chars/s) field of an utterance"""
         log.debug(f"getUtteranceDensity({segment_id=})")
+
         if self.waveform_widget is None:
             return 0.0
         
@@ -391,6 +405,7 @@ class DocumentController(QObject):
         if not block:
             log.warning("No block found for id: {seg_id}")
             return 0.0
+        
         block_metadata = block.userData().data
         if "density" not in block_metadata:
             self.updateUtteranceDensity(segment_id)
@@ -401,9 +416,7 @@ class DocumentController(QObject):
     def updateUtteranceDensity(self, segment_id: SegmentId) -> None:
         """Update the density (chars/s) field of an utterance"""
         log.debug(f"updateUtteranceDensity({segment_id=})")
-
-        if self.text_widget is None:
-            return
+        assert self.text_widget is not None
                 
         block = self.getBlockById(segment_id)
         if block is None:
@@ -442,7 +455,6 @@ class DocumentController(QObject):
                 self.undo_stack.push(
                     ResizeSegmentCommand(
                         self,
-                        self.waveform_widget,
                         active_segment_id,
                         playhead,
                         segment[1]
@@ -470,7 +482,6 @@ class DocumentController(QObject):
                 self.undo_stack.push(
                     ResizeSegmentCommand(
                         self,
-                        self.waveform_widget,
                         active_segment_id,
                         segment[0],
                         playhead
@@ -792,13 +803,12 @@ class DocumentController(QObject):
 
 
     def autoAlignSelectedBlocks(self) -> None:
+        log.info("autoAlignSelectedBlocks()")
+
         if self.text_widget is None or self.waveform_widget is None:
             return
         
-        log.info("autoAlignSelectedBlocks()")
-        
         start_range = 0.0
-        # end_range = self.media_controller.getDuration()
         end_range = self.waveform_widget.audio_len
 
         cursor = self.text_widget.textCursor()
@@ -862,14 +872,17 @@ class DocumentController(QObject):
             self.undo_stack.push(AlignBlockWithSegment(self, block, segment))
 
 
-    def deleteUtterances(self, segments_ids: List[SegmentId]) -> None:
+    def deleteUtterances(self, segment_ids: List[SegmentId]) -> None:
         """Delete both segments and sentences"""
-
         if (self.text_widget is None) or (self.waveform_widget is None):
             return
         
-        if segments_ids:
-            self.undo_stack.push(DeleteUtterancesCommand(self, self.text_widget, self.waveform_widget, segments_ids))
+        if segment_ids:
+            if self.waveform_widget.active_segment_id in segment_ids:
+                self.refresh_segment_info.emit(-1)
+            self.undo_stack.push(DeleteUtterancesCommand(self, self.text_widget, self.waveform_widget, segment_ids))
+        else:
+            self.message.emit(self.tr("Select one or more utterances first"))
 
 
     def deleteSegments(self, segments_id: List[SegmentId]) -> None:
