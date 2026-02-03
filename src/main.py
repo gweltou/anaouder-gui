@@ -32,8 +32,6 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 import logging
 import time
-from math import floor, ceil
-
 import re
 
 from ostilhou.audio import get_audiofile_info
@@ -97,8 +95,7 @@ from src.hunspell import HunspellLoader
 from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
     app_settings, shortcuts,
-    SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES,
-    SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL, SUBTITLES_CPS,
+    SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_CPS,
     WAVEFORM_SAMPLERATE,
     STATUS_BAR_TIMEOUT,
     BUTTON_SIZE, BUTTON_MEDIA_SIZE, BUTTON_SPACING,
@@ -120,19 +117,6 @@ log = logging.getLogger(__name__)
 def getActionTooltip(action: QAction) -> str:
     return f"{action.text()} <{action.shortcut().toString()}>"
 
-
-# def createButton(icon_key: str, tooltip: str,
-#                   action: QAction, checkable=False) -> QToolButton:
-#     """Factory method for creating buttons"""
-#     button = QToolButton()
-#     button.setIcon(icons[icon_key])
-#     button.setFixedWidth(BUTTON_SIZE)
-#     button.setToolTip(tooltip)
-#     if checkable:
-#         button.setCheckable(True)
-#     if callback:
-#         button.clicked.connect(callback)
-#     return button
 
 
 ###############################################################################
@@ -242,94 +226,6 @@ class MainWindow(QMainWindow):
         self.onSetAutosave(app_settings.value("autosave/checked", True, type=bool))
         self.last_saved_index = 0
         self.last_saved_time = time.time()
-
-
-    # def _createActions(self) -> None:
-    #     ## File menu actions
-    #     self.action_open = QAction(self.tr("&Open") + "...", self)
-    #     self.action_open.setShortcut(QKeySequence.StandardKey.Open)
-    #     self.action_open.triggered.connect(lambda _: self.openFile())
-
-    #     self.action_save = QAction(self.tr("&Save"), self)
-    #     self.action_save.setShortcut(QKeySequence.StandardKey.Save)
-    #     self.action_save.triggered.connect(self.saveFile)
-
-    #     self.action_saveAs = QAction(self.tr("Save as") + "...", self)
-    #     self.action_saveAs.setShortcut(QKeySequence.StandardKey.SaveAs)
-    #     self.action_saveAs.triggered.connect(self.saveFileAs)
-
-    #     self.action_import_media = QAction(strings.TR_IMPORT_MEDIA + '...', self)
-    #     self.action_import_media.setStatusTip(self.tr("Import a media file (audio or video)"))
-    #     self.action_import_media.triggered.connect(self.onImportMedia)
-
-    #     self.action_import_subtitles = QAction(strings.TR_IMPORT_SUBTITLES + '...', self)
-    #     self.action_import_subtitles.setStatusTip(self.tr("Import a subtitles file, keep current media"))
-    #     self.action_import_subtitles.triggered.connect(self.onImportSubtitles)
-
-    #     self.action_export_srt = QAction(self.tr("&SubRip (.srt)"), self)
-    #     self.action_export_srt.setStatusTip(self.tr("Export as SubRip subtitle file"))
-    #     self.action_export_srt.triggered.connect(self.exportSrt)
-
-    #     self.action_export_eaf = QAction("&Elan (.eaf)", self)
-    #     self.action_export_eaf.setStatusTip(self.tr("Export as ELAN annotation file"))
-    #     self.action_export_eaf.triggered.connect(self.exportEaf)
-
-    #     self.action_export_txt = QAction(self.tr("Raw &text (.txt)"), self)
-    #     self.action_export_txt.setStatusTip(self.tr("Export as simple text document"))
-    #     self.action_export_txt.triggered.connect(self.exportTxt)
-
-    #     self.action_open_parameters = QAction(self.tr("&Parameters") + "...", self)
-    #     self.action_open_parameters.setShortcut(QKeySequence.StandardKey.Print)
-    #     self.action_open_parameters.triggered.connect(self.showParametersDialog)
-
-    #     self.action_exit = QAction(self.tr("E&xit"), self)
-    #     self.action_exit.setShortcut(QKeySequence.StandardKey.Quit)
-    #     self.action_exit.triggered.connect(self.close)
-
-    #     ## About menu action
-    #     self.action_about = QAction(self.tr("&About"), self)
-    #     self.action_about.triggered.connect(self.showAboutDialog)
-
-    #     ## Undo/Redo
-    #     self.action_undo = QAction(self.tr("Undo"), self)
-    #     self.action_undo.setShortcut(QKeySequence.StandardKey.Undo)
-    #     self.action_undo.setIcon(icons["undo"])
-    #     self.action_undo.setToolTip(getActionTooltip(self.action_undo))
-    #     self.action_undo.triggered.connect(self.undo_stack.undo)
-
-    #     self.action_redo = QAction(self.tr("Redo"), self)
-    #     self.action_redo.setShortcut(QKeySequence.StandardKey.Redo)
-    #     self.action_redo.setIcon(icons["redo"])
-    #     self.action_redo.setToolTip(getActionTooltip(self.action_redo))
-    #     self.action_redo.triggered.connect(self.undo_stack.redo)
-
-    #     ## Transcribe actions
-    #     self.action_transcribe = QAction(self.tr("Transcribe"), self)
-    #     self.action_transcribe.setShortcut(shortcuts["transcribe"])
-    #     self.action_transcribe.setIcon(icons["sparkles"])
-    #     self.action_transcribe.setToolTip(getActionTooltip(self.action_transcribe))
-    #     self.action_transcribe.setCheckable(True)
-    #     self.action_transcribe.setChecked(False)
-    #     self.action_transcribe.setEnabled(False)
-    #     self.action_transcribe.toggled.connect(
-    #         lambda checked: self.toggleTranscribe(checked, is_hidden=False)
-    #     )
-    #     self.action_hidden_transcription = QAction(self.tr("&Hidden transcription"), self)
-    #     self.action_hidden_transcription.setStatusTip(self.tr("Allow for smart splitting and auto-alignment operations"))
-    #     self.action_hidden_transcription.setCheckable(True)
-    #     self.action_hidden_transcription.setChecked(False)
-    #     self.action_hidden_transcription.toggled.connect(
-    #         lambda checked: self.toggleHiddenTranscription(checked)
-    #     )
-
-    #     ## Follow playhead
-    #     self.action_follow_playhead = QAction(self.tr("Follow playhead"), self)
-    #     self.action_follow_playhead.setShortcut(shortcuts["follow_playhead"])
-    #     self.action_follow_playhead.setIcon(icons["follow_playhead"])
-    #     self.action_follow_playhead.setToolTip(getActionTooltip(self.action_follow_playhead))
-    #     self.action_follow_playhead.setCheckable(True)
-    #     self.action_follow_playhead.setChecked(self.waveform.follow_playhead)
-    #     self.action_follow_playhead.triggered.connect(self.toggleFollowPlayhead)
 
 
     def _configureWindow(self) -> None:
@@ -1100,9 +996,10 @@ class MainWindow(QMainWindow):
 
         if file_path is None:
             # Open a File dialog window
-            file_path = Path(self.getOpenFileDialog(self.tr("Open File"), ";;".join([supported_filter, media_filter])))
+            file_path = self.getOpenFileDialog(self.tr("Open File"), ";;".join([supported_filter, media_filter]))
             if file_path is None:
                 return
+            file_path = Path(file_path)
                 
         self.last_saved_index = 0
         self.last_saved_time = 0.0
@@ -2001,74 +1898,22 @@ class MainWindow(QMainWindow):
         self.undo_stack.endMacro()
 
     
-
     def adaptToSubtitle(self) -> None:
         """
         Try to adapt the selected utterance to a subtitle format by:
           * Setting the segments boundaries on frame positions
           * Adding line breaks if text is longer than the subtitle line limit
         """
-        from src.adapt_subtitles import AdaptDialog
+        from src.adapt_subtitles import AdaptUtterancesDialog
 
-        def apply_subtitle_rules(self: MainWindow, start_block: QTextBlock, end_block: QTextBlock):
-            print("applying subs rules")
-            line_max_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
-            media_metadata = cache.get_media_metadata(self.media_path)
-            block = start_block
-            while True:
-                seg_id = self.document_controller.getBlockId(block)
-                if seg_id != -1:
-                    if (fps := self.waveform.fps) > 0.0:
-                        # Adjust segment boundaries on frame positions
-                        seg_start, seg_end = self.document_controller.getSegment(seg_id)
-                        frame_start = floor(seg_start * fps) / fps
-                        frame_end = ceil(seg_end * fps) / fps
-                        prev_segment_id = self.document_controller.getPrevSegmentId(seg_id)
-                        if segment := self.document_controller.getSegment(prev_segment_id):
-                            if frame_start < segment[1]:
-                                # The previous frame position overlaps the previous segment,
-                                # choose next frame
-                                frame_start = ceil(seg_start * fps) / fps
-                        
-                        next_segment_id = self.document_controller.getNextSegmentId(seg_id)
-                        if segment := self.document_controller.getSegment(next_segment_id):
-                            right_boundary = floor(segment[0] * fps) / fps
-                            right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL, type=int) / fps
-                            if frame_end > right_boundary:
-                                # The next frame position overlaps the next segment,
-                                # choose previous frame
-                                frame_end = right_boundary
-                        self.undo_stack.push(ResizeSegmentCommand(self.document_controller, seg_id, frame_start, frame_end))
-
-                    text = block.text()
-                    splits = splitForSubtitle(text, line_max_size)
-                    if len(splits) > 1:
-                        text = LINE_BREAK.join([ s.strip() for s in splits ])
-                        self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
-                    
-                if block == end_block:
-                    break
-                block = block.next()
-
-        def remove_fillers(self: MainWindow, start_block: QTextBlock, end_block: QTextBlock):
-            block = start_block
-            while block.isValid() and block != end_block.next():
-                text = block.text()
-                new_text = lang.removeVerbalFillers(text)
-                if text != new_text:
-                    print(text)
-                    print(new_text)
-                self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, new_text))
-
-                block = block.next()
-
-
-        dialog = AdaptDialog(self)
+        dialog = AdaptUtterancesDialog(self)
+        # Load saved parameters
         dialog.set_parameters(app_settings.value("adapt_to_subtitles/saved_parameters", {}))
         if dialog.exec() == QDialog.DialogCode.Rejected:
             return  # User cancelled
 
         params = dialog.get_parameters()
+        # Save parameters
         app_settings.setValue("adapt_to_subtitles/saved_parameters", params)
 
         if params["apply_to_all"] == True:
@@ -2083,9 +1928,26 @@ class MainWindow(QMainWindow):
 
         self.undo_stack.beginMacro("adapt to subtitles")
         if params["apply_subtitle_rules"] == True:
-            apply_subtitle_rules(self, start_block, end_block)
+            dialog.apply_subtitle_rules(
+                self.document_controller,
+                self.text_widget,
+                start_block, end_block,
+                self.undo_stack,
+                self.waveform.fps
+            )
         if params["remove_verbal_fillers"] == True:
-            remove_fillers(self, start_block, end_block)
+            dialog.remove_fillers(
+                self.text_widget,
+                start_block, end_block,
+                self.undo_stack
+            )
+        if params["convert_quotation_marks"]:
+            dialog.convert_quotation_marks(
+                self.text_widget,
+                start_block, end_block,
+                self.undo_stack
+            )
+        
         self.undo_stack.endMacro()
 
 

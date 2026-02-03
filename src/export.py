@@ -226,7 +226,6 @@ def clean_subtitle_text(text: str, allowed_tags: Optional[set] = None) -> str:
 
 
 def format_srt(utterances: List[tuple]) -> str:
-    print("format srt")
     # Remove metadata
     metadata_parser = MetadataParser()
     metadata_parser.set_filter_out({"subtitles": False})
@@ -258,7 +257,6 @@ def format_srt(utterances: List[tuple]) -> str:
 
 
 def format_txt(utterances: List[tuple]) -> str:
-    print("format txt")
     # Remove metadata
     rm_special_tokens = True
 
@@ -287,7 +285,6 @@ def format_txt(utterances: List[tuple]) -> str:
 
 def format_eaf(utterances: List[tuple], audiofile, type="wav") -> str:
     """ Export to eaf (Elan) file """
-    print("format elan")
 
     sentences = []
     segments = []
