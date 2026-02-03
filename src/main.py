@@ -1452,11 +1452,12 @@ class MainWindow(QMainWindow):
         # Parse media metadata
         media_metadata = cache.get_media_metadata(file_path)
         print(media_metadata)
+        
+        audiofile_info = get_audiofile_info(str(file_path))
+        print(f"{audiofile_info=}")
 
         if not "fps" in media_metadata:
             # Check video framerate
-            audiofile_info = get_audiofile_info(str(file_path))
-            print(f"{audiofile_info=}")
             if "r_frame_rate" in audiofile_info:
                 print(f"Stream {audiofile_info["r_frame_rate"]=}")
                 if match := re.match(r"(\d+)/(\d+)", audiofile_info["r_frame_rate"]):
@@ -1469,12 +1470,15 @@ class MainWindow(QMainWindow):
                     self.log.info(f"Unrecognized FPS: {audiofile_info["r_frame_rate"]}")
             # if "avg_frame_rate" in audio_metadata:
             #     print(f"Stream {audio_metadata["avg_frame_rate"]=}")
+        
+        if "tags" in audiofile_info and "timecode" in audiofile_info["tags"]:
+            self.waveform.setTimeOffset(audiofile_info["tags"]["timecode"])
 
         if "fps" in media_metadata:
             self.waveform.fps = media_metadata["fps"]
             # Open Video Widget
             self.toggle_video_action.setChecked(True)
-            self.status_fps_label.setText(f"{self.waveform.fps:.2f} {strings.TR_FPS_UNIT}")
+            self.status_fps_label.setText(f"{self.waveform.fps:.2f} {strings.TR_UNIT_FPS}")
             self.status_fps_label.setToolTip(self.tr("Video framerate"))
         else:
             self.status_fps_label.clear()
@@ -2537,8 +2541,18 @@ class MainWindow(QMainWindow):
         warning_style = "background-color: red; color: white;"
 
         start, end = segment
-        start_str = sec2hms(start, sep='', precision=2, m_unit='m', s_unit='s')
-        end_str = sec2hms(end, sep='', precision=2, m_unit='m', s_unit='s')
+        start_str = sec2hms(
+            start + self.waveform.time_offset,
+            sep='', precision=2,
+            m_unit=strings.TR_UNIT_MINUTE[0],
+            s_unit=strings.TR_UNIT_SECOND
+        )
+        end_str = sec2hms(
+            end + self.waveform.time_offset,
+            sep='', precision=2,
+            m_unit=strings.TR_UNIT_MINUTE[0],
+            s_unit=strings.TR_UNIT_SECOND
+        )
         string_parts = [
             #f"ID: {seg_id}",
             self.tr("start: {}").format(f"{start_str:10}"),
@@ -2546,7 +2560,7 @@ class MainWindow(QMainWindow):
         ]
 
         duration = end - start
-        duration_string = self.tr("dur: {}s").format(f"{duration:.3f}")
+        duration_string = self.tr("dur: {}s").format(f"{duration:.2f}")
         # Highlight value if segment is too short or too long
         fps = self.waveform.fps
         if fps > 0.0 and (
@@ -2558,7 +2572,7 @@ class MainWindow(QMainWindow):
             string_parts.append(duration_string)
 
         if density != -1.0:
-            density_str = f"{density:.1f}{strings.TR_CPS_UNIT}"
+            density_str = f"{density:.1f}{strings.TR_UNIT_CPS}"
             if density >= self._target_density:
                 string_parts.append(f"<span style='{warning_style}'>{density_str}</span>")
             else:

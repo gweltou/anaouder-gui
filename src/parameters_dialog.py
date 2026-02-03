@@ -487,7 +487,7 @@ class GeneralPanel(QWidget):
         autosave_layout = QVBoxLayout()
 
         self.save_interval_spin = QDoubleSpinBox()
-        self.save_interval_spin.setSuffix(' ' + strings.TR_MINUTE_UNIT)
+        self.save_interval_spin.setSuffix(' ' + strings.TR_UNIT_MINUTE)
         self.save_interval_spin.setRange(0.1, 10)
         self.save_interval_spin.setDecimals(1)
         self.save_interval_spin.setSingleStep(0.1)
@@ -499,7 +499,7 @@ class GeneralPanel(QWidget):
         autosave_layout.addLayout(save_interval_layout)
 
         self.backup_number_spin = QSpinBox()
-        self.backup_number_spin.setSuffix(' ' + strings.TR_FILES_UNIT)
+        self.backup_number_spin.setSuffix(' ' + strings.TR_UNIT_FILES)
         self.backup_number_spin.setRange(1, 10)
         self.backup_number_spin.setValue(app_settings.value("autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int))
         self.backup_number_spin.valueChanged.connect(self.updateBackupNumber)
@@ -745,7 +745,7 @@ class SubtitlesPanel(QWidget):
 
         ## Minimum duration for a subtitle
         self.min_frames_spin = QSpinBox()
-        self.min_frames_spin.setSuffix(' ' + strings.TR_FRAMES_UNIT)
+        self.min_frames_spin.setSuffix(' ' + strings.TR_UNIT_FRAMES)
         self.min_frames_spin.setMinimum(1)
         self.min_frames_spin.valueChanged.connect(self.updateMinFrames)
         self.min_dur_label = QLabel()
@@ -757,7 +757,7 @@ class SubtitlesPanel(QWidget):
 
         ## Maximum duration for a subtitle
         self.max_frames_spin = QSpinBox()
-        self.max_frames_spin.setSuffix(' ' + strings.TR_FRAMES_UNIT)
+        self.max_frames_spin.setSuffix(' ' + strings.TR_UNIT_FRAMES)
         self.max_frames_spin.setMinimum(1)
         self.max_frames_spin.setMaximum(250)
         self.max_frames_spin.valueChanged.connect(self.updateMaxFrames)
@@ -774,7 +774,7 @@ class SubtitlesPanel(QWidget):
 
         ## Minimum time interval between two subtitles
         self.min_interval_spin = QSpinBox()
-        self.min_interval_spin.setSuffix(' ' + strings.TR_FRAMES_UNIT)
+        self.min_interval_spin.setSuffix(' ' + strings.TR_UNIT_FRAMES)
         self.min_interval_spin.setRange(0, 8)
         self.min_interval_spin.valueChanged.connect(self.updateMinInterval)
         self.min_interval_time_label = QLabel()
@@ -793,7 +793,7 @@ class SubtitlesPanel(QWidget):
             lambda checked: app_settings.setValue("subtitles/auto_extend", checked)
         )
         self.extend_max_gap_spin = QSpinBox()
-        self.extend_max_gap_spin.setSuffix(' ' + strings.TR_FRAMES_UNIT)
+        self.extend_max_gap_spin.setSuffix(' ' + strings.TR_UNIT_FRAMES)
         self.extend_max_gap_spin.setMaximum(16)
         self.extend_max_gap_spin.valueChanged.connect(self.updateExtendMaxGap)
         self.extend_max_gap_time_label = QLabel()
@@ -819,7 +819,7 @@ class SubtitlesPanel(QWidget):
 
         ## Text density
         self.text_density_spin = QDoubleSpinBox()
-        self.text_density_spin.setSuffix(' ' + strings.TR_CPS_UNIT)
+        self.text_density_spin.setSuffix(' ' + strings.TR_UNIT_CPS)
         self.text_density_spin.setDecimals(1)
         self.text_density_spin.setSingleStep(0.1)
         self.text_density_spin.valueChanged.connect(self.updateDensity)
@@ -847,7 +847,7 @@ class SubtitlesPanel(QWidget):
         min_frames = self.min_frames_spin.value()
         app_settings.setValue("subtitles/min_frames", min_frames)
         t = min_frames / self.fps
-        text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
+        text = f"{round(t, 3)}{strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{strings.TR_UNIT_FPS}"
         self.min_dur_label.setText(text)
         self.parent_dialog.signals.subtitles_min_frames_changed.emit(min_frames)
         if not self.default_params_lock:
@@ -858,7 +858,7 @@ class SubtitlesPanel(QWidget):
         max_frames = self.max_frames_spin.value()
         app_settings.setValue("subtitles/max_frames", max_frames)
         t = max_frames / self.fps
-        text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
+        text = f"{round(t, 3)}{strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{strings.TR_UNIT_FPS}"
         self.max_dur_label.setText(text)
         self.parent_dialog.signals.subtitles_max_frames_changed.emit(max_frames)
         if not self.default_params_lock:
@@ -869,7 +869,7 @@ class SubtitlesPanel(QWidget):
         min_interval = self.min_interval_spin.value()
         app_settings.setValue("subtitles/min_interval", min_interval)
         t = min_interval / self.fps
-        text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
+        text = f"{round(t, 3)}{strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{strings.TR_UNIT_FPS}"
         self.min_interval_time_label.setText(text)
         self.extend_max_gap_spin.setMinimum(min_interval + 1)
         if not self.default_params_lock:
@@ -880,7 +880,7 @@ class SubtitlesPanel(QWidget):
         max_gap = self.extend_max_gap_spin.value()
         app_settings.setValue("subtitles/auto_extend_max_gap", max_gap)
         t = max_gap / self.fps
-        text = f"{round(t, 3)}{strings.TR_SECOND_UNIT} @{round(self.fps, 2)}{strings.TR_FPS_UNIT}"
+        text = f"{round(t, 3)}{strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{strings.TR_UNIT_FPS}"
         self.extend_max_gap_time_label.setText(text)
         if not self.default_params_lock:
             self.user_params["auto_extend_max_gap"] = max_gap
@@ -1018,7 +1018,7 @@ class CachePanel(QWidget):
         global_size_layout.addWidget(label)
 
         self.global_size_spinbox = QSpinBox()
-        self.global_size_spinbox.setSuffix(' ' + strings.TR_MEGA_OCTED_UNIT)
+        self.global_size_spinbox.setSuffix(' ' + strings.TR_UNIT_MEGA_OCTED)
         self.global_size_spinbox.setRange(0, 2000)
         self.global_size_spinbox.setValue(int(app_settings.value("cache/media_cache_size", 500)))
         self.global_size_spinbox.valueChanged.connect(self.changeCacheSize)
@@ -1107,7 +1107,7 @@ class CachePanel(QWidget):
 
 
     def simplifySize(self, size: int) -> str:
-        units = [strings.TR_OCTED_UNIT, strings.TR_KILO_OCTED_UNIT, strings.TR_MEGA_OCTED_UNIT]
+        units = [strings.TR_UNIT_OCTED, strings.TR_UNIT_KILO_OCTED, strings.TR_UNIT_MEGA_OCTED]
         unit_i = 0
         while size >= 1000 and unit_i < len(units):
             size /= 1000

@@ -170,6 +170,7 @@ class WaveformWidget(QWidget):
         self.pixmap = QPixmap()
         self.painter = QPainter()
 
+        self.time_offset = 0
         self.recognizer_progress = 0.0
         self.display_scene_change = False
         
@@ -582,7 +583,7 @@ class WaveformWidget(QWidget):
         return False
 
 
-    def setSelecting(self, checked: bool):
+    def setSelecting(self, checked: bool) -> None:
         self.is_selecting = checked
         self.anchor = -1
 
@@ -591,6 +592,12 @@ class WaveformWidget(QWidget):
             self.setCursor(Qt.CursorShape.SplitHCursor)
         else:
             self.unsetCursor() # Change mouse cursor shape to default
+    
+
+    def setTimeOffset(self, time_offset_str: str) -> None:
+        print(f"{time_offset_str=}")
+        hours, minutes, seconds, frames = time_offset_str.split(':')
+        self.time_offset = 3600 * int(hours) + 60 * int(minutes) + int(seconds)
 
 
     def zoomIn(self, factor=1.333, position=0.5):
@@ -1360,7 +1367,7 @@ class WaveformWidget(QWidget):
         # Ideal density
         ideal_density_dur = self.resizing_textlen / self._target_density
         t = start + ideal_density_dur
-        tag = str(round(self._target_density, 1)) + strings.TR_CPS_UNIT
+        tag = str(round(self._target_density, 1)) + strings.TR_UNIT_CPS
         self._drawMarkerText(t, tag, ypos=-6)
 
         markers.append(t)
@@ -1410,10 +1417,61 @@ class WaveformWidget(QWidget):
                 self.painter.drawRect(QRect(0, y_pos, self.width(), height))
 
 
+    def _drawTimeline(self, t_right: float) -> None:
+        """Paint timeline tics and text"""
+
+        t_left = self.t_left + self.time_offset
+        t_right += self.time_offset
+
+        if self.ppsec > 50:
+            time_step = 1
+        elif self.ppsec > 6:
+            time_step = 10
+        elif self.ppsec > 1.8:
+            time_step = 30
+        elif self.ppsec > 0.5:
+            time_step = 60
+        else:
+            time_step = 300 # Every 5 min
+        self.painter.setPen(QPen(theme.wf_timeline))
+
+        # Video frames timecodes
+        if self.fps > 0 and time_step == 1:
+            frame_time_step = 1.0 / self.fps
+            t = ceil(t_left / frame_time_step) * frame_time_step
+            while t < t_right:
+                t += frame_time_step
+                t_x = round((t - t_left) * self.ppsec)
+                self.painter.drawLine(t_x, self.timecode_margin - 4, t_x, self.timecode_margin)
+
+        if time_step == 10:
+            # Draw a tick for every seconds
+            ti = ceil(max(0.0, t_left))
+            for t in range(ti, int(t_right)+1, 1):
+                t_x = round((t - t_left) * self.ppsec)
+                self.painter.drawLine(t_x, self.timecode_margin, t_x, self.timecode_margin + 4)
+
+        ti = ceil(max(0.0, t_left) / time_step) * time_step
+        for t in range(ti, int(t_right)+1, time_step):
+            t_x = round((t - t_left) * self.ppsec)
+            self.painter.drawLine(t_x, self.timecode_margin, t_x, self.height()-4)
+            minutes, secs = divmod(t, 60)
+            hour, minutes = divmod(minutes, 60)
+            
+            if hour > 0:
+                t_string = f"{hour}:{minutes:02}:{secs:02}"
+            else:
+                if secs == 0:
+                    t_string = f"{minutes}{strings.TR_UNIT_MINUTE[0]}"
+                elif minutes == 0:
+                    t_string = f"{secs}{strings.TR_UNIT_SECOND}"
+                else:
+                    t_string = f"{minutes}{strings.TR_UNIT_MINUTE[0]}{secs:02}{strings.TR_UNIT_SECOND}"
+            
+            self.painter.drawText(t_x-8 * len(t_string) // 2, 12, t_string)
+
 
     def draw(self):
-        # log.debug("Redraw waveform canvas")
-
         if not self.pixmap:
             return
         
@@ -1440,52 +1498,8 @@ class WaveformWidget(QWidget):
             w = (self.recognizer_progress - self.t_left) * self.ppsec
             self.painter.drawRect(QRect(0, 0, int(w), self.height()))
 
-        # Paint timecode lines and text
-        if self.ppsec > 50:
-            time_step = 1
-        elif self.ppsec > 6:
-            time_step = 10
-        elif self.ppsec > 1.8:
-            time_step = 30
-        elif self.ppsec > 0.5:
-            time_step = 60
-        else:
-            time_step = 300 # Every 5 min
-        self.painter.setPen(QPen(theme.wf_timeline))
-
-        # Video frames timecodes
-        if self.fps > 0 and time_step == 1:
-            frame_time_step = 1.0 / self.fps
-            t = ceil(self.t_left / frame_time_step) * frame_time_step
-            while t < t_right:
-                t += frame_time_step
-                t_x = round((t - self.t_left) * self.ppsec)
-                self.painter.drawLine(t_x, self.timecode_margin - 4, t_x, self.timecode_margin)
-
-        if time_step == 10:
-            # Draw a tick for every seconds
-            ti = ceil(max(0.0, self.t_left))
-            for t in range(ti, int(t_right)+1, 1):
-                t_x = round((t - self.t_left) * self.ppsec)
-                self.painter.drawLine(t_x, self.timecode_margin, t_x, self.timecode_margin + 4)
-
-        ti = ceil(max(0.0, self.t_left) / time_step) * time_step
-        for t in range(ti, int(t_right)+1, time_step):
-            t_x = round((t - self.t_left) * self.ppsec)
-            self.painter.drawLine(t_x, self.timecode_margin, t_x, self.height()-4)
-            minutes, secs = divmod(t, 60)
-            # t_string = f"{secs}s" if not minutes else f"{minutes}m{secs:02}s"
-            if secs == 0:
-                t_string = f"{minutes}m"
-            elif minutes == 0:
-                t_string = f"{secs}s"
-            else:
-                t_string = f"{minutes}m{secs:02}s"
-            self.painter.drawText(t_x-8 * len(t_string) // 2, 12, t_string)
-        
-        # Draw scene transitions
-        if self.display_scene_change and self.scenes:
-            self._drawSceneChanges(t_right)
+        # Draw timeline
+        self._drawTimeline(t_right)
         
         # Draw waveform
         self.painter.setPen(self.wavepen)
@@ -1499,6 +1513,10 @@ class WaveformWidget(QWidget):
 
         # Draw segments
         self._drawSegments(t_right)
+        
+        # Draw scene transitions
+        if self.display_scene_change and self.scenes:
+            self._drawSceneChanges(t_right)
 
         # Draw head
         if self.t_left <= self.playhead <= t_right:
