@@ -264,6 +264,7 @@ def yuv_to_rgb(y: float, u: float, v: float, color_range='full') -> tuple:
     r = min(max(int(r*256), 0), 255)
     g = min(max(int(g*256), 0), 255)
     b = min(max(int(b*256), 0), 255)
+    
     return (r, g, b)
 
 

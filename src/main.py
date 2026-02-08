@@ -26,7 +26,6 @@ Terminology
     Utterance: The association of an audio `Segment` and a text `Sentence`
 """
 
-
 import os.path
 from pathlib import Path
 from typing import List, Tuple, Optional
@@ -82,11 +81,12 @@ from src.video_widget import VideoWidget
 from document_controller import DocumentController
 from src.transcriber import TranscriptionService
 from src.scene_detector import SceneDetectWorker
+from src.aligner import TextAligner
 from src.actions import ActionManager
 from src.commands import (
     ReplaceTextCommand,
     CreateNewEmptyUtteranceCommand,
-    AlignWithSelectionCommand
+    AlignWithSelectionCommand, AlignBlockWithSegment
 )
 from src.parameters_dialog import ParametersDialog
 from src.export import export, exportSignals
@@ -100,7 +100,7 @@ from src.settings import (
     STATUS_BAR_TIMEOUT,
     BUTTON_SIZE, BUTTON_MEDIA_SIZE, BUTTON_SPACING,
     BUTTON_MARGIN, BUTTON_LABEL_SIZE, DIAL_SIZE,
-    FFMPEG_SCENCE_DETECTOR_THRESHOLD,
+    FFMPEG_SCENE_DETECTOR_THRESHOLD,
     AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER, AUTOSAVE_FOLDER_NAME,
     RECENT_FILES_LIMIT
 )
@@ -112,6 +112,7 @@ from src.strings import strings
 
 
 log = logging.getLogger(__name__)
+
 
 
 def getActionTooltip(action: QAction) -> str:
@@ -214,6 +215,9 @@ class MainWindow(QMainWindow):
 
         # Scenes
         self.scene_detector = None
+
+        # Aligner
+        self.alignment_thread = None
 
         # Undo stack
         self.undo_stack = self.document_controller.undo_stack
@@ -838,7 +842,11 @@ class MainWindow(QMainWindow):
     def saveFile(self) -> bool:
         # if self.filepath and self.filepath.suffix == ".ali":
         if self.file_path and self.file_path.suffix == ".ali":
-            return self._saveFile(self.file_path)
+            success = self._saveFile(self.file_path)
+            if not success:
+                # Revert to saveAs
+                return self.saveFileAs(self.file_path)
+            return success
         else:
             path = self.file_path.with_suffix(".ali") if self.file_path else Path.home()
             return self.saveFileAs(path)
@@ -882,7 +890,12 @@ class MainWindow(QMainWindow):
 
 
     def _saveFile(self, file_path: Path) -> bool:
-        """ Opens a critical dialog window on error """
+        """
+        Opens a critical dialog window on error
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
         try:
             self._performSave(file_path)
             self.undo_stack.setClean()
@@ -891,11 +904,13 @@ class MainWindow(QMainWindow):
             return True
         
         except FileOperationError as e:
-            QMessageBox.critical(
-                self,
+            msg_box = QMessageBox(
+                QMessageBox.Icon.Critical,
                 self.tr("Save Error"),
-                str(e)
+                self.tr("Couldn't save file to '{filename}'").format(filename=file_path.name),
             )
+            msg_box.addButton(strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
+            msg_box.exec()
             return False
 
 
@@ -955,7 +970,7 @@ class MainWindow(QMainWindow):
         try:
             self.setStatusMessage("Autosaving...", 1000) # Display for 1 second
 
-            autosave_folder.mkdir(exist_ok=True)    # Create "autosave" folder, if necessary
+            autosave_folder.mkdir(exist_ok=True)  # Create "autosave" folder, if necessary
             self._performSave(autosave_path)
 
             # Remove old backups, if necessary
@@ -964,8 +979,11 @@ class MainWindow(QMainWindow):
             if len(old_backups) > max_backups:
                 for i in range(len(old_backups) - max_backups):
                     old_backups[i].unlink()                               
-        except FileOperationError as e:
-            log.error("Autosave failed", e)
+        except Exception as e:
+            log.error(f"Autosave failed {e}")
+            self.setStatusMessage(
+                '⚠️ ' + self.tr("Autosave failed: {exception}").format(exception=str(e))
+            )
 
 
     def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]:
@@ -1087,6 +1105,13 @@ class MainWindow(QMainWindow):
                 self.tr("Read Error"),
                 str(e)
             )
+            msg_box = QMessageBox(
+                QMessageBox.Icon.Critical,
+                self.tr("Read Error"),
+                self.tr("Couldn't read file '{filename}'").format(filename=file_path.name),
+            )
+            msg_box.addButton(strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
+            msg_box.exec()
             return False
         
         self.document_controller.loadDocumentData(data["document"])
@@ -1128,6 +1153,7 @@ class MainWindow(QMainWindow):
                     self._performSave(file_path, media_filepath)
                     # Re-open the updated file
                     self.openFile(file_path)
+        return True
 
 
     def _selectFileToLoad(self, file_path: Path) -> Optional[Path]:
@@ -1319,7 +1345,8 @@ class MainWindow(QMainWindow):
         ## XXX: Use QAudioDecoder instead maybe ?
 
         # Stop the scene detector
-        self.toggleSceneDetect(False)
+        if self.scene_detect_action.isChecked():
+            self.scene_detect_action.setChecked(False)
 
         # Stop the recognizer
         if self.transcribe_button.isChecked():
@@ -1372,12 +1399,20 @@ class MainWindow(QMainWindow):
             self.waveform.setTimeOffset(audiofile_info["tags"]["timecode"])
 
         if "fps" in media_metadata:
+            # It is a video media file
+            # Enable relevant actions
+            self.scene_detect_action.setEnabled(True)
+
             self.waveform.fps = media_metadata["fps"]
             # Open Video Widget
             self.toggle_video_action.setChecked(True)
             self.status_fps_label.setText(f"{self.waveform.fps:.2f} {strings.TR_UNIT_FPS}")
             self.status_fps_label.setToolTip(self.tr("Video framerate"))
         else:
+            # It is an audio only media
+            # Disable unusable actions
+            self.scene_detect_action.setEnabled(False)
+
             self.status_fps_label.clear()
             self.status_fps_label.setToolTip("")
 
@@ -1814,43 +1849,57 @@ class MainWindow(QMainWindow):
         if self.media_path is None:
             return
         
-        media_metadata = cache.get_media_metadata(self.media_path)
-        # Verify if the media is a video file
-        if checked and "fps" in media_metadata:
+        if checked:
+            assert self.waveform.fps > 0.0  # The media should be a video file at this point
+
             self.waveform.display_scene_change = True
-            if "scenes" in media_metadata and media_metadata["scenes"]:
-                self.log.info("Using cached scene transitions")
-                self.waveform.scenes = media_metadata["scenes"]
-                self.waveform.must_redraw = True
-            else:
-                self.log.info("Start scene changes detection")
-                if self.scene_detector is None:
+
+            if self.scene_detector is None and not self.waveform.scenes:
+                # Check for cached scenes
+                if cached_scenes := cache.get_media_scenes(self.media_path):
+                    self.log.info("Using cached scene transitions")
+                    self.waveform.scenes = cached_scenes
+                    self.waveform.must_redraw = True
+            
+                else:
+                    self.log.info("Start scene changes detection")
                     self.scene_detector = SceneDetectWorker()
-                    self.scene_detector.setFilePath(self.media_path)
-                    self.scene_detector.setThreshold(FFMPEG_SCENCE_DETECTOR_THRESHOLD)
+                    self.scene_detector.setMediaPath(self.media_path)
+                    self.scene_detector.setThreshold(FFMPEG_SCENE_DETECTOR_THRESHOLD)
                     self.scene_detector.new_scene.connect(self.onNewSceneChange)
+                    self.scene_detector.message.connect(self.setStatusMessage)
                     self.scene_detector.finished.connect(self.onSceneChangeFinished)
                     self.scene_detector.start()
         else:
+            if self.scene_detector:
+                print("stopping")
+                self.scene_detector.stop()
             self.waveform.display_scene_change = False
             self.waveform.must_redraw = True
-            self.scene_detect_action.setChecked(False)
 
 
-    #@Slot(float, tuple)
+    @Slot(float, tuple)
     def onNewSceneChange(self, time: float, color: tuple) -> None:
         self.waveform.scenes.append((time, color[0], color[1], color[2]))
         self.waveform.must_redraw = True
     
 
-    @Slot()
-    def onSceneChangeFinished(self) -> None:
-        if self.scene_detector:
-            self.scene_detector.new_scene.disconnect()
-            self.scene_detector.finished.disconnect()
-            self.scene_detector = None
-        if self.media_path:
-            cache.update_media_metadata(self.media_path, {"scenes": self.waveform.scenes})
+    @Slot(bool)
+    def onSceneChangeFinished(self, success: bool) -> None:
+        print(f"scene change finished {success=}")
+        if self.scene_detector is None:
+            return
+        
+        if success:
+            cache.set_media_scenes(self.scene_detector.media_path, self.waveform.scenes)
+
+        self.scene_detector.new_scene.disconnect(self.onNewSceneChange)
+        self.scene_detector.finished.disconnect(self.onSceneChangeFinished)
+        self.scene_detector.message.disconnect(self.setStatusMessage)
+        
+        self.scene_detector.deleteLater()
+        self.scene_detector = None
+
     
 
     def onUndoStackIndexChanged(self, index: int) -> None:
@@ -1926,7 +1975,7 @@ class MainWindow(QMainWindow):
             start_block = self.text_widget.document().findBlock(cursor.selectionStart())
             end_block = self.text_widget.document().findBlock(cursor.selectionEnd())
 
-        self.undo_stack.beginMacro("adapt to subtitles")
+        self.undo_stack.beginMacro("Adapt to subtitles")
         if params["apply_subtitle_rules"] == True:
             dialog.apply_subtitle_rules(
                 self.document_controller,
@@ -2071,7 +2120,7 @@ class MainWindow(QMainWindow):
 
 
     def toggleTranscribe(self, toggled, is_hidden) -> None:
-        print(f"calling toggletranscribe({toggled=}, {is_hidden=})")
+        log.debug(f"toggleTranscribe({toggled=}, {is_hidden=})")
         if toggled:
             if is_hidden:
                 self.toggleHiddenTranscription(toggled)
@@ -2082,7 +2131,7 @@ class MainWindow(QMainWindow):
 
 
     def toggleHiddenTranscription(self, checked: bool):
-        print(f"calling startHiddenTranscription({checked})")
+        log.debug(f"toggleHiddenTranscription({checked})")
         if not checked:
             self.recognizer.stop()
             return
@@ -2111,7 +2160,7 @@ class MainWindow(QMainWindow):
 
 
     def transcribeAction(self) -> None:
-        print("calling transcribeAction")
+        log.debug("transcribeAction()")
         if self.media_path is None:
             return
     
@@ -2151,14 +2200,10 @@ class MainWindow(QMainWindow):
 
     def finishTranscriptionAction(self) -> None:
         """Single method to uncheck both regular and hidden transcriptions"""
-        print("finishtranscriptionAction")
         if self.action.transcribe.isChecked():
-            print("uncheck transcribe action")
             self.action.transcribe.setChecked(False)
         if self.action.hidden_transcription.isChecked():
-            print("uncheck hidden transcription action")
             self.action.hidden_transcription.setChecked(False)
-        # self.transcribe_button.setChecked(False)
 
 
     @Slot()
@@ -2175,37 +2220,79 @@ class MainWindow(QMainWindow):
 
 
     def autoAlign(self) -> None:
-        log.info("autoAlign")
+        log.debug("autoAlign()")
 
         if self.media_path is None:
             return
         
         # Check if there is a cached transcription for this media
-        missing_transcription = False
+        is_missing_transcription = False
         media_metadata = cache.get_media_metadata(self.media_path)
         if not media_metadata.get("transcription_completed", False):
             # We need to transcribe the whole file first
-            missing_transcription = True
+            is_missing_transcription = True
 
-        # Create and show loading dialog
-        self.loading_dialog = LoadingDialog(self, "Processing data...")
+        alignment_data = self.document_controller.getSelectedBlocksAndTimeRange()
+        if alignment_data is None:
+            return
+        blocks, time_range = alignment_data
 
-        if missing_transcription:
+        tokens = self.document_controller.getTranscriptionForSegment(time_range[0], time_range[1])
+ 
+        self.loading_dialog = ProgressDialog(self, "Processing data...")
+        
+        def start_alignment():
+            # Set the progress bar in indeterminate mode
+            self.loading_dialog.progress_bar.setRange(0, 0)
+            self.loading_dialog.progress_bar.setValue(0)
+            self.loading_dialog.cancelled.connect(on_alignment_canceled)
+
+            self.alignment_thread = TextAligner(blocks, tokens, self)
+            self.alignment_thread.finished.connect(on_alignment_complete)
+            self.alignment_thread.error.connect(self.setStatusMessage)
+
+            self.alignment_thread.start()
+
+        def on_alignment_canceled():
+            if self.alignment_thread is not None and self.alignment_thread.isRunning():
+                self.alignment_thread.cancel()
+
+        def on_alignment_complete(segments):
+            self.undo_stack.beginMacro("Auto alignment")
+            for i, segment in enumerate(segments):
+                if segment is None:
+                    continue
+                self.undo_stack.push(
+                    AlignBlockWithSegment(self.document_controller, blocks[i], segment)
+                )
+            self.undo_stack.endMacro()
+
+            # Close loading dialog
+            if self.loading_dialog is not None:
+                self.loading_dialog.close()
+            
+            # Clean up thread
+            if self.alignment_thread is not None:
+                self.alignment_thread.wait()
+                self.alignment_thread.deleteLater()
+                self.alignment_thread = None
+
+        if is_missing_transcription:
+            # Start with hidden transcription first
+            self.loading_dialog.progress_bar.setRange(0, int(self.waveform.audio_len))
+            self.loading_dialog.cancelled.connect(self.recognizer.stop)
+
+            self.recognizer.progress.connect(self.loading_dialog.progress_bar.setValue)
+            self.recognizer.finished.connect(start_alignment)
+
             start_time = media_metadata.get("transcription_progress", 0.0)
             self.recognizer.transcribeFile(str(self.media_path), start_time, is_hidden=True)
+        else:
+            start_alignment()
 
+        # Show loading dialog
         self.loading_dialog.exec()
-        
-
-    # def deleteUtterances(self, segment_ids: List[SegmentId]) -> None:
-    #     """Delete both segments and sentences"""
-    #     if segment_ids:
-    #         if self.text_widget.highlighted_sentence_id in segment_ids:
-    #             self.statusBar().clearMessage()
-    #         self.document_controller.deleteUtterances(segment_ids)
-    #     else:
-    #         self.setStatusMessage(self.tr("Select one or more utterances first"))
-
+    
 
     def search(self) -> None:
         print("search tool")
@@ -2334,7 +2421,7 @@ class MainWindow(QMainWindow):
             
             # Stop and destroy the scene detector
             if self.scene_detector:
-                self.scene_detector.end()
+                self.scene_detector.stop()
                 if not self.scene_detector.wait(2000): # 2 second timeout
                     self.scene_detector.terminate()
                     self.scene_detector.wait()
@@ -2493,8 +2580,9 @@ class MainWindow(QMainWindow):
 
 
 
-class LoadingDialog(QDialog):
+class ProgressDialog(QDialog):
     """Modal loading dialog with cancel button"""
+    cancelled = Signal()
     
     def __init__(self, parent=None, message="Loading..."):
         super().__init__(parent)
@@ -2522,11 +2610,15 @@ class LoadingDialog(QDialog):
         # Cancel button
         self.cancel_btn = QPushButton(self.tr("Cancel"))
         self.cancel_btn.setFixedWidth(100)
-        self.cancel_btn.clicked.connect(self.reject)
+        self.cancel_btn.clicked.connect(self.on_cancel)
         layout.addWidget(self.cancel_btn)
         
         layout.addStretch()
         self.setLayout(layout)
+    
+    def on_cancel(self):
+        self.cancelled.emit()
+        self.reject()
 
 
 

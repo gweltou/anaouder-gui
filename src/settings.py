@@ -56,7 +56,7 @@ BUTTON_LABEL_SIZE = 16  # in pixels
 DIAL_SIZE = 30          # in pixels
 
 # FFMPEG settings
-FFMPEG_SCENCE_DETECTOR_THRESHOLD = 0.2
+FFMPEG_SCENE_DETECTOR_THRESHOLD = 0.2
 
 # Default values for subtitles
 SUBTITLES_MIN_FRAMES = 16

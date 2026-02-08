@@ -86,13 +86,6 @@ class FileManager(QObject):
         file_path = file_path.absolute()
         self.log.info(f"Saving file to {file_path}")
 
-        # Get a copy of the old file, if it already exist
-        backup = None
-        if file_path.exists() and file_path.stat().st_size > 0:
-            with file_path.open('r', encoding="utf-8") as _fin:
-                backup = _fin.read()
-
-        error = False
         try:
             with file_path.open('w', encoding="utf-8") as _fout:
                 if media_path:
@@ -117,24 +110,9 @@ class FileManager(QObject):
 
         except IOError as e:
             self.log.error(f"Failed to save file: {e}")
-            error = True
+            raise FileOperationError
         except Exception as e:
             self.log.error(f"Unexpected error saving file: {e}")
-            error = True
-        
-        if error and backup:
-            # Create a backup copy of the previous version of the file
-            dir = file_path.parent
-            basename = file_path.stem
-            ext = file_path.suffix
-            bck_filepath = dir / f"{basename}_bck{ext}"
-            try:
-                with bck_filepath.open('w', encoding="utf-8") as _fout:
-                    _fout.write(backup)
-                print(f"Backup file written to '{bck_filepath}'")
-            except Exception as e:
-                self.log.error(f"Unexpected error saving file {bck_filepath}: {e}")
-
             raise FileOperationError
 
 

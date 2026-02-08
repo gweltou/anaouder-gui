@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
 from typing import List, Tuple, Dict, Optional
 import logging
 from pathlib import Path
@@ -54,7 +53,6 @@ from src.aligner import (
 )
 from src.cache_system import cache
 from src.strings import strings
-
 
 
 
@@ -101,7 +99,7 @@ class DocumentController(QObject):
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
         self.text_widget.split_utterance.connect(self.splitFromText)
-        self.text_widget.request_auto_align.connect(self.autoAlignSelectedBlocks)
+        # self.text_widget.request_auto_align.connect(self.autoAlignSelectedBlocks)
     
 
     def setWaveformWidget(self, waveform_widget: WaveformWidget) -> None:
@@ -747,62 +745,8 @@ class DocumentController(QObject):
         self.undo_stack.push(JoinUtterancesCommand(self, self.text_widget, self.waveform_widget, segment_ids))
 
 
-
-    def autoAlignSentences(self, sentences: List[str], range: Optional[Segment] = None) -> List[Segment]:
-        text = "|| " + " || ".join(sentences) + " || "
-        
-        if range:
-            tokens = self.getTranscriptionForSegment(range[0], range[1])
-        else:
-            tokens = self.media_metadata.get("transcription", [])
-
-        alignment = align_text_with_vosk_tokens(text, tokens)
-
-        # Separating into segments
-        segments = []
-        segment_tokens = []
-        for al in alignment:
-            if al[0] is None:
-                continue
-            if al[0] == "||":
-                # print("||")
-                if segment_tokens:
-                    first_idx = 0
-                    last_idx = len(segment_tokens) - 1
-                    first_token = segment_tokens[first_idx][1]
-                    last_token = segment_tokens[last_idx][1]
-                    # Skip first tokens if they align to None
-                    while (first_token is None) and (first_idx < last_idx):
-                        first_idx += 1
-                        first_token = segment_tokens[first_idx][1]
-                    # Skip last tokens if they align to None
-                    while (last_token is None) and (first_idx < last_idx):
-                        last_idx -= 1
-                        last_token = segment_tokens[last_idx][1]
-
-                    print(f"{first_token=} {last_token=}")
-                    if not (first_token or last_token):
-                        segments.append(None)
-                        continue
-                    
-                    if first_token:
-                        segment_start = first_token[1]
-                    else:
-                        segment_start = last_token[1]
-                    
-                    if last_token:
-                        segment_end = last_token[2]
-                    else:
-                        segment_end = first_token[2]
-                    
-                    segments.append([segment_start, segment_end])
-                    segment_tokens.clear()
-                continue
-            segment_tokens.append(al)
-        return segments
-
-
-    def autoAlignSelectedBlocks(self) -> None:
+    def getSelectedBlocksAndTimeRange(self) -> Optional[Tuple[List[QTextBlock], List]]:
+        """Returns the selected text and the corresponding time range"""
         log.info("autoAlignSelectedBlocks()")
 
         if self.text_widget is None or self.waveform_widget is None:
@@ -816,6 +760,7 @@ class DocumentController(QObject):
         # Find the range of non-aligned blocks to align
         # Stop at first aligned block, if there is any in the cursor selection
         to_align: List[QTextBlock] = []
+
         if cursor.hasSelection():
             block = self.findBlock(cursor.selectionStart())
             end_block = self.findBlock(cursor.selectionEnd())
@@ -861,15 +806,9 @@ class DocumentController(QObject):
                     break
             block = block.next()
         
-        texts = [ b.text() for b in to_align ]
-        range = [start_range, end_range]
-        segments = self.autoAlignSentences(texts, range)
-        print(segments)
-        for i, segment in enumerate(segments):
-            if segment is None:
-                continue
-            block = to_align[i]
-            self.undo_stack.push(AlignBlockWithSegment(self, block, segment))
+        time_range = [start_range, end_range]
+        
+        return (to_align, time_range)
 
 
     def deleteUtterances(self, segment_ids: List[SegmentId]) -> None:

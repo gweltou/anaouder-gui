@@ -63,21 +63,9 @@ from src.strings import strings
 from src.cache_system import cache
 
 
+
 log = logging.getLogger(__name__)
 
-
-# class Signals(QObject):
-#         """Custom signals"""
-#         subtitles_margin_size_changed = Signal(int)
-#         subtitles_cps_changed = Signal(float)
-#         subtitles_min_frames_changed = Signal(int)
-#         subtitles_max_frames_changed = Signal(int)
-#         cache_scenes_removed = Signal()
-#         update_ui_language = Signal(str)
-#         toggle_autosave = Signal(bool)
-
-
-# signals = Signals()
 
 
 class DownloadProgressDialog(QDialog):
@@ -294,8 +282,6 @@ class ParametersDialog(QDialog):
         self.tabs.addTab(SubtitlesPanel(self, media_metadata.get("fps", 0)), self.tr("Subtitles Rules"))
         # self.tabs.addTab(UIPanel(parent.video_widget), self.tr("UI"))
         self.tabs.addTab(CachePanel(self, media_path), self.tr("Cache"))
-        # self.tabs.addTab(self.display_tab, "Display")
-        # self.tabs.addTab(self.dictionary_tab, "Dictionary")
         
         # Main layout
         main_layout = QVBoxLayout()
@@ -333,89 +319,6 @@ class ParametersDialog(QDialog):
         form_layout.addRow("Font family:", self.font_family)
         
         appearance_group.setLayout(form_layout)
-        
-        # Window behavior group
-        window_group = QGroupBox("Window Behavior")
-        window_layout = QVBoxLayout()
-        
-        self.start_maximized = QCheckBox("Start maximized")
-        self.remember_size = QCheckBox("Remember window size and position")
-        self.show_toolbar = QCheckBox("Show toolbar")
-        self.show_toolbar.setChecked(True)
-        self.show_statusbar = QCheckBox("Show status bar")
-        self.show_statusbar.setChecked(True)
-        
-        window_layout.addWidget(self.start_maximized)
-        window_layout.addWidget(self.remember_size)
-        window_layout.addWidget(self.show_toolbar)
-        window_layout.addWidget(self.show_statusbar)
-        window_group.setLayout(window_layout)
-        
-        layout.addWidget(appearance_group)
-        layout.addWidget(window_group)
-        layout.addStretch()
-        tab.setLayout(layout)
-        return tab
-
-
-    def create_dictionary_tab(self):
-        tab = QWidget()
-        layout = QVBoxLayout()
-        
-        # Dictionary sources
-        sources_group = QGroupBox("Dictionary Sources")
-        sources_layout = QVBoxLayout()
-        
-        self.use_builtin = QCheckBox("Use built-in dictionary")
-        self.use_builtin.setChecked(True)
-        
-        self.use_custom = QCheckBox("Use custom dictionary")
-        
-        path_layout = QHBoxLayout()
-        self.custom_path = QLineEdit()
-        self.custom_path.setPlaceholderText("Path to custom dictionary file...")
-        self.browse_button = QPushButton("Browse...")
-        path_layout.addWidget(self.custom_path)
-        path_layout.addWidget(self.browse_button)
-        
-        self.use_online = QCheckBox("Use online dictionary service")
-        
-        api_layout = QFormLayout()
-        self.api_key = QLineEdit()
-        self.api_key.setPlaceholderText("Enter API key...")
-        self.api_endpoint = QLineEdit()
-        self.api_endpoint.setText("https://api.dictionary.example.com/v1")
-        api_layout.addRow("API Key:", self.api_key)
-        api_layout.addRow("Endpoint:", self.api_endpoint)
-        
-        sources_layout.addWidget(self.use_builtin)
-        sources_layout.addWidget(self.use_custom)
-        sources_layout.addLayout(path_layout)
-        sources_layout.addWidget(self.use_online)
-        sources_layout.addLayout(api_layout)
-        sources_group.setLayout(sources_layout)
-        
-        # Languages
-        language_group = QGroupBox("Languages")
-        language_layout = QVBoxLayout()
-        
-        self.english = QCheckBox("English")
-        self.english.setChecked(True)
-        self.french = QCheckBox("French")
-        self.spanish = QCheckBox("Spanish")
-        self.german = QCheckBox("German")
-        
-        language_layout.addWidget(self.english)
-        language_layout.addWidget(self.french)
-        language_layout.addWidget(self.spanish)
-        language_layout.addWidget(self.german)
-        language_group.setLayout(language_layout)
-        
-        layout.addWidget(sources_group)
-        layout.addWidget(language_group)
-        layout.addStretch()
-        tab.setLayout(layout)
-        return tab
 """
 
 
@@ -942,11 +845,27 @@ class CachePanel(QWidget):
 
         main_layout = QVBoxLayout()
 
-        self.current_file_group = QGroupBox(self.tr("Current file cache"))
-        self.current_file_group.setEnabled(bool(self.media_metadata) and "fingerprint" in self.media_metadata)
+        self.current_media_group = self._create_current_media_cache_group()
+        main_layout.addWidget(self.current_media_group)
+
+        # Global cache layout
+        global_group = self._create_global_cache_group()
+        main_layout.addWidget(global_group)
+
+        main_layout.addStretch(1)
+
+        self.setLayout(main_layout)
+
+        self.update()
+    
+
+    def _create_current_media_cache_group(self) -> QGroupBox:
+        current_media_group = QGroupBox(self.tr("Current file cache"))
+        current_media_group.setEnabled(bool(self.media_metadata) and "fingerprint" in self.media_metadata)
+        
         current_file_layout = QVBoxLayout()
         
-        if self.current_file_group.isEnabled():
+        if current_media_group.isEnabled():
             label = QLabel(self.media_metadata["fingerprint"])
             label.setToolTip(self.tr("Media fingerprint"))
         else:
@@ -960,7 +879,7 @@ class CachePanel(QWidget):
         current_size_layout.addWidget(label)
         self.current_size_label = QLabel("")
         current_size_layout.addWidget(self.current_size_label)
-        if self.current_file_group.isEnabled():
+        if current_media_group.isEnabled():
             current_file_layout.addLayout(current_size_layout)
 
         current_delete_group = QGroupBox(self.tr("Clear cache"))        
@@ -981,20 +900,14 @@ class CachePanel(QWidget):
         current_delete_layout.addSpacing(16)
         current_delete_layout.addWidget(self.current_delete_btn)
         current_delete_group.setLayout(current_delete_layout)
+
         current_file_layout.addWidget(current_delete_group)
+        current_media_group.setLayout(current_file_layout)
 
-        # Hide unrelevant option
-        if self.current_file_group.isEnabled():
-            if not "transcription" in self.media_metadata or not self.media_metadata["transcription"]:
-                self.current_transcription.setHidden(True)
-            if not "scenes" in self.media_metadata or not self.media_metadata["scenes"]:
-                self.current_scenes.setHidden(True)
-        
-        self.current_file_group.setLayout(current_file_layout)
-        main_layout.addWidget(self.current_file_group)
+        return current_media_group
 
-        ################
 
+    def _create_global_cache_group(self) -> QGroupBox:
         global_group = QGroupBox(self.tr("Global cache"))
         global_layout = QVBoxLayout()
         # global_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -1023,8 +936,8 @@ class CachePanel(QWidget):
         self.global_size_spinbox.setValue(int(app_settings.value("cache/media_cache_size", 500)))
         self.global_size_spinbox.valueChanged.connect(self.changeCacheSize)
         self.global_size_spinbox.setEnabled(False) # TODO
+        
         global_size_layout.addWidget(self.global_size_spinbox)
-
         global_layout.addLayout(global_size_layout)
 
         # Delete layout
@@ -1051,18 +964,14 @@ class CachePanel(QWidget):
         global_layout.addWidget(global_delete_group)
         
         global_group.setLayout(global_layout)
-        main_layout.addWidget(global_group)
-        main_layout.addStretch(1)
 
-        self.setLayout(main_layout)
+        return global_group
 
-        self.update()
-    
 
     def update(self):
         """Update values of cache sizes by calculating its footprint on the hard-drive"""
         
-        if self.current_file_group.isEnabled():
+        if self.current_media_group.isEnabled():
             fingerprint = self.media_metadata["fingerprint"]
             size_strings = []
             size_current_waveform = self.media_metadata.get("waveform_size", 0)
@@ -1076,12 +985,19 @@ class CachePanel(QWidget):
                 size_strings.append(
                     f"{strings.TR_TRANSCRIPTION} ({self.simplifySize(size_current_transcription)})"
                 )
+                self.current_transcription.setHidden(False)
+            else:
+                self.current_transcription.setHidden(True)
+            
             if cache._get_scenes_path(fingerprint).exists():
                 size_current_scenes = cache._get_scenes_path(fingerprint).stat().st_size
                 current_total_size += size_current_scenes
                 size_strings.append(
                     f"{strings.TR_SCENES} ({self.simplifySize(size_current_scenes)})"
                 )
+                self.current_scenes.setHidden(False)
+            else:
+                self.current_scenes.setHidden(True)
             
             self.current_size_label.setText(self.simplifySize(current_total_size))
             self.current_size_label.setToolTip('\n'.join([f"* {s}" for s in size_strings]))

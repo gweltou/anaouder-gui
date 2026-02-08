@@ -16,13 +16,22 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
+from typing import List
+import logging
 import re
 import jiwer
 from math import inf
 
+from PySide6.QtCore import QRunnable, Signal, QObject, QThread
+from PySide6.QtGui import QTextBlock
+
 from src.lang import prepTextForAlignment
 from src.utils import PUNCTUATION
+
+
+
+log = logging.getLogger(__name__)
+
 
 
 SPLIT_TOKEN = '|'
@@ -182,7 +191,101 @@ def prep_sentence(sentence: str, remove_spaces=True) -> str:
     return sentence
 
 
-def align_text_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
+def _print_matrix(matrix):
+    # 2D matrix
+    for row in matrix:
+        r = [ f"{val:.2f}" for val in row ]
+        print(f"[{' '.join(r)}]")
+
+
+def filter_out_chars(text: str, chars: str) -> str:
+    """Remove given characters from a string"""
+
+    filtered_text = ""
+    for l in text:
+        if not l in chars: filtered_text += l
+    return filtered_text
+
+
+
+class TextAligner(QThread):
+    finished = Signal(list)
+    error = Signal(str)
+
+    def __init__(self, blocks: List[QTextBlock], tokens: list, parent=None):
+        super().__init__(parent)
+        self.sentences = [block.text() for block in blocks]
+        self.tokens = tokens
+        self.segments = []
+
+        self._must_stop = False
+    
+    def cancel(self):
+        self._must_stop = True
+
+    def run(self):
+        QThread.currentThread().setPriority(QThread.Priority.HighPriority)
+
+        try:
+            text = "|| " + " || ".join(self.sentences) + " || "
+            
+            alignment = align_text_with_vosk_tokens(text, self.tokens, cancel_check=lambda: self._must_stop)
+
+            if self._must_stop:
+                return
+
+            # Separating into segments
+            segments = []
+            segment_tokens = []
+            for al in alignment:
+                if al[0] is None:
+                    continue
+                if al[0] == "||":
+                    # print("||")
+                    if segment_tokens:
+                        first_idx = 0
+                        last_idx = len(segment_tokens) - 1
+                        first_token = segment_tokens[first_idx][1]
+                        last_token = segment_tokens[last_idx][1]
+                        # Skip first tokens if they align to None
+                        while (first_token is None) and (first_idx < last_idx):
+                            first_idx += 1
+                            first_token = segment_tokens[first_idx][1]
+                        # Skip last tokens if they align to None
+                        while (last_token is None) and (first_idx < last_idx):
+                            last_idx -= 1
+                            last_token = segment_tokens[last_idx][1]
+
+                        print(f"{first_token=} {last_token=}")
+                        if not (first_token or last_token):
+                            segments.append(None)
+                            segment_tokens.clear()
+                            continue
+                        
+                        if first_token:
+                            segment_start = first_token[1]
+                        else:
+                            segment_start = last_token[1]
+                        
+                        if last_token:
+                            segment_end = last_token[2]
+                        else:
+                            segment_end = first_token[2]
+                        
+                        segments.append([segment_start, segment_end])
+                        segment_tokens.clear()
+                    continue
+                segment_tokens.append(al)
+
+            self.segments = segments
+            self.finished.emit(segments)
+        
+        except Exception as e:
+            log.error(f"Alignment error: {e}")
+            self.error.emit(str(e))
+
+
+def align_text_with_vosk_tokens(text: str, vosk_tokens: list, cancel_check=None) -> list:
     """
     Args:
         text: ground truth text
@@ -207,6 +310,9 @@ def align_text_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
     
     # Fill the matrix using Levenshtein distance
     for i in range(n + 1):
+        if cancel_check and cancel_check():
+            return []
+    
         for j in range(m + 1):
             if i > 0 and j > 0:
                 if gt_words[i-1] == hyp_words[j-1][0]:
@@ -219,36 +325,29 @@ def align_text_with_vosk_tokens(text: str, vosk_tokens: list) -> list:
             if j > 0:
                 dp[i][j] = min(dp[i][j], dp[i][j-1] + ins_cost)  # insertion
     # _print_matrix(dp)
+
+    if cancel_check and cancel_check():
+        return []
     
     # Backtrack to find alignment
     alignment = []
     i, j = n, m
     while i > 0 or j > 0:
-        sub_cost = jiwer.cer(gt_words[i-1], hyp_words[j-1][0])
-        if (i > 0 and j > 0 and dp[i][j] == dp[i-1][j-1] + sub_cost):
-            alignment.append((gt_words[i-1], hyp_words[j-1]))
-            i, j = i-1, j-1
-        elif i > 0 and dp[i][j] == dp[i-1][j] + del_cost:
+        if cancel_check and cancel_check():
+            return []
+    
+        if i > 0 and j > 0:  # Add bounds check
+            sub_cost = jiwer.cer(gt_words[i-1], hyp_words[j-1][0])
+            if dp[i][j] == dp[i-1][j-1] + sub_cost:
+                alignment.append((gt_words[i-1], hyp_words[j-1]))
+                i, j = i-1, j-1
+                continue
+    
+        if i > 0 and dp[i][j] == dp[i-1][j] + del_cost:
             alignment.append((gt_words[i-1], None))
             i -= 1
-        else:
+        elif j > 0:  # Changed from else to elif
             alignment.append((None, hyp_words[j-1]))
             j -= 1
     
     return list(reversed(alignment))
-
-
-def _print_matrix(matrix):
-    # 2D matrix
-    for row in matrix:
-        r = [ f"{val:.2f}" for val in row ]
-        print(f"[{' '.join(r)}]")
-
-
-def filter_out_chars(text: str, chars: str) -> str:
-    """Remove given characters from a string"""
-
-    filtered_text = ""
-    for l in text:
-        if not l in chars: filtered_text += l
-    return filtered_text
