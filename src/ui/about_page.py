@@ -25,7 +25,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from src.version import __version__
-from src.icons import icons
+from ui.icons import icons
 from src.strings import strings
 
 

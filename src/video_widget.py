@@ -244,7 +244,7 @@ class VideoWidget(QGraphicsView):
                 self.background_rect.setVisible(False)
                 self.text_item.updateText("", position_sec)
                 return
-            regions, _ = data
+            regions = data[0]
             text = ''.join([region["text"] for region in regions if "text" in region])
             self.current_caption_postproc = text.strip()
         

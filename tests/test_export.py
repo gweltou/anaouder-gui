@@ -2,7 +2,7 @@ import pytest
 
 from PySide6.QtWidgets import QWidget
 
-from src.export import (
+from exports.textual_exporter import (
     ExportDialog,
     export,
     clean_subtitle_text,

@@ -39,7 +39,7 @@ from PySide6.QtGui import (
 )
 
 from src.actions import ActionManager
-from src.theme import theme
+from ui.theme import theme
 from src.settings import app_settings, shortcuts
 from src.utils import lerpColor, mapNumber
 from src.commands import ResizeSegmentCommand
@@ -1220,7 +1220,6 @@ class WaveformWidget(QWidget):
                 draw_shapes()
                 self.painter.setPen(self.segment_active_pen)
                 draw_shapes()
-        
 
 
     def _drawSegments(self, t_right: float):
@@ -1396,8 +1395,8 @@ class WaveformWidget(QWidget):
         for i, (tc, r, g, b) in enumerate(self.scenes):
             if t_right < tc:
                 break
+            self.painter.setPen(Qt.PenStyle.NoPen)
             if self.t_left < tc:
-                self.painter.setPen(Qt.PenStyle.NoPen)
                 x = (tc - self.t_left) * self.ppsec
                 if i > 0 and self.scenes[i-1][0] <= self.t_left:
                     prev_color = self.scenes[i-1][1:]

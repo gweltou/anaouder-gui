@@ -52,7 +52,7 @@ import src.lang as lang
 from src.video_widget import VideoWidget
 from src.utils import get_cache_directory
 from src.settings import (
-    MULTI_LANG, app_settings, UI_LANGUAGES,
+    FUTURE, app_settings, UI_LANGUAGES,
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_MIN_INTERVAL,
     SUBTITLES_AUTO_EXTEND, SUBTITLES_AUTO_EXTEND_MAX_GAP,
     SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS,
@@ -508,7 +508,7 @@ class ModelsPanel(QWidget):
 
         main_layout = QVBoxLayout()
 
-        if MULTI_LANG:
+        if FUTURE:
             lang_group = QGroupBox(self.tr("Language"))
             lang_layout = QHBoxLayout(lang_group)
             lang_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -559,7 +559,7 @@ class ModelsPanel(QWidget):
         models_layout.addWidget(online_group)
         models_layout.addWidget(local_group)
         
-        if MULTI_LANG:
+        if FUTURE:
             main_layout.addWidget(lang_group)
         main_layout.addLayout(models_layout)
         
@@ -597,7 +597,7 @@ class ModelsPanel(QWidget):
 
     def updateLanguage(self):
         print("updatelanguage")
-        if MULTI_LANG:
+        if FUTURE:
             lang.loadLanguage(self.lang_selection.currentText())
         self.online_models_list.clear()
         self.online_models_list.addItems(lang.getDownloadableModelList())

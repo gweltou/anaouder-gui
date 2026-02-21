@@ -34,7 +34,7 @@ from PySide6.QtCore import QObject, Signal
 
 from ostilhou.asr.dataset import MetadataParser, METADATA_PATTERN
 
-from src.icons import icons
+from ui.icons import icons
 from src.version import __version__
 
 
@@ -184,6 +184,7 @@ class ExportDialog(QDialog):
         if file_path:
             file_path = os.path.abspath(file_path)
             self.file_path_input.setText(file_path)
+            self.accept()
 
 
     def get_file_path(self) -> str:

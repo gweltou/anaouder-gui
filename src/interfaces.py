@@ -48,6 +48,13 @@ class BlockType(Enum):
 
 
 
+class MainWindowInterface(Protocol):
+
+    def setStatusMessage(self, message: str, timeout: int) -> None:
+        ...
+
+
+
 class DocumentInterface(Protocol):
     undo_stack: QUndoStack
     segments: Dict[SegmentId, Segment]
@@ -101,6 +108,9 @@ class DocumentInterface(Protocol):
         ...
     
     def updateUtteranceDensity(self, segment_id: SegmentId) -> None:
+        ...
+    
+    def getSelectedBlocksAndTimeRange(self) -> Tuple[List[QTextBlock], List] | None:
         ...
 
     def cropHead(self) -> None:

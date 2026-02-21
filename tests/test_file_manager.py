@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QApplication
 from src.main import (
     MainWindow
 )
-from src.icons import loadIcons
+from ui.icons import loadIcons
 from src.strings import strings
 
 
@@ -31,7 +31,7 @@ def load_document():
         ("Pevare linenn", (32, 35)),
         ("Pempvet linenn", (40, 41))
     ]:
-        seg_id = main_window.waveform.addSegment(list(segment))
+        seg_id = main_window.document_controller.addSegment(list(segment))
         main_window.text_widget.appendSentence(text, seg_id)
 
 

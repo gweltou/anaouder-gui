@@ -52,7 +52,7 @@ from src.commands import (
     MoveTextCursor
 )
 from src.interfaces import DocumentInterface
-from src.theme import theme
+from ui.theme import theme
 from src.utils import (
     getSentenceRegions,
     MyTextBlockUserData,
@@ -410,44 +410,6 @@ class TextEditWidget(QTextEdit):
         if "seg_id" in user_data:
             return user_data["seg_id"]
         return -1
-
-
-    # def setBlockId(self, block: QTextBlock, seg_id: SegmentId) -> None:
-    #     log.debug(f"setBlockId({block=}, {seg_id=})")
-    #     if not block.userData():
-    #         block.setUserData(MyTextBlockUserData({"seg_id": seg_id}))
-    #     else:
-    #         user_data = block.userData().data
-    #         user_data["seg_id"] = seg_id
-
-
-    # def getBlockById(self, seg_id: SegmentId) -> Optional[QTextBlock]:
-    #     doc = self.document()
-    #     block = doc.firstBlock()
-    #     while block.isValid():
-    #         if block.userData():
-    #             if block.userData().data["seg_id"] == seg_id:
-    #                 return block
-    #         block = block.next()
-    #     return None
-    
-
-    # def getNextAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
-    #     while True:
-    #         block = block.next()
-    #         if block.blockNumber() == -1:
-    #             return None
-    #         if self.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
-    #             return block
-
-
-    # def getPrevAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
-    #     while True:
-    #         block = block.previous()
-    #         if block.blockNumber() == -1:
-    #             return None
-    #         if self.getBlockType(block) == TextEditWidget.BlockType.ALIGNED:
-    #             return block
 
 
     def getBlockNumber(self, position: int) -> int:
@@ -1191,8 +1153,6 @@ class TextEditWidget(QTextEdit):
     
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        print("keyPressEvent", event.key())
-
         # Block TAB
         if event.key() == Qt.Key.Key_Tab:
             return
@@ -1245,225 +1205,29 @@ class TextEditWidget(QTextEdit):
             else:
                 self.undo_stack.push(InsertTextCommand(self, char, cursor_pos))
             return
-        
-        pos_in_block = cursor.positionInBlock()
-        block = cursor.block()
-        block_data: MyTextBlockUserData = block.userData()
-        block_len = block.length()
-        
-        # ENTER
+                
         if event.key() == Qt.Key.Key_Return:
-            if self._handleReturnKey(event, block, cursor):
+            if self._handle_return_key(event, cursor):
                 return
 
         elif event.key() == Qt.Key.Key_Delete:
-            print("Delete")
-        
-            if cursor.hasSelection():
-                # Special treatment when a selection is active
-                self.deleteSelectedText(cursor)
+            if self._handle_delete_key(cursor):
                 return
-            
-            if pos_in_block < block_len-1:
-                self.undo_stack.push(
-                    DeleteTextCommand(
-                        self,
-                        cursor_pos,
-                        1,
-                        QTextCursor.MoveOperation.Right
-                    )
-                )
-                return
-
-            # Cursor is at the end of the block
-            if self.isAligned(block):
-                next_block = block.next()
-                if not next_block.isValid():
-                    return
-                
-                if self.isAligned(next_block):
-                    # Join two aligned utterances
-                    seg_id = self.getBlockId(block)
-                    next_seg_id = self.getBlockId(next_block)
-                    self.join_utterances.emit([seg_id, next_seg_id])
-                    return
-                
-                # Join with next non-aligned sentence
-                # Join with the current unaligned block
-                self.undo_stack.beginMacro("join with next sentence")
-                self.undo_stack.push(
-                    InsertTextCommand(
-                        self,
-                        next_block.text(),
-                        cursor_pos
-                    )
-                )
-                self.undo_stack.push(
-                    DeleteTextCommand(
-                        self,
-                        next_block.position() - 1, # We need to delete from pos-1 so that the metadata doens't get shifted
-                        next_block.length(),
-                        QTextCursor.MoveOperation.Right
-                    )
-                )
-                self.undo_stack.endMacro()
-                cursor = self.textCursor()
-                cursor.setPosition(cursor_pos)
-                self.setTextCursor(cursor)
-                return
-            else:
-                next_block = block.next()
-                if not next_block.isValid():
-                    return
-                
-                if self.isAligned(next_block):
-                    # Join this non aligned sentence with the next aligned block
-                    self.undo_stack.beginMacro("join with next utterance")
-                    self.undo_stack.push(
-                        InsertTextCommand(
-                            self,
-                            block.text(),
-                            cursor_pos + 1
-                        )
-                    )
-                    self.undo_stack.push(
-                        DeleteTextCommand(
-                            self,
-                            block.position() - 1, # We need to delete from pos-1 so that the metadata doens't get shifted
-                            block_len,
-                            QTextCursor.MoveOperation.Right
-                        )
-                    )
-                    self.undo_stack.endMacro()
-                    return
-                    
-                
-                # Current block and next block are unaligned
-                self.undo_stack.push(
-                        DeleteTextCommand(
-                            self,
-                            cursor_pos,
-                            1,
-                            QTextCursor.MoveOperation.Right
-                        )
-                    )
-                return 
 
         elif event.key() == Qt.Key.Key_Backspace:
-            print("Backspace")
-
-            if cursor.hasSelection():
-                # Special treatment when a selection is active
-                self.deleteSelectedText(cursor)
-                return
-            
-            if pos_in_block > 0:
-                # Regular deletion within the block
-                self.undo_stack.push(
-                    DeleteTextCommand(
-                        self,
-                        cursor_pos,
-                        1,
-                        QTextCursor.MoveOperation.Left
-                    )
-                )
-                return
-            
-            # Cursor is at the beggining of the block
-            if self.isAligned(block):
-                # This is an aligned utterance block
-                if len(block.text().strip()) == 0:
-                    # Empty aligned block, remove it
-                    seg_id = block_data.data["seg_id"]
-                    self.delete_utterances.emit([seg_id])
-                    return
-                elif (
-                    block.previous().isValid()
-                    and self.isAligned(block.previous())
-                ):
-                    # Join this aligned utterance with previous aligned utterance
-                    seg_id = block_data.data["seg_id"]
-                    prev_seg_id = block.previous().userData().data["seg_id"]
-                    self.join_utterances.emit([prev_seg_id, seg_id])
-                    return
-                elif block.previous().isValid():
-                    # Join with previous unaligned block
-                    log.debug("Join with previous unaligned block")
-                    prev_block = block.previous()
-                    self.undo_stack.beginMacro("join with previous sentence")
-                    # Insert the previous block's text at the beggining of this block
-                    self.undo_stack.push(
-                        InsertTextCommand(
-                            self,
-                            prev_block.text(),
-                            cursor_pos
-                        )
-                    )
-                    # We need to delete from pos-1 so that the metadata doesn't get shifted
-                    # But this doesn't work to remove the first block
-                    self.undo_stack.push(
-                        DeleteTextCommand(
-                            self,
-                            prev_block.position() - 1,
-                            prev_block.length(),
-                            QTextCursor.MoveOperation.Right
-                        )
-                    )
-                    self.undo_stack.endMacro()
-                    return
-            else:
-                # Not an aligned block, but we could join with previous aligned block
-                prev_block = block.previous()
-                if not prev_block.isValid():
-                    return
-                
-                if self.isAligned(prev_block):
-                    insert_pos = cursor_pos - 1
-                    self.undo_stack.beginMacro("join with previous utterance")
-                    self.undo_stack.push(
-                        InsertTextCommand(
-                            self,
-                            block.text(),
-                            insert_pos
-                        )
-                    )
-                    self.undo_stack.push(
-                        DeleteTextCommand(
-                            self,
-                            block.position(),
-                            block.length(),
-                            QTextCursor.MoveOperation.Right
-                        )
-                    )
-                    self.undo_stack.endMacro()
-                    cursor = self.textCursor()
-                    cursor.setPosition(insert_pos)
-                    self.setTextCursor(cursor)
-                    return
-                
-                # Regular mergin between unaligned sentences
-                self.undo_stack.push(
-                    DeleteTextCommand(
-                        self,
-                        cursor_pos,
-                        1,
-                        QTextCursor.MoveOperation.Left
-                    )
-                )
+            if self._handle_backspace_key(cursor):
                 return
 
         return super().keyPressEvent(event)
 
 
-    def _handleReturnKey(
+    def _handle_return_key(
             self,
             event: QKeyEvent,
-            block: QTextBlock,
             cursor: QTextCursor
         ) -> bool:
-        """
-        Returns True if the key is captures, False otherwise
-        """
+        """Returns True if the key is processed, False otherwise."""
+        
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
             # Prevent Ctrl + ENTER
             return True
@@ -1473,6 +1237,7 @@ class TextEditWidget(QTextEdit):
             self.deleteSelectedText(cursor)
             return True
 
+        block = cursor.block()
         text = block.text()
         cursor_pos = cursor.position()
         pos_in_block = cursor.positionInBlock()
@@ -1577,8 +1342,222 @@ class TextEditWidget(QTextEdit):
                 print(f"4 {self.textCursor().position()=}")
                 self.undo_stack.endMacro()
                 return True
+            
         return False
     
+
+    def _handle_delete_key(self, cursor: QTextCursor) -> bool:
+        """Returns True if the key is processed, False otherwise."""
+        
+        if cursor.hasSelection():
+            # Special treatment when a selection is active
+            self.deleteSelectedText(cursor)
+            return True
+        
+        block = cursor.block()
+        cursor_pos = cursor.position()
+        pos_in_block = cursor.positionInBlock()
+        block_len = block.length()
+        
+        if pos_in_block < block_len - 1:
+            self.undo_stack.push(
+                DeleteTextCommand(
+                    self,
+                    cursor_pos,
+                    1,
+                    QTextCursor.MoveOperation.Right
+                )
+            )
+            return True
+
+        # Cursor is at the end of the block
+        if self.isAligned(block):
+            next_block = block.next()
+            if not next_block.isValid():
+                return True
+            
+            if self.isAligned(next_block):
+                # Join two aligned utterances
+                seg_id = self.getBlockId(block)
+                next_seg_id = self.getBlockId(next_block)
+                self.join_utterances.emit([seg_id, next_seg_id])
+                return True
+            
+            # Join with next non-aligned sentence
+            # Join with the current unaligned block
+            self.undo_stack.beginMacro("join with next sentence")
+            self.undo_stack.push(
+                InsertTextCommand(
+                    self,
+                    next_block.text(),
+                    cursor_pos
+                )
+            )
+            self.undo_stack.push(
+                DeleteTextCommand(
+                    self,
+                    next_block.position() - 1, # We need to delete from pos-1 so that the metadata doens't get shifted
+                    next_block.length(),
+                    QTextCursor.MoveOperation.Right
+                )
+            )
+            self.undo_stack.endMacro()
+            cursor = self.textCursor()
+            cursor.setPosition(cursor_pos)
+            self.setTextCursor(cursor)
+            return True
+        
+        else:
+            next_block = block.next()
+            if not next_block.isValid():
+                return True
+            
+            if self.isAligned(next_block):
+                # Join this non aligned sentence with the next aligned block
+                self.undo_stack.beginMacro("join with next utterance")
+                self.undo_stack.push(
+                    InsertTextCommand(
+                        self,
+                        block.text(),
+                        cursor_pos + 1
+                    )
+                )
+                self.undo_stack.push(
+                    DeleteTextCommand(
+                        self,
+                        block.position() - 1, # We need to delete from pos-1 so that the metadata doens't get shifted
+                        block_len,
+                        QTextCursor.MoveOperation.Right
+                    )
+                )
+                self.undo_stack.endMacro()
+                return True
+                
+            
+            # Current block and next block are unaligned
+            self.undo_stack.push(
+                    DeleteTextCommand(
+                        self,
+                        cursor_pos,
+                        1,
+                        QTextCursor.MoveOperation.Right
+                    )
+                )
+            
+            return True
+
+
+    def _handle_backspace_key(self, cursor: QTextCursor) -> bool:
+
+        if cursor.hasSelection():
+            # Special treatment when a selection is active
+            self.deleteSelectedText(cursor)
+            return True
+
+        block = cursor.block()
+        cursor_pos = cursor.position()
+        pos_in_block = cursor.positionInBlock()
+        block_data: MyTextBlockUserData = block.userData()
+        
+        if pos_in_block > 0:
+            # Regular deletion within the block
+            self.undo_stack.push(
+                DeleteTextCommand(
+                    self,
+                    cursor_pos,
+                    1,
+                    QTextCursor.MoveOperation.Left
+                )
+            )
+            return True
+        
+        # Cursor is at the beggining of the block
+        if self.isAligned(block):
+            # This is an aligned utterance block
+            if len(block.text().strip()) == 0:
+                # Empty aligned block, remove it
+                seg_id = block_data.data["seg_id"]
+                self.delete_utterances.emit([seg_id])
+                return True
+            
+            elif (
+                block.previous().isValid()
+                and self.isAligned(block.previous())
+            ):
+                # Join this aligned utterance with previous aligned utterance
+                seg_id = block_data.data["seg_id"]
+                prev_seg_id = block.previous().userData().data["seg_id"]
+                self.join_utterances.emit([prev_seg_id, seg_id])
+                return True
+            
+            elif block.previous().isValid():
+                # Join with previous unaligned block
+                log.debug("Join with previous unaligned block")
+                prev_block = block.previous()
+                self.undo_stack.beginMacro("join with previous sentence")
+                # Insert the previous block's text at the beggining of this block
+                self.undo_stack.push(
+                    InsertTextCommand(
+                        self,
+                        prev_block.text(),
+                        cursor_pos
+                    )
+                )
+                # We need to delete from pos-1 so that the metadata doesn't get shifted
+                # But this doesn't work to remove the first block
+                self.undo_stack.push(
+                    DeleteTextCommand(
+                        self,
+                        prev_block.position() - 1,
+                        prev_block.length(),
+                        QTextCursor.MoveOperation.Right
+                    )
+                )
+                self.undo_stack.endMacro()
+                return True
+        else:
+            # Not an aligned block, but we could join with previous aligned block
+            prev_block = block.previous()
+            if not prev_block.isValid():
+                return True
+            
+            if self.isAligned(prev_block):
+                insert_pos = cursor_pos - 1
+                self.undo_stack.beginMacro("join with previous utterance")
+                self.undo_stack.push(
+                    InsertTextCommand(
+                        self,
+                        block.text(),
+                        insert_pos
+                    )
+                )
+                self.undo_stack.push(
+                    DeleteTextCommand(
+                        self,
+                        block.position(),
+                        block.length(),
+                        QTextCursor.MoveOperation.Right
+                    )
+                )
+                self.undo_stack.endMacro()
+                cursor = self.textCursor()
+                cursor.setPosition(insert_pos)
+                self.setTextCursor(cursor)
+                return True
+            
+            # Regular mergin between unaligned sentences
+            self.undo_stack.push(
+                DeleteTextCommand(
+                    self,
+                    cursor_pos,
+                    1,
+                    QTextCursor.MoveOperation.Left
+                )
+            )
+            return True
+        
+        return False
+
 
     def mouseReleaseEvent(self, event):
         """

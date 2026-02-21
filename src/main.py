@@ -33,15 +33,12 @@ import logging
 import time
 import re
 
-from ostilhou.audio import get_audiofile_info
-
 from ostilhou.audio.audio_numpy import get_samples
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QDialog,
     QMenuBar,
     QWidget, QVBoxLayout, QHBoxLayout,
-    QProgressBar,
     QPushButton, QToolButton, QDial,
     QLabel, QComboBox, QCheckBox, QMessageBox,
     QListWidget, QDialogButtonBox
@@ -63,13 +60,14 @@ from PySide6.QtMultimedia import QMediaDevices
 from src.utils import (
     get_resource_path,
     sec2hms, splitForSubtitle,
-    ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS, SUBTITLES_FILE_FORMATS
+    ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS, SUBTITLES_FILE_FORMATS,
+    get_audiofile_info
 )
 from src.file_manager import FileManager, FileOperationError
 from src.version import __version__
-from src.about_page import AboutDialog
-from src.theme import theme
-from src.icons import icons, loadIcons, IconWidget
+from ui.icons import icons, loadIcons, IconWidget
+from ui.theme import theme
+from ui.about_page import AboutDialog
 from src.media_player_controller import MediaPlayerController
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
 from src.text_widget import (
@@ -89,11 +87,13 @@ from src.commands import (
     AlignWithSelectionCommand, AlignBlockWithSegment
 )
 from src.parameters_dialog import ParametersDialog
-from src.export import export, exportSignals
+from ui.progess_dialog import ProgressDialog
+from exports.textual_exporter import export, exportSignals
+from src.exports import segment_exporter
 from src.auto_segment import auto_segment
 from src.hunspell import HunspellLoader
 from src.settings import (
-    APP_NAME, DEFAULT_LANGUAGE, MULTI_LANG,
+    APP_NAME, DEFAULT_LANGUAGE, FUTURE,
     app_settings, shortcuts,
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_CPS,
     WAVEFORM_SAMPLERATE,
@@ -196,9 +196,6 @@ class MainWindow(QMainWindow):
         # Actions
         self.action = ActionManager(self)
 
-        # Transcription service
-        self.recognizer = TranscriptionService(self)
-
         # TODO: reverse dependencies of document_controller and text/waveform widgets
         self.document_controller = DocumentController(self)
         self.text_widget = TextEditWidget(self, self.document_controller, self.action)
@@ -213,11 +210,19 @@ class MainWindow(QMainWindow):
         self.media_controller = MediaPlayerController(self)
         self.media_controller.connectVideoWidget(self.video_widget)
 
+        # Transcription service
+        self.recognizer = TranscriptionService(self)
+
+        # Aligner
+        self.aligner = TextAligner(
+            self, self.document_controller, self.media_controller, self.recognizer
+        )
+
         # Scenes
         self.scene_detector = None
 
-        # Aligner
-        self.alignment_thread = None
+        # Audio segment extractor
+        segment_exporter.initAudioSegmentExtractor(self)
 
         # Undo stack
         self.undo_stack = self.document_controller.undo_stack
@@ -312,6 +317,8 @@ class MainWindow(QMainWindow):
         self.action.export_srt_requested.connect(self.exportSrt)
         self.action.export_txt_requested.connect(self.exportTxt)
         self.action.export_eaf_requested.connect(self.exportEaf)
+        self.action.export_audio_segments_resquested.connect(self.exportAudioSegments)
+
         self.action.show_parameters_requested.connect(self.showParametersDialog)
         self.action.close_application_requested.connect(self.close)
         self.action.show_about_requested.connect(self.showAboutDialog)
@@ -356,7 +363,7 @@ class MainWindow(QMainWindow):
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
         self.text_widget.align_with_selection.connect(self.alignWithSelection)
-        self.text_widget.request_auto_align.connect(self.autoAlign)
+        self.text_widget.request_auto_align.connect(self.aligner.autoAlign)
 
         # Waveform widget
         self.waveform.selection_ended.connect(lambda: self.selection_button.setChecked(False))
@@ -418,6 +425,8 @@ class MainWindow(QMainWindow):
         import_export_submenu.addAction(self.action.export_srt)
         import_export_submenu.addAction(self.action.export_eaf)
         import_export_submenu.addAction(self.action.export_txt)
+        if FUTURE:
+            import_export_submenu.addAction(self.action.export_audio_segments)
         file_menu.addSeparator()
         # -------------------------
         ## Parameters
@@ -451,6 +460,14 @@ class MainWindow(QMainWindow):
         adapt_to_subtitle_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
         adapt_to_subtitle_action.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adapt_to_subtitle_action)
+
+        if FUTURE:
+            ## Render frames
+            render_frames_action = QAction(self.tr("&Render frames"), self)
+            # render_frames_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
+            from renderer import render_all
+            render_frames_action.triggered.connect(lambda: render_all(self.document_controller))
+            operation_menu.addAction(render_frames_action)
 
 
     def _createDisplayMenu(self, menu_bar: QMenuBar) -> None:
@@ -550,7 +567,7 @@ class MainWindow(QMainWindow):
         self.language_selection.currentIndexChanged.connect(
             lambda i: self.changeLanguage(self.languages[i])
         )
-        if MULTI_LANG:
+        if FUTURE:
             transcription_buttons_layout.addWidget(QLabel("Lang"))
             transcription_buttons_layout.addWidget(self.language_selection)
 
@@ -1485,6 +1502,26 @@ class MainWindow(QMainWindow):
         exportSignals.message.disconnect()
 
 
+    def exportAudioSegments(self):
+        log.info("Export audio segments")
+        if self.media_path is None:
+            return
+        
+        if self.waveform.selection_is_active:
+            selection = self.waveform.getSelection()
+            if selection is None:
+                return
+            selected_segments = [selection]
+        else:
+            selected_segments = [
+                self.document_controller.getSegment(seg_id)
+                for seg_id in self.waveform.active_segments
+            ]
+            selected_segments = list(filter(None, selected_segments))
+
+        segment_exporter.startAudioSegmentExtractor(self.media_path, selected_segments)
+
+
     def showParametersDialog(self, tab_idx: int = 0)  -> None:
         """
         Show the Parameters dialog
@@ -1859,8 +1896,6 @@ class MainWindow(QMainWindow):
                 if cached_scenes := cache.get_media_scenes(self.media_path):
                     self.log.info("Using cached scene transitions")
                     self.waveform.scenes = cached_scenes
-                    self.waveform.must_redraw = True
-            
                 else:
                     self.log.info("Start scene changes detection")
                     self.scene_detector = SceneDetectWorker()
@@ -1870,6 +1905,7 @@ class MainWindow(QMainWindow):
                     self.scene_detector.message.connect(self.setStatusMessage)
                     self.scene_detector.finished.connect(self.onSceneChangeFinished)
                     self.scene_detector.start()
+                self.waveform.must_redraw = True
         else:
             if self.scene_detector:
                 print("stopping")
@@ -1908,7 +1944,6 @@ class MainWindow(QMainWindow):
         else:
             self.undo_button.setEnabled(True)
         
-        print(f"{self.undo_stack.count()=}")
         if index < self.undo_stack.count():
             self.redo_button.setEnabled(True)
         else:
@@ -1953,51 +1988,15 @@ class MainWindow(QMainWindow):
           * Setting the segments boundaries on frame positions
           * Adding line breaks if text is longer than the subtitle line limit
         """
-        from src.adapt_subtitles import AdaptUtterancesDialog
+        from services.adapt_subtitles import AdaptUtterancesDialog
 
-        dialog = AdaptUtterancesDialog(self)
-        # Load saved parameters
-        dialog.set_parameters(app_settings.value("adapt_to_subtitles/saved_parameters", {}))
-        if dialog.exec() == QDialog.DialogCode.Rejected:
-            return  # User cancelled
-
-        params = dialog.get_parameters()
-        # Save parameters
-        app_settings.setValue("adapt_to_subtitles/saved_parameters", params)
-
-        if params["apply_to_all"] == True:
-            # Get all blocks
-            start_block = self.text_widget.document().firstBlock()
-            end_block = self.text_widget.document().lastBlock()
-        else:
-            # Get selected blocks
-            cursor = self.text_widget.textCursor()
-            start_block = self.text_widget.document().findBlock(cursor.selectionStart())
-            end_block = self.text_widget.document().findBlock(cursor.selectionEnd())
-
-        self.undo_stack.beginMacro("Adapt to subtitles")
-        if params["apply_subtitle_rules"] == True:
-            dialog.apply_subtitle_rules(
-                self.document_controller,
-                self.text_widget,
-                start_block, end_block,
-                self.undo_stack,
-                self.waveform.fps
-            )
-        if params["remove_verbal_fillers"] == True:
-            dialog.remove_fillers(
-                self.text_widget,
-                start_block, end_block,
-                self.undo_stack
-            )
-        if params["convert_quotation_marks"]:
-            dialog.convert_quotation_marks(
-                self.text_widget,
-                start_block, end_block,
-                self.undo_stack
-            )
-        
-        self.undo_stack.endMacro()
+        AdaptUtterancesDialog(
+            self,
+            self.document_controller,
+            self.text_widget,
+            self.waveform.fps,
+            self.undo_stack
+        ).exec()
 
 
     @Slot()
@@ -2217,81 +2216,6 @@ class MainWindow(QMainWindow):
         self.undo_stack.push(AlignWithSelectionCommand(self, self.document_controller, self.waveform, block))
         if self.selection_button.isChecked():
             self.selection_button.setChecked(False)
-
-
-    def autoAlign(self) -> None:
-        log.debug("autoAlign()")
-
-        if self.media_path is None:
-            return
-        
-        # Check if there is a cached transcription for this media
-        is_missing_transcription = False
-        media_metadata = cache.get_media_metadata(self.media_path)
-        if not media_metadata.get("transcription_completed", False):
-            # We need to transcribe the whole file first
-            is_missing_transcription = True
-
-        alignment_data = self.document_controller.getSelectedBlocksAndTimeRange()
-        if alignment_data is None:
-            return
-        blocks, time_range = alignment_data
-
-        tokens = self.document_controller.getTranscriptionForSegment(time_range[0], time_range[1])
- 
-        self.loading_dialog = ProgressDialog(self, "Processing data...")
-        
-        def start_alignment():
-            # Set the progress bar in indeterminate mode
-            self.loading_dialog.progress_bar.setRange(0, 0)
-            self.loading_dialog.progress_bar.setValue(0)
-            self.loading_dialog.cancelled.connect(on_alignment_canceled)
-
-            self.alignment_thread = TextAligner(blocks, tokens, self)
-            self.alignment_thread.finished.connect(on_alignment_complete)
-            self.alignment_thread.error.connect(self.setStatusMessage)
-
-            self.alignment_thread.start()
-
-        def on_alignment_canceled():
-            if self.alignment_thread is not None and self.alignment_thread.isRunning():
-                self.alignment_thread.cancel()
-
-        def on_alignment_complete(segments):
-            self.undo_stack.beginMacro("Auto alignment")
-            for i, segment in enumerate(segments):
-                if segment is None:
-                    continue
-                self.undo_stack.push(
-                    AlignBlockWithSegment(self.document_controller, blocks[i], segment)
-                )
-            self.undo_stack.endMacro()
-
-            # Close loading dialog
-            if self.loading_dialog is not None:
-                self.loading_dialog.close()
-            
-            # Clean up thread
-            if self.alignment_thread is not None:
-                self.alignment_thread.wait()
-                self.alignment_thread.deleteLater()
-                self.alignment_thread = None
-
-        if is_missing_transcription:
-            # Start with hidden transcription first
-            self.loading_dialog.progress_bar.setRange(0, int(self.waveform.audio_len))
-            self.loading_dialog.cancelled.connect(self.recognizer.stop)
-
-            self.recognizer.progress.connect(self.loading_dialog.progress_bar.setValue)
-            self.recognizer.finished.connect(start_alignment)
-
-            start_time = media_metadata.get("transcription_progress", 0.0)
-            self.recognizer.transcribeFile(str(self.media_path), start_time, is_hidden=True)
-        else:
-            start_alignment()
-
-        # Show loading dialog
-        self.loading_dialog.exec()
     
 
     def search(self) -> None:
@@ -2551,7 +2475,9 @@ class MainWindow(QMainWindow):
         if t_seconds > self.waveform.t_left and t_seconds < self.waveform.getTimeRight():
             self.waveform.must_redraw = True
         
-        self.transcription_status_label.setText(self.tr("Transcribed") + f" {t_seconds / self.media_controller.getDuration():.0%}")
+        self.transcription_status_label.setText(
+            self.tr("Transcribed") + f" {t_seconds / self.media_controller.getDuration():.0%}"
+        )
 
 
     def _setStatusNoTranscription(self):
@@ -2577,48 +2503,6 @@ class MainWindow(QMainWindow):
         self.transcription_led.setToolTip("")
         self.transcription_status_label.clear()
         self.transcription_status_label.setToolTip("")
-
-
-
-class ProgressDialog(QDialog):
-    """Modal loading dialog with cancel button"""
-    cancelled = Signal()
-    
-    def __init__(self, parent=None, message="Loading..."):
-        super().__init__(parent)
-        self.setWindowTitle(self.tr("Please Wait"))
-        self.setModal(True)
-        self.setFixedSize(400, 120)
-        
-        # Remove window close button
-        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint)
-        
-        # Setup UI
-        layout = QVBoxLayout()
-        
-        # Message label
-        self.label = QLabel(message)
-        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.label)
-        
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        layout.addWidget(self.progress_bar)
-        
-        # Cancel button
-        self.cancel_btn = QPushButton(self.tr("Cancel"))
-        self.cancel_btn.setFixedWidth(100)
-        self.cancel_btn.clicked.connect(self.on_cancel)
-        layout.addWidget(self.cancel_btn)
-        
-        layout.addStretch()
-        self.setLayout(layout)
-    
-    def on_cancel(self):
-        self.cancelled.emit()
-        self.reject()
 
 
 

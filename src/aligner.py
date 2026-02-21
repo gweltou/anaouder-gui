@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+
 from typing import List
 import logging
 import re
@@ -25,6 +26,12 @@ from math import inf
 from PySide6.QtCore import QRunnable, Signal, QObject, QThread
 from PySide6.QtGui import QTextBlock
 
+from ui.progess_dialog import ProgressDialog
+from src.media_player_controller import MediaPlayerController
+from src.transcriber import TranscriptionService
+from src.interfaces import DocumentInterface
+from src.commands import AlignBlockWithSegment
+from src.cache_system import cache
 from src.lang import prepTextForAlignment
 from src.utils import PUNCTUATION
 
@@ -208,7 +215,7 @@ def filter_out_chars(text: str, chars: str) -> str:
 
 
 
-class TextAligner(QThread):
+class TextAlignerThread(QThread):
     finished = Signal(list)
     error = Signal(str)
 
@@ -351,3 +358,112 @@ def align_text_with_vosk_tokens(text: str, vosk_tokens: list, cancel_check=None)
             j -= 1
     
     return list(reversed(alignment))
+
+
+
+class TextAligner(QObject):
+    error = Signal(str)
+
+    def __init__(
+            self,
+            parent,
+            document_controller: DocumentInterface,
+            media_controller: MediaPlayerController,
+            recognizer: TranscriptionService
+        ):
+        self.parent_window = parent
+        self.document_controller = document_controller
+        self.media_controller = media_controller
+        self.undo_stack = document_controller.undo_stack
+        self.recognizer = recognizer
+        self.alignment_thread = None
+        self.progress_bar = None
+
+
+    def autoAlign(self) -> None:
+        """
+        media_path
+        progress_bar
+        document_controller
+        """
+        log.debug("autoAlign()")
+
+        media_path = self.document_controller.media_path
+
+        if media_path is None:
+            return
+        
+        # Check if there is a cached transcription for this media
+        is_missing_transcription = False
+        media_metadata = cache.get_media_metadata(media_path)
+        if not media_metadata.get("transcription_completed", False):
+            # We need to transcribe the whole file first
+            is_missing_transcription = True
+
+        alignment_data = self.document_controller.getSelectedBlocksAndTimeRange()
+        if alignment_data is None:
+            return
+        blocks, time_range = alignment_data
+
+        self.loading_dialog = ProgressDialog(self.parent_window)
+        
+        def start_alignment():
+            # Set the progress bar in indeterminate mode
+            self.loading_dialog.progress_bar.setRange(0, 0)
+            self.loading_dialog.progress_bar.setValue(0)
+            self.loading_dialog.cancelled.connect(on_alignment_canceled)
+            self.loading_dialog.setMessage(self.tr("Aligning text with speech..."))
+
+            tokens = self.document_controller.getTranscriptionForSegment(time_range[0], time_range[1])
+
+            self.alignment_thread = TextAlignerThread(blocks, tokens, self.parent_window)
+            self.alignment_thread.finished.connect(on_alignment_complete)
+            self.alignment_thread.error.connect(self.error.emit)
+
+            self.alignment_thread.start()
+
+        def on_alignment_canceled():
+            if self.alignment_thread is not None and self.alignment_thread.isRunning():
+                self.alignment_thread.cancel()
+
+        def on_alignment_complete(segments):
+            self.undo_stack.beginMacro("Auto alignment")
+            for i, segment in enumerate(segments):
+                if segment is None:
+                    continue
+                self.undo_stack.push(
+                    AlignBlockWithSegment(self.document_controller, blocks[i], segment)
+                )
+            self.undo_stack.endMacro()
+
+            # Close loading dialog
+            if self.loading_dialog is not None:
+                self.loading_dialog.close()
+            
+            # Clean up thread
+            if self.alignment_thread is not None:
+                self.alignment_thread.wait()
+                self.alignment_thread.deleteLater()
+                self.alignment_thread = None
+
+        if is_missing_transcription:
+            # Start with hidden transcription first
+            self.loading_dialog.progress_bar.setRange(0, 100)
+            self.loading_dialog.cancelled.connect(self.recognizer.stop)
+            self.loading_dialog.setMessage(self.tr("Hidden transcription..."))
+
+            self.recognizer.progress.connect(
+                lambda time_s:
+                self.loading_dialog.progress_bar.setValue(
+                    round(100 * time_s / self.media_controller.getDuration())
+                )
+            )
+            self.recognizer.finished.connect(start_alignment)
+
+            start_time = media_metadata.get("transcription_progress", 0.0)
+            self.recognizer.transcribeFile(str(media_path), start_time, is_hidden=True)
+        else:
+            start_alignment()
+
+        # Show loading dialog
+        self.loading_dialog.exec()

@@ -3,7 +3,7 @@ from PySide6.QtGui import QAction, QKeySequence
 
 from src.settings import shortcuts
 from src.strings import strings
-from src.icons import icons
+from ui.icons import icons
 
 
 
@@ -16,11 +16,15 @@ class ActionManager(QObject):
     open_requested = Signal()
     save_requested = Signal()
     save_as_requested = Signal()
+
     import_media_requested = Signal()
     import_subtitles_requested = Signal()
+
     export_srt_requested = Signal()
     export_txt_requested = Signal()
     export_eaf_requested = Signal()
+    export_audio_segments_resquested = Signal()
+
     show_parameters_requested = Signal()
     close_application_requested = Signal()
     undo_requested = Signal()
@@ -52,6 +56,7 @@ class ActionManager(QObject):
         self.save_as.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.save_as.triggered.connect(self.save_as_requested.emit)
 
+        # Import actions
         self.import_media = QAction(strings.TR_IMPORT_MEDIA + '...', self)
         self.import_media.setStatusTip(self.tr("Import a media file (audio or video)"))
         self.import_media.triggered.connect(self.import_media_requested.emit)
@@ -60,6 +65,7 @@ class ActionManager(QObject):
         self.import_subtitles.setStatusTip(self.tr("Import a subtitles file, keep current media"))
         self.import_subtitles.triggered.connect(self.import_subtitles_requested.emit)
 
+        # Export actions
         self.export_srt = QAction(self.tr("&SubRip (.srt)"), self)
         self.export_srt.setStatusTip(self.tr("Export as SubRip subtitle file"))
         self.export_srt.triggered.connect(self.export_srt_requested.emit)
@@ -72,6 +78,11 @@ class ActionManager(QObject):
         self.export_eaf.setStatusTip(self.tr("Export as ELAN annotation file"))
         self.export_eaf.triggered.connect(self.export_eaf_requested.emit)
 
+        self.export_audio_segments = QAction(self.tr("&Audio segments"), self)
+        self.export_audio_segments.setStatusTip(self.tr("Export audio segments as individual audio files"))
+        self.export_audio_segments.triggered.connect(self.export_audio_segments_resquested.emit)
+
+        # Parameters Dialog
         self.open_parameters = QAction(self.tr("&Parameters") + "...", self)
         self.open_parameters.setShortcut(QKeySequence.StandardKey.Print)
         self.open_parameters.triggered.connect(self.show_parameters_requested.emit)

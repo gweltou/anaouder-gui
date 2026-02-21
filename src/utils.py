@@ -22,8 +22,8 @@ import sys
 import os
 import platform
 from pathlib import Path
-import logging
-import functools
+import subprocess
+import json
 
 import ssl
 import certifi
@@ -294,3 +294,28 @@ def sec2hms(seconds, sep=' ', precision=0, h_unit='h', m_unit='\'', s_unit="''")
     seconds = round(seconds, precision)
     parts.append(f"{seconds:.2f}{s_unit}")
     return sep.join(parts)
+
+
+def get_audiofile_info(filename) -> dict:
+    r = subprocess.check_output(['ffprobe', '-hide_banner', '-v', 'panic', '-show_streams', '-of', 'json', filename])
+    r = json.loads(r)
+    return r['streams'][0]
+
+
+def list_fonts_linux() -> List[Path]:
+    font_dirs = [
+        '/usr/share/fonts/',
+        '/usr/local/share/fonts/',
+        '~/.fonts/',
+        '~/.local/share/fonts/'
+    ]
+    
+    fonts = []
+    for font_dir in font_dirs:
+        path = Path(font_dir).expanduser()
+        if path.exists():
+            fonts.extend(path.rglob('*.ttf'))
+            fonts.extend(path.rglob('*.otf'))
+    
+    # Convert Path objects to strings if needed
+    return fonts

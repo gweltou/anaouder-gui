@@ -29,7 +29,8 @@ _is_darwin = platform.system() == "Darwin"
 
 APP_NAME = "Anaouder"
 DEFAULT_LANGUAGE = "br"
-MULTI_LANG = False
+FUTURE = True
+
 AUTOSAVE_FOLDER_NAME = "_anaouder_autosave"
 
 

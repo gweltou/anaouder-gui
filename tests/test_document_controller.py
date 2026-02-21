@@ -6,7 +6,7 @@ import logging
 from PySide6.QtWidgets import QApplication
 
 from src.main import MainWindow
-from src.icons import loadIcons
+from ui.icons import loadIcons
 from src.text_widget import TextEditWidget
 from src.strings import strings
 

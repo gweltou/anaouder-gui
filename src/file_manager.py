@@ -342,3 +342,5 @@ class FileManager(QObject):
                 return parent_ali
         return None
 
+
+    

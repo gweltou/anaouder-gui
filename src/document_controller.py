@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2026  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -47,7 +47,6 @@ from src.commands import (
     AlignWithSelectionCommand, AlignBlockWithSegment
 )
 from src.aligner import (
-    align_text_with_vosk_tokens,
     smart_split_text, smart_split_time,
     SmartSplitError
 )
@@ -387,6 +386,13 @@ class DocumentController(QObject):
                 return segment_id
         return -1
     
+
+    def getTextById(self, segment_id: SegmentId) -> str | None:
+        block = self.getBlockById(segment_id)
+        if block is None:
+            return None
+        return block.text()
+
 
     def getUtteranceDensity(self, segment_id: SegmentId) -> float:
         """Get the density (chars/s) field of an utterance"""
@@ -745,7 +751,7 @@ class DocumentController(QObject):
         self.undo_stack.push(JoinUtterancesCommand(self, self.text_widget, self.waveform_widget, segment_ids))
 
 
-    def getSelectedBlocksAndTimeRange(self) -> Optional[Tuple[List[QTextBlock], List]]:
+    def getSelectedBlocksAndTimeRange(self) -> Tuple[List[QTextBlock], List] | None:
         """Returns the selected text and the corresponding time range"""
         log.info("autoAlignSelectedBlocks()")
 
@@ -837,8 +843,8 @@ class DocumentController(QObject):
 
 
 
-class Block:
-    def __init__(self, parent: DocumentController) -> None:
-        self.parent = parent
-        self.segment: Segment = []
-        self.segment_id: SegmentId = -1
+# class Block:
+#     def __init__(self, parent: DocumentController) -> None:
+#         self.parent = parent
+#         self.segment: Segment = []
+#         self.segment_id: SegmentId = -1
