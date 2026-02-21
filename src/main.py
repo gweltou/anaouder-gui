@@ -287,9 +287,16 @@ class MainWindow(QMainWindow):
         self.status_label.setTextFormat(Qt.TextFormat.RichText)
         self.statusBar().addWidget(self.status_label)
 
-        self.status_fps_label = QLabel()
-        self.statusBar().addPermanentWidget(self.status_fps_label, stretch=0)
-        self.statusBar().addPermanentWidget(QLabel(), stretch=0) # Spacer to the left
+        # Media duration
+        self.status_media_duration_label = QLabel()
+        self.status_media_duration_label.setContentsMargins(0, 0, 16, 0)
+        self.statusBar().addPermanentWidget(self.status_media_duration_label, stretch=0)
+
+        # Framerate (fps)
+        self.status_media_fps_label = QLabel()
+        self.status_media_fps_label.setContentsMargins(0, 0, 16, 0)
+        self.statusBar().addPermanentWidget(self.status_media_fps_label, stretch=0)
+
         self.transcription_status_label = QLabel()
         self.transcription_led = IconWidget(icons["led_red"], 10)
         self.transcription_led.setToolTip(strings.TR_NO_TRANSCRIPTION_TOOLTIP)
@@ -344,7 +351,7 @@ class MainWindow(QMainWindow):
 
         # Media controller
         self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
-        self.media_controller.media_duration_changed.connect(self.onMediaDurationChanged)
+        # self.media_controller.media_duration_changed.connect(self.onMediaDurationChanged)
 
         # Document controller
         self.document_controller.message.connect(self.setStatusMessage)
@@ -1415,6 +1422,22 @@ class MainWindow(QMainWindow):
         if "tags" in audiofile_info and "timecode" in audiofile_info["tags"]:
             self.waveform.setTimeOffset(audiofile_info["tags"]["timecode"])
 
+        if not "duration" in media_metadata:
+            media_duration_s = float(audiofile_info["duration"])
+            media_metadata["duration"] = media_duration_s
+            cache.update_media_metadata(file_path, {"duration": media_duration_s})
+
+        duration_str = sec2hms(
+            media_metadata["duration"],
+            precision=1,
+            h_unit=strings.TR_UNIT_HOUR,
+            m_unit=strings.TR_UNIT_MINUTE[0],
+            s_unit=strings.TR_UNIT_SECOND,
+            sep=' '
+        )
+        self.status_media_duration_label.setText(duration_str)
+        self.status_media_duration_label.setToolTip(self.tr("Media total duration"))
+
         if "fps" in media_metadata:
             # It is a video media file
             # Enable relevant actions
@@ -1423,15 +1446,15 @@ class MainWindow(QMainWindow):
             self.waveform.fps = media_metadata["fps"]
             # Open Video Widget
             self.toggle_video_action.setChecked(True)
-            self.status_fps_label.setText(f"{self.waveform.fps:.2f} {strings.TR_UNIT_FPS}")
-            self.status_fps_label.setToolTip(self.tr("Video framerate"))
+            self.status_media_fps_label.setText(f"{self.waveform.fps:.2f} {strings.TR_UNIT_FPS}")
+            self.status_media_fps_label.setToolTip(self.tr("Video framerate"))
         else:
             # It is an audio only media
             # Disable unusable actions
             self.scene_detect_action.setEnabled(False)
 
-            self.status_fps_label.clear()
-            self.status_fps_label.setToolTip("")
+            self.status_media_fps_label.clear()
+            self.status_media_fps_label.setToolTip("")
 
         if "transcription_progress" in media_metadata:
             progress_seconds = media_metadata["transcription_progress"]
@@ -1860,10 +1883,11 @@ class MainWindow(QMainWindow):
         self.media_controller.seekTo(position_sec)
 
 
-    def onMediaDurationChanged(self, duration_sec: float) -> None:
-        if not self.media_path:
-            return
-        cache.update_media_metadata(self.media_path, {"duration": duration_sec})
+    # def onMediaDurationChanged(self, duration_sec: float) -> None:
+    #     print("onMediaDurationChanged")
+    #     if not self.media_path:
+    #         return
+    #     cache.update_media_metadata(self.media_path, {"duration": duration_sec})
 
 
     def toggleVideo(self, checked) -> None:
@@ -2416,15 +2440,17 @@ class MainWindow(QMainWindow):
         start, end = segment
         start_str = sec2hms(
             start + self.waveform.time_offset,
-            sep='', precision=2,
+            precision=2,
             m_unit=strings.TR_UNIT_MINUTE[0],
-            s_unit=strings.TR_UNIT_SECOND
+            s_unit=strings.TR_UNIT_SECOND,
+            sep=''
         )
         end_str = sec2hms(
             end + self.waveform.time_offset,
-            sep='', precision=2,
+            precision=2,
             m_unit=strings.TR_UNIT_MINUTE[0],
-            s_unit=strings.TR_UNIT_SECOND
+            s_unit=strings.TR_UNIT_SECOND,
+            sep=''
         )
         string_parts = [
             #f"ID: {seg_id}",
