@@ -31,7 +31,7 @@ import urllib
 import zipfile
 
 from PySide6.QtCore import QRegularExpression
-from PySide6.QtGui import QColor, QTextBlockUserData
+from PySide6.QtGui import QColor
 
 
 DIALOG_CHAR = '–'
@@ -43,21 +43,6 @@ MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm", ".mov"
 ALL_COMPATIBLE_FORMATS = MEDIA_FORMATS + (".ali", ".seg", ".split", ".srt")
 SUBTITLES_FILE_FORMATS = (".srt",)
 
-
-
-class MyTextBlockUserData(QTextBlockUserData):
-    """
-        Fields:
-            - seg_id
-    """
-    def __init__(self, data: dict):
-        super().__init__()
-        self.data = data
-
-    def clone(self):
-        # This method is required by QTextBlockUserData.
-        # It should return a copy of the user data object.
-        return MyTextBlockUserData(self.data)
 
 
 
@@ -136,7 +121,7 @@ def download(url: str, root: str) -> str:
 
 
 
-def getSentenceRegions(text: str) -> List[tuple]:
+def extract_sentence_regions(text: str) -> List[tuple]:
     """
     Return a list of text regions,
     stripped of their metadata and special tokens
@@ -151,7 +136,7 @@ def getSentenceRegions(text: str) -> List[tuple]:
         sentence_splits = _cutSentence(
             sentence_splits,
             match.capturedStart(),
-            match.capturedStart()+match.capturedLength()
+            match.capturedStart() + match.capturedLength()
         )
     
     # Special tokens
@@ -161,7 +146,7 @@ def getSentenceRegions(text: str) -> List[tuple]:
         match = matches.next()
         sentence_splits = _cutSentence(
             sentence_splits, match.capturedStart(),
-            match.capturedStart()+match.capturedLength()
+            match.capturedStart() + match.capturedLength()
         )
     return sentence_splits
 
@@ -205,7 +190,7 @@ def splitForSubtitle(text: str, size: int):
         idx = text.find(DIALOG_CHAR, idx+1)
         return (text[:idx], text[idx:])
 
-    text_segs = getSentenceRegions(text)
+    text_segs = extract_sentence_regions(text)
     text_len = sum([e-s for s, e in text_segs])
     if text_len > size:
         

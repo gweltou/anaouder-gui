@@ -48,9 +48,7 @@ main_window = MainWindow()
 
 
 def load_document():
-    main_window.waveform.clear()
-    main_window.text_widget.document().clear()
-    main_window.undo_stack.clear()
+    main_window.document_controller.clear()
 
     for text, segment in [
         ("Linenn kentañ", (0.45, 2.25)),
@@ -64,10 +62,6 @@ def load_document():
 
 
 def load_document_2():
-    main_window.waveform.clear()
-    main_window.text_widget.document().clear()
-    main_window.undo_stack.clear()
-
     main_window.openFile(Path("tests/Meli_mila_Malou_1.ali"))
 
 
@@ -85,7 +79,7 @@ def getDocumentState() -> dict:
         data.pop("density", None)
         state["blocks"].append((text, data))
         block = block.next()
-    state["segments"] = deepcopy(main_window.waveform.segments)
+    state["segments"] = deepcopy(main_window.document_controller.segments)
     return state
 
 
@@ -141,7 +135,14 @@ def undo_redo_function(function: callable, *args, random_cursor=False):
 
 def test_add_segment():
     load_document()
-    undo_redo_command(AddSegmentCommand(main_window.waveform, [10, 12], 12))
+    undo_redo_command(
+        AddSegmentCommand(
+            main_window.document_controller,
+            main_window.waveform,
+            [10, 12],
+            12
+        )
+    )
 
 
 def test_create_new_utterance():
@@ -149,6 +150,7 @@ def test_create_new_utterance():
     undo_redo_command(
         CreateNewEmptyUtteranceCommand(
             main_window.media_controller,
+            main_window.document_controller,
             main_window.text_widget,
             main_window.waveform,
             [10, 12], 12
@@ -160,35 +162,56 @@ def test_create_new_utterance():
 def test_delete_utterances():
     load_document()
     undo_redo_command(
-        DeleteUtterancesCommand(main_window.text_widget, main_window.waveform, [2, 3, 4]),
+        DeleteUtterancesCommand(
+            main_window.document_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            [2, 3, 4]
+        ),
         random_cursor=True
     )
 
 
 def test_split_utterance():
     load_document()
-    undo_redo_function(main_window.splitFromText, 1, 8)
-    undo_redo_function(main_window.splitFromText, 2, 6)
+    undo_redo_function(main_window.document_controller.splitFromText, 1, 8)
+    undo_redo_function(main_window.document_controller.splitFromText, 2, 6)
 
 
 def test_join_utterances():
     load_document()
-    undo_redo_command(JoinUtterancesCommand(main_window.text_widget, main_window.waveform, [2, 3, 4]))
+    undo_redo_command(
+        JoinUtterancesCommand(
+            main_window.document_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            [2, 3, 4]
+        )
+    )
 
 
 def test_delete_segments():
     load_document()
-    undo_redo_command(DeleteSegmentsCommand(main_window, [2, 3, 4]))
+    undo_redo_command(
+        DeleteSegmentsCommand(
+            main_window.document_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            [2, 3, 4]
+        )
+    )
 
 
 def test_resize_segment():
     load_document()
-    undo_redo_command(ResizeSegmentCommand(
-                    main_window.document_controller,
-                    2,
-                    24,
-                    30
-                ))
+    undo_redo_command(
+        ResizeSegmentCommand(
+            main_window.document_controller,
+            2,
+            24,
+            30
+        )
+    )
 
 
 def test_align_with_selection():
@@ -196,36 +219,52 @@ def test_align_with_selection():
     block = main_window.text_widget.document().findBlockByNumber(3)
     # cursor = main_window.text_edit.textCursor()
     # cursor.movePosition(QTextCursor.Start)
-    # print(cursor.position())
     # cursor.movePosition(QTextCursor.NextBlock, QTextCursor.MoveAnchor, 2)
-    # print(cursor.position())
 
     block_id = main_window.document_controller.getBlockId(block)
-    segment = main_window.waveform.segments[block_id][:]
-    main_window.undo_stack.push(DeleteSegmentsCommand(main_window, [block_id]))
-    main_window.waveform._selection = segment
-    undo_redo_command(AlignWithSelectionCommand(main_window, main_window.text_widget, main_window.waveform, block))
+    segment = main_window.document_controller.getSegment(block_id)
+    assert segment is not None
+
+    main_window.undo_stack.push(
+        DeleteSegmentsCommand(
+            main_window.document_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            [block_id]
+        )
+    )
+    main_window.waveform._selection = segment[:]
+    undo_redo_command(
+        AlignWithSelectionCommand(
+            main_window,
+            main_window.document_controller,
+            main_window.waveform,
+            block
+        )
+    )
 
 
 def test_insert_block_command():
     load_document()
 
-    segment = [40, 41]
-    seg_id = main_window.waveform.addSegment(segment)
+    segment = [40.0, 41.0]
+    seg_id = main_window.document_controller.addSegment(segment)
     text = "inserted text"
 
     undo_redo_command(
         InsertBlockCommand(
+            main_window.document_controller,
             main_window.text_widget,
             main_window.text_widget.textCursor().position(),
-            seg_id=seg_id,
             text=text,
+            seg_id=seg_id,
         )
     )
     
     load_document()
     undo_redo_command(
         InsertBlockCommand(
+            main_window.document_controller,
             main_window.text_widget,
             main_window.text_widget.textCursor().position(),
             seg_id=seg_id,
@@ -274,7 +313,12 @@ def test_delete_first_utterance():
         #     )
         # )
         main_window.undo_stack.push(
-            DeleteUtterancesCommand(main_window.text_widget, main_window.waveform, seg_ids=[0])
+            DeleteUtterancesCommand(
+                main_window.document_controller,
+                main_window.text_widget,
+                main_window.waveform,
+                seg_ids=[0]
+            )
         )
         main_window.undo_stack.endMacro()
 

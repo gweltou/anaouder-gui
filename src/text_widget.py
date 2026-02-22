@@ -32,8 +32,8 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QAction, QColor, QFont, QIcon,
     QKeyEvent, QKeySequence,
-    QTextBlock, QTextBlockUserData,
-    QTextCursor, QTextBlockFormat, QTextCharFormat, QFontMetricsF,
+    QTextBlock, QTextCursor,
+    QTextBlockFormat, QTextCharFormat, QFontMetricsF,
     QSyntaxHighlighter,
     QPainter, QPaintEvent,
     QClipboard, QEnterEvent, QDragMoveEvent, QDropEvent,
@@ -51,23 +51,18 @@ from src.commands import (
     ReplaceTextCommand,
     MoveTextCursor
 )
-from src.interfaces import DocumentInterface
+from src.interfaces import DocumentInterface, SegmentId, MyTextBlockUserData
 from ui.theme import theme
 from src.utils import (
-    getSentenceRegions,
-    MyTextBlockUserData,
+    extract_sentence_regions,
     LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
-    MEDIA_FORMATS, ALL_COMPATIBLE_FORMATS,
     color_yellow,
 )
 from src.settings import app_settings, shortcuts, SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
 
 
+
 log = logging.getLogger(__name__)
-
-
-type Segment = List[float]
-type SegmentId = int
 
 
 
@@ -86,9 +81,9 @@ class Highlighter(QSyntaxHighlighter):
         self.hunspell = None
         self.show_misspelling = False
 
-        self.metadata_format = QTextCharFormat()
-        self.metadata_format.setForeground(QColor(165, 0, 165)) # semi-dark magenta
-        self.metadata_format.setFontWeight(QFont.Weight.DemiBold)
+        self.ali_metadata_format = QTextCharFormat()
+        self.ali_metadata_format.setForeground(QColor(165, 0, 165)) # semi-dark magenta
+        self.ali_metadata_format.setFontWeight(QFont.Weight.DemiBold)
 
         self.comment_format = QTextCharFormat()
         self.comment_format.setForeground(Qt.GlobalColor.gray)
@@ -156,11 +151,12 @@ class Highlighter(QSyntaxHighlighter):
 
     def highlightAlignment(self, sentence_splits):
         block = self.currentBlock()
+        block_id = self.document_controller.getBlockId(block)
         cursor = QTextCursor(block)
 
         if self.currentBlockUserData():
             if self.text_edit.isAligned(block):
-                if self.text_edit.highlighted_sentence_id == self.text_edit.getBlockId(block):
+                if self.text_edit.highlighted_sentence_id == block_id:
                     cursor.setBlockFormat(self.active_green_block_format)
                 else:
                     cursor.setBlockFormat(self.green_block_format)
@@ -172,20 +168,21 @@ class Highlighter(QSyntaxHighlighter):
 
     def highlightDensity(self):
         block = self.currentBlock()
+        block_id = self.document_controller.getBlockId(block)
         cursor = QTextCursor(block)
 
         if self.currentBlockUserData():
             if self.text_edit.isAligned(block):
-                utt_id = self.document_controller.getBlockId(block)
+                utt_id = block_id
                 density = self.document_controller.getUtteranceDensity(utt_id)
                 target_density: float = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
                 if density < target_density:
-                    if self.text_edit.highlighted_sentence_id == self.text_edit.getBlockId(block):
+                    if self.text_edit.highlighted_sentence_id == block_id:
                         cursor.setBlockFormat(self.active_green_block_format)
                     else:
                         cursor.setBlockFormat(self.green_block_format)
                 else:
-                    if self.text_edit.highlighted_sentence_id == self.text_edit.getBlockId(block):
+                    if self.text_edit.highlighted_sentence_id == block_id:
                         cursor.setBlockFormat(self.active_red_block_format)
                     else:
                         cursor.setBlockFormat(self.red_block_format)
@@ -212,12 +209,12 @@ class Highlighter(QSyntaxHighlighter):
         #     self.text_edit.document().blockSignals(was_blocked)
         #     return
 
-        # Metadata  
+        # Ali DSL Metadata  
         expression = QRegularExpression(r"{\s*(.+?)\s*}")
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
-            self.setFormat(match.capturedStart(), match.capturedLength(), self.metadata_format)
+            self.setFormat(match.capturedStart(), match.capturedLength(), self.ali_metadata_format)
         
         # Special tokens
         expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
@@ -226,7 +223,7 @@ class Highlighter(QSyntaxHighlighter):
             match = matches.next()
             self.setFormat(match.capturedStart(), match.capturedLength(), self.special_token_format)
 
-        sentence_splits = getSentenceRegions(text)
+        sentence_splits = extract_sentence_regions(text)
 
         # Background color
         if self.mode == self.ColorMode.ALIGNMENT:
@@ -371,59 +368,6 @@ class TextEditWidget(QTextEdit):
         cursor = self.textCursor()
         cursor.setPosition(cursor_state["position"])
         self.setTextCursor(cursor)
-
-
-    def getBlockType(self, block : QTextBlock) -> BlockType:
-        text = block.text()
-
-        # Find and crop comments
-        i = text.find('#')
-        if i >= 0:
-            text = text[:i]
-        text = text.strip()
-
-        if not text:
-            return TextEditWidget.BlockType.EMPTY_OR_COMMENT
-        
-        text, metadata = extract_metadata(text)
-        if metadata and not text.strip():
-            return TextEditWidget.BlockType.METADATA_ONLY
-
-        # This block is a sentence, check if it is aligned or not
-        if not block.userData():
-            return TextEditWidget.BlockType.NOT_ALIGNED
-        
-        user_data = block.userData().data
-        if "seg_id" in user_data:
-            segment_id = user_data["seg_id"]
-            if segment_id in self.document_controller.segments:
-                return TextEditWidget.BlockType.ALIGNED
-        
-        return TextEditWidget.BlockType.NOT_ALIGNED
-    
-
-    def getBlockId(self, block: QTextBlock) -> int:
-        """Return utterance id associated to block or -1"""
-        if not block.userData():
-            return -1
-        user_data = block.userData().data
-        if "seg_id" in user_data:
-            return user_data["seg_id"]
-        return -1
-
-
-    def getBlockNumber(self, position: int) -> int:
-        document = self.document()
-        block = document.findBlock(position)
-        return block.blockNumber()
-
-
-    def getSentenceLength(self, block: QTextBlock) -> int:
-        """Returns length of sentence, stripped of metadata and comments"""
-        if not block:
-            return 0.0
-        sentence_splits = getSentenceRegions(block.text())
-        return sum([ e-s for s, e in sentence_splits ], 0)
 
 
     def isAligned(self, block: QTextBlock) -> bool:
@@ -601,7 +545,7 @@ class TextEditWidget(QTextEdit):
             block = end_block
             while block.isValid():
                 prev_block = block.previous()
-                utt_id = self.getBlockId(block)
+                utt_id = self.document_controller.getBlockId(block)
                 if utt_id >= 0:
                     # Delete this utterance
                     self.delete_utterances.emit([utt_id])
@@ -619,21 +563,21 @@ class TextEditWidget(QTextEdit):
             self.undo_stack.endMacro()
 
 
-    def setText(self, text: str):
-        """
-        TODO: What is this again ?
-        """
-        super().setText(text)
+    # def setText(self, text: str):
+    #     """
+    #     TODO: What is this again ?
+    #     """
+    #     super().setText(text)
 
-        # Add utterances metadata
-        doc = self.document()
-        for block_idx in range(doc.blockCount()):
-            block = doc.findBlockByNumber(block_idx)
-            text = block.text()
+    #     # Add utterances metadata
+    #     doc = self.document()
+    #     for block_idx in range(doc.blockCount()):
+    #         block = doc.findBlockByNumber(block_idx)
+    #         text = block.text()
 
-            i_comment = text.find('#')
-            if i_comment >= 0:
-                text = text[:i_comment]
+    #         i_comment = text.find('#')
+    #         if i_comment >= 0:
+    #             text = text[:i_comment]
 
 
     def replaceWord(self, cursor: QTextCursor, new_word: str):
@@ -664,6 +608,17 @@ class TextEditWidget(QTextEdit):
                     new_text
                 )
             )
+    
+    def findBlock(self, position: int) -> Optional[QTextBlock]:
+        pos = self.document().findBlock(position)
+        return pos if pos != -1 else None
+    
+
+    def getBlockNumber(self, position: int) -> int:
+        block = self.findBlock(position)
+        if block is None:
+            return -1
+        return block.blockNumber()
 
 
     def getBlockHtml(self, block: QTextBlock) -> Tuple[str, List[bool]]:
@@ -913,7 +868,15 @@ class TextEditWidget(QTextEdit):
             paragraphs = clipboard.text().split('\n')
             print(f"pasting {paragraphs}")
             for text in paragraphs:
-                self.undo_stack.push(InsertBlockCommand(self, pos, text, after=True))
+                self.undo_stack.push(
+                    InsertBlockCommand(
+                        self.document_controller,
+                        self, 
+                        pos,
+                        text,
+                        after=True
+                    )
+                )
                 pos += len(text) + 1
         else:
             text = clipboard.text()
@@ -982,7 +945,7 @@ class TextEditWidget(QTextEdit):
 
             current_block = tmp_cursor.block()
             while current_block.isValid() and current_block.position() < end_pos:
-                block_id = self.getBlockId(current_block)
+                block_id = self.document_controller.getBlockId(current_block)
                 if block_id >= 0:
                     selected_ids.append(block_id)
                 
@@ -993,7 +956,7 @@ class TextEditWidget(QTextEdit):
         
         else:
             current_block = cursor.block()
-            block_id = self.getBlockId(current_block)
+            block_id = self.document_controller.getBlockId(current_block)
             if block_id >= 0:
                 self.cursor_changed_signal.emit( [block_id] )
             else:
@@ -1006,7 +969,7 @@ class TextEditWidget(QTextEdit):
         print(f"event pos: {event.pos()}")
         cursor = self.cursorForPosition(event.pos())
         block = cursor.block()
-        block_type = self.getBlockType(block)
+        block_type = self.document_controller.getBlockType(block)
 
         # Check for a misspelled word at this position, by checking the char format
         misspelled_word = None
@@ -1054,13 +1017,13 @@ class TextEditWidget(QTextEdit):
                 left_time_boundary = 0.0
                 prev_aligned_block = self.document_controller.getPrevAlignedBlock(block)
                 if prev_aligned_block:
-                    seg_id = self.getBlockId(prev_aligned_block)
+                    seg_id = self.document_controller.getBlockId(prev_aligned_block)
                     left_time_boundary = self.document_controller.segments[seg_id][1]
 
                 right_time_boundary = self.main_window.waveform.audio_len
                 next_aligned_block = self.document_controller.getNextAlignedBlock(block)
                 if next_aligned_block:
-                    seg_id = self.getBlockId(next_aligned_block)
+                    seg_id = self.document_controller.getBlockId(next_aligned_block)
                     right_time_boundary = self.document_controller.segments[seg_id][0]
             
                 if selection[0] >= left_time_boundary and selection[1] <= right_time_boundary:
@@ -1278,13 +1241,26 @@ class TextEditWidget(QTextEdit):
         # Cursor at the beginning of sentence
         if pos_in_block <= first_letter_idx:
             # Create an empty block before
-            self.undo_stack.push(InsertBlockCommand(self, cursor_pos))
+            self.undo_stack.push(
+                InsertBlockCommand(
+                    self.document_controller,
+                    self,
+                    cursor_pos
+                )
+            )
             return True
         
         # Cursor at the end of sentence
         if pos_in_block >= last_letter_idx:
             # Create an empty block after
-            self.undo_stack.push(InsertBlockCommand(self, cursor_pos, after=True))
+            self.undo_stack.push(
+                InsertBlockCommand(
+                    self.document_controller,
+                    self,
+                    cursor_pos,
+                    after=True
+                )
+            )
             return True
         
         # Cursor in the middle of the sentence
@@ -1309,6 +1285,7 @@ class TextEditWidget(QTextEdit):
                 self.undo_stack.beginMacro("split non aligned")
                 self.undo_stack.push(
                     InsertBlockCommand(
+                        self.document_controller,
                         self,
                         cursor_pos,
                         after=True
@@ -1378,8 +1355,8 @@ class TextEditWidget(QTextEdit):
             
             if self.isAligned(next_block):
                 # Join two aligned utterances
-                seg_id = self.getBlockId(block)
-                next_seg_id = self.getBlockId(next_block)
+                seg_id = self.document_controller.getBlockId(block)
+                next_seg_id = self.document_controller.getBlockId(next_block)
                 self.join_utterances.emit([seg_id, next_seg_id])
                 return True
             
@@ -1516,6 +1493,7 @@ class TextEditWidget(QTextEdit):
                 self.undo_stack.endMacro()
                 return True
         else:
+            print("**** heeeeere ****")
             # Not an aligned block, but we could join with previous aligned block
             prev_block = block.previous()
             if not prev_block.isValid():
@@ -1524,6 +1502,7 @@ class TextEditWidget(QTextEdit):
             if self.isAligned(prev_block):
                 insert_pos = cursor_pos - 1
                 self.undo_stack.beginMacro("join with previous utterance")
+                # Inserting this block's text at the end of the previous aligned one
                 self.undo_stack.push(
                     InsertTextCommand(
                         self,
@@ -1531,6 +1510,7 @@ class TextEditWidget(QTextEdit):
                         insert_pos
                     )
                 )
+                # Deleting this block
                 self.undo_stack.push(
                     DeleteTextCommand(
                         self,

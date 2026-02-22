@@ -297,8 +297,8 @@ class WaveformWidget(QWidget):
         self.shift_pressed = False
 
         self.scenes = [] # Scene transition timecodes and color channels, in the form [ts, r, g, b]
-        self.active_segment_id = -1
         self.active_segments = []
+        self.active_segment_id = -1
 
         self.resizing_handle = None
         self.resizing_segment = []

@@ -1027,7 +1027,6 @@ class MainWindow(QMainWindow):
     def openFile(
             self,
             file_path: Optional[Path] = None,
-            keep_text = False,
             keep_media = False
         ) -> None:
         """Hub function for opening files"""
@@ -1045,10 +1044,10 @@ class MainWindow(QMainWindow):
                 
         self.last_saved_index = 0
         self.last_saved_time = 0.0
+        
+        self.document_controller.clear()
         if not keep_media:
             self.waveform.clear()
-        if not keep_text:
-            self.text_widget.clear()
 
         self.file_path = file_path
         ext = file_path.suffix.lower()

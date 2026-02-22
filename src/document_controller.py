@@ -33,9 +33,10 @@ from src.interfaces import (
 )
 from src.text_widget import TextEditWidget
 from src.waveform_widget import WaveformWidget, Handle
+from src.interfaces import MyTextBlockUserData
 from src.utils import (
-    MyTextBlockUserData,
-    LINE_BREAK
+    LINE_BREAK,
+    extract_sentence_regions,
 )
 from src.commands import (
     AddSegmentCommand, DeleteSegmentsCommand, ResizeSegmentCommand,
@@ -44,7 +45,6 @@ from src.commands import (
     MoveTextCursor,
     # ReplaceTextCommand,
     # CreateNewEmptyUtteranceCommand,
-    AlignWithSelectionCommand, AlignBlockWithSegment
 )
 from src.aligner import (
     smart_split_text, smart_split_time,
@@ -83,7 +83,12 @@ class DocumentController(QObject):
 
     def clear(self) -> None:
         """ Clears the document """
-        self.clearSegments()
+        self.media_path = None
+        self.segments.clear()
+        self.id_counter = 0
+        self.must_sort = True
+
+        # self.waveform_widget.clear()
         
         if self.text_widget is not None:
             self.text_widget.document().clear()
@@ -110,6 +115,7 @@ class DocumentController(QObject):
     
 
     def setMediaPath(self, media_path: Path) -> None:
+        print("setting media path", media_path)
         self.media_path = media_path
 
 
@@ -146,22 +152,6 @@ class DocumentController(QObject):
         return block
 
 
-    def getBlockNumber(self, position: int) -> int:
-        block = self.findBlock(position)
-        if block is None:
-            return -1
-        return block.blockNumber()
-
-
-    def findBlock(self, position: int) -> Optional[QTextBlock]:
-        if self.text_widget is None:
-            return None
-        
-        document = self.text_widget.document()
-        pos = document.findBlock(position)
-        return pos if pos != -1 else None
-
-
     def setBlockId(self, block: QTextBlock, segment_id: Optional[SegmentId]) -> None:
         """
         Set the segment id of a given block
@@ -182,7 +172,7 @@ class DocumentController(QObject):
         self.text_widget.highlighter.rehighlightBlock(block)
 
 
-    def getBlockId(self, block: QTextBlock) -> int:
+    def getBlockId(self, block: QTextBlock) -> SegmentId:
         """Return utterance id associated to block or -1"""
         if not block.userData():
             return -1
@@ -230,11 +220,31 @@ class DocumentController(QObject):
         
         user_data = block.userData().data
         if "seg_id" in user_data:
-            segment_id = user_data["seg_id"]
+            segment_id: SegmentId = user_data["seg_id"]
             if segment_id in self.segments:
                 return BlockType.ALIGNED
         
         return BlockType.NOT_ALIGNED
+
+
+    def getBlockMetadata(self, block: QTextBlock) -> Dict:
+        metadata: MyTextBlockUserData = block.userData()
+        if metadata:
+            return metadata.data
+        return dict()
+
+
+    def setBlockMetadata(self, block: QTextBlock, metadata: dict | None) -> None:
+        if metadata:
+            block.setUserData(MyTextBlockUserData(metadata))
+        else:
+            block.setUserData(None)
+
+
+    def updateBlockMetadata(self, block: QTextBlock, metadata: dict) -> None:
+        block_metadata = self.getBlockMetadata(block)
+        block_metadata.update(metadata)
+        block.setUserData(MyTextBlockUserData(block_metadata))
 
 
     def getNewSegmentId(self) -> SegmentId:
@@ -277,15 +287,6 @@ class DocumentController(QObject):
         del self.segments[segment_id]
         self.must_sort = True
         self.waveform_widget.must_redraw = True
-    
-
-    def clearSegments(self) -> None:
-        # Keys are segment ids (int), values are segment [start (float), end (float)]
-        self.segments.clear()
-        self.waveform_widget.active_segments = []
-        self.waveform_widget.active_segment_id = -1
-        self.waveform_widget.must_redraw = True
-        self.must_sort = True
 
     
     def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
@@ -427,7 +428,7 @@ class DocumentController(QObject):
             return
 
         # Count the number of characters in sentence
-        num_chars = self.text_widget.getSentenceLength(block)
+        num_chars = self._getSentenceLength(block)
 
         segment = self.getSegment(segment_id)
         if not segment:
@@ -439,6 +440,14 @@ class DocumentController(QObject):
             new_density = num_chars / dur
             # current_density = block.userData().data.get("density", -1.0)
             block.userData().data["density"] = new_density
+
+
+    def _getSentenceLength(self, block: QTextBlock) -> int:
+        """Returns length of sentence, stripped of metadata and comments"""
+        if not block:
+            return 0.0
+        sentence_splits = extract_sentence_regions(block.text())
+        return sum([ e-s for s, e in sentence_splits ], 0)
 
 
     def cropHead(self) -> None:
@@ -710,6 +719,7 @@ class DocumentController(QObject):
         print(f"{self.text_widget.textCursor().position()=}")
         self.undo_stack.push(
             InsertBlockCommand(
+                self,
                 self.text_widget,
                 self.text_widget.textCursor().position(),
                 seg_id=left_id,
@@ -720,6 +730,7 @@ class DocumentController(QObject):
         self.undo_stack.push(AddSegmentCommand(self, self.waveform_widget, right_seg, right_id))
         self.undo_stack.push(
             InsertBlockCommand(
+                self,
                 self.text_widget,
                 self.text_widget.textCursor().position(),
                 seg_id=right_id,
@@ -768,9 +779,10 @@ class DocumentController(QObject):
         to_align: List[QTextBlock] = []
 
         if cursor.hasSelection():
-            block = self.findBlock(cursor.selectionStart())
-            end_block = self.findBlock(cursor.selectionEnd())
-            assert block is not None and (block.blockNumber() <= end_block.blockNumber())
+            block = self.text_widget.findBlock(cursor.selectionStart())
+            end_block = self.text_widget.findBlock(cursor.selectionEnd())
+            assert (block is not None) and (end_block is not None)
+            assert (block.blockNumber() <= end_block.blockNumber())
 
             while block.isValid() and block is not end_block:
                 block_type = self.getBlockType(block)
@@ -840,11 +852,3 @@ class DocumentController(QObject):
         self.waveform_widget.active_segments = selection
         self.waveform_widget.active_segment_id = selection[-1] if selection else -1
         self.waveform_widget.must_redraw = True
-
-
-
-# class Block:
-#     def __init__(self, parent: DocumentController) -> None:
-#         self.parent = parent
-#         self.segment: Segment = []
-#         self.segment_id: SegmentId = -1
