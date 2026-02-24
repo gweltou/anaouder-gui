@@ -1137,9 +1137,10 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return False
         
+        # Load textual data
         self.document_controller.loadDocumentData(data["document"])
-        self.addRecentFile(str(file_path))
-
+        
+        # Try to open media file
         media_path = data.get("media-path", None)
         if media_path:
             media_path = Path(media_path)
@@ -1151,6 +1152,7 @@ class MainWindow(QMainWindow):
         if media_path and media_path.exists():
             self.openMediaFile(media_path)
         else:
+            # Can't find the media file !
             # Open a File Dialog to re-link
             msg_box = QMessageBox(
                 QMessageBox.Icon.Warning,
@@ -1176,6 +1178,9 @@ class MainWindow(QMainWindow):
                     self._performSave(file_path, media_filepath)
                     # Re-open the updated file
                     self.openFile(file_path)
+        
+        self.addRecentFile(str(file_path))
+
         return True
 
 
@@ -1452,7 +1457,7 @@ class MainWindow(QMainWindow):
             # Disable unusable actions
             self.scene_detect_action.setEnabled(False)
 
-            self.status_media_fps_label.clear()
+            self.status_media_fps_label.setText(self.tr("No image"))
             self.status_media_fps_label.setToolTip("")
 
         if "transcription_progress" in media_metadata:
@@ -2335,7 +2340,13 @@ class MainWindow(QMainWindow):
             event.acceptProposedAction()
 
 
+    def close(self) -> None:
+        print("close")
+        super().close()
+
+
     def closeEvent(self, event: QCloseEvent) -> None:
+        print("closeEvent")
         if not self.undo_stack.isClean():
             msg_box = QMessageBox(self)
             msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -2360,6 +2371,8 @@ class MainWindow(QMainWindow):
             else:
                 event.ignore()
                 return
+            
+            self.undo_stack.clear()
             
         try:
             # Stop and destroy the recognizer
@@ -2525,7 +2538,7 @@ class MainWindow(QMainWindow):
     
     def _setStatusTranscriptionStarted(self):
         self.transcription_led.setIcon(icons["led_orange"])
-        self.transcription_led.setToolTip("")
+        self.transcription_led.setToolTip(strings.TR_TRANSCRIPTION_IN_PROGRESS)
         self.transcription_status_label.clear()
         self.transcription_status_label.setToolTip("")
 

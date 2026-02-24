@@ -123,7 +123,7 @@ class VideoWidget(QGraphicsView):
         self.max_subtitle_height_ratio = 0.2  # Max 20% of video height for subtitles
 
         self.metadata_parser = MetadataParser()
-        self.metadata_parser.set_filter_out({"subtitles": False})
+        self.metadata_parser.set_filter_out({"subtitles": False, "st": False})
 
         self.setAcceptDrops(False)
 

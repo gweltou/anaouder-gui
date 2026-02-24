@@ -51,7 +51,12 @@ from src.commands import (
     ReplaceTextCommand,
     MoveTextCursor
 )
-from src.interfaces import DocumentInterface, SegmentId, MyTextBlockUserData
+from src.interfaces import (
+    DocumentInterface,
+    SegmentId,
+    MyTextBlockUserData,
+    BlockType
+)
 from ui.theme import theme
 from src.utils import (
     extract_sentence_regions,
@@ -276,18 +281,6 @@ class LineNumberArea(QWidget):
 
 class TextEditWidget(QTextEdit):
 
-    class TextFormat(Enum):
-        BOLD = 'B'
-        ITALIC = 'I'
-    
-
-    class BlockType(Enum):
-        EMPTY_OR_COMMENT = 0
-        METADATA_ONLY = 1
-        ALIGNED = 2
-        NOT_ALIGNED = 3
-
-
     cursor_changed_signal = Signal(list) # Utterance ids of segment under cursor or selection
     join_utterances = Signal(list)
     delete_utterances = Signal(list)
@@ -295,6 +288,11 @@ class TextEditWidget(QTextEdit):
     align_with_selection = Signal(QTextBlock)
     auto_transcribe = Signal()
     request_auto_align = Signal()
+
+
+    class TextFormat(Enum):
+        BOLD = 'B'
+        ITALIC = 'I'
 
 
     def __init__(
@@ -392,15 +390,19 @@ class TextEditWidget(QTextEdit):
         self.document_controller.updateUtteranceDensity(segment_id)
 
 
-    def appendSentence(self, text: str, segment_id: Optional[SegmentId]) -> QTextBlock:
+    def appendSentence(self, text: str, segment_id: SegmentId | None) -> QTextBlock:
         """Insert new utterance at the end of the document"""
         end_position = self.document().characterCount() - 1  # -1 because of implicit newline
-        new_block = self.insertBlock(text, {"seg_id": segment_id} if segment_id is not None else None, end_position)
+        new_block = self.insertBlock(
+            text,
+            {"seg_id": segment_id} if segment_id is not None else None,
+            end_position
+        )
         self.highlighter.rehighlightBlock(new_block)
         return new_block
 
 
-    def insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock:
+    def insertBlock(self, text: str, data: dict | None, pos: int) -> QTextBlock:
         """Insert a block, with user data, at a given position"""
         log.debug(f"text_widget.insertBlock({text=}, {data=}, {pos=})")
 
@@ -411,9 +413,9 @@ class TextEditWidget(QTextEdit):
 
         # Escape the special tokens ("<C'HOARZH>", "<LAU>"...)
         expression = QRegularExpression(r"<([a-zA-Z\']+)>")
+        matches = expression.globalMatch(text)
         escaped_string = ""
         i = 0
-        matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
             tag = match.captured(1)
@@ -643,47 +645,82 @@ class TextEditWidget(QTextEdit):
             it += 1
         
         return fragments
+
+
+    def setBlockFragments(self, block: QTextBlock, fragments: List[Tuple[str, set]]) -> None:
+        cursor = QTextCursor(block)
+        
+        # Select the entire block content and remove it
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        
+        for text, format_desc in fragments:
+            fmt = QTextCharFormat()
+            
+            if self.TextFormat.BOLD in format_desc:
+                fmt.setFontWeight(QFont.Weight.Bold)
+            else:
+                fmt.setFontWeight(QFont.Weight.Normal)
+            
+            fmt.setFontItalic(self.TextFormat.ITALIC in format_desc)
+            
+            cursor.insertText(text, fmt)
     
 
     def fragmentsToHtml(self, fragments: list) -> Tuple[str, List[bool]]:
         """
-            Returns:
-                An html string and a mask (list of bools) for special tokens
+        Convert list of fragments to an html string
+
+        Returns:
+            An html string and a mask (list of bools) for special tokens
         """
-        # Convert list of fragments to an html string
-        html_text = ""
-        mask = []
-        last_format = set()
-        for text, formats in fragments:
-            closing_formats = last_format.difference(formats)
-            for f in closing_formats:
-                format_element = f"</{f.value}>"
-                html_text += format_element
-                mask.extend( [False] * len(format_element) )
-            opening_formats = formats.difference(last_format)
-            for f in opening_formats:
+
+        def add_opening_elements(formats: set, html_text: List[str], mask: List[bool]):
+            for f in sorted(formats):
                 format_element = f"<{f.value}>"
-                html_text += format_element
+                html_text.append(format_element)
                 mask.extend( [False] * len(format_element) )
+
+        def add_closing_elements(formats: set, html_text: List[str], mask: List[bool]):
+            for f in sorted(formats, reverse=True):
+                format_element = f"</{f.value}>"
+                html_text.append(format_element)
+                mask.extend( [False] * len(format_element) )
+
+        html_text = []
+        mask = []
+        last_formats = set()
+        for text, formats in fragments:
+            # Closing formatting elements
+            closing_formats = last_formats.difference(formats)
+            add_closing_elements(closing_formats, html_text, mask)
+
+            # Opening formatting elements
+            opening_formats = formats.difference(last_formats)
+            add_opening_elements(opening_formats, html_text, mask)
             
             # Convert line breaks
             sub_lines = text.split(LINE_BREAK)
-            html_text += sub_lines[0]
+            html_text.append(sub_lines[0])
             mask.extend( [True] * len(sub_lines[0]) )
-            for l in sub_lines[1:]:
-                html_text += "<BR>" + l
+            for sub_line in sub_lines[1:]:
+                # Close all formatting elements
+                add_closing_elements(formats, html_text, mask)
+                # Add line break
+                html_text.append("<BR>")
                 mask.extend( [False] * len("<BR>") )
-                mask.extend( [True] * len(l) )
+                # Reopen formatting elements
+                add_opening_elements(formats, html_text, mask)
+                html_text.append(sub_line)
+                mask.extend( [True] * len(sub_line) )
             
-            last_format = formats
+            last_formats = formats
         
         # closing_formats = last_format.difference(set())
-        for f in last_format:
-            format_element = f"</{f.value}>"
-            html_text += format_element
-            mask.extend( [False] * len(format_element) )
+        add_closing_elements(last_formats, html_text, mask)
 
-        return html_text, mask
+        return ''.join(html_text), mask
 
 
     def deactivateSentence(self, seg_id: Optional[SegmentId]=None):
@@ -965,9 +1002,7 @@ class TextEditWidget(QTextEdit):
     
     def contextMenuEvent(self, event):
         te_cursor = self.textCursor()
-        print(f"context_menu {te_cursor.position()}")
-        print(f"event pos: {event.pos()}")
-        cursor = self.cursorForPosition(event.pos())
+        cursor = self.cursorForPosition(event.pos()) # event.pos() is cursor pos in pixels
         block = cursor.block()
         block_type = self.document_controller.getBlockType(block)
 
@@ -997,7 +1032,7 @@ class TextEditWidget(QTextEdit):
             if n_suggestion > 0:
                 context_menu.addSeparator()
                 # -------------------------
-        if block_type == TextEditWidget.BlockType.ALIGNED:
+        if block_type == BlockType.ALIGNED:
             context_menu.addAction(self.action.transcribe)
 
             # tr_delete_utterance = self.tr("Delete utterances") if multi else self.tr("Delete utterance")
@@ -1006,7 +1041,7 @@ class TextEditWidget(QTextEdit):
             context_menu.addAction(self.action.delete_segment)
             context_menu.addSeparator()
             # -------------------------
-        elif block_type == TextEditWidget.BlockType.NOT_ALIGNED:
+        elif block_type == BlockType.NOT_ALIGNED:
             align_action = context_menu.addAction("Align with selection")
             align_action.setEnabled(False)
 
@@ -1399,10 +1434,11 @@ class TextEditWidget(QTextEdit):
                         cursor_pos + 1
                     )
                 )
+
                 self.undo_stack.push(
                     DeleteTextCommand(
                         self,
-                        block.position() - 1, # We need to delete from pos-1 so that the metadata doens't get shifted
+                        block.position(),
                         block_len,
                         QTextCursor.MoveOperation.Right
                     )
@@ -1413,13 +1449,13 @@ class TextEditWidget(QTextEdit):
             
             # Current block and next block are unaligned
             self.undo_stack.push(
-                    DeleteTextCommand(
-                        self,
-                        cursor_pos,
-                        1,
-                        QTextCursor.MoveOperation.Right
-                    )
+                DeleteTextCommand(
+                    self,
+                    cursor_pos,
+                    1,
+                    QTextCursor.MoveOperation.Right
                 )
+            )
             
             return True
 
@@ -1432,6 +1468,7 @@ class TextEditWidget(QTextEdit):
             return True
 
         block = cursor.block()
+        block_len = block.length()
         cursor_pos = cursor.position()
         pos_in_block = cursor.positionInBlock()
         block_data: MyTextBlockUserData = block.userData()
@@ -1486,14 +1523,13 @@ class TextEditWidget(QTextEdit):
                     DeleteTextCommand(
                         self,
                         prev_block.position() - 1,
-                        prev_block.length(),
+                        block_len,
                         QTextCursor.MoveOperation.Right
                     )
                 )
                 self.undo_stack.endMacro()
                 return True
         else:
-            print("**** heeeeere ****")
             # Not an aligned block, but we could join with previous aligned block
             prev_block = block.previous()
             if not prev_block.isValid():
@@ -1503,6 +1539,7 @@ class TextEditWidget(QTextEdit):
                 insert_pos = cursor_pos - 1
                 self.undo_stack.beginMacro("join with previous utterance")
                 # Inserting this block's text at the end of the previous aligned one
+                self.printDocumentStructure()
                 self.undo_stack.push(
                     InsertTextCommand(
                         self,
@@ -1510,12 +1547,11 @@ class TextEditWidget(QTextEdit):
                         insert_pos
                     )
                 )
-                # Deleting this block
                 self.undo_stack.push(
                     DeleteTextCommand(
                         self,
                         block.position(),
-                        block.length(),
+                        block_len,
                         QTextCursor.MoveOperation.Right
                     )
                 )
@@ -1735,14 +1771,15 @@ class TextEditWidget(QTextEdit):
 
     #### Debug functions ####
 
-    def printDocumentStructure(self):
+    def printDocumentStructure(self) -> None:
         """For debug purposes"""
         i = 0
 
         block = self.document().firstBlock()
         while block.isValid():
+            text = block.text()
             print(color_yellow(f"* block {i} (pos {block.position()}):"))
-            print(color_yellow(f"    text='{block.text()}'"))
+            print(color_yellow(f"    {text=}"))
             metadata = block.userData()
             if metadata:
                 print(color_yellow(f"    userData='{metadata.data}'"))

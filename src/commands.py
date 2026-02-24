@@ -29,9 +29,8 @@ from PySide6.QtGui import (
     QTextBlock,
 )
 
-from src.utils import MyTextBlockUserData
 from src.interfaces import (
-    Segment, SegmentId,
+    Segment, SegmentId, MyTextBlockUserData,
     WaveformInterface, TextDocumentInterface,
     DocumentInterface,
 )
@@ -118,7 +117,7 @@ class JoinUtterancesCommand(QUndoCommand):
             cursor.insertBlock()
             cursor.insertText(self.segments_text[i+1])
             user_data = {"seg_id": seg_id}
-            cursor.block().setUserData(MyTextBlockUserData(user_data))
+            self.document_controller.setBlockMetadata(cursor.block(), user_data)
             self.document_controller.segments[seg_id] = self.segments[i+1]
             self.text_widget.deactivateSentence(seg_id)
         
@@ -179,17 +178,16 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.document_controller = document_controller
         self.waveform = waveform
         self.block: QTextBlock = block
-        self.old_block_data = self.block.userData().data.copy() if block.userData() else None
+        self.old_block_data = document_controller.getBlockMetadata(block).copy()
         s = self.waveform.getSelection()
         self.selection: Optional[Segment] = s.copy() if s is not None else None
-        self.segment_id = self.document_controller.getNewSegmentId()
+        self.segment_id = document_controller.getNewSegmentId()
     
     def undo(self):
-        # self.parent.text_widget.highlightUtterance(self.prev_active_segment_id)
         if self.old_block_data:
-            self.document_controller.setBlockId(self.block, self.old_block_data)
+            self.document_controller.setBlockMetadata(self.block, self.old_block_data)
         else:
-            self.document_controller.setBlockId(self.block, None)
+            self.document_controller.setBlockMetadata(self.block, None)
         self.waveform._selection = self.selection
         self.document_controller.removeSegment(self.segment_id)
         self.parent.statusBar().clearMessage()
@@ -198,8 +196,10 @@ class AlignWithSelectionCommand(QUndoCommand):
         if self.selection:
             self.document_controller.addSegment(self.selection, self.segment_id)
         self.waveform.removeSelection()
-        self.document_controller.setBlockId(self.block, self.segment_id)
-        self.parent.updateUtteranceDensity(self.segment_id)
+        self.document_controller.updateBlockMetadata(self.block, {"seg_id": self.segment_id})
+        # self.document_controller.updateUtteranceDensity(self.segment_id)
+
+        print("redo", self.document_controller.getBlockMetadata(self.block))
 
 
 
@@ -212,28 +212,27 @@ class AlignBlockWithSegment(QUndoCommand):
         ):
         log.debug(f"AlignBlockWithSegment.__init__(parent, {block=})")
         super().__init__()
-        self.document = document
+        self.document_controller = document
         self.block_number: int = block.blockNumber()
-        self.old_block_data = block.userData().data.copy() if block.userData() else None
+        self.old_block_data = document.getBlockMetadata(block).copy()
         self.segment = segment
         self.segment_id = document.getNewSegmentId()
     
     def undo(self):
-        block = self.document.getBlockByNumber(self.block_number)
+        block = self.document_controller.getBlockByNumber(self.block_number)
         assert block is not None and block.isValid()
 
         # Reset segment_id in block metadata
-        self.document.setBlockId(block, self.old_block_data.get("seg_id", None) if self.old_block_data else None)
-        self.document.removeSegment(self.segment_id)
+        self.document_controller.setBlockMetadata(block, self.old_block_data)
+        self.document_controller.removeSegment(self.segment_id)
 
     def redo(self):
-        block = self.document.getBlockByNumber(self.block_number)
+        block = self.document_controller.getBlockByNumber(self.block_number)
         assert block is not None and block.isValid()
 
         print(f"redo {block=}")
-
-        self.document.addSegment(self.segment, self.segment_id)
-        self.document.setBlockId(block, self.segment_id)
+        self.document_controller.addSegment(self.segment, self.segment_id)
+        self.document_controller.updateBlockMetadata(block, {"seg_id": self.segment_id})
 
 
 
@@ -264,7 +263,11 @@ class DeleteUtterancesCommand(QUndoCommand):
     def undo(self):
         log.debug("DeleteUtterancesCommand UNDO")
 
-        for segment, text, seg_id, data, pos in zip(self.segments, self.texts, self.seg_ids, self.datas, self.positions):
+        for segment, text, seg_id, data, pos in zip(
+                self.segments, self.texts,
+                self.seg_ids, self.datas,
+                self.positions
+            ):
             seg_id = self.document_controller.addSegment(segment, seg_id)
             block = self.text_widget.insertBlock(text, data, pos - 1)
             self.text_widget.highlighter.rehighlightBlock(block)
@@ -294,6 +297,7 @@ class DeleteUtterancesCommand(QUndoCommand):
 
 class InsertTextCommand(QUndoCommand):
     """Add characters at a given position in the document"""
+
     def __init__(self, text_edit, text, position):
         super().__init__()
         self.text_edit: TextDocumentInterface = text_edit
@@ -352,21 +356,31 @@ class DeleteTextCommand(QUndoCommand):
         self.prev_cursor = self.text_edit.getCursorState()
 
     def undo(self):
+        print(f"DeleteTextCommand before undo: {self.position=} {self.deleted_text=} {self.size=}")
+        self.text_edit.printDocumentStructure()
         cursor: QTextCursor = self.text_edit.textCursor()
         if self.direction == QTextCursor.MoveOperation.Left:
-            cursor.setPosition(self.position - self.size)
+            cursor.setPosition(self.position)
             cursor.insertText(self.deleted_text)
         elif self.direction == QTextCursor.MoveOperation.Right:
-            cursor.setPosition(self.position)
+            if self.deleted_text == '\u2029':
+                # Dumb fix to prevent metadata from sticking to inserted paragraph
+                cursor.setPosition(self.position - 1)
+            else:
+                cursor.setPosition(self.position)
             cursor.insertText(self.deleted_text)
             cursor.setPosition(self.position)
         self.text_edit.setCursorState(self.prev_cursor)
+        print("DeleteTextCommand after undo:")
+        self.text_edit.printDocumentStructure()
+        print()
     
     def redo(self):
         cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.movePosition(self.direction, QTextCursor.MoveMode.KeepAnchor, self.size)
         self.deleted_text = cursor.selectedText()
+        print(f"{self.deleted_text=}")
         cursor.removeSelectedText()
     
     def id(self) -> int:
@@ -406,6 +420,7 @@ class InsertBlockCommand(QUndoCommand):
     """
     def __init__(
             self,
+            document_controller: DocumentInterface,
             text_edit: TextDocumentInterface,
             position: int,
             text = "",
@@ -416,6 +431,7 @@ class InsertBlockCommand(QUndoCommand):
 
         super().__init__()
         self.text_edit = text_edit
+        self.document_controller = document_controller
         self.prev_cursor = self.text_edit.getCursorState()
 
         cursor = self.text_edit.textCursor()
@@ -426,6 +442,8 @@ class InsertBlockCommand(QUndoCommand):
             cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         self.position = cursor.position() # Set at the beginning or end of the block
         
+        self.old_metadata = document_controller.getBlockMetadata(cursor.block()).copy()
+
         self.inserted_text = text
         self.seg_id = seg_id
         self.after = after
@@ -475,9 +493,7 @@ class InsertBlockCommand(QUndoCommand):
         cursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         current_block = cursor.block()
-        old_data = current_block.userData()
-        if old_data:
-            old_data = old_data.data
+        # old_data = self.document_controller.getBlockMetadata(current_block)
 
         cursor.insertBlock()
 
@@ -486,7 +502,8 @@ class InsertBlockCommand(QUndoCommand):
             if self.inserted_text:
                 cursor.insertText(self.inserted_text)
             if self.seg_id:
-                cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
+                user_data = {"seg_id": self.seg_id}
+                self.document_controller.setBlockMetadata(cursor.block(), user_data)
             self.text_edit.highlighter.rehighlightBlock(cursor.block())
         else:
             # Block has been inserted before
@@ -495,14 +512,15 @@ class InsertBlockCommand(QUndoCommand):
             if self.inserted_text:
                 cursor.insertText(self.inserted_text)
             if self.seg_id:
-                cursor.block().setUserData(MyTextBlockUserData({"seg_id": self.seg_id}))
+                user_data = {"seg_id": self.seg_id}
+                self.document_controller.setBlockMetadata(cursor.block(), user_data)
             else:
-                cursor.block().setUserData(None)
+                self.document_controller.setBlockMetadata(cursor.block(), None)
             self.text_edit.highlighter.rehighlightBlock(cursor.block())
 
-            if old_data:
-                cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
-                cursor.block().setUserData(MyTextBlockUserData(old_data))
+            # Restore old metadata
+            cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+            self.document_controller.setBlockMetadata(cursor.block(), self.old_metadata or None)
             self.text_edit.highlighter.rehighlightBlock(cursor.block())
 
         self.text_edit.blockSignals(was_blocked)

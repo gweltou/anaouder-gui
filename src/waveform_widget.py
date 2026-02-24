@@ -868,7 +868,7 @@ class WaveformWidget(QWidget):
                 print(f"{self.active_segment_id=} {segment=}")
                 self.resizing_segment = segment[:]
                 block = self.document_controller.getBlockById(self.active_segment_id)
-                self.resizing_textlen = self.main_window.text_widget.getSentenceLength(block)
+                self.resizing_textlen = self.document_controller.getSentenceLength(block)
                 seg_len = self.resizing_segment[1] - self.resizing_segment[0]
                 self.resizing_density = self.resizing_textlen / seg_len
                 self.must_redraw = True

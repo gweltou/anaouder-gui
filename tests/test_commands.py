@@ -62,7 +62,7 @@ def load_document():
 
 
 def load_document_2():
-    main_window.openFile(Path("tests/Meli_mila_Malou_1.ali"))
+    main_window.openFile(Path("tests/MeliMilaMalou.ali"))
 
 
 def getDocumentState() -> dict:
@@ -302,24 +302,70 @@ def test_delete_text_command():
 def test_delete_first_utterance():
     load_document_2()
 
-    def apply_commands():
-        main_window.undo_stack.beginMacro("delete first utterance")
-        # main_window.undo_stack.push(
-        #     DeleteTextCommand(
-        #         main_window.text_widget,
-        #         position=117,
-        #         size=34,
-        #         direction=QTextCursor.MoveOperation.Left
-        #     )
-        # )
+    undo_redo_command(
+        DeleteUtterancesCommand(
+            main_window.document_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            seg_ids=[0]
+        ),
+        random_cursor=True
+    )
+
+
+
+def test_join_with_prev_nonaligned():
+    print("********************* test_join_with_prev_nonaligned")
+    load_document_2()
+    main_window.text_widget.printDocumentStructure()
+
+    text_position = 218
+
+    def delete_and_join():
+        cursor = main_window.text_widget.textCursor()
+        cursor.setPosition(text_position)
+        insert_pos = text_position - 1
+
+        block = cursor.block()
+        block_len = block.length()
+
+        main_window.undo_stack.beginMacro("test_join_with_prev_nonaligned")
         main_window.undo_stack.push(
-            DeleteUtterancesCommand(
-                main_window.document_controller,
+            InsertTextCommand(
                 main_window.text_widget,
-                main_window.waveform,
-                seg_ids=[0]
+                block.text(),
+                insert_pos
+            )
+        )
+
+        # Deleting this block
+        main_window.undo_stack.push(
+            DeleteTextCommand(
+                main_window.text_widget,
+                block.position(),
+                block_len,
+                QTextCursor.MoveOperation.Right
             )
         )
         main_window.undo_stack.endMacro()
 
-    undo_redo_function(apply_commands, random_cursor=True)
+    undo_redo_function(
+        delete_and_join
+    )
+
+
+def test_join_with_next_nonaligned():
+    print("********************* test_join_with_next_nonaligned")
+    load_document_2()
+    main_window.text_widget.printDocumentStructure()
+
+    cursor_pos = 218
+
+    undo_redo_command(
+        DeleteTextCommand(
+            main_window.text_widget,
+            cursor_pos, # We need to delete from pos-1 so that the metadata doens't get shifted
+            1,
+            QTextCursor.MoveOperation.Right
+        )
+    )

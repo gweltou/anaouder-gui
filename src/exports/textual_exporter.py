@@ -229,7 +229,7 @@ def clean_subtitle_text(text: str, allowed_tags: Optional[set] = None) -> str:
 def format_srt(utterances: List[tuple]) -> str:
     # Remove metadata
     metadata_parser = MetadataParser()
-    metadata_parser.set_filter_out({"subtitles": False})
+    metadata_parser.set_filter_out({"subtitles": False, "st": False})
 
     subs = []
     for i, (text, (start, end)) in enumerate(utterances):

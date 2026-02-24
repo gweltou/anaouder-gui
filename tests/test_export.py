@@ -16,7 +16,7 @@ from exports.textual_exporter import (
 
 @pytest.fixture
 def sample_utterances():
-    """Returns a standard list of utterances for testing."""
+    """Returns a list of utterances for testing."""
     return [
         ("Hello world", (0.0, 1.5)),
         ("Second sentence", (2.0, 3.5)),

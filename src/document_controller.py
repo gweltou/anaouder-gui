@@ -428,7 +428,7 @@ class DocumentController(QObject):
             return
 
         # Count the number of characters in sentence
-        num_chars = self._getSentenceLength(block)
+        num_chars = self.getSentenceLength(block)
 
         segment = self.getSegment(segment_id)
         if not segment:
@@ -442,7 +442,7 @@ class DocumentController(QObject):
             block.userData().data["density"] = new_density
 
 
-    def _getSentenceLength(self, block: QTextBlock) -> int:
+    def getSentenceLength(self, block: QTextBlock) -> int:
         """Returns length of sentence, stripped of metadata and comments"""
         if not block:
             return 0.0
@@ -714,17 +714,31 @@ class DocumentController(QObject):
         right_id = self.getNewSegmentId()
         
         self.undo_stack.beginMacro("split utterance")
-        self.undo_stack.push(DeleteUtterancesCommand(self, self.text_widget, self.waveform_widget, [seg_id]))
-        self.undo_stack.push(AddSegmentCommand(self, self.waveform_widget, left_seg, left_id))
+        self.undo_stack.push(
+            DeleteUtterancesCommand(
+                self,
+                self.text_widget,
+                self.waveform_widget,
+                [seg_id]
+            )
+        )
+        self.undo_stack.push(
+            AddSegmentCommand(
+                self,
+                self.waveform_widget,
+                left_seg,
+                left_id
+            )
+        )
         print(f"{self.text_widget.textCursor().position()=}")
         self.undo_stack.push(
             InsertBlockCommand(
                 self,
                 self.text_widget,
                 self.text_widget.textCursor().position(),
-                seg_id=left_id,
-                text=left_text,
-                after=True
+                seg_id = left_id,
+                text = left_text,
+                after = True
             )
         )
         self.undo_stack.push(AddSegmentCommand(self, self.waveform_widget, right_seg, right_id))
@@ -733,9 +747,9 @@ class DocumentController(QObject):
                 self,
                 self.text_widget,
                 self.text_widget.textCursor().position(),
-                seg_id=right_id,
-                text=right_text,
-                after=True
+                seg_id = right_id,
+                text = right_text,
+                after = True
             )
         )
         # Set cursor at the beggining of the right utterance

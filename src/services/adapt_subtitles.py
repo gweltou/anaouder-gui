@@ -191,13 +191,31 @@ class AdaptUtterancesDialog(QDialog):
         self.undo_stack.beginMacro("Adapt to subtitles")
 
         if params["apply_subtitle_rules"] == True:
-            self.apply_subtitle_rules(start_block, end_block)
+            apply_subtitle_rules(
+                    self.document_controller,
+                    start_block, end_block,
+                    self.undo_stack,
+                    self.fps
+                )
         if params["remove_verbal_fillers"] == True:
-            self.remove_fillers(start_block, end_block)
+            remove_fillers(
+                    start_block, end_block,
+                    self.text_widget,
+                    self.undo_stack
+                )
         if params["convert_quotation_marks"]:
-            self.convert_quotation_marks(start_block, end_block)
+            convert_quotation_marks(
+                    start_block, end_block,
+                    self.text_widget,
+                    self.undo_stack
+                )
         if params["convert_apostrophes"]:
-            self.convert_apostrophes(start_block, end_block, params["apostrophe_type"])
+            convert_apostrophes(
+                    start_block, end_block,
+                    params["apostrophe_type"],
+                    self.text_widget,
+                    self.undo_stack
+                )
 
         self.undo_stack.endMacro()
 
@@ -226,109 +244,125 @@ class AdaptUtterancesDialog(QDialog):
             self.en_apostrophe_radiobtn.setChecked(True)
 
 
-    def apply_subtitle_rules(
-            self,
-            start_block: QTextBlock,
-            end_block: QTextBlock,
-        ):
-        print("applying subs rules")
-        line_max_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
-        fps = self.fps
-        block = start_block
-        while True:
-            seg_id = self.document_controller.getBlockId(block)
-            if seg_id != -1:
-                if fps > 0.0:
-                    # Adjust segment boundaries on frame positions
-                    seg_start, seg_end = self.document_controller.getSegment(seg_id)
-                    frame_start = round(seg_start * fps) / fps
-                    frame_end = round(seg_end * fps) / fps
-                    prev_segment_id = self.document_controller.getPrevSegmentId(seg_id)
-                    if segment := self.document_controller.getSegment(prev_segment_id):
-                        if frame_start < segment[1]:
-                            # The previous frame position overlaps the previous segment,
-                            # choose next frame
-                            frame_start = ceil(seg_start * fps) / fps
-                    
-                    next_segment_id = self.document_controller.getNextSegmentId(seg_id)
-                    if segment := self.document_controller.getSegment(next_segment_id):
-                        right_boundary = round(segment[0] * fps) / fps
-                        right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL, type=int) / fps
-                        if frame_end > right_boundary:
-                            # The next frame position overlaps the next segment,
-                            # choose previous frame
-                            frame_end = right_boundary
-                    self.undo_stack.push(ResizeSegmentCommand(self.document_controller, seg_id, frame_start, frame_end))
 
-                text = block.text()
-                splits = splitForSubtitle(text, line_max_size)
-                if len(splits) > 1:
-                    text = LINE_BREAK.join([ s.strip() for s in splits ])
-                    self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
+def apply_subtitle_rules(
+        document_controller: DocumentController,
+        start_block: QTextBlock,
+        end_block: QTextBlock,
+        undo_stack: QUndoStack,
+        fps: float,
+    ):
+    print("applying subs rules")
+    text_widget = document_controller.text_widget
+
+    line_max_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
+    
+    block = start_block
+    while True:
+        seg_id = document_controller.getBlockId(block)
+        if seg_id != -1:
+            if fps > 0.0:
+                # Adjust segment boundaries on frame positions
+                seg_start, seg_end = document_controller.getSegment(seg_id)
+                frame_start = round(seg_start * fps) / fps
+                frame_end = round(seg_end * fps) / fps
+                prev_segment_id = document_controller.getPrevSegmentId(seg_id)
+                if segment := document_controller.getSegment(prev_segment_id):
+                    if frame_start < segment[1]:
+                        # The previous frame position overlaps the previous segment,
+                        # choose next frame
+                        frame_start = ceil(seg_start * fps) / fps
                 
-            if block == end_block:
-                break
-            block = block.next()
+                next_segment_id = document_controller.getNextSegmentId(seg_id)
+                if segment := document_controller.getSegment(next_segment_id):
+                    right_boundary = round(segment[0] * fps) / fps
+                    right_boundary -= app_settings.value("subtitles/min_interval", SUBTITLES_MIN_INTERVAL, type=int) / fps
+                    if frame_end > right_boundary:
+                        # The next frame position overlaps the next segment,
+                        # choose previous frame
+                        frame_end = right_boundary
+                undo_stack.push(ResizeSegmentCommand(document_controller, seg_id, frame_start, frame_end))
 
-
-    def remove_fillers(
-            self,
-            start_block: QTextBlock, end_block: QTextBlock,
-        ) -> None:
-        block = start_block
-        while block.isValid() and block != end_block.next():
             text = block.text()
-            new_text = lang.removeVerbalFillers(text)
-            if text != new_text:
-                print(text)
-                print(new_text)
-            self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, new_text))
-
-            block = block.next()
-    
-
-    def convert_quotation_marks(
-            self,
-            start_block: QTextBlock, end_block: QTextBlock,
-        ) -> None:
-        # TODO: this function should be localized
-        # to use the right quotation marks depending on language
-        quotation_open = False
-
-        block = start_block
-        while block.isValid() and block != end_block.next():
-            text = block.text()
-            if '"' in text:
-                new_text = ""
-                idx = 0
-                while (next_idx := text[idx:].find('"')) != -1:
-                    quot_mark = ' »' if quotation_open else '« '
-                    new_text += text[idx:idx + next_idx] + quot_mark
-                    quotation_open = not quotation_open
-                    idx += next_idx + 1
-                new_text += text[idx:]
-                self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, new_text))
+            splits = splitForSubtitle(text, line_max_size)
+            if len(splits) > 1:
+                text = LINE_BREAK.join([ s.strip() for s in splits ])
+                undo_stack.push(ReplaceTextCommand(text_widget, block, text))
             
-            block = block.next()
-    
+        if block == end_block:
+            break
+        block = block.next()
 
-    def convert_apostrophes(
-            self,
-            start_block: QTextBlock, end_block: QTextBlock,
-            apostrophe_type: str
-        ) -> None:
-        if apostrophe_type == 'fr':
-            to_replace = "'"
-            replacement = "’" # Unicode: U+2019
-        else:
-            to_replace = "’" # Unicode: U+2019
-            replacement = "'"
 
-        block = start_block
-        while block.isValid() and block != end_block.next():
-            text = block.text()
-            if to_replace in text:
-                text = text.replace(to_replace, replacement)
-                self.undo_stack.push(ReplaceTextCommand(self.text_widget, block, text))
-            
-            block = block.next()
+def remove_fillers(
+        start_block: QTextBlock, end_block: QTextBlock,
+        text_widget: TextEditWidget,
+        undo_stack: QUndoStack,
+    ) -> None:
+    block = start_block
+    while block.isValid() and block != end_block.next():
+        html_text, _ = text_widget.getBlockHtml(block)
+        new_text = lang.removeVerbalFillers(html_text)
+        if html_text != new_text:
+            print(html_text)
+            print(new_text)
+        undo_stack.push(ReplaceTextCommand(text_widget, block, new_text))
+
+        block = block.next()
+
+
+def convert_quotation_marks(
+        start_block: QTextBlock, end_block: QTextBlock,
+        text_widget: TextEditWidget,
+        undo_stack: QUndoStack
+    ) -> None:
+    # TODO: this function should be localized
+    # to use the right quotation marks depending on language
+    quotation_open = False
+
+    block = start_block
+    while block.isValid() and block != end_block.next():
+        html_text, _ = text_widget.getBlockHtml(block)
+        if '"' in html_text:
+            new_text = ""
+            idx = 0
+            while (next_idx := html_text[idx:].find('"')) != -1:
+                quot_mark = ' »' if quotation_open else '« '
+                new_text += html_text[idx:idx + next_idx] + quot_mark
+                quotation_open = not quotation_open
+                idx += next_idx + 1
+            new_text += html_text[idx:]
+            undo_stack.push(ReplaceTextCommand(text_widget, block, new_text))
+        
+        block = block.next()
+
+
+def convert_apostrophes(
+        start_block: QTextBlock, end_block: QTextBlock,
+        apostrophe_type: str,
+        text_widget: TextEditWidget,
+        undo_stack: QUndoStack
+    ) -> None:
+    """
+    Change apostrophe type (fr/en) in given QTextBlock(s)
+
+    Args:
+        apostrophe_type (str): 'fr' or 'en'
+    """
+    if apostrophe_type == 'fr':
+        to_replace = "'"
+        replacement = "’" # Unicode: U+2019
+    else:
+        to_replace = "’" # Unicode: U+2019
+        replacement = "'"
+
+    block = start_block
+    while block.isValid() and block != end_block.next():
+        # text = block.text()
+        html_text, _ = text_widget.getBlockHtml(block)
+        if to_replace in html_text:
+            # We asume that there is no apostrophe in the formatting HTML elements
+            html_text = html_text.replace(to_replace, replacement)
+            undo_stack.push(ReplaceTextCommand(text_widget, block, html_text))
+        
+        block = block.next()
