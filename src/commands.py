@@ -299,7 +299,9 @@ class InsertTextCommand(QUndoCommand):
     """Add characters at a given position in the document"""
 
     def __init__(self, text_edit, text, position):
+        log.debug(f"InsertTextCommand.__init__(text_edit, {text=}, {position=})")
         super().__init__()
+
         self.text_edit: TextDocumentInterface = text_edit
         self.text: str = text[:]
         self.position : int = position
@@ -307,6 +309,7 @@ class InsertTextCommand(QUndoCommand):
         self.prev_cursor = self.text_edit.getCursorState()
     
     def undo(self):
+        log.debug(f"InsertTextCommand.UNDO")
         cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, len(self.text))
@@ -314,6 +317,7 @@ class InsertTextCommand(QUndoCommand):
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
+        log.debug(f"InsertTextCommand.REDO")
         cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.insertText(self.text)
@@ -356,11 +360,10 @@ class DeleteTextCommand(QUndoCommand):
         self.prev_cursor = self.text_edit.getCursorState()
 
     def undo(self):
-        print(f"DeleteTextCommand before undo: {self.position=} {self.deleted_text=} {self.size=}")
-        self.text_edit.printDocumentStructure()
+        log.debug(f"DeleteTextCommand.UNDO: {self.position=} {self.deleted_text=} {self.size=} {self.direction=}")
         cursor: QTextCursor = self.text_edit.textCursor()
         if self.direction == QTextCursor.MoveOperation.Left:
-            cursor.setPosition(self.position)
+            cursor.setPosition(self.position - self.size)
             cursor.insertText(self.deleted_text)
         elif self.direction == QTextCursor.MoveOperation.Right:
             if self.deleted_text == '\u2029':
@@ -371,11 +374,9 @@ class DeleteTextCommand(QUndoCommand):
             cursor.insertText(self.deleted_text)
             cursor.setPosition(self.position)
         self.text_edit.setCursorState(self.prev_cursor)
-        print("DeleteTextCommand after undo:")
-        self.text_edit.printDocumentStructure()
-        print()
     
     def redo(self):
+        log.debug("DeleteTextCommand.REDO")
         cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.movePosition(self.direction, QTextCursor.MoveMode.KeepAnchor, self.size)

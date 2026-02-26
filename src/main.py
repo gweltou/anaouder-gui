@@ -2029,7 +2029,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def onTextChanged(self) -> None:
-        log.debug("onTextChanged()")
+        #log.debug("onTextChanged()")
         # Update the utterance density field
         with QSignalBlocker(self.text_widget.document()):
             cursor = self.text_widget.textCursor()

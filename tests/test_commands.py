@@ -28,14 +28,6 @@ from src.text_widget import TextEditWidget
 from src.strings import strings
 
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(levelname)s %(asctime)s %(name)s %(filename)s:%(lineno)d %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
-
 
 app = QApplication.instance()
 if app is None:
@@ -65,28 +57,11 @@ def load_document_2():
     main_window.openFile(Path("tests/MeliMilaMalou.ali"))
 
 
-def getDocumentState() -> dict:
-    state = dict()
-    cursor = main_window.text_widget.textCursor()
-    state["cursor_position"] = cursor.position()
-    state["cursor_anchor"] = cursor.anchor()
-    # state["n_blocks"] = main_window.text_edit.document().blockCount()
-    state["blocks"] = []
-    block = main_window.text_widget.document().firstBlock()
-    while block.isValid():
-        text = block.text()[:]
-        data = deepcopy(block.userData().data) if block.userData() else {}
-        data.pop("density", None)
-        state["blocks"].append((text, data))
-        block = block.next()
-    state["segments"] = deepcopy(main_window.document_controller.segments)
-    return state
-
 
 def undo_redo_command(command: QUndoCommand, random_cursor=False):
-    state1 = getDocumentState()
+    state1 = main_window.document_controller.getDocumentState()
     main_window.undo_stack.push(command)
-    state2 = getDocumentState()
+    state2 = main_window.document_controller.getDocumentState()
     assert state1 != state2
 
     if random_cursor:
@@ -95,7 +70,7 @@ def undo_redo_command(command: QUndoCommand, random_cursor=False):
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
     
     main_window.undo_stack.undo()
-    state3 = getDocumentState()
+    state3 = main_window.document_controller.getDocumentState()
     assert state3 == state1
 
     if random_cursor:
@@ -104,14 +79,14 @@ def undo_redo_command(command: QUndoCommand, random_cursor=False):
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
     
     main_window.undo_stack.redo()
-    state4 = getDocumentState()
+    state4 = main_window.document_controller.getDocumentState()
     assert state4 == state2
 
 
 def undo_redo_function(function: callable, *args, random_cursor=False):
-    state1 = getDocumentState()
+    state1 = main_window.document_controller.getDocumentState()
     function(*args)
-    state2 = getDocumentState()
+    state2 = main_window.document_controller.getDocumentState()
     assert state1 != state2
 
     if random_cursor:
@@ -120,7 +95,7 @@ def undo_redo_function(function: callable, *args, random_cursor=False):
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
     
     main_window.undo_stack.undo()
-    state3 = getDocumentState()
+    state3 = main_window.document_controller.getDocumentState()
     assert state3 == state1
 
     if random_cursor:
@@ -129,7 +104,7 @@ def undo_redo_function(function: callable, *args, random_cursor=False):
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
 
     main_window.undo_stack.redo()
-    state4 = getDocumentState()
+    state4 = main_window.document_controller.getDocumentState()
     assert state4 == state2
 
 

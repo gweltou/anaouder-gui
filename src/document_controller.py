@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import List, Tuple, Dict, Optional
 import logging
 from pathlib import Path
+from copy import deepcopy
 
 from ostilhou.asr import extract_metadata
 
@@ -141,6 +142,24 @@ class DocumentController(QObject):
         
         self.text_widget.updateLineNumberAreaWidth()
         self.text_widget.updateLineNumberArea()
+    
+
+    def getDocumentState(self) -> dict:
+        state = dict()
+        cursor = self.text_widget.textCursor()
+        state["cursor_position"] = cursor.position()
+        state["cursor_anchor"] = cursor.anchor()
+        # state["n_blocks"] = main_window.text_edit.document().blockCount()
+        state["blocks"] = []
+        block = self.text_widget.document().firstBlock()
+        while block.isValid():
+            text = block.text()[:]
+            data = deepcopy(block.userData().data) if block.userData() else {}
+            data.pop("density", None)
+            state["blocks"].append((text, data))
+            block = block.next()
+        state["segments"] = deepcopy(self.segments)
+        return state
     
     
     def getBlockByNumber(self, block_number: int) -> Optional[QTextBlock]:

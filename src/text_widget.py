@@ -363,8 +363,21 @@ class TextEditWidget(QTextEdit):
     
 
     def setCursorState(self, cursor_state):
+        prev_pos = cursor_state["position"]
+        prev_anchor = cursor_state["anchor"]
+        log.debug(f"setCursorState {cursor_state=}")
+
         cursor = self.textCursor()
-        cursor.setPosition(cursor_state["position"])
+        cursor.setPosition(prev_anchor)
+
+        if prev_pos < prev_anchor:
+            offset = prev_anchor - prev_pos
+            cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, offset)
+        elif prev_pos > prev_anchor:
+            offset = prev_pos - prev_anchor
+            cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, offset)
+        
+        log.debug(f"new cursor {cursor.position()=} {cursor.anchor()=}")
         self.setTextCursor(cursor)
 
 
@@ -532,6 +545,7 @@ class TextEditWidget(QTextEdit):
 
     def deleteSelectedText(self, cursor: QTextCursor):
         """Delete a selected portion of text, using an undoable command"""
+        log.debug(f"deleteSelectedText(cursor)")
         pos = cursor.selectionEnd()
         start_block = self.document().findBlock(cursor.selectionStart())
         end_block = self.document().findBlock(cursor.selectionEnd())
@@ -877,6 +891,7 @@ class TextEditWidget(QTextEdit):
 
     def cut(self):
         cursor = self.textCursor()
+        log.debug(f"cut() {cursor.position()=} {cursor.anchor()=}")
         if cursor.hasSelection():
             selected_text = cursor.selectedText()
             clipboard = QApplication.clipboard()
@@ -891,12 +906,13 @@ class TextEditWidget(QTextEdit):
         i.e. to modify what QTextEdit can paste and how it is being pasted,
         reimplement the virtual canInsertFromMimeData() and insertFromMimeData() functions.
         """
+        log.debug("paste()")
         clipboard = QApplication.clipboard()
         # log.info(f"paste {clipboard.mimeData()}")
         cursor = self.textCursor()
         pos = cursor.position()
         # print(clipboard.mimeData())
-        print(f"{clipboard.text()=}")
+        log.debug(f"{clipboard.text()=}")
         self.undo_stack.beginMacro("Replace text")
         if cursor.hasSelection():
             pos = cursor.selectionStart()
@@ -1539,7 +1555,6 @@ class TextEditWidget(QTextEdit):
                 insert_pos = cursor_pos - 1
                 self.undo_stack.beginMacro("join with previous utterance")
                 # Inserting this block's text at the end of the previous aligned one
-                self.printDocumentStructure()
                 self.undo_stack.push(
                     InsertTextCommand(
                         self,
