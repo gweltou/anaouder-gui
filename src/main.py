@@ -84,10 +84,10 @@ from src.actions import ActionManager
 from src.commands import (
     ReplaceTextCommand,
     CreateNewEmptyUtteranceCommand,
-    AlignWithSelectionCommand, AlignBlockWithSegment
+    AlignWithSelectionCommand
 )
 from src.parameters_dialog import ParametersDialog
-from ui.progess_dialog import ProgressDialog
+from ui.timecode_display import TimecodeWidget
 from exports.textual_exporter import export, exportSignals
 from src.exports import segment_exporter
 from src.auto_segment import auto_segment
@@ -346,12 +346,14 @@ class MainWindow(QMainWindow):
             lambda: self.document_controller.deleteUtterances(self.waveform.active_segments)
         )
 
+        # Timecode display
+        self.timecode_widget.timeChanged.connect(self.onTimecodeDisplayChanged)
+
         # File manager
         self.file_manager.message.connect(self.setStatusMessage)
 
         # Media controller
         self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
-        # self.media_controller.media_duration_changed.connect(self.onMediaDurationChanged)
 
         # Document controller
         self.document_controller.message.connect(self.setStatusMessage)
@@ -745,7 +747,11 @@ class MainWindow(QMainWindow):
 
         media_toolbar_layout.addLayout(play_buttons_layout)
 
-        # Dials
+        # Timecode Display
+        self.timecode_widget = TimecodeWidget(self)
+        media_toolbar_layout.addWidget(self.timecode_widget)
+
+        # Volume and Speed dials
         dial_layout = QHBoxLayout()
         dial_layout.setSpacing(BUTTON_SPACING)
 
@@ -1048,6 +1054,7 @@ class MainWindow(QMainWindow):
         self.document_controller.clear()
         if not keep_media:
             self.waveform.clear()
+            self.timecode_widget.setFps(100)
 
         self.file_path = file_path
         ext = file_path.suffix.lower()
@@ -1422,9 +1429,6 @@ class MainWindow(QMainWindow):
                     self.log.info(f"Unrecognized FPS: {audiofile_info["r_frame_rate"]}")
             # if "avg_frame_rate" in audio_metadata:
             #     print(f"Stream {audio_metadata["avg_frame_rate"]=}")
-        
-        if "tags" in audiofile_info and "timecode" in audiofile_info["tags"]:
-            self.waveform.setTimeOffset(audiofile_info["tags"]["timecode"])
 
         if not "duration" in media_metadata:
             media_duration_s = float(audiofile_info["duration"])
@@ -1433,7 +1437,7 @@ class MainWindow(QMainWindow):
 
         duration_str = sec2hms(
             media_metadata["duration"],
-            precision=1,
+            precision=0,
             h_unit=strings.TR_UNIT_HOUR,
             m_unit=strings.TR_UNIT_MINUTE[0],
             s_unit=strings.TR_UNIT_SECOND,
@@ -1442,24 +1446,42 @@ class MainWindow(QMainWindow):
         self.status_media_duration_label.setText(duration_str)
         self.status_media_duration_label.setToolTip(self.tr("Media total duration"))
 
+        # ******** Update UI elements ********
+        
         if "fps" in media_metadata:
             # It is a video media file
             # Enable relevant actions
             self.scene_detect_action.setEnabled(True)
 
             self.waveform.fps = media_metadata["fps"]
-            # Open Video Widget
-            self.toggle_video_action.setChecked(True)
+
+            self.timecode_widget.setFps(media_metadata["fps"])
+
             self.status_media_fps_label.setText(f"{self.waveform.fps:.2f} {strings.TR_UNIT_FPS}")
             self.status_media_fps_label.setToolTip(self.tr("Video framerate"))
+
+            # Open Video Widget
+            self.toggle_video_action.setChecked(True)
         else:
             # It is an audio only media
             # Disable unusable actions
             self.scene_detect_action.setEnabled(False)
 
+            self.timecode_widget.setFps(100)
+
             self.status_media_fps_label.setText(self.tr("No image"))
             self.status_media_fps_label.setToolTip("")
-
+        
+        # Check for a timecode offset
+        if "tags" in audiofile_info and "timecode" in audiofile_info["tags"]:
+            hours, minutes, seconds, frames = audiofile_info["tags"]["timecode"].split(':')
+            offset_s = 3600 * int(hours) + 60 * int(minutes) + int(seconds)
+            if self.waveform.fps > 0.0:
+                offset_s += int(frames) / self.waveform.fps
+            self.waveform.setTimeOffset(offset_s)
+            self.timecode_widget.setTimeOffset(offset_s)
+        
+        # Transcription progress
         if "transcription_progress" in media_metadata:
             progress_seconds = media_metadata["transcription_progress"]
             self.waveform.recognizer_progress = progress_seconds
@@ -1481,10 +1503,12 @@ class MainWindow(QMainWindow):
         else:
             self._setStatusNoTranscription()
 
+        # Scene/picture changes (ffmpeg)
         scenes = cache.get_media_scenes(file_path)
         if scenes:
             self.waveform.scenes = scenes
 
+        # Buttons
         self.action.transcribe.setEnabled(True)
         self.transcription_led.setVisible(True)
         self.waveform.must_redraw = True
@@ -1658,7 +1682,11 @@ class MainWindow(QMainWindow):
         if self.video_widget.isVisible() and not self.video_widget.video_is_valid: # XXX: is this in the right place ?
             self.video_widget.updateLayout() # fixes the video layout updating
 
+        # Update playhead on waveform widget
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
+
+        # Update timecode widget
+        self.timecode_widget.setTime(position_sec)
 
         # Check if end of current selected segments is reached
         selected_segment_id = self.waveform._dev_getSelectedId()
@@ -1818,6 +1846,7 @@ class MainWindow(QMainWindow):
         if segment_id is None:
             self.deselectUtterance()
             self.media_controller.seekTo(0.0)
+            # self.timecode_widget.setTime(0.0)
             return
         
         if (segment := self.document_controller.getSegment(segment_id)) != None:
@@ -1887,11 +1916,12 @@ class MainWindow(QMainWindow):
         self.media_controller.seekTo(position_sec)
 
 
-    # def onMediaDurationChanged(self, duration_sec: float) -> None:
-    #     print("onMediaDurationChanged")
-    #     if not self.media_path:
-    #         return
-    #     cache.update_media_metadata(self.media_path, {"duration": duration_sec})
+    def onTimecodeDisplayChanged(self, position_sec: float) -> None:
+        # Block player signals so the timecode display is not updated back
+        self.media_controller.blockSignals(True)
+        self.media_controller.seekTo(position_sec)
+        self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
+        self.media_controller.blockSignals(False)
 
 
     def toggleVideo(self, checked) -> None:

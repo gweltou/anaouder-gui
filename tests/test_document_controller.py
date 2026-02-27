@@ -10,13 +10,6 @@ from ui.icons import loadIcons
 from src.text_widget import TextEditWidget
 from src.strings import strings
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(levelname)s %(asctime)s %(name)s %(filename)s:%(lineno)d %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
 
 
 @pytest.fixture(scope="session")

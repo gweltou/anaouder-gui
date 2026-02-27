@@ -32,7 +32,7 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import (
-    QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap,
+    QFocusEvent, QPainter, QPen, QBrush, QAction, QPaintEvent, QPixmap,
     QColor, QResizeEvent, QWheelEvent,
     QKeyEvent, QEnterEvent,
     QMouseEvent, QKeySequence, QShortcut
@@ -594,10 +594,8 @@ class WaveformWidget(QWidget):
             self.unsetCursor() # Change mouse cursor shape to default
     
 
-    def setTimeOffset(self, time_offset_str: str) -> None:
-        print(f"{time_offset_str=}")
-        hours, minutes, seconds, frames = time_offset_str.split(':')
-        self.time_offset = 3600 * int(hours) + 60 * int(minutes) + int(seconds)
+    def setTimeOffset(self, offset_s: float) -> None:
+        self.time_offset = offset_s
 
 
     def zoomIn(self, factor=1.333, position=0.5):
@@ -758,11 +756,24 @@ class WaveformWidget(QWidget):
     ##   KEYBOARD AND MOUSE EVENTS   ##
     ###################################
 
+    def focusInEvent(self, event) -> None:
+        """When mouse is above the waveform widget"""
+        self.must_redraw = True # For focus highlight
+        return super().focusInEvent(event)
+    
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        self.must_redraw = True # For focus highlight
+        return super().focusOutEvent(event)
+
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.isAutoRepeat():
             event.ignore()
             return
         
+        elif event.key() == shortcuts["play_pause"]:
+            pass
+
         elif event.key() == shortcuts["select"]:
             self.toggle_selection.emit()
 
@@ -1524,6 +1535,11 @@ class WaveformWidget(QWidget):
             self.painter.drawLine(t_x, 0, t_x, self.height())
             self.painter.setPen(QPen(QColor(255, 20, 20, 100)))
             self.painter.drawLine(t_x, 0, t_x, self.height())
+        
+        if not self.hasFocus():
+            self.painter.setPen(Qt.PenStyle.NoPen)
+            self.painter.setBrush(QBrush(QColor(0, 0, 0, 6)))
+            self.painter.drawRect(QRect(0, 0, self.width(), self.height()))
         
         self.painter.end()
         self.update()

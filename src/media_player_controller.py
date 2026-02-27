@@ -385,9 +385,6 @@ class MediaPlayerController(QObject):
         
         # Emit position update
         self.position_changed.emit(position_sec)
-        
-        # Emit subtitle update
-        # self.subtitle_changed.emit(position_sec)
     
 
     def _onPlaybackStateChanged(self, state: QMediaPlayer.PlaybackState) -> None:
