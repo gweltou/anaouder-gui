@@ -38,13 +38,13 @@ from PySide6.QtGui import (
     QMouseEvent, QKeySequence, QShortcut
 )
 
-from src.actions import ActionManager
+from actions import ActionManager
 from ui.theme import theme
-from src.settings import app_settings, shortcuts
-from src.utils import lerpColor, mapNumber
-from src.commands import ResizeSegmentCommand
-from src.interfaces import Segment, SegmentId, DocumentInterface
-from src.strings import strings
+from settings import app_settings, shortcuts
+from utils import lerpColor, mapNumber
+from commands import ResizeSegmentCommand
+from interfaces import Segment, SegmentId, DocumentInterface
+from strings import strings
 
 
 ZOOM_Y = 3.5    # In pixels per second
@@ -75,6 +75,7 @@ class WaveformWidget(QWidget):
     select_segments = Signal(list)
     stop_follow = Signal()
     split_utterance = Signal(int, float)
+    play_pause = Signal()
     
     HANDLE_SELECT_RADIUS = 10
 
@@ -771,8 +772,8 @@ class WaveformWidget(QWidget):
             event.ignore()
             return
         
-        elif event.key() == shortcuts["play_pause"]:
-            pass
+        # elif event.key() == shortcuts["play_pause"]:
+        #     self.play_pause.emit()
 
         elif event.key() == shortcuts["select"]:
             self.toggle_selection.emit()

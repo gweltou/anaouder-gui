@@ -36,7 +36,7 @@ from PySide6.QtMultimedia import QMediaPlayer
 from ostilhou.asr.dataset import MetadataParser
 
 
-from src.settings import app_settings
+from settings import app_settings
 
 log = logging.getLogger(__name__)
 

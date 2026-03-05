@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 
-from src.utils import get_cache_directory
+from utils import get_cache_directory
 
 
 type Fingerprint = str
@@ -232,6 +232,9 @@ class CacheSystem:
         The waveform is never present in returned dictionary
         You must call the 'get_waveform' method instead
         """
+        if not media_path:
+            return {}
+        
         fingerprint = calculate_fingerprint(media_path)
 
         if fingerprint in self.media_cache:

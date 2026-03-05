@@ -1,8 +1,8 @@
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction, QKeySequence
 
-from src.settings import shortcuts
-from src.strings import strings
+from settings import shortcuts
+from strings import strings
 from ui.icons import icons
 
 

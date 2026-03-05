@@ -29,9 +29,9 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, QUrl
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
-from src.interfaces import Segment, SegmentId
-from src.video_widget import VideoWidget
-from src.cache_system import cache
+from interfaces import Segment, SegmentId
+from video_widget import VideoWidget
+from cache_system import cache
 
 # To trace the segmentation error when playing problematic segments
 import faulthandler

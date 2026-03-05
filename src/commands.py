@@ -29,12 +29,12 @@ from PySide6.QtGui import (
     QTextBlock,
 )
 
-from src.interfaces import (
+from interfaces import (
     Segment, SegmentId, MyTextBlockUserData,
     WaveformInterface, TextDocumentInterface,
     DocumentInterface,
 )
-from src.media_player_controller import MediaPlayerController
+from media_player_controller import MediaPlayerController
 
 
 log = logging.getLogger(__name__)

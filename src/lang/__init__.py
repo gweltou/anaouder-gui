@@ -7,7 +7,7 @@ import hashlib
 
 from ostilhou.asr.models import _is_valid_vosk_model
 
-from src.utils import get_cache_directory
+from utils import get_cache_directory
 
 
 LANG_MODULES = ['br', 'cy', 'fr']

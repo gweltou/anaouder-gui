@@ -78,6 +78,7 @@ AUTOSAVE_BACKUP_NUMBER = 3         # Number of files to keep at most
 
 shortcuts: Dict[str, QKeySequence] = {
     "transcribe":      QKeySequence("Ctrl+R"),
+    "play_pause":      Qt.Key.Key_Space,
     "play_stop":       QKeySequence("Alt+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
     "play_next":       QKeySequence("Alt+Down") if _is_darwin else QKeySequence("Ctrl+Down"),
     "play_prev":       QKeySequence("Alt+Up") if _is_darwin else QKeySequence("Ctrl+Up"),

@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Iterator
 import logging
 from pathlib import Path
 from copy import deepcopy
@@ -28,31 +28,29 @@ from PySide6.QtGui import (
     QTextCursor
 )
 from PySide6.QtCore import QObject, Signal
-from src.interfaces import (
+from interfaces import (
     BlockType,
     Segment, SegmentId,
 )
-from src.text_widget import TextEditWidget
-from src.waveform_widget import WaveformWidget, Handle
-from src.interfaces import MyTextBlockUserData
-from src.utils import (
+from text_widget import TextEditWidget
+from waveform_widget import WaveformWidget, Handle
+from interfaces import MyTextBlockUserData
+from utils import (
     LINE_BREAK,
     extract_sentence_regions,
 )
-from src.commands import (
+from commands import (
     AddSegmentCommand, DeleteSegmentsCommand, ResizeSegmentCommand,
     DeleteUtterancesCommand, JoinUtterancesCommand,
     InsertBlockCommand,
     MoveTextCursor,
-    # ReplaceTextCommand,
-    # CreateNewEmptyUtteranceCommand,
 )
-from src.aligner import (
+from aligner import (
     smart_split_text, smart_split_time,
     SmartSplitError
 )
-from src.cache_system import cache
-from src.strings import strings
+from cache_system import cache
+from strings import strings
 
 
 
@@ -396,13 +394,18 @@ class DocumentController(QObject):
                 return block
 
 
-    def getSegmentAtTime(self, position_sec: float) -> SegmentId:
+    def getSegmentAtTime(
+        self,
+        position_sec: float,
+        onset = 0.0,
+        offset = 0.0
+    ) -> SegmentId:
         """Return the ID of any segment at a given position, or -1 if none is present"""
         log.debug(f"getSegmentAtTime({position_sec=})")
         for segment_id, (start, end) in self.getSortedSegments():
             # Give precedence to the segment that starts at this timecode
             # rather than the one that ends at this timecode
-            if start - 0.001 <= position_sec < end:
+            if start - 0.001 + onset <= position_sec < end + offset:
                 return segment_id
         return -1
     
@@ -412,6 +415,13 @@ class DocumentController(QObject):
         if block is None:
             return None
         return block.text()
+    
+
+    def getAllBlocks(self) -> Iterator[QTextBlock]:
+        block = self.text_widget.document().firstBlock()
+        while block.isValid():
+            yield block
+            block = block.next()
 
 
     def getUtteranceDensity(self, segment_id: SegmentId) -> float:

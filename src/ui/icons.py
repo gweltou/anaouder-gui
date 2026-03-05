@@ -2,7 +2,7 @@ from PySide6.QtGui import QIcon, QMouseEvent
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QLabel
 
-from src.utils import get_resource_path
+from utils import get_resource_path
 
 
 

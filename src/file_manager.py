@@ -31,7 +31,7 @@ import srt
 
 from PySide6.QtCore import QObject, Signal
 
-from ostilhou.asr import load_segments_data, extract_metadata
+from ostilhou.asr import load_segments_data, extract_metadata, MetadataParser
 from ostilhou.asr.dataset import format_timecode
 
 from src.utils import MEDIA_FORMATS, LINE_BREAK
@@ -89,7 +89,6 @@ class FileManager(QObject):
         try:
             with file_path.open('w', encoding="utf-8") as _fout:
                 if media_path:
-                    print(f"{media_path=}")
                     # Write media-path metadata if provided
                     _fout.write(f"{{media-path: {media_path.name}}}\n")
 
