@@ -262,6 +262,7 @@ class DocumentController(QObject):
         block_metadata = self.getBlockMetadata(block)
         block_metadata.update(metadata)
         block.setUserData(MyTextBlockUserData(block_metadata))
+        self.text_widget.highlighter.rehighlightBlock(block)
 
 
     def getNewSegmentId(self) -> SegmentId:

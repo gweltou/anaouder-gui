@@ -263,7 +263,6 @@ class TextAlignerThread(QThread):
                             last_idx -= 1
                             last_token = segment_tokens[last_idx][1]
 
-                        print(f"{first_token=} {last_token=}")
                         if not (first_token or last_token):
                             segments.append(None)
                             segment_tokens.clear()
