@@ -63,36 +63,36 @@ from src.utils import (
     ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS, SUBTITLES_FILE_FORMATS,
     get_audiofile_info
 )
-from src.file_manager import FileManager, FileOperationError
-from src.version import __version__
+from file_manager import FileManager, FileOperationError
+from version import __version__
 from ui.icons import icons, loadIcons, IconWidget
 from ui.theme import theme
 from ui.about_page import AboutDialog
-from src.media_player_controller import MediaPlayerController
-from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
-from src.text_widget import (
+from media_player_controller import MediaPlayerController
+from waveform_widget import WaveformWidget, ResizeSegmentCommand
+from text_widget import (
     TextEditWidget, Highlighter,
     LINE_BREAK
 )
-from src.splitter import CustomSplitter
-from src.video_widget import VideoWidget
+from splitter import CustomSplitter
+from video_widget import VideoWidget
 from document_controller import DocumentController
-from src.transcriber import TranscriptionService
-from src.scene_detector import SceneDetectWorker
-from src.aligner import TextAligner
-from src.actions import ActionManager
-from src.commands import (
+from transcriber import TranscriptionService
+from scene_detector import SceneDetectWorker
+from aligner import TextAligner
+from actions import ActionManager
+from commands import (
     ReplaceTextCommand,
     CreateNewEmptyUtteranceCommand,
     AlignWithSelectionCommand
 )
-from src.parameters_dialog import ParametersDialog
+from parameters_dialog import ParametersDialog
 from ui.timecode_display import TimecodeWidget
 from exports.textual_exporter import export, exportSignals
-from src.exports import segment_exporter
-from src.auto_segment import auto_segment
-from src.hunspell import HunspellLoader
-from src.settings import (
+from exports import segment_exporter
+from auto_segment import auto_segment
+from hunspell import HunspellLoader
+from settings import (
     APP_NAME, DEFAULT_LANGUAGE, FUTURE,
     app_settings, shortcuts,
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_CPS,
@@ -104,10 +104,10 @@ from src.settings import (
     AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER, AUTOSAVE_FOLDER_NAME,
     RECENT_FILES_LIMIT
 )
-import src.lang as lang
-from src.interfaces import Segment, SegmentId, BlockType
-from src.cache_system import cache
-from src.strings import strings
+import lang as lang
+from interfaces import Segment, SegmentId, BlockType
+from cache_system import cache
+from strings import strings
 
 
 
@@ -148,6 +148,9 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.search)
         ## Play
         shortcut = QShortcut(shortcuts["play_stop"], self)
+        shortcut.activated.connect(self.playAction)
+
+        shortcut = QShortcut(shortcuts["play_pause"], self)
         shortcut.activated.connect(self.playAction)
 
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
@@ -474,8 +477,8 @@ class MainWindow(QMainWindow):
             ## Render frames
             render_frames_action = QAction(self.tr("&Render frames"), self)
             # render_frames_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
-            from renderer import render_all
-            render_frames_action.triggered.connect(lambda: render_all(self.document_controller))
+            from services.caption_renderer import render_all
+            render_frames_action.triggered.connect(lambda: render_all(self.document_controller, self.file_path.parent))
             operation_menu.addAction(render_frames_action)
 
 
@@ -1088,6 +1091,7 @@ class MainWindow(QMainWindow):
             print(f"Bad file type: {file_path}")
 
         doc_metadata = cache.get_doc_metadata(file_path)
+        print(f"{doc_metadata=}")
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
         if "cursor_pos" in doc_metadata:
@@ -1430,8 +1434,14 @@ class MainWindow(QMainWindow):
             # if "avg_frame_rate" in audio_metadata:
             #     print(f"Stream {audio_metadata["avg_frame_rate"]=}")
 
-        if not "duration" in media_metadata:
-            media_duration_s = float(audiofile_info["duration"])
+        if not "duration" in media_metadata or not media_metadata["duration"]:
+            # media_duration_s = float(audiofile_info["duration"])
+            if "duration" in audiofile_info:
+                media_duration_s = float(audiofile_info["duration"])
+            elif "tags" in audiofile_info:
+                # For MKV files
+                h, m, s = audiofile_info["tags"]["DURATION"].split(':')
+                media_duration_s = float(h) * 3600 + float(m) * 60 + float(s)
             media_metadata["duration"] = media_duration_s
             cache.update_media_metadata(file_path, {"duration": media_duration_s})
 
@@ -2421,6 +2431,7 @@ class MainWindow(QMainWindow):
             
             # Save document state to cache
             if self.file_path and self.file_path.suffix == ".ali":
+                print(f"{self.waveform.t_left=}")
                 doc_metadata = {
                     "cursor_pos": self.text_widget.textCursor().position(),
                     "waveform_pos": self.waveform.t_left,
