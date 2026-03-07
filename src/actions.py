@@ -1,5 +1,5 @@
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QActionGroup
 
 from settings import shortcuts
 from strings import strings
@@ -16,6 +16,7 @@ class ActionManager(QObject):
     open_requested = Signal()
     save_requested = Signal()
     save_as_requested = Signal()
+    close_application_requested = Signal()
 
     import_media_requested = Signal()
     import_subtitles_requested = Signal()
@@ -26,9 +27,13 @@ class ActionManager(QObject):
     export_audio_segments_resquested = Signal()
 
     show_parameters_requested = Signal()
-    close_application_requested = Signal()
+
+    display_alignment_requested = Signal()
+    display_density_requested = Signal()
+
     undo_requested = Signal()
     redo_requested = Signal()
+
     transcribe_requested = Signal(bool)
     transcribe_hidden_requested = Signal(bool)
     follow_playhead_requested = Signal(bool)
@@ -43,7 +48,7 @@ class ActionManager(QObject):
     
 
     def _create_actions(self):
-        ## File menu actions
+        # File menu actions
         self.open_file = QAction(self.tr("&Open") + "...", self)
         self.open_file.setShortcut(QKeySequence.StandardKey.Open)
         self.open_file.triggered.connect(self.open_requested.emit)
@@ -56,7 +61,11 @@ class ActionManager(QObject):
         self.save_as.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.save_as.triggered.connect(self.save_as_requested.emit)
 
-        # Import actions
+        self.close_app = QAction(self.tr("E&xit"), self)
+        self.close_app.setShortcut(QKeySequence.StandardKey.Quit)
+        self.close_app.triggered.connect(self.close_application_requested.emit)
+
+        ## Import actions
         self.import_media = QAction(strings.TR_IMPORT_MEDIA + '...', self)
         self.import_media.setStatusTip(self.tr("Import a media file (audio or video)"))
         self.import_media.triggered.connect(self.import_media_requested.emit)
@@ -65,7 +74,7 @@ class ActionManager(QObject):
         self.import_subtitles.setStatusTip(self.tr("Import a subtitles file, keep current media"))
         self.import_subtitles.triggered.connect(self.import_subtitles_requested.emit)
 
-        # Export actions
+        ## Export actions
         self.export_srt = QAction(self.tr("&SubRip (.srt)"), self)
         self.export_srt.setStatusTip(self.tr("Export as SubRip subtitle file"))
         self.export_srt.triggered.connect(self.export_srt_requested.emit)
@@ -82,16 +91,28 @@ class ActionManager(QObject):
         self.export_audio_segments.setStatusTip(self.tr("Export audio segments as individual audio files"))
         self.export_audio_segments.triggered.connect(self.export_audio_segments_resquested.emit)
 
-        # Parameters Dialog
+        ## Parameters Dialog
         self.open_parameters = QAction(self.tr("&Parameters") + "...", self)
         self.open_parameters.setShortcut(QKeySequence.StandardKey.Print)
         self.open_parameters.triggered.connect(self.show_parameters_requested.emit)
 
-        self.close_app = QAction(self.tr("E&xit"), self)
-        self.close_app.setShortcut(QKeySequence.StandardKey.Quit)
-        self.close_app.triggered.connect(self.close_application_requested.emit)
+        # Display menu actions
+        self.display_alignment = QAction(self.tr("Unaligned sentences"), self)
+        self.display_alignment.setCheckable(True)
+        self.display_alignment.setChecked(True)
+        self.display_alignment.triggered.connect(self.display_alignment_requested.emit)
 
-        ## About menu action
+        self.display_density = QAction(self.tr("Speech density"), self)
+        self.display_density.setCheckable(True)
+        self.display_density.triggered.connect(self.display_density_requested.emit)
+
+        coloring_action_group = QActionGroup(self)
+        coloring_action_group.setExclusive(True)
+        coloring_action_group.addAction(self.display_alignment)
+        coloring_action_group.addAction(self.display_density)
+
+
+        # About menu actions
         self.show_about = QAction(self.tr("&About"), self)
         self.show_about.triggered.connect(self.show_about_requested.emit)
 

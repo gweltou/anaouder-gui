@@ -58,6 +58,7 @@ log = logging.getLogger(__name__)
 
 
 class Highlighter(QSyntaxHighlighter):
+
     class ColorMode(Enum):
         ALIGNMENT = 0
         DENSITY = 1
@@ -120,6 +121,10 @@ class Highlighter(QSyntaxHighlighter):
         was_blocked = self.text_edit.document().blockSignals(True)
         self.rehighlight()
         self.text_edit.document().blockSignals(was_blocked)
+
+
+    def getMode(self) -> ColorMode:
+        return self.mode
 
 
     def updateThemeColors(self):

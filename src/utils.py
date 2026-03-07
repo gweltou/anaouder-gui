@@ -24,6 +24,7 @@ import platform
 from pathlib import Path
 import subprocess
 import json
+import glob
 
 import ssl
 import certifi
@@ -61,9 +62,11 @@ def color_yellow(text):
 
 def get_cache_directory(name: Optional[str] = None) -> Path:
     # Use XDG_CACHE_HOME if available, otherwise use default
-    if platform.system() in ("Linux", "Darwin"):
+    system = platform.system()
+
+    if system in ("Linux", "Darwin"):
         default = Path.home() / ".cache"
-    elif platform.system() == "Windows":
+    elif system == "Windows":
         default = Path(os.getenv("LOCALAPPDATA"))
     else:
         raise OSError("Unsupported operating system")
@@ -292,20 +295,64 @@ def get_audiofile_info(filename) -> dict:
     return r['streams'][0]
 
 
-def list_fonts_linux() -> List[Path]:
-    font_dirs = [
-        '/usr/share/fonts/',
-        '/usr/local/share/fonts/',
-        '~/.fonts/',
-        '~/.local/share/fonts/'
-    ]
+
+#### Fonts
+
+def find_system_fonts():
+    """Simple cross-platform font finder."""
+    system = platform.system()
     
+    if system == "Linux":
+        dirs = [
+            Path('/usr/share/fonts/'),
+            Path('/usr/local/share/fonts/'), 
+            Path('~/.fonts/').expanduser(), 
+            Path('~/.local/share/fonts/').expanduser()
+        ]
+    elif system == "Darwin":  # macOS
+        dirs = [
+            Path('/Library/Fonts/'),
+            Path('/System/Library/Fonts/'), 
+            Path('~/Library/Fonts/')
+        ]
+    elif system == "Windows":
+        dirs = [
+            Path(os.environ.get('WINDIR', 'C:\\Windows')) / 'Fonts'
+        ]
+    else:
+        dirs = []
+    
+    font_paths = []
+    for directory in dirs:
+        if directory.exists():
+            font_paths.extend(directory.rglob('*.ttf'))
+            font_paths.extend(directory.rglob('*.otf'))
+            font_paths.extend(directory.rglob('*.ttc'))
+    return font_paths
+
+
+def list_fonts_macos():
+    # Use system_profiler to get font information
+    result = subprocess.run(['system_profiler', 'SPFontsDataType', '-xml'],
+                          capture_output=True, text=True)
+    print(result)
+
+
+def list_fonts_windows():
+    import winreg
+
     fonts = []
-    for font_dir in font_dirs:
-        path = Path(font_dir).expanduser()
-        if path.exists():
-            fonts.extend(path.rglob('*.ttf'))
-            fonts.extend(path.rglob('*.otf'))
+    key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
     
-    # Convert Path objects to strings if needed
+    try:
+        i = 0
+        while True:
+            font_name, font_file, _ = winreg.EnumValue(key, i)
+            fonts.append(font_name)
+            i += 1
+    except winreg.WindowsError:
+        pass
+    finally:
+        winreg.CloseKey(key)
+    
     return fonts

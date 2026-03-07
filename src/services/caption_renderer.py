@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from ostilhou.asr.dataset import MetadataParser
 
-from utils import get_audiofile_info, list_fonts_linux
+from utils import get_audiofile_info
 from cache_system import cache
 from text_widget import LINE_BREAK
 from document_controller import DocumentController
@@ -40,7 +40,7 @@ class CaptionRenderer:
     DEFAULT_PROGRESS = "bg"
 
 
-    def __init__(self, document: DocumentController | None) -> None:
+    def __init__(self, document: DocumentController | None = None) -> None:
         self.document: DocumentController
         self.fps: float
         self.segments = []
@@ -231,6 +231,7 @@ class CaptionRenderer:
             font,
             properties,
             color_pc = progress,
+            caching = True
         )
         ascent, descent = font.getmetrics()
         font_height = ascent + descent
@@ -286,6 +287,7 @@ class CaptionRenderer:
         color_pc = 0.0,
         # shadow_color = "#000000AA",
         # shadow_offset = (0, 0)   # (x, y) offset
+        caching = True
     ) -> Tuple[Image.Image, tuple]:
         """Render a whole sentence (possibly over many lines)
         
@@ -340,6 +342,7 @@ class CaptionRenderer:
                     text_fg_outline_color, text_fg_outline_width,
                     get_word_coloring_pc(word_span, color_pc),
                     # shadow_color, shadow_offset
+                    caching = caching
                 )
                 rendered_line.append(rendered_word)
             rendered_words.append(rendered_line)
@@ -398,23 +401,24 @@ class CaptionRenderer:
         self,
         text,
         font, 
-        bg_color="#FFFFFF",  # White
-        fg_color="#FFFF00",  # Yellow
-        bg_outline_color="#000000", 
-        bg_outline_width=3,
-        fg_outline_color="#000000", 
-        fg_outline_width=3,
-        color_pc=0.0,
-        shadow_color="#000000AA",
-        shadow_offset=(0, 0)   # (x, y) offset
+        bg_color = "#FFFFFF",  # White
+        fg_color = "#FFFF00",  # Yellow
+        bg_outline_color = "#000000", 
+        bg_outline_width = 3,
+        fg_outline_color = "#000000", 
+        fg_outline_width = 3,
+        color_pc = 0.0,
+        shadow_color = "#000000AA",
+        shadow_offset = (0, 0),   # (x, y) offset
+        caching = True
     ) -> Tuple[Image.Image, tuple, float]:
         """Generates a transparent PNG with stylized text."""
         font_size = font.size
         
-        # Get text bounding box
         bg_img = fg_img = None
         key_bg = (text, ) + font.getname() + (font_size, bg_color, bg_outline_color, bg_outline_width, shadow_color, shadow_offset)
         key_fg = (text, ) + font.getname() + (font_size, fg_color, fg_outline_color, fg_outline_width, shadow_color, shadow_offset)
+        # Get text bounding box
         if key_bg in self.render_cache:
             # Check in cache
             bg_img, bbox, textlen = self.render_cache[key_bg]
@@ -434,7 +438,7 @@ class CaptionRenderer:
         # height = text_height + abs(shadow_offset[1]) + font_size // 4 # We need to multiply by two because it crops the shadow
 
         # First layer, background text
-        if not bg_img:
+        if not bg_img and color_pc < 1.0:
             # First layer, background text
             bg_img = Image.new("RGBA", (text_img_width, text_img_height), self.background_color)
             draw = ImageDraw.Draw(bg_img)
@@ -447,11 +451,12 @@ class CaptionRenderer:
                 stroke_fill=bg_outline_color
             )
 
-            # Save to cache
-            self.render_cache[key_bg] = (bg_img, bbox, textlen)
+            if caching:
+                # Save to cache
+                self.render_cache[key_bg] = (bg_img, bbox, textlen)
         
         # Second layer, colored text
-        if not fg_img:
+        if not fg_img and color_pc > 0.0:
             fg_img = Image.new("RGBA", (text_img_width, text_img_height), self.background_color)
             draw = ImageDraw.Draw(fg_img)
             draw.text(
@@ -463,8 +468,9 @@ class CaptionRenderer:
                 stroke_fill=fg_outline_color
             )
 
-            # Save to cache
-            self.render_cache[key_fg] = (fg_img, bbox, textlen)
+            if caching:
+                # Save to cache
+                self.render_cache[key_fg] = (fg_img, bbox, textlen)
         
         if fg_color == bg_color:
             return (bg_img, bbox, textlen)

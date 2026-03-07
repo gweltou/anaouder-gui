@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -34,14 +34,10 @@ from PySide6.QtGui import (
     QKeyEvent, QKeySequence,
     QTextBlock, QTextCursor,
     QTextBlockFormat, QTextCharFormat, QFontMetricsF,
-    QSyntaxHighlighter,
     QPainter, QPaintEvent,
     QClipboard, QEnterEvent, QDragMoveEvent, QDropEvent,
     QUndoStack, QShortcut
 )
-
-from ostilhou.asr import extract_metadata
-from ostilhou.hspell import get_hunspell_spylls
 
 from actions import ActionManager
 from commands import (
@@ -60,7 +56,6 @@ from interfaces import (
 from ui.text_highlighter import Highlighter
 from ui.theme import theme
 from utils import (
-    extract_sentence_regions,
     LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
     color_yellow,
 )
@@ -129,18 +124,13 @@ class TextEditWidget(QTextEdit):
 
         #self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document(), self, document_controller)
-
-        # self.defaultBlockFormat = QTextBlockFormat()
-        # self.defaultCharFormat = QTextCharFormat()
-        # self.activeCharFormat = QTextCharFormat()
-        # self.activeCharFormat.setFontWeight(QFont.DemiBold)
         self.highlighted_sentence_id = -1
 
         # Subtitles margin
         self._text_margin = False
         self._margin_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
         self._char_width = -1
-        self.margin_color = theme.margin
+        self._margin_color = theme.margin
 
         # Used to handle double and triple-clicks
         self._click_count = 0
@@ -151,7 +141,7 @@ class TextEditWidget(QTextEdit):
 
 
     def updateThemeColors(self):        
-        self.margin_color = theme.margin
+        self._margin_color = theme.margin
         self.highlighter.updateThemeColors()
         self.highlighter.rehighlight()
 
@@ -386,23 +376,6 @@ class TextEditWidget(QTextEdit):
             self.undo_stack.endMacro()
 
 
-    # def setText(self, text: str):
-    #     """
-    #     TODO: What is this again ?
-    #     """
-    #     super().setText(text)
-
-    #     # Add utterances metadata
-    #     doc = self.document()
-    #     for block_idx in range(doc.blockCount()):
-    #         block = doc.findBlockByNumber(block_idx)
-    #         text = block.text()
-
-    #         i_comment = text.find('#')
-    #         if i_comment >= 0:
-    #             text = text[:i_comment]
-
-
     def replaceWord(self, cursor: QTextCursor, new_word: str):
         """
         Replace the word under the given cursor with a new word
@@ -432,6 +405,7 @@ class TextEditWidget(QTextEdit):
                 )
             )
     
+
     def findBlock(self, position: int) -> Optional[QTextBlock]:
         pos = self.document().findBlock(position)
         return pos if pos != -1 else None
@@ -597,6 +571,7 @@ class TextEditWidget(QTextEdit):
 
 
     def changeTextFormat(self, format: TextFormat):
+        """Change the font format (bold or italic) of the selected text"""
 
         def find_masked_index(index: int, mask: list):
             i, j = 0, 0
@@ -1284,7 +1259,8 @@ class TextEditWidget(QTextEdit):
 
 
     def _handle_backspace_key(self, cursor: QTextCursor) -> bool:
-
+        """Returns True if the key is processed, False otherwise."""
+        
         if cursor.hasSelection():
             # Special treatment when a selection is active
             self.deleteSelectedText(cursor)
@@ -1495,7 +1471,7 @@ class TextEditWidget(QTextEdit):
             
             painter.fillRect(
                 QRect(gray_start_x, 0, viewport_rect.width() - gray_start_x, viewport_rect.height()), 
-                self.margin_color
+                self._margin_color
             )
         finally:
             painter.end()

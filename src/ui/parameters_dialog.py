@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -48,10 +48,10 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QDesktopServices, QPalette, QColor
 
-import src.lang as lang
-from src.video_widget import VideoWidget
-from src.utils import get_cache_directory
-from src.settings import (
+import lang
+from video_widget import VideoWidget
+from utils import get_cache_directory
+from settings import (
     FUTURE, app_settings, UI_LANGUAGES,
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_MIN_INTERVAL,
     SUBTITLES_AUTO_EXTEND, SUBTITLES_AUTO_EXTEND_MAX_GAP,
@@ -59,8 +59,8 @@ from src.settings import (
     SUBTITLES_DEFAULT_COLOR, SUBTITLES_BLOCK_DEFAULT_COLOR,
     AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER
 )
-from src.strings import strings
-from src.cache_system import cache
+from strings import strings
+from cache_system import cache
 
 
 

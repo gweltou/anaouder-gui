@@ -55,7 +55,7 @@ from PySide6.QtGui import (
     QKeySequence, QShortcut, QCloseEvent,
     QTextBlock, QTextCursor,
 )
-from PySide6.QtMultimedia import QMediaDevices
+# from PySide6.QtMultimedia import QMediaDevices
 
 from src.utils import (
     get_resource_path,
@@ -67,7 +67,6 @@ from file_manager import FileManager, FileOperationError
 from version import __version__
 from ui.icons import icons, loadIcons, IconWidget
 from ui.theme import theme
-from ui.about_page import AboutDialog
 from media_player_controller import MediaPlayerController
 from waveform_widget import WaveformWidget, ResizeSegmentCommand
 from text_widget import (
@@ -86,8 +85,9 @@ from commands import (
     CreateNewEmptyUtteranceCommand,
     AlignWithSelectionCommand
 )
-from parameters_dialog import ParametersDialog
 from ui.timecode_display import TimecodeWidget
+from ui.parameters_dialog import ParametersDialog
+from ui.about_page import AboutDialog
 from exports.textual_exporter import export, exportSignals
 from exports import segment_exporter
 from auto_segment import auto_segment
@@ -183,10 +183,6 @@ class MainWindow(QMainWindow):
         self._text_cursor_utterance_id = -1
         self._last_play_press_time = 0.0
 
-        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
-        self._subs_min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
-        self._subs_max_frames = app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
-
 
     def _initializeComponents(self) -> None:
         """Initialize primary components of the application"""
@@ -233,11 +229,10 @@ class MainWindow(QMainWindow):
         self.undo_stack.indexChanged.connect(self.onUndoStackIndexChanged)
 
         # Autosave
-        self.autosave_timer = QTimer()
-        self.autosave_timer.timeout.connect(self.autoSave)
-        self.onSetAutosave(app_settings.value("autosave/checked", True, type=bool))
-        self.last_saved_index = 0
-        self.last_saved_time = time.time()
+        self._autosave_timer = QTimer()
+        self._autosave_timer.timeout.connect(self.autoSave)
+        self._last_saved_index = 0
+        self._last_saved_time = time.time()
 
 
     def _configureWindow(self) -> None:
@@ -328,10 +323,15 @@ class MainWindow(QMainWindow):
         self.action.export_txt_requested.connect(self.exportTxt)
         self.action.export_eaf_requested.connect(self.exportEaf)
         self.action.export_audio_segments_resquested.connect(self.exportAudioSegments)
+        self.action.close_application_requested.connect(self.close)
+
+        # Display menu
+        self.action.display_alignment_requested.connect(self.toggleColorAlignment)
+        self.action.display_density_requested.connect(self.toggleColorDensity)
 
         self.action.show_parameters_requested.connect(self.showParametersDialog)
-        self.action.close_application_requested.connect(self.close)
         self.action.show_about_requested.connect(self.showAboutDialog)
+
         self.action.undo_requested.connect(self.undo_stack.undo)
         self.action.redo_requested.connect(self.undo_stack.redo)
         self.action.transcribe_requested.connect(
@@ -390,15 +390,24 @@ class MainWindow(QMainWindow):
 
     def _restoreSettings(self) -> None:
         # Restore window geometry and state
-        geometry = app_settings.value("main/geometry")
+        geometry = app_settings.value("main_window/geometry")
         if geometry:
             self.restoreGeometry(geometry)
         
-        state = app_settings.value("main/window_state")
+        state = app_settings.value("main_window/window_state")
         if state:
             self.restoreState(state)
         
+        # Recent menu
         self.updateRecentMenu()
+
+        # Subtitling rules
+        self._target_density = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
+        self._subs_min_frames = app_settings.value("subtitles/min_frames", SUBTITLES_MIN_FRAMES, type=int)
+        self._subs_max_frames = app_settings.value("subtitles/max_frames", SUBTITLES_MAX_FRAMES, type=int)
+
+        # Autosave
+        self.onSetAutosave(app_settings.value("autosave/checked", True, type=bool))
 
 
     def _createMainMenu(self) -> None:
@@ -478,7 +487,11 @@ class MainWindow(QMainWindow):
             render_frames_action = QAction(self.tr("&Render frames"), self)
             # render_frames_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
             from services.caption_renderer import render_all
-            render_frames_action.triggered.connect(lambda: render_all(self.document_controller, self.file_path.parent))
+            from ui.render_dialog import RenderCaptionsDialog
+            # render_frames_action.triggered.connect(lambda: render_all(self.document_controller, self.file_path.parent))
+            render_frames_action.triggered.connect(
+                lambda: RenderCaptionsDialog(self, self.document_controller).exec()
+            )
             operation_menu.addAction(render_frames_action)
 
 
@@ -489,48 +502,31 @@ class MainWindow(QMainWindow):
         self.toggle_video_action = QAction(self.tr("&Video"), self)
         self.toggle_video_action.setCheckable(True)
         self.toggle_video_action.setChecked(False)
-        self.toggle_video_action.toggled.connect(
-            lambda checked: self.toggleVideo(checked))
+        self.toggle_video_action.toggled.connect(self.toggleVideo)
         display_menu.addAction(self.toggle_video_action)
 
         # Misspelling
         self.toggle_misspelling_action = QAction(self.tr("&Misspelling"), self)
         self.toggle_misspelling_action.setCheckable(True)
-        # toggle_misspelling.toggled.connect(
-        #     lambda checked: self.text_widget.highlighter.toggleMisspelling(checked))
         self.toggle_misspelling_action.toggled.connect(self.toggleMisspelling)
         display_menu.addAction(self.toggle_misspelling_action)
 
         # Text margin
         self.toggle_margin_action = QAction(self.tr("Subtitle margin"), self)
         self.toggle_margin_action.setCheckable(True)
-        self.toggle_margin_action.toggled.connect(
-            lambda checked: self.text_widget.toggleTextMargin(checked))
+        self.toggle_margin_action.toggled.connect(self.text_widget.toggleTextMargin)
         display_menu.addAction(self.toggle_margin_action)
 
         # Scene change detection
         self.scene_detect_action = QAction(self.tr("Scenes transitions"), self)
         self.scene_detect_action.setCheckable(True)
-        self.scene_detect_action.toggled.connect(lambda checked: self.toggleSceneDetect(checked))
+        self.scene_detect_action.toggled.connect(self.toggleSceneDetect)
         display_menu.addAction(self.scene_detect_action)
 
         ## Coloring sub-menu
         coloring_subMenu = display_menu.addMenu(self.tr("Coloring"))
-        coloring_action_group = QActionGroup(self)
-        coloring_action_group.setExclusive(True)
-
-        color_alignment_action = QAction(self.tr("Unaligned sentences"), self)
-        color_alignment_action.setCheckable(True)
-        color_alignment_action.setChecked(True)
-        color_alignment_action.triggered.connect(self.toggleAlignmentColoring)
-        coloring_subMenu.addAction(color_alignment_action)
-        coloring_action_group.addAction(color_alignment_action)
-
-        color_density_action = QAction(self.tr("Speech density"), self)
-        color_density_action.setCheckable(True)
-        color_density_action.triggered.connect(self.toggleDensityColoring)
-        coloring_subMenu.addAction(color_density_action)
-        coloring_action_group.addAction(color_density_action)
+        coloring_subMenu.addAction(self.action.display_alignment)
+        coloring_subMenu.addAction(self.action.display_density)
 
 
     def _createTopToolbarLayout(self):
@@ -873,7 +869,6 @@ class MainWindow(QMainWindow):
 
 
     def saveFile(self) -> bool:
-        # if self.filepath and self.filepath.suffix == ".ali":
         if self.file_path and self.file_path.suffix == ".ali":
             success = self._saveFile(self.file_path)
             if not success:
@@ -893,7 +888,7 @@ class MainWindow(QMainWindow):
         if self.media_path:
             return str(self.media_path.parent), self.media_path.stem + ".ali"
         
-        default_dir = app_settings.value("main/last_opened_folder", Path.home(), type=str)
+        default_dir = app_settings.value("last_opened_folder", Path.home(), type=str)
         return str(default_dir), "nevez.ali"
 
 
@@ -979,21 +974,21 @@ class MainWindow(QMainWindow):
         
         self.file_manager.save_ali_file(file_path, blocks_data, media_path)
 
-        self.last_saved_index = self.undo_stack.index()
-        self.last_saved_time = time.time()
+        self._last_saved_index = self.undo_stack.index()
+        self._last_saved_time = time.time()
 
 
     def autoSave(self):
         current_index = self.undo_stack.index()
         if not self.file_path:
             return
-        if current_index == self.last_saved_index:
+        if current_index == self._last_saved_index:
             return
         if self.media_controller.isPlaying(): # Don't save during playback
             return
         
         autosave_interval_second = 60.0 * app_settings.value("autosave/interval_minute", AUTOSAVE_DEFAULT_INTERVAL, type=float)
-        if (time.time() - self.last_saved_time) < autosave_interval_second:
+        if (time.time() - self._last_saved_time) < autosave_interval_second:
             return
         
         # Autosave
@@ -1023,13 +1018,13 @@ class MainWindow(QMainWindow):
         if self.file_path:
             dir = str(self.file_path.parent)
         else:
-            dir = app_settings.value("main/last_opened_folder", "", type=str)
+            dir = app_settings.value("last_opened_folder", "", type=str)
 
         file_path, _ = QFileDialog.getOpenFileName(self, title, dir, filter)
         if not file_path:
             return None
 
-        app_settings.setValue("main/last_opened_folder", os.path.split(file_path)[0])
+        app_settings.setValue("last_opened_folder", os.path.split(file_path)[0])
         return file_path
 
 
@@ -1051,8 +1046,8 @@ class MainWindow(QMainWindow):
                 return
             file_path = Path(file_path)
                 
-        self.last_saved_index = 0
-        self.last_saved_time = 0.0
+        self._last_saved_index = 0
+        self._last_saved_time = 0.0
         
         self.document_controller.clear()
         if not keep_media:
@@ -1088,10 +1083,10 @@ class MainWindow(QMainWindow):
             if media_path and os.path.exists(media_path) :
                 self.openMediaFile(Path(media_path))
         else:
-            print(f"Bad file type: {file_path}")
+            log.error(f"Bad file type: {file_path}")
 
         doc_metadata = cache.get_doc_metadata(file_path)
-        print(f"{doc_metadata=}")
+        log.info(f"{doc_metadata=}")
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
         if "cursor_pos" in doc_metadata:
@@ -1113,9 +1108,15 @@ class MainWindow(QMainWindow):
             self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
         if "show_misspelling" in doc_metadata:
             self.toggle_misspelling_action.setChecked(doc_metadata["show_misspelling"])
+        if "coloring_mode" in doc_metadata:
+            color_mode = Highlighter.ColorMode(doc_metadata["coloring_mode"])
+            if color_mode == Highlighter.ColorMode.ALIGNMENT:
+                self.action.display_alignment.trigger()
+            elif color_mode == Highlighter.ColorMode.DENSITY:
+                self.action.display_density.trigger()
 
         self.updateWindowTitle()
-        self.last_saved_index = 0
+        self._last_saved_index = 0
     
 
     def loadAliFile(self, file_path: Path) -> bool:
@@ -1294,6 +1295,7 @@ class MainWindow(QMainWindow):
         media_filepath = Path(media_filepath)
         if media_filepath.exists():
             self.openMediaFile(media_filepath)
+        
         # TODO: When saving, the folder and basename are not set
 
 
@@ -1306,7 +1308,7 @@ class MainWindow(QMainWindow):
 
         data = self.file_manager.read_srt_file(file_path, find_media=not self.media_controller.hasMedia())
         self.document_controller.loadDocumentData(data["document"])
-        self.last_saved_index = 0
+        self._last_saved_index = 0
 
         # Load the media file if none is already loaded
         if not self.media_controller.hasMedia():
@@ -1637,9 +1639,9 @@ class MainWindow(QMainWindow):
     def onSetAutosave(self, checked: bool) -> None:
         if checked:
             # Timer resolution is set to the shortest autosave interval
-            self.autosave_timer.start(6_000)
+            self._autosave_timer.start(6_000)
         else:
-            self.autosave_timer.stop()
+            self._autosave_timer.stop()
 
 
     def getSubtitleAtPosition(self, time: float) -> Tuple[SegmentId, str]:
@@ -1942,11 +1944,11 @@ class MainWindow(QMainWindow):
         self.video_widget.setVisible(checked)
 
 
-    def toggleAlignmentColoring(self, checked) -> None:
+    def toggleColorAlignment(self) -> None:
         self.text_widget.highlighter.setMode(Highlighter.ColorMode.ALIGNMENT)
     
 
-    def toggleDensityColoring(self, checked) -> None:
+    def toggleColorDensity(self) -> None:
         self.text_widget.highlighter.setMode(Highlighter.ColorMode.DENSITY)
 
 
@@ -2380,13 +2382,12 @@ class MainWindow(QMainWindow):
             event.acceptProposedAction()
 
 
-    def close(self) -> None:
-        print("close")
-        super().close()
+    # def close(self) -> None:
+    #     print("close")
+    #     super().close()
 
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        print("closeEvent")
         if not self.undo_stack.isClean():
             msg_box = QMessageBox(self)
             msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -2439,7 +2440,8 @@ class MainWindow(QMainWindow):
                     "show_scenes": self.scene_detect_action.isChecked(),
                     "show_margin": self.toggle_margin_action.isChecked(),
                     "video_open": self.toggle_video_action.isChecked(),
-                    "show_misspelling": self.toggle_misspelling_action.isChecked()
+                    "show_misspelling": self.toggle_misspelling_action.isChecked(),
+                    "coloring_mode": self.text_widget.highlighter.getMode().value
                 }
                 cache.update_doc_metadata(self.file_path, doc_metadata)
             
@@ -2448,8 +2450,8 @@ class MainWindow(QMainWindow):
                 cache.update_media_metadata(self.media_path)
 
             # Save window geometry and state
-            app_settings.setValue("main/geometry", self.saveGeometry())
-            app_settings.setValue("main/window_state", self.saveState())
+            app_settings.setValue("main_window/geometry", self.saveGeometry())
+            app_settings.setValue("main_window/window_state", self.saveState())
         
         except Exception as e:
             print(f"Error during closeEvent cleanup: {e}")

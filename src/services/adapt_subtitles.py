@@ -68,7 +68,7 @@ class AdaptUtterancesDialog(QDialog):
         dialog_layout.setSpacing(16)
         dialog_layout.setContentsMargins(20, 20, 20, 20)
 
-        # 1. SCOPE GROUP ("Apply to")
+        # Scope ("Apply to")
         apply_to_group = QGroupBox(self.tr("Apply to"))
         apply_to_layout = QHBoxLayout(apply_to_group)
         apply_to_layout.setContentsMargins(15, 15, 15, 15)
@@ -81,7 +81,7 @@ class AdaptUtterancesDialog(QDialog):
         apply_to_layout.addWidget(self.all_radio_button)
         dialog_layout.addWidget(apply_to_group)
 
-        # 2. SEGMENT OPTIONS GROUP
+        # Segment options
         segment_options_group = QGroupBox(self.tr("Timing & Length"))
         segment_options_layout = QVBoxLayout(segment_options_group)
         segment_options_layout.setContentsMargins(15, 15, 15, 15)
@@ -90,7 +90,7 @@ class AdaptUtterancesDialog(QDialog):
         segment_options_layout.addWidget(self.subtitle_rules_checkbox)
         dialog_layout.addWidget(segment_options_group)
         
-        # 3. TEXT OPTIONS GROUP
+        # Text options
         text_options_group = QGroupBox(self.tr("Text Formatting"))
         text_options_layout = QVBoxLayout(text_options_group)
         text_options_layout.setContentsMargins(15, 15, 15, 15)
