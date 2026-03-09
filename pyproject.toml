@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anaouder-gui"
-version = "1.1dev"
+version = "1.1"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -15,6 +15,7 @@ dependencies = [
     "audioop-lts; python_version>='3.13'",
     "vosk",
     "srt",
+    "pillow",
     "pyinstaller",
     "ostilhou @ git+https://github.com/gweltou/ostilhou"
 ]

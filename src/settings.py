@@ -84,7 +84,7 @@ shortcuts: Dict[str, QKeySequence] = {
     "play_prev":       QKeySequence("Alt+Up") if _is_darwin else QKeySequence("Ctrl+Up"),
     "select":          QKeySequence("S"), #Qt.Key.Key_S,
     "follow_playhead": QKeySequence("F"),
-    "dialog_char":     QKeySequence("Ctrl+D"),
+    "em_dash":         QKeySequence("Ctrl+D"),
     "crop_head":       QKeySequence("Ctrl+H"),
     "crop_tail":       QKeySequence("Ctrl+T"),
     "segment_from_selection": QKeySequence("A"),

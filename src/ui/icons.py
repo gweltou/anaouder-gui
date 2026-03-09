@@ -33,6 +33,7 @@ def loadIcons():
 
     icons["italic"] = QIcon(get_resource_path("icons/italic.png"))
     icons["bold"] = QIcon(get_resource_path("icons/bold.png"))
+    icons["em_dashes"] = QIcon(get_resource_path("icons/em_dashes.png"))
 
     icons["head"] = QIcon(get_resource_path("icons/head-side-thinking.png"))
     icons["numbers"] = QIcon(get_resource_path("icons/123-numbers.png"))

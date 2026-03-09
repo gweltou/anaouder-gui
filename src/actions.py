@@ -40,6 +40,9 @@ class ActionManager(QObject):
     show_about_requested = Signal()
     delete_segment_requested = Signal()
     delete_utterance_requested = Signal()
+
+    # Text actions signals
+    insert_em_dash_requested = Signal()
     
 
     def __init__(self, parent=None):
@@ -111,7 +114,6 @@ class ActionManager(QObject):
         coloring_action_group.addAction(self.display_alignment)
         coloring_action_group.addAction(self.display_density)
 
-
         # About menu actions
         self.show_about = QAction(self.tr("&About"), self)
         self.show_about.triggered.connect(self.show_about_requested.emit)
@@ -160,3 +162,10 @@ class ActionManager(QObject):
 
         self.delete_utterance = QAction(self.tr("Delete utterance"), self)
         self.delete_utterance.triggered.connect(self.delete_utterance_requested.emit)
+
+        # Text actions
+        self.insert_em_dash = QAction(self.tr("Insert em dashes"))
+        self.insert_em_dash.setShortcut(shortcuts["em_dash"])
+        self.insert_em_dash.setIcon(icons["em_dashes"])
+        self.insert_em_dash.setToolTip(getActionTooltip(self.insert_em_dash))
+        self.insert_em_dash.triggered.connect(self.insert_em_dash_requested.emit)

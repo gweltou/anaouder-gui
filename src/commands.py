@@ -34,7 +34,7 @@ from interfaces import (
     WaveformInterface, TextDocumentInterface,
     DocumentInterface,
 )
-from media_player_controller import MediaPlayerController
+from services.media_player_controller import MediaPlayerController
 
 
 log = logging.getLogger(__name__)

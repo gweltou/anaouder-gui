@@ -244,7 +244,6 @@ class MediaPlayerController(QObject):
         if not self.hasMedia():
             self.log.warning("Cannot seek: no media loaded")
             return
-        
         position_sec = max(0.0, min(position_sec, self.media_duration))
         position_ms = int(position_sec * 1000)
         self.player.setPosition(position_ms)

@@ -49,7 +49,6 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QDesktopServices, QPalette, QColor
 
 import lang
-from video_widget import VideoWidget
 from utils import get_cache_directory
 from settings import (
     FUTURE, app_settings, UI_LANGUAGES,

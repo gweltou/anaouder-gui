@@ -35,7 +35,7 @@ from PySide6.QtCore import QRegularExpression
 from PySide6.QtGui import QColor
 
 
-DIALOG_CHAR = '–'
+EM_DASH = '–'
 LINE_BREAK = '\u2028'
 PUNCTUATION = '.?!,‚;:«»“”"()[]{}/\…–—-_~^•'
 STOP_CHARS = PUNCTUATION + ' \t\u2028'
@@ -188,9 +188,9 @@ def splitForSubtitle(text: str, size: int):
     """
 
     # Slit at dialog character
-    if text.count(DIALOG_CHAR) >= 2:
-        idx = text.find(DIALOG_CHAR)    # Ignore first one
-        idx = text.find(DIALOG_CHAR, idx+1)
+    if text.count(EM_DASH) >= 2:
+        idx = text.find(EM_DASH)    # Ignore first one
+        idx = text.find(EM_DASH, idx+1)
         return (text[:idx], text[idx:])
 
     text_segs = extract_sentence_regions(text)

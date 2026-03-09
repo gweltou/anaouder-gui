@@ -24,9 +24,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
-from src.version import __version__
+from version import __version__
 from ui.icons import icons
-from src.strings import strings
+from strings import strings
 
 
 trugarekaat = ', '. join(sorted([

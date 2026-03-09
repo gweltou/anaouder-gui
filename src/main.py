@@ -67,7 +67,7 @@ from file_manager import FileManager, FileOperationError
 from version import __version__
 from ui.icons import icons, loadIcons, IconWidget
 from ui.theme import theme
-from media_player_controller import MediaPlayerController
+from services.media_player_controller import MediaPlayerController
 from waveform_widget import WaveformWidget, ResizeSegmentCommand
 from text_widget import (
     TextEditWidget, Highlighter,
@@ -376,6 +376,7 @@ class MainWindow(QMainWindow):
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
         self.text_widget.align_with_selection.connect(self.alignWithSelection)
         self.text_widget.request_auto_align.connect(self.aligner.autoAlign)
+        self.action.insert_em_dash_requested.connect(self.text_widget.insertEmDash)
 
         # Waveform widget
         self.waveform.selection_ended.connect(lambda: self.selection_button.setChecked(False))
@@ -621,6 +622,11 @@ class MainWindow(QMainWindow):
         bold_button.setShortcut(QKeySequence.StandardKey.Bold)
         bold_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.BOLD))
         format_buttons_layout.addWidget(bold_button)
+
+        dash_button = QToolButton()
+        dash_button.setFixedWidth(BUTTON_SIZE)
+        dash_button.setDefaultAction(self.action.insert_em_dash)
+        format_buttons_layout.addWidget(dash_button)
 
         top_bar_layout.addLayout(format_buttons_layout)
         top_bar_layout.addStretch(1)
@@ -1085,35 +1091,7 @@ class MainWindow(QMainWindow):
         else:
             log.error(f"Bad file type: {file_path}")
 
-        doc_metadata = cache.get_doc_metadata(file_path)
-        log.info(f"{doc_metadata=}")
-        if "video_open" in doc_metadata:
-            self.toggle_video_action.setChecked(doc_metadata["video_open"])
-        if "cursor_pos" in doc_metadata:
-            cursor = self.text_widget.textCursor()
-            cursor.setPosition(doc_metadata["cursor_pos"])
-            self.text_widget.setTextCursor(cursor)
-            self.text_widget.ensureCursorVisible()
-        if "waveform_pos" in doc_metadata:
-            self.waveform.t_left = doc_metadata["waveform_pos"]
-            self.waveform.scroll_goal = -1
-            self.waveform.must_redraw = True
-        if "waveform_pps" in doc_metadata:
-            self.waveform.ppsec = doc_metadata["waveform_pps"]
-            self.waveform.ppsec_goal = doc_metadata["waveform_pps"]
-            self.waveform.waveform.ppsec = doc_metadata["waveform_pps"]
-        if "show_scenes" in doc_metadata and doc_metadata["show_scenes"] == True:
-            self.scene_detect_action.setChecked(True)
-        if "show_margin" in doc_metadata:
-            self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
-        if "show_misspelling" in doc_metadata:
-            self.toggle_misspelling_action.setChecked(doc_metadata["show_misspelling"])
-        if "coloring_mode" in doc_metadata:
-            color_mode = Highlighter.ColorMode(doc_metadata["coloring_mode"])
-            if color_mode == Highlighter.ColorMode.ALIGNMENT:
-                self.action.display_alignment.trigger()
-            elif color_mode == Highlighter.ColorMode.DENSITY:
-                self.action.display_density.trigger()
+        self._loadDocumentState(file_path)
 
         self.updateWindowTitle()
         self._last_saved_index = 0
@@ -1121,7 +1099,7 @@ class MainWindow(QMainWindow):
 
     def loadAliFile(self, file_path: Path) -> bool:
         """
-        Load an ALI file or its more recent backup
+        Load an ALI file (document and media file) or its more recent backup
         
         Returns:
             True if file loaded successfully, False otherwise
@@ -1194,6 +1172,40 @@ class MainWindow(QMainWindow):
         self.addRecentFile(str(file_path))
 
         return True
+
+
+    def _loadDocumentState(self, file_path: Path) -> None:
+        doc_metadata = cache.get_doc_metadata(file_path)
+        log.info(f"{doc_metadata=}")
+        if "video_open" in doc_metadata:
+            self.toggle_video_action.setChecked(doc_metadata["video_open"])
+        if "cursor_pos" in doc_metadata:
+            cursor = self.text_widget.textCursor()
+            cursor.setPosition(doc_metadata["cursor_pos"])
+            self.text_widget.setTextCursor(cursor)
+            self.text_widget.ensureCursorVisible()
+        if "waveform_pos" in doc_metadata:
+            self.waveform.t_left = doc_metadata["waveform_pos"]
+            self.waveform.scroll_goal = -1
+            self.waveform.must_redraw = True
+        if "waveform_pps" in doc_metadata:
+            self.waveform.ppsec = doc_metadata["waveform_pps"]
+            self.waveform.ppsec_goal = doc_metadata["waveform_pps"]
+            self.waveform.waveform.ppsec = doc_metadata["waveform_pps"]
+        if "playhead_pos" in doc_metadata:
+            QTimer.singleShot(0, lambda: self.media_controller.seekTo(doc_metadata["playhead_pos"]))
+        if "show_scenes" in doc_metadata and doc_metadata["show_scenes"] == True:
+            self.scene_detect_action.setChecked(True)
+        if "show_margin" in doc_metadata:
+            self.toggle_margin_action.setChecked(doc_metadata["show_margin"])
+        if "show_misspelling" in doc_metadata:
+            self.toggle_misspelling_action.setChecked(doc_metadata["show_misspelling"])
+        if "coloring_mode" in doc_metadata:
+            color_mode = Highlighter.ColorMode(doc_metadata["coloring_mode"])
+            if color_mode == Highlighter.ColorMode.ALIGNMENT:
+                self.action.display_alignment.trigger()
+            elif color_mode == Highlighter.ColorMode.DENSITY:
+                self.action.display_density.trigger()
 
 
     def _selectFileToLoad(self, file_path: Path) -> Optional[Path]:
@@ -1824,7 +1836,6 @@ class MainWindow(QMainWindow):
             return
         
         next_segment_id = self.document_controller.getNextSegmentId(segment_id)
-        print(f"{next_segment_id=}")
 
         if next_segment_id != -1:
             self.selectUtterance(next_segment_id)
@@ -2362,7 +2373,7 @@ class MainWindow(QMainWindow):
                 elif ext in MEDIA_FORMATS:
                     media_files.append(file_path)
                 else:
-                    print(f"Wrong file type {file_path}")
+                    log.warning(f"Wrong file type {file_path}")
                         
             for file_path in document_files:
                 ext = file_path.suffix.lower()
@@ -2373,7 +2384,7 @@ class MainWindow(QMainWindow):
                     self.openFile(file_path, keep_media=True)
                     break # Load only the first document file
                 else:
-                    print(f"Wrong file type {file_path}")
+                    log.warning(f"Wrong file type {file_path}")
             
             for file_path in media_files:
                 self.openMediaFile(file_path)
@@ -2416,6 +2427,30 @@ class MainWindow(QMainWindow):
             self.undo_stack.clear()
             
         try:
+            # Save document state to cache
+            if self.file_path and self.file_path.suffix == ".ali":
+                doc_metadata = {
+                    "cursor_pos": self.text_widget.textCursor().position(),
+                    "playhead_pos": self.media_controller.getCurrentPosition(),
+                    "waveform_pos": self.waveform.t_left,
+                    "waveform_pps": self.waveform.ppsec,
+                    "show_scenes": self.scene_detect_action.isChecked(),
+                    "show_margin": self.toggle_margin_action.isChecked(),
+                    "video_open": self.toggle_video_action.isChecked(),
+                    "show_misspelling": self.toggle_misspelling_action.isChecked(),
+                    "coloring_mode": self.text_widget.highlighter.getMode().value
+                }
+                print(f"{doc_metadata=}")
+                cache.update_doc_metadata(self.file_path, doc_metadata)
+            
+            # Save media cache
+            if self.media_path:
+                cache.update_media_metadata(self.media_path)
+
+            # Save window geometry and state
+            app_settings.setValue("main_window/geometry", self.saveGeometry())
+            app_settings.setValue("main_window/window_state", self.saveState())
+
             # Stop and destroy the recognizer
             self.recognizer.stop()
             self.recognizer.cleanup()
@@ -2429,29 +2464,6 @@ class MainWindow(QMainWindow):
                 self.scene_detector.deleteLater()
             
             self.media_controller.cleanup()
-            
-            # Save document state to cache
-            if self.file_path and self.file_path.suffix == ".ali":
-                print(f"{self.waveform.t_left=}")
-                doc_metadata = {
-                    "cursor_pos": self.text_widget.textCursor().position(),
-                    "waveform_pos": self.waveform.t_left,
-                    "waveform_pps": self.waveform.ppsec,
-                    "show_scenes": self.scene_detect_action.isChecked(),
-                    "show_margin": self.toggle_margin_action.isChecked(),
-                    "video_open": self.toggle_video_action.isChecked(),
-                    "show_misspelling": self.toggle_misspelling_action.isChecked(),
-                    "coloring_mode": self.text_widget.highlighter.getMode().value
-                }
-                cache.update_doc_metadata(self.file_path, doc_metadata)
-            
-            # Save media cache
-            if self.media_path:
-                cache.update_media_metadata(self.media_path)
-
-            # Save window geometry and state
-            app_settings.setValue("main_window/geometry", self.saveGeometry())
-            app_settings.setValue("main_window/window_state", self.saveState())
         
         except Exception as e:
             print(f"Error during closeEvent cleanup: {e}")

@@ -56,7 +56,7 @@ from interfaces import (
 from ui.text_highlighter import Highlighter
 from ui.theme import theme
 from utils import (
-    LINE_BREAK, DIALOG_CHAR, STOP_CHARS,
+    LINE_BREAK, EM_DASH, STOP_CHARS,
     color_yellow,
 )
 from settings import app_settings, shortcuts, SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
@@ -136,8 +136,8 @@ class TextEditWidget(QTextEdit):
         self._click_count = 0
         self._last_click = None
 
-        shortcut = QShortcut(shortcuts["dialog_char"], self)
-        shortcut.activated.connect(self.insertDialogChar)
+        # shortcut = QShortcut(shortcuts["dialog_char"], self)
+        # shortcut.activated.connect(self.insertEmDash)
 
 
     def updateThemeColors(self):        
@@ -917,7 +917,7 @@ class TextEditWidget(QTextEdit):
             self.undo_stack.push(InsertTextCommand(self, char, pos))
 
 
-    def insertDialogChar(self):
+    def insertEmDash(self):
         cursor = self.textCursor()
         pos_in_block = cursor.positionInBlock()
         block = cursor.block()
@@ -927,8 +927,8 @@ class TextEditWidget(QTextEdit):
         cursor_offset = 0
         lines = []
         for i, l in enumerate(text.split(LINE_BREAK)):
-            if not l.strip().startswith(DIALOG_CHAR):
-                lines.append(DIALOG_CHAR + ' ' + l.strip())
+            if not l.strip().startswith(EM_DASH):
+                lines.append(EM_DASH + ' ' + l.strip())
             else:
                 lines.append(l)
             if i <= cursor_line_n:
@@ -1260,7 +1260,7 @@ class TextEditWidget(QTextEdit):
 
     def _handle_backspace_key(self, cursor: QTextCursor) -> bool:
         """Returns True if the key is processed, False otherwise."""
-        
+
         if cursor.hasSelection():
             # Special treatment when a selection is active
             self.deleteSelectedText(cursor)
