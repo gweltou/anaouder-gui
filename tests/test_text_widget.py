@@ -1,8 +1,8 @@
-import pytest
 from typing import List
+import random
 from pathlib import Path
 import logging
-import random
+import pytest
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QTextCursor
@@ -42,9 +42,7 @@ def main_window(qapp):
 
 
 def load_document(main_window):
-    main_window.waveform.clear()
-    main_window.text_widget.clear()
-    main_window.undo_stack.clear()
+    main_window.document_controller.clear()
 
     for text, segment in [
         ("<I>Ar c'hentañ linenn</I>", (0.45, 2.25)),

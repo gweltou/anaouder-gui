@@ -1,14 +1,11 @@
 import pytest
-from typing import List
 from pathlib import Path
-import logging
 
 from PySide6.QtWidgets import QApplication
 
 from src.main import MainWindow
 from ui.icons import loadIcons
-from src.text_widget import TextEditWidget
-from src.strings import strings
+from strings import strings
 
 
 
@@ -80,4 +77,4 @@ def test_density(main_window):
     main_window.document_controller.joinUtterances([1, 2])
     # The joined utterance keeps the same seg_id as the first of the two joined sentences
     second_density = main_window.document_controller.getUtteranceDensity(1)
-    assert first_density < second_density
+    assert second_density < first_density

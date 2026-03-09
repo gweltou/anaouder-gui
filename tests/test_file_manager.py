@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import pytest
 
 from PySide6.QtWidgets import QApplication
 
@@ -7,22 +8,41 @@ from src.main import (
     MainWindow
 )
 from ui.icons import loadIcons
-from src.strings import strings
+from strings import strings
 
 
-app = QApplication.instance()
-if app is None:
-    app = QApplication()
 
-loadIcons()
-strings.initialize()
-main_window = MainWindow()
+@pytest.fixture(scope="session")
+def qapp():
+    """Create QApplication instance for all tests"""
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    
+    loadIcons()
+    strings.initialize()
+    
+    yield app
+    
+    # Cleanup after all tests
+    app.quit()
 
 
-def load_document():
-    main_window.waveform.clear()
-    main_window.text_widget.document().clear()
-    main_window.undo_stack.clear()
+@pytest.fixture
+def main_window(qapp):
+    """Create a fresh MainWindow for each test"""
+    window = MainWindow()
+    yield window
+    # Cleanup after each test
+    window.undo_stack.clear()
+    window.close()
+    window.deleteLater()
+    qapp.processEvents()  # Process pending events
+
+
+
+def load_document(main_window):
+    main_window.document_controller.clear()
 
     for text, segment in [
         ("Linenn kentañ", (0.45, 2.25)),
@@ -35,19 +55,17 @@ def load_document():
         main_window.text_widget.appendSentence(text, seg_id)
 
 
-def load_document_2():
-    main_window.waveform.clear()
-    main_window.text_widget.document().clear()
-    main_window.undo_stack.clear()
+def load_document_2(main_window):
+    main_window.document_controller.clear()
 
     main_window.openFile("Meli_mila_Malou_1.ali")
 
 
-def test_save_ali(tmp_path: Path):
-    load_document()
+def test_save_ali(main_window, tmp_path: Path):
+    load_document(main_window)
 
     output_file = tmp_path / "test.ali"
-    main_window._saveFile(output_file.as_posix())
+    main_window._saveFile(output_file)
 
     data = output_file.read_text()
 
@@ -62,11 +80,11 @@ Pempvet linenn {start: 40; end: 41}"""
     os.remove(output_file)
 
 
-def test_save_ali_replace_media(tmp_path: Path):
-    load_document()
+def test_save_ali_replace_media(main_window, tmp_path: Path):
+    load_document(main_window)
 
     output_file = tmp_path / "test.ali"
-    main_window._performSave(output_file, "media.mp3")
+    main_window._performSave(output_file, Path("media.mp3"))
 
     data = output_file.read_text()
 
@@ -82,10 +100,8 @@ Pempvet linenn {start: 40; end: 41}"""
     os.remove(output_file)
 
 
-def test_read_ali():
-    main_window.waveform.clear()
-    main_window.text_widget.document().clear()
-    main_window.undo_stack.clear()
+def test_read_ali(main_window):
+    main_window.document_controller.clear()
 
     test_dir = Path(__file__).parent
 
@@ -93,13 +109,10 @@ def test_read_ali():
     assert "media-path" in data
     assert "document" in data
     assert data["document"][0] == ("{metadata: yes}", None)
-    print(data)
 
 
-def test_load_ali():
-    main_window.waveform.clear()
-    main_window.text_widget.document().clear()
-    main_window.undo_stack.clear()
+def test_load_ali(main_window):
+    main_window.document_controller.clear()
 
     test_dir = Path(__file__).parent
 

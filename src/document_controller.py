@@ -89,6 +89,7 @@ class DocumentController(QObject):
 
         # self.waveform_widget.clear()
         
+        # Clear text document
         if self.text_widget is not None:
             self.text_widget.document().clear()
             self.text_widget.updateLineNumberAreaWidth()
