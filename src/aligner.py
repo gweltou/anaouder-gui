@@ -390,6 +390,7 @@ class TextAligner(QObject):
         media_path = self.document_controller.media_path
 
         if media_path is None:
+            log.error("No media file detected")
             return
         
         # Check if there is a cached transcription for this media

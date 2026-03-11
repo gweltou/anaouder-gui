@@ -1,4 +1,4 @@
-from aligner import smart_split_text
+from src.aligner import smart_split_text
 import src.lang as lang
 
 

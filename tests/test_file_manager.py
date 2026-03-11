@@ -116,7 +116,7 @@ def test_load_ali(main_window):
 
     test_dir = Path(__file__).parent
 
-    main_window.openFile(test_dir / "MeliMilaMalou.ali")
+    main_window.onOpenFile(test_dir / "MeliMilaMalou.ali")
     main_window.text_widget.printDocumentStructure()
     doc = main_window.text_widget.document()
     block = doc.firstBlock()

@@ -6,13 +6,13 @@ import logging
 from PySide6.QtWidgets import QApplication
 
 from src.main import MainWindow
-from ui.icons import loadIcons
-import lang
-from services.adapt_subtitles import (
+from src.ui.icons import loadIcons
+from src.lang import lang
+from src.services.adapt_subtitles import (
     convert_apostrophes, convert_quotation_marks,
     remove_fillers,
 )
-from strings import strings
+from src.strings import app_strings
 
 
 logging.basicConfig(
@@ -32,7 +32,7 @@ def qapp():
         app = QApplication([])
     
     loadIcons()
-    strings.initialize()
+    app_strings.initialize()
     
     yield app
     
@@ -105,7 +105,6 @@ def test_remove_fillers(main_window):
 
     third_block = main_window.document_controller.getBlockById(2)
 
-    print(f"{lang.getCurrentLanguage()=}")
     remove_fillers(
         third_block, third_block,
         main_window.text_widget,

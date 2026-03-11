@@ -89,7 +89,7 @@ from src.ui.timecode_display import TimecodeWidget
 from src.ui.parameters_dialog import ParametersDialog
 from src.ui.about_page import AboutDialog
 from src.exports.textual_exporter import export, exportSignals
-from exports import segment_exporter
+from src.exports import segment_exporter
 from src.auto_segment import auto_segment
 from src.hunspell import HunspellLoader
 from src.settings import (
@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.document_controller.selectAll)
 
         if file_path is not None:
-            self.openFile(file_path)
+            self.onOpenFile(file_path)
 
         self.changeLanguage(DEFAULT_LANGUAGE)
 
@@ -314,15 +314,16 @@ class MainWindow(QMainWindow):
         QApplication.styleHints().colorSchemeChanged.connect(self.updateThemeColors)
 
         # Main window actions
-        self.action.open_requested.connect(self.openFile)
-        self.action.save_requested.connect(self.saveFile)
-        self.action.save_as_requested.connect(self.saveFileAs)
+        self.action.open_requested.connect(self.onOpenFile)
+        self.action.save_requested.connect(self.onSaveFile)
+        self.action.save_as_requested.connect(self.onSaveFileAs)
         self.action.import_media_requested.connect(self.onImportMedia)
         self.action.import_subtitles_requested.connect(self.onImportSubtitles)
-        self.action.export_srt_requested.connect(self.exportSrt)
-        self.action.export_txt_requested.connect(self.exportTxt)
-        self.action.export_eaf_requested.connect(self.exportEaf)
-        self.action.export_audio_segments_resquested.connect(self.exportAudioSegments)
+        self.action.import_rtf_movie_script_requested.connect(self.onImportRTF)
+        self.action.export_srt_requested.connect(self.onExportSrt)
+        self.action.export_txt_requested.connect(self.onExportTxt)
+        self.action.export_eaf_requested.connect(self.onExportEaf)
+        self.action.export_audio_segments_resquested.connect(self.onExportAudioSegments)
         self.action.close_application_requested.connect(self.close)
 
         # Display menu
@@ -440,15 +441,17 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         # -------------------------
         ## Import / Export Menu
-        file_menu.addAction(self.action.import_media)
-        file_menu.addAction(self.action.import_subtitles)
+        import_submenu = file_menu.addMenu(self.tr("&Import"))
+        import_submenu.addAction(self.action.import_media)
+        import_submenu.addAction(self.action.import_subtitles)
+        import_submenu.addAction(self.action.import_rtf)
 
-        import_export_submenu = file_menu.addMenu(self.tr("&Export as"))
-        import_export_submenu.addAction(self.action.export_srt)
-        import_export_submenu.addAction(self.action.export_eaf)
-        import_export_submenu.addAction(self.action.export_txt)
+        export_submenu = file_menu.addMenu(self.tr("&Export as"))
+        export_submenu.addAction(self.action.export_srt)
+        export_submenu.addAction(self.action.export_eaf)
+        export_submenu.addAction(self.action.export_txt)
         if FUTURE:
-            import_export_submenu.addAction(self.action.export_audio_segments)
+            export_submenu.addAction(self.action.export_audio_segments)
         file_menu.addSeparator()
         # -------------------------
         ## Parameters
@@ -873,16 +876,16 @@ class MainWindow(QMainWindow):
         self.model_selection.addItems(self.available_models)
 
 
-    def saveFile(self) -> bool:
+    def onSaveFile(self) -> bool:
         if self.file_path and self.file_path.suffix == ".ali":
             success = self._saveFile(self.file_path)
             if not success:
                 # Revert to saveAs
-                return self.saveFileAs(self.file_path)
+                return self.onSaveFileAs(self.file_path)
             return success
         else:
             path = self.file_path.with_suffix(".ali") if self.file_path else Path.home()
-            return self.saveFileAs(path)
+            return self.onSaveFileAs(path)
 
 
     def _get_default_save_location(self) -> tuple[str, str]:
@@ -897,7 +900,7 @@ class MainWindow(QMainWindow):
         return str(default_dir), "nevez.ali"
 
 
-    def saveFileAs(self, file_path: Optional[Path] = None) -> bool:        
+    def onSaveFileAs(self, file_path: Optional[Path] = None) -> bool:        
         directory, default_name = self._get_default_save_location()
         
         path = file_path or Path(directory) / default_name
@@ -1033,7 +1036,7 @@ class MainWindow(QMainWindow):
         return file_path
 
 
-    def openFile(
+    def onOpenFile(
             self,
             file_path: Optional[Path] = None,
             keep_media = False
@@ -1166,7 +1169,7 @@ class MainWindow(QMainWindow):
                     # Rewrite the file to disk
                     self._performSave(file_path, media_filepath)
                     # Re-open the updated file
-                    self.openFile(file_path)
+                    self.onOpenFile(file_path)
         
         self.addRecentFile(str(file_path))
 
@@ -1373,7 +1376,7 @@ class MainWindow(QMainWindow):
 
                 action = QAction(display_name, self)
                 action.setStatusTip(filepath)  # Show full path in status bar
-                action.triggered.connect(lambda checked, f=filepath: self.openFile(Path(f)))
+                action.triggered.connect(lambda checked, f=filepath: self.onOpenFile(Path(f)))
                 self.recent_menu.addAction(action)
             
             # Add "Clear Recent" option
@@ -1537,6 +1540,27 @@ class MainWindow(QMainWindow):
         self.waveform.must_redraw = True
 
 
+    def onImportRTF(self):
+        from src.imports.rtf_importer import RTFImporter
+        RTFImporter(self, self.document_controller).importRTFDialog()
+
+
+    def onExportSrt(self):
+        exportSignals.message.connect(self.setStatusMessage)
+        export(self, str(self.media_path), self.getUtterancesForExport(), "srt")
+        exportSignals.message.disconnect()
+
+    def onExportEaf(self):
+        exportSignals.message.connect(self.setStatusMessage)
+        export(self, str(self.media_path), self.getUtterancesForExport(), "eaf")
+        exportSignals.message.disconnect()
+
+    def onExportTxt(self):
+        exportSignals.message.connect(self.setStatusMessage)
+        export(self, str(self.media_path), self.getUtterancesForExport(), "txt")
+        exportSignals.message.disconnect()
+
+
     def getUtterancesForExport(self) -> List[Tuple[str, Segment]]:
         """Return all sentences and segments for export"""
         utterances = []
@@ -1559,24 +1583,7 @@ class MainWindow(QMainWindow):
         return utterances
 
 
-    def exportSrt(self):
-        exportSignals.message.connect(self.setStatusMessage)
-        export(self, str(self.media_path), self.getUtterancesForExport(), "srt")
-        exportSignals.message.disconnect()
-
-    def exportEaf(self):
-        exportSignals.message.connect(self.setStatusMessage)
-        export(self, str(self.media_path), self.getUtterancesForExport(), "eaf")
-        exportSignals.message.disconnect()
-
-
-    def exportTxt(self):
-        exportSignals.message.connect(self.setStatusMessage)
-        export(self, str(self.media_path), self.getUtterancesForExport(), "txt")
-        exportSignals.message.disconnect()
-
-
-    def exportAudioSegments(self):
+    def onExportAudioSegments(self):
         log.info("Export audio segments")
         if self.media_path is None:
             return
@@ -2064,11 +2071,6 @@ class MainWindow(QMainWindow):
 
     
     def adaptToSubtitle(self) -> None:
-        """
-        Try to adapt the selected utterance to a subtitle format by:
-          * Setting the segments boundaries on frame positions
-          * Adding line breaks if text is longer than the subtitle line limit
-        """
         from services.adapt_subtitles import AdaptUtterancesDialog
 
         AdaptUtterancesDialog(
@@ -2378,10 +2380,10 @@ class MainWindow(QMainWindow):
             for file_path in document_files:
                 ext = file_path.suffix.lower()
                 if ext == ".ali":
-                    self.openFile(file_path)
+                    self.onOpenFile(file_path)
                     break # Load only the first document file
                 elif ext == ".srt":
-                    self.openFile(file_path, keep_media=True)
+                    self.onOpenFile(file_path, keep_media=True)
                     break # Load only the first document file
                 else:
                     log.warning(f"Wrong file type {file_path}")
@@ -2413,7 +2415,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             
             if msg_box.clickedButton() == save_btn:
-                if self.saveFile():
+                if self.onSaveFile():
                     event.accept()
                 else:
                     event.ignore()

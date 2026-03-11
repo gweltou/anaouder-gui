@@ -126,6 +126,8 @@ class DocumentInterface(Protocol):
     
     def clear(self) -> None: ...
 
+    def loadDocumentData(self, data: List[Tuple[str, Optional[Segment]]]) -> None: ...
+
 
 
 class WaveformInterface(Protocol):

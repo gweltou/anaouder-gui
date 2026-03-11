@@ -39,27 +39,27 @@ from PySide6.QtGui import (
     QUndoStack, QShortcut
 )
 
-from actions import ActionManager
-from commands import (
+from src.actions import ActionManager
+from src.commands import (
     InsertTextCommand,
     DeleteTextCommand,
     InsertBlockCommand,
     ReplaceTextCommand,
     MoveTextCursor
 )
-from interfaces import (
+from src.interfaces import (
     DocumentInterface,
     SegmentId,
     MyTextBlockUserData,
     BlockType
 )
-from ui.text_highlighter import Highlighter
-from ui.theme import theme
-from utils import (
+from src.ui.text_highlighter import Highlighter
+from src.ui.theme import theme
+from src.utils import (
     LINE_BREAK, EM_DASH, STOP_CHARS,
     color_yellow,
 )
-from settings import app_settings, shortcuts, SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
+from src.settings import app_settings, shortcuts, SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
 
 
 
@@ -799,6 +799,7 @@ class TextEditWidget(QTextEdit):
 
     
     def contextMenuEvent(self, event):
+        print("contextmenu")
         te_cursor = self.textCursor()
         cursor = self.cursorForPosition(event.pos()) # event.pos() is cursor pos in pixels
         block = cursor.block()
