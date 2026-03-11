@@ -48,9 +48,9 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QDesktopServices, QPalette, QColor
 
-import lang
-from utils import get_cache_directory
-from settings import (
+import src.lang
+from src.utils import get_cache_directory
+from src.settings import (
     FUTURE, app_settings, UI_LANGUAGES,
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_MIN_INTERVAL,
     SUBTITLES_AUTO_EXTEND, SUBTITLES_AUTO_EXTEND_MAX_GAP,
@@ -58,8 +58,8 @@ from settings import (
     SUBTITLES_DEFAULT_COLOR, SUBTITLES_BLOCK_DEFAULT_COLOR,
     AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER
 )
-from strings import strings
-from cache_system import cache
+from src.strings import app_strings
+from src.cache_system import cache
 
 
 
@@ -106,7 +106,7 @@ class DownloadProgressDialog(QDialog):
         self.bytes_label = QLabel("0 MB / 0 MB")
         layout.addWidget(self.bytes_label)
         
-        self.cancel_button = QPushButton(strings.TR_CANCEL)
+        self.cancel_button = QPushButton(app_strings.TR_CANCEL)
         self.cancel_button.setFixedWidth(80)
         self.cancel_button.clicked.connect(self.cancel_download)
         layout.addWidget(self.cancel_button)
@@ -389,7 +389,7 @@ class GeneralPanel(QWidget):
         autosave_layout = QVBoxLayout()
 
         self.save_interval_spin = QDoubleSpinBox()
-        self.save_interval_spin.setSuffix(' ' + strings.TR_UNIT_MINUTE)
+        self.save_interval_spin.setSuffix(' ' + app_strings.TR_UNIT_MINUTE)
         self.save_interval_spin.setRange(0.1, 10)
         self.save_interval_spin.setDecimals(1)
         self.save_interval_spin.setSingleStep(0.1)
@@ -401,7 +401,7 @@ class GeneralPanel(QWidget):
         autosave_layout.addLayout(save_interval_layout)
 
         self.backup_number_spin = QSpinBox()
-        self.backup_number_spin.setSuffix(' ' + strings.TR_UNIT_FILES)
+        self.backup_number_spin.setSuffix(' ' + app_strings.TR_UNIT_FILES)
         self.backup_number_spin.setRange(1, 10)
         self.backup_number_spin.setValue(app_settings.value("autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int))
         self.backup_number_spin.valueChanged.connect(self.updateBackupNumber)
@@ -431,7 +431,7 @@ class GeneralPanel(QWidget):
             color = QColorDialog.getColor(
                 prev_color,
                 self,
-                strings.TR_SELECT_COLOR
+                app_strings.TR_SELECT_COLOR
             )
         if color and color.isValid():
             self.setColorButtonStyle(self.subs_font_color_button, color)
@@ -445,7 +445,7 @@ class GeneralPanel(QWidget):
             color = QColorDialog.getColor(
                 prev_color,
                 self,
-                strings.TR_SELECT_COLOR,
+                app_strings.TR_SELECT_COLOR,
                 QColorDialog.ColorDialogOption.ShowAlphaChannel
             )
         if color and color.isValid():
@@ -548,7 +548,7 @@ class ModelsPanel(QWidget):
         # Populate with some example models
         self.local_models_list.addItems(lang.getCachedModelList())
         
-        self.delete_button = QPushButton(strings.TR_DELETE)
+        self.delete_button = QPushButton(app_strings.TR_DELETE)
         self.delete_button.setFixedWidth(80)
         self.delete_button.clicked.connect(self.deleteModel)
         
@@ -647,25 +647,25 @@ class SubtitlesPanel(QWidget):
 
         ## Minimum duration for a subtitle
         self.min_frames_spin = QSpinBox()
-        self.min_frames_spin.setSuffix(' ' + strings.TR_UNIT_FRAMES)
+        self.min_frames_spin.setSuffix(' ' + app_strings.TR_UNIT_FRAMES)
         self.min_frames_spin.setMinimum(1)
         self.min_frames_spin.valueChanged.connect(self.updateMinFrames)
         self.min_dur_label = QLabel()
         min_frames_layout = QHBoxLayout()
-        min_frames_layout.addWidget(QLabel(strings.TR_MINIMUM))
+        min_frames_layout.addWidget(QLabel(app_strings.TR_MINIMUM))
         min_frames_layout.addWidget(self.min_frames_spin)
         min_frames_layout.addWidget(self.min_dur_label)
         duration_layout.addLayout(min_frames_layout)
 
         ## Maximum duration for a subtitle
         self.max_frames_spin = QSpinBox()
-        self.max_frames_spin.setSuffix(' ' + strings.TR_UNIT_FRAMES)
+        self.max_frames_spin.setSuffix(' ' + app_strings.TR_UNIT_FRAMES)
         self.max_frames_spin.setMinimum(1)
         self.max_frames_spin.setMaximum(250)
         self.max_frames_spin.valueChanged.connect(self.updateMaxFrames)
         self.max_dur_label = QLabel()
         max_frames_layout = QHBoxLayout()
-        max_frames_layout.addWidget(QLabel(strings.TR_MAXIMUM))
+        max_frames_layout.addWidget(QLabel(app_strings.TR_MAXIMUM))
         max_frames_layout.addWidget(self.max_frames_spin)
         max_frames_layout.addWidget(self.max_dur_label)
         duration_layout.addLayout(max_frames_layout)
@@ -676,12 +676,12 @@ class SubtitlesPanel(QWidget):
 
         ## Minimum time interval between two subtitles
         self.min_interval_spin = QSpinBox()
-        self.min_interval_spin.setSuffix(' ' + strings.TR_UNIT_FRAMES)
+        self.min_interval_spin.setSuffix(' ' + app_strings.TR_UNIT_FRAMES)
         self.min_interval_spin.setRange(0, 8)
         self.min_interval_spin.valueChanged.connect(self.updateMinInterval)
         self.min_interval_time_label = QLabel()
         min_interval_layout = QHBoxLayout()
-        min_interval_layout.addWidget(QLabel(strings.TR_MINIMUM))
+        min_interval_layout.addWidget(QLabel(app_strings.TR_MINIMUM))
         min_interval_layout.addWidget(self.min_interval_spin)
         min_interval_layout.addWidget(self.min_interval_time_label)
         interval_layout.addLayout(min_interval_layout)
@@ -695,7 +695,7 @@ class SubtitlesPanel(QWidget):
             lambda checked: app_settings.setValue("subtitles/auto_extend", checked)
         )
         self.extend_max_gap_spin = QSpinBox()
-        self.extend_max_gap_spin.setSuffix(' ' + strings.TR_UNIT_FRAMES)
+        self.extend_max_gap_spin.setSuffix(' ' + app_strings.TR_UNIT_FRAMES)
         self.extend_max_gap_spin.setMaximum(16)
         self.extend_max_gap_spin.valueChanged.connect(self.updateExtendMaxGap)
         self.extend_max_gap_time_label = QLabel()
@@ -721,7 +721,7 @@ class SubtitlesPanel(QWidget):
 
         ## Text density
         self.text_density_spin = QDoubleSpinBox()
-        self.text_density_spin.setSuffix(' ' + strings.TR_UNIT_CPS)
+        self.text_density_spin.setSuffix(' ' + app_strings.TR_UNIT_CPS)
         self.text_density_spin.setDecimals(1)
         self.text_density_spin.setSingleStep(0.1)
         self.text_density_spin.valueChanged.connect(self.updateDensity)
@@ -749,7 +749,7 @@ class SubtitlesPanel(QWidget):
         min_frames = self.min_frames_spin.value()
         app_settings.setValue("subtitles/min_frames", min_frames)
         t = min_frames / self.fps
-        text = f"{round(t, 3)}{strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{strings.TR_UNIT_FPS}"
+        text = f"{round(t, 3)}{app_strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{app_strings.TR_UNIT_FPS}"
         self.min_dur_label.setText(text)
         self.parent_dialog.signals.subtitles_min_frames_changed.emit(min_frames)
         if not self.default_params_lock:
@@ -760,7 +760,7 @@ class SubtitlesPanel(QWidget):
         max_frames = self.max_frames_spin.value()
         app_settings.setValue("subtitles/max_frames", max_frames)
         t = max_frames / self.fps
-        text = f"{round(t, 3)}{strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{strings.TR_UNIT_FPS}"
+        text = f"{round(t, 3)}{app_strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{app_strings.TR_UNIT_FPS}"
         self.max_dur_label.setText(text)
         self.parent_dialog.signals.subtitles_max_frames_changed.emit(max_frames)
         if not self.default_params_lock:
@@ -771,7 +771,7 @@ class SubtitlesPanel(QWidget):
         min_interval = self.min_interval_spin.value()
         app_settings.setValue("subtitles/min_interval", min_interval)
         t = min_interval / self.fps
-        text = f"{round(t, 3)}{strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{strings.TR_UNIT_FPS}"
+        text = f"{round(t, 3)}{app_strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{app_strings.TR_UNIT_FPS}"
         self.min_interval_time_label.setText(text)
         self.extend_max_gap_spin.setMinimum(min_interval + 1)
         if not self.default_params_lock:
@@ -782,7 +782,7 @@ class SubtitlesPanel(QWidget):
         max_gap = self.extend_max_gap_spin.value()
         app_settings.setValue("subtitles/auto_extend_max_gap", max_gap)
         t = max_gap / self.fps
-        text = f"{round(t, 3)}{strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{strings.TR_UNIT_FPS}"
+        text = f"{round(t, 3)}{app_strings.TR_UNIT_SECOND} @{round(self.fps, 2)}{app_strings.TR_UNIT_FPS}"
         self.extend_max_gap_time_label.setText(text)
         if not self.default_params_lock:
             self.user_params["auto_extend_max_gap"] = max_gap
@@ -884,13 +884,13 @@ class CachePanel(QWidget):
         current_delete_group = QGroupBox(self.tr("Clear cache"))        
         current_delete_layout = QHBoxLayout()
         current_delete_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.current_waveform = QCheckBox(strings.TR_WAVEFORM)
+        self.current_waveform = QCheckBox(app_strings.TR_WAVEFORM)
         self.current_waveform.setChecked(True)
-        self.current_transcription = QCheckBox(strings.TR_TRANSCRIPTION)
+        self.current_transcription = QCheckBox(app_strings.TR_TRANSCRIPTION)
         self.current_transcription.setChecked(True)
-        self.current_scenes = QCheckBox(strings.TR_SCENES)
+        self.current_scenes = QCheckBox(app_strings.TR_SCENES)
         self.current_scenes.setChecked(True)
-        self.current_delete_btn = QPushButton(strings.TR_DELETE)
+        self.current_delete_btn = QPushButton(app_strings.TR_DELETE)
         self.current_delete_btn.setToolTip(self.tr("Clear cache for current file only"))
         self.current_delete_btn.clicked.connect(self.clearCurrentCache)
         current_delete_layout.addWidget(self.current_waveform)
@@ -930,7 +930,7 @@ class CachePanel(QWidget):
         global_size_layout.addWidget(label)
 
         self.global_size_spinbox = QSpinBox()
-        self.global_size_spinbox.setSuffix(' ' + strings.TR_UNIT_MEGA_OCTED)
+        self.global_size_spinbox.setSuffix(' ' + app_strings.TR_UNIT_MEGA_OCTED)
         self.global_size_spinbox.setRange(0, 2000)
         self.global_size_spinbox.setValue(int(app_settings.value("cache/media_cache_size", 500)))
         self.global_size_spinbox.valueChanged.connect(self.changeCacheSize)
@@ -944,13 +944,13 @@ class CachePanel(QWidget):
         
         global_delete_layout = QHBoxLayout()
         global_delete_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.global_waveform = QCheckBox(strings.TR_WAVEFORMS)
+        self.global_waveform = QCheckBox(app_strings.TR_WAVEFORMS)
         self.global_waveform.setChecked(True)
-        self.global_transcription = QCheckBox(strings.TR_TRANSCRIPTIONS)
+        self.global_transcription = QCheckBox(app_strings.TR_TRANSCRIPTIONS)
         self.global_transcription.setChecked(True)
-        self.global_scenes = QCheckBox(strings.TR_SCENES)
+        self.global_scenes = QCheckBox(app_strings.TR_SCENES)
         self.global_scenes.setChecked(True)
-        self.global_delete_btn = QPushButton(strings.TR_DELETE)
+        self.global_delete_btn = QPushButton(app_strings.TR_DELETE)
         self.global_delete_btn.setToolTip(self.tr("Clear global cache"))
         self.global_delete_btn.clicked.connect(self.clearGlobalCache)
         global_delete_layout.addWidget(self.global_waveform)
@@ -976,13 +976,13 @@ class CachePanel(QWidget):
             size_current_waveform = self.media_metadata.get("waveform_size", 0)
             current_total_size = size_current_waveform
             size_strings.append(
-                f"{strings.TR_WAVEFORM} ({self.simplifySize(size_current_waveform)})"
+                f"{app_strings.TR_WAVEFORM} ({self.simplifySize(size_current_waveform)})"
             )
             if cache._get_transcription_path(fingerprint).exists():
                 size_current_transcription = cache._get_transcription_path(fingerprint).stat().st_size
                 current_total_size += size_current_transcription
                 size_strings.append(
-                    f"{strings.TR_TRANSCRIPTION} ({self.simplifySize(size_current_transcription)})"
+                    f"{app_strings.TR_TRANSCRIPTION} ({self.simplifySize(size_current_transcription)})"
                 )
                 self.current_transcription.setHidden(False)
             else:
@@ -992,7 +992,7 @@ class CachePanel(QWidget):
                 size_current_scenes = cache._get_scenes_path(fingerprint).stat().st_size
                 current_total_size += size_current_scenes
                 size_strings.append(
-                    f"{strings.TR_SCENES} ({self.simplifySize(size_current_scenes)})"
+                    f"{app_strings.TR_SCENES} ({self.simplifySize(size_current_scenes)})"
                 )
                 self.current_scenes.setHidden(False)
             else:
@@ -1013,16 +1013,16 @@ class CachePanel(QWidget):
             total_cache_size += cache.doc_cache_path.stat().st_size
 
         size_strings = [
-            f"{strings.TR_WAVEFORMS} ({self.simplifySize(size_all_waveforms)})",
-            f"{strings.TR_TRANSCRIPTIONS} ({self.simplifySize(size_all_transcriptions)})",
-            f"{strings.TR_SCENES} ({self.simplifySize(size_all_scenes)})"
+            f"{app_strings.TR_WAVEFORMS} ({self.simplifySize(size_all_waveforms)})",
+            f"{app_strings.TR_TRANSCRIPTIONS} ({self.simplifySize(size_all_transcriptions)})",
+            f"{app_strings.TR_SCENES} ({self.simplifySize(size_all_scenes)})"
         ]
         self.global_size_label.setText(self.simplifySize(total_cache_size))
         self.global_size_label.setToolTip('\n'.join([f"* {s}" for s in size_strings]))
 
 
     def simplifySize(self, size: int) -> str:
-        units = [strings.TR_UNIT_OCTED, strings.TR_UNIT_KILO_OCTED, strings.TR_UNIT_MEGA_OCTED]
+        units = [app_strings.TR_UNIT_OCTED, app_strings.TR_UNIT_KILO_OCTED, app_strings.TR_UNIT_MEGA_OCTED]
         unit_i = 0
         while size >= 1000 and unit_i < len(units):
             size /= 1000

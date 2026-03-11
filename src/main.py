@@ -63,36 +63,36 @@ from src.utils import (
     ALL_COMPATIBLE_FORMATS, MEDIA_FORMATS, SUBTITLES_FILE_FORMATS,
     get_audiofile_info
 )
-from file_manager import FileManager, FileOperationError
-from version import __version__
-from ui.icons import icons, loadIcons, IconWidget
-from ui.theme import theme
-from services.media_player_controller import MediaPlayerController
-from waveform_widget import WaveformWidget, ResizeSegmentCommand
-from text_widget import (
+from src.file_manager import FileManager, FileOperationError
+from src.version import __version__
+from src.ui.icons import icons, loadIcons, IconWidget
+from src.ui.theme import theme
+from src.services.media_player_controller import MediaPlayerController
+from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
+from src.text_widget import (
     TextEditWidget, Highlighter,
     LINE_BREAK
 )
-from splitter import CustomSplitter
-from video_widget import VideoWidget
-from document_controller import DocumentController
-from transcriber import TranscriptionService
-from scene_detector import SceneDetectWorker
-from aligner import TextAligner
-from actions import ActionManager
-from commands import (
+from src.splitter import CustomSplitter
+from src.video_widget import VideoWidget
+from src.document_controller import DocumentController
+from src.transcriber import TranscriptionService
+from src.scene_detector import SceneDetectWorker
+from src.aligner import TextAligner
+from src.actions import ActionManager
+from src.commands import (
     ReplaceTextCommand,
     CreateNewEmptyUtteranceCommand,
     AlignWithSelectionCommand
 )
-from ui.timecode_display import TimecodeWidget
-from ui.parameters_dialog import ParametersDialog
-from ui.about_page import AboutDialog
-from exports.textual_exporter import export, exportSignals
+from src.ui.timecode_display import TimecodeWidget
+from src.ui.parameters_dialog import ParametersDialog
+from src.ui.about_page import AboutDialog
+from src.exports.textual_exporter import export, exportSignals
 from exports import segment_exporter
-from auto_segment import auto_segment
-from hunspell import HunspellLoader
-from settings import (
+from src.auto_segment import auto_segment
+from src.hunspell import HunspellLoader
+from src.settings import (
     APP_NAME, DEFAULT_LANGUAGE, FUTURE,
     app_settings, shortcuts,
     SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_CPS,
@@ -104,10 +104,10 @@ from settings import (
     AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER, AUTOSAVE_FOLDER_NAME,
     RECENT_FILES_LIMIT
 )
-import lang as lang
-from interfaces import Segment, SegmentId, BlockType
-from cache_system import cache
-from strings import strings
+import src.lang as lang
+from src.interfaces import Segment, SegmentId, BlockType
+from src.cache_system import cache
+from src.strings import app_strings
 
 
 
@@ -297,7 +297,7 @@ class MainWindow(QMainWindow):
 
         self.transcription_status_label = QLabel()
         self.transcription_led = IconWidget(icons["led_red"], 10)
-        self.transcription_led.setToolTip(strings.TR_NO_TRANSCRIPTION_TOOLTIP)
+        self.transcription_led.setToolTip(app_strings.TR_NO_TRANSCRIPTION_TOOLTIP)
         self.statusBar().addPermanentWidget(self.transcription_status_label)
         self.statusBar().addPermanentWidget(self.transcription_led)
         self.transcription_led.setVisible(False)
@@ -487,11 +487,10 @@ class MainWindow(QMainWindow):
             ## Render frames
             render_frames_action = QAction(self.tr("&Render frames"), self)
             # render_frames_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
-            from services.caption_renderer import render_all
-            from ui.render_dialog import RenderCaptionsDialog
+            from src.ui.render_dialog import RenderCaptionsDialog
             # render_frames_action.triggered.connect(lambda: render_all(self.document_controller, self.file_path.parent))
             render_frames_action.triggered.connect(
-                lambda: RenderCaptionsDialog(self, self.document_controller).exec()
+                lambda: RenderCaptionsDialog(self, self.document_controller, self.file_path.parent).exec()
             )
             operation_menu.addAction(render_frames_action)
 
@@ -641,14 +640,14 @@ class MainWindow(QMainWindow):
         text_zoom_out_button = QToolButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
         text_zoom_out_button.setFixedWidth(BUTTON_SIZE)
-        text_zoom_out_button.setToolTip(strings.TR_ZOOM_OUT)
+        text_zoom_out_button.setToolTip(app_strings.TR_ZOOM_OUT)
         text_zoom_out_button.clicked.connect(lambda: self.text_widget.zoomOut(1))
         view_buttons_layout.addWidget(text_zoom_out_button)
 
         text_zoom_in_button = QToolButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
         text_zoom_in_button.setFixedWidth(BUTTON_SIZE)
-        text_zoom_out_button.setToolTip(strings.TR_ZOOM_IN)
+        text_zoom_out_button.setToolTip(app_strings.TR_ZOOM_IN)
         text_zoom_in_button.clicked.connect(lambda: self.text_widget.zoomIn(1))
         view_buttons_layout.addWidget(text_zoom_in_button)
 
@@ -805,7 +804,7 @@ class MainWindow(QMainWindow):
         wave_zoom_out_button = QToolButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
         wave_zoom_out_button.setFixedWidth(BUTTON_SIZE)
-        wave_zoom_out_button.setToolTip(strings.TR_ZOOM_OUT + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;")
+        wave_zoom_out_button.setToolTip(app_strings.TR_ZOOM_OUT + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;")
         wave_zoom_out_button.clicked.connect(lambda: self.waveform.zoomOut(1.333))
         view_buttons_layout.addWidget(wave_zoom_out_button)
         
@@ -813,7 +812,7 @@ class MainWindow(QMainWindow):
         wave_zoom_in_button = QToolButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
         wave_zoom_in_button.setFixedWidth(BUTTON_SIZE)
-        wave_zoom_in_button.setToolTip(strings.TR_ZOOM_IN + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;")
+        wave_zoom_in_button.setToolTip(app_strings.TR_ZOOM_IN + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;")
         wave_zoom_in_button.clicked.connect(lambda: self.waveform.zoomIn(1.333))
         view_buttons_layout.addWidget(wave_zoom_in_button)
         
@@ -832,8 +831,8 @@ class MainWindow(QMainWindow):
             msg_box.setText(self.tr("A Speech-To-Text model is needed for automatic transcription."))
             msg_box.setInformativeText(self.tr("Would you like to download one?"))
             
-            ok_btn = msg_box.addButton(strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
-            msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
+            ok_btn = msg_box.addButton(app_strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
+            msg_box.addButton(app_strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
             msg_box.setDefaultButton(ok_btn)
             
             msg_box.exec()
@@ -905,9 +904,9 @@ class MainWindow(QMainWindow):
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            strings.TR_SAVE_FILE,
+            app_strings.TR_SAVE_FILE,
             str(path),
-            strings.TR_ALI_FILES + " (*.ali)"
+            app_strings.TR_ALI_FILES + " (*.ali)"
         )
         
         if not file_path:
@@ -943,7 +942,7 @@ class MainWindow(QMainWindow):
                 self.tr("Save Error"),
                 self.tr("Couldn't save file to '{filename}'").format(filename=file_path.name),
             )
-            msg_box.addButton(strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
+            msg_box.addButton(app_strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
             msg_box.exec()
             return False
 
@@ -1123,7 +1122,7 @@ class MainWindow(QMainWindow):
                 self.tr("Read Error"),
                 self.tr("Couldn't read file '{filename}'").format(filename=file_path.name),
             )
-            msg_box.addButton(strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
+            msg_box.addButton(app_strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
             msg_box.exec()
             return False
         
@@ -1153,13 +1152,13 @@ class MainWindow(QMainWindow):
                 m = self.tr("'{filepath}' doesn't exist.").format(filepath=media_path.absolute())
                 msg_box.setInformativeText(m)
 
-            ok_btn = msg_box.addButton(strings.TR_OPEN, QMessageBox.ButtonRole.AcceptRole)
-            msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
+            ok_btn = msg_box.addButton(app_strings.TR_OPEN, QMessageBox.ButtonRole.AcceptRole)
+            msg_box.addButton(app_strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
 
             msg_box.exec()
             if msg_box.clickedButton() == ok_btn:
-                media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
-                media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
+                media_filter = app_strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+                media_filepath = self.getOpenFileDialog(app_strings.TR_OPEN_MEDIA_FILE, media_filter)
                 if not media_filepath:
                     return False
                 media_filepath = Path(media_filepath)
@@ -1240,14 +1239,14 @@ class MainWindow(QMainWindow):
 
         msg_box = QMessageBox(
             QMessageBox.Icon.Question,
-            strings.TR_AUTOSAVE_BACKUPS,
+            app_strings.TR_AUTOSAVE_BACKUPS,
             f"{self.tr('The autosaved file has more recent changes.')}\n\n"
             f"{self.tr('Load autosaved file?')}",
             parent=self
         )
         
-        yes_button = msg_box.addButton(strings.TR_YES, QMessageBox.ButtonRole.YesRole)
-        msg_box.addButton(strings.TR_NO, QMessageBox.ButtonRole.NoRole)
+        yes_button = msg_box.addButton(app_strings.TR_YES, QMessageBox.ButtonRole.YesRole)
+        msg_box.addButton(app_strings.TR_NO, QMessageBox.ButtonRole.NoRole)
         msg_box.setDefaultButton(yes_button)
         
         msg_box.exec()
@@ -1260,7 +1259,7 @@ class MainWindow(QMainWindow):
         from datetime import datetime
         
         dialog = QDialog(self)
-        dialog.setWindowTitle(strings.TR_AUTOSAVE_BACKUPS)
+        dialog.setWindowTitle(app_strings.TR_AUTOSAVE_BACKUPS)
         dialog.setMinimumWidth(400)
         
         layout = QVBoxLayout(dialog)
@@ -1285,8 +1284,8 @@ class MainWindow(QMainWindow):
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        button_box.button(QDialogButtonBox.StandardButton.Ok).setText(strings.TR_OK)
-        button_box.button(QDialogButtonBox.StandardButton.Cancel).setText(strings.TR_CANCEL)
+        button_box.button(QDialogButtonBox.StandardButton.Ok).setText(app_strings.TR_OK)
+        button_box.button(QDialogButtonBox.StandardButton.Cancel).setText(app_strings.TR_CANCEL)
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
         layout.addWidget(button_box)
@@ -1299,8 +1298,8 @@ class MainWindow(QMainWindow):
 
 
     def onImportMedia(self):
-        media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
-        media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
+        media_filter = app_strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+        media_filepath = self.getOpenFileDialog(app_strings.TR_OPEN_MEDIA_FILE, media_filter)
         if media_filepath is None:
             return
         
@@ -1330,8 +1329,8 @@ class MainWindow(QMainWindow):
                 self.openMediaFile(Path(media_filepath))
             else:
                 # Open a File Dialog to find the associated media file
-                media_filter = strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
-                media_filepath = self.getOpenFileDialog(strings.TR_OPEN_MEDIA_FILE, media_filter)
+                media_filter = app_strings.TR_MEDIA_FILES + f" ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
+                media_filepath = self.getOpenFileDialog(app_strings.TR_OPEN_MEDIA_FILE, media_filter)
                 if media_filepath is None:
                     return
                 
@@ -1462,9 +1461,9 @@ class MainWindow(QMainWindow):
         duration_str = sec2hms(
             media_metadata["duration"],
             precision=0,
-            h_unit=strings.TR_UNIT_HOUR,
-            m_unit=strings.TR_UNIT_MINUTE[0],
-            s_unit=strings.TR_UNIT_SECOND,
+            h_unit=app_strings.TR_UNIT_HOUR,
+            m_unit=app_strings.TR_UNIT_MINUTE[0],
+            s_unit=app_strings.TR_UNIT_SECOND,
             sep=' '
         )
         self.status_media_duration_label.setText(duration_str)
@@ -1481,7 +1480,7 @@ class MainWindow(QMainWindow):
 
             self.timecode_widget.setFps(media_metadata["fps"])
 
-            self.status_media_fps_label.setText(f"{self.waveform.fps:.2f} {strings.TR_UNIT_FPS}")
+            self.status_media_fps_label.setText(f"{self.waveform.fps:.2f} {app_strings.TR_UNIT_FPS}")
             self.status_media_fps_label.setToolTip(self.tr("Video framerate"))
 
             # Open Video Widget
@@ -1670,9 +1669,10 @@ class MainWindow(QMainWindow):
                 Segment ID and HTML formatted sentence
         """
 
-        seg_id = self.document_controller.getSegmentAtTime(time)
-        if seg_id < 0:
+        seg_ids = self.document_controller.getSegmentsAtTime(time)
+        if not seg_ids:
             return (-1, "")
+        seg_id = seg_ids[0]
         
         # Remove metadata from subtitle text
         block = self.document_controller.getBlockById(seg_id)
@@ -1753,9 +1753,9 @@ class MainWindow(QMainWindow):
                     return
 
         # Highlight text sentence at this time position
-        if (seg_id := self.document_controller.getSegmentAtTime(self.waveform.playhead)) != -1:
-            if seg_id != self.text_widget.highlighted_sentence_id:
-                self.text_widget.highlightUtterance(seg_id, scroll_text=False)
+        if (seg_ids := self.document_controller.getSegmentsAtTime(self.waveform.playhead)) != -1:
+            if seg_ids and (seg_ids[0] != self.text_widget.highlighted_sentence_id):
+                self.text_widget.highlightUtterance(seg_ids[0], scroll_text=False)
         else:
             self.text_widget.deactivateSentence()
         
@@ -2405,9 +2405,9 @@ class MainWindow(QMainWindow):
             msg_box.setWindowTitle(self.tr("Unsaved work"))
             msg_box.setText(self.tr("Do you want to save your changes?"))
             
-            save_btn = msg_box.addButton(strings.TR_YES, QMessageBox.ButtonRole.AcceptRole)
-            discard_btn = msg_box.addButton(strings.TR_NO, QMessageBox.ButtonRole.DestructiveRole)
-            cancel_btn = msg_box.addButton(strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
+            save_btn = msg_box.addButton(app_strings.TR_YES, QMessageBox.ButtonRole.AcceptRole)
+            discard_btn = msg_box.addButton(app_strings.TR_NO, QMessageBox.ButtonRole.DestructiveRole)
+            cancel_btn = msg_box.addButton(app_strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
             msg_box.setDefaultButton(save_btn)
             
             msg_box.exec()
@@ -2508,15 +2508,15 @@ class MainWindow(QMainWindow):
         start_str = sec2hms(
             start + self.waveform.time_offset,
             precision=2,
-            m_unit=strings.TR_UNIT_MINUTE[0],
-            s_unit=strings.TR_UNIT_SECOND,
+            m_unit=app_strings.TR_UNIT_MINUTE[0],
+            s_unit=app_strings.TR_UNIT_SECOND,
             sep=''
         )
         end_str = sec2hms(
             end + self.waveform.time_offset,
             precision=2,
-            m_unit=strings.TR_UNIT_MINUTE[0],
-            s_unit=strings.TR_UNIT_SECOND,
+            m_unit=app_strings.TR_UNIT_MINUTE[0],
+            s_unit=app_strings.TR_UNIT_SECOND,
             sep=''
         )
         string_parts = [
@@ -2538,7 +2538,7 @@ class MainWindow(QMainWindow):
             string_parts.append(duration_string)
 
         if density != -1.0:
-            density_str = f"{density:.1f}{strings.TR_UNIT_CPS}"
+            density_str = f"{density:.1f}{app_strings.TR_UNIT_CPS}"
             if density >= self._target_density:
                 string_parts.append(f"<span style='{warning_style}'>{density_str}</span>")
             else:
@@ -2575,25 +2575,25 @@ class MainWindow(QMainWindow):
 
     def _setStatusNoTranscription(self):
         self.transcription_led.setIcon(icons["led_red"])
-        self.transcription_led.setToolTip(strings.TR_NO_TRANSCRIPTION_TOOLTIP)
-        self.transcription_status_label.setText(strings.TR_NO_TRANSCRIPTION_LABEL)
-        self.transcription_status_label.setToolTip(strings.TR_NO_TRANSCRIPTION_LABEL_TOOLTIP)
+        self.transcription_led.setToolTip(app_strings.TR_NO_TRANSCRIPTION_TOOLTIP)
+        self.transcription_status_label.setText(app_strings.TR_NO_TRANSCRIPTION_LABEL)
+        self.transcription_status_label.setToolTip(app_strings.TR_NO_TRANSCRIPTION_LABEL_TOOLTIP)
 
     def _setStatusPartialTranscription(self, progress):
         self.transcription_led.setIcon(icons["led_red"])
-        self.transcription_led.setToolTip(strings.TR_NO_TRANSCRIPTION_TOOLTIP)
+        self.transcription_led.setToolTip(app_strings.TR_NO_TRANSCRIPTION_TOOLTIP)
         self.transcription_status_label.setText(f"{progress:.0%}")
-        self.transcription_status_label.setToolTip(strings.TR_PARTIAL_TRANSCRIPTION_LABEL_TOOLTIP)
+        self.transcription_status_label.setToolTip(app_strings.TR_PARTIAL_TRANSCRIPTION_LABEL_TOOLTIP)
 
     def _setStatusTranscriptionCompleted(self):
         self.transcription_led.setIcon(icons["led_green"])
-        self.transcription_led.setToolTip(strings.TR_TRANSCRIPTION_COMPLETED)
+        self.transcription_led.setToolTip(app_strings.TR_TRANSCRIPTION_COMPLETED)
         self.transcription_status_label.clear()
         self.transcription_status_label.setToolTip("")
     
     def _setStatusTranscriptionStarted(self):
         self.transcription_led.setIcon(icons["led_orange"])
-        self.transcription_led.setToolTip(strings.TR_TRANSCRIPTION_IN_PROGRESS)
+        self.transcription_led.setToolTip(app_strings.TR_TRANSCRIPTION_IN_PROGRESS)
         self.transcription_status_label.clear()
         self.transcription_status_label.setToolTip("")
 
@@ -2630,7 +2630,7 @@ class TranslatedApp(QApplication):
             self.translator = None
         
         # Reload strings
-        strings.initialize()
+        app_strings.initialize()
 
 
 
@@ -2649,7 +2649,7 @@ def main(argv: list):
         print(f"{locale=}")
         app.switch_language(locale)
     else:
-        strings.initialize() # Load strings
+        app_strings.initialize() # Load strings
 
     loadIcons()
     window = MainWindow(file_path)

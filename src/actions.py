@@ -1,9 +1,28 @@
+"""
+Anaouder - Automatic transcription and subtitling for the Breton language
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction, QKeySequence, QActionGroup
 
-from settings import shortcuts
-from strings import strings
-from ui.icons import icons
+from src.settings import shortcuts
+from src.strings import app_strings
+from src.ui.icons import icons
 
 
 
@@ -69,11 +88,11 @@ class ActionManager(QObject):
         self.close_app.triggered.connect(self.close_application_requested.emit)
 
         ## Import actions
-        self.import_media = QAction(strings.TR_IMPORT_MEDIA + '...', self)
+        self.import_media = QAction(app_strings.TR_IMPORT_MEDIA + '...', self)
         self.import_media.setStatusTip(self.tr("Import a media file (audio or video)"))
         self.import_media.triggered.connect(self.import_media_requested.emit)
 
-        self.import_subtitles = QAction(strings.TR_IMPORT_SUBTITLES + '...', self)
+        self.import_subtitles = QAction(app_strings.TR_IMPORT_SUBTITLES + '...', self)
         self.import_subtitles.setStatusTip(self.tr("Import a subtitles file, keep current media"))
         self.import_subtitles.triggered.connect(self.import_subtitles_requested.emit)
 

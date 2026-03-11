@@ -26,14 +26,14 @@ from math import inf
 from PySide6.QtCore import QRunnable, Signal, QObject, QThread
 from PySide6.QtGui import QTextBlock
 
-from ui.progess_dialog import ProgressDialog
-from services.media_player_controller import MediaPlayerController
-from transcriber import TranscriptionService
-from interfaces import DocumentInterface
-from commands import AlignBlockWithSegment
-from cache_system import cache
-from lang import prepTextForAlignment
-from utils import PUNCTUATION
+from src.ui.progess_dialog import ProgressDialog
+from src.services.media_player_controller import MediaPlayerController
+from src.transcriber import TranscriptionService
+from src.interfaces import DocumentInterface
+from src.commands import AlignBlockWithSegment
+from src.cache_system import cache
+from src.lang import prepTextForAlignment
+from src.utils import PUNCTUATION
 
 
 

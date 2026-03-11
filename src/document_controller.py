@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2026  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,29 +28,30 @@ from PySide6.QtGui import (
     QTextCursor
 )
 from PySide6.QtCore import QObject, Signal
-from interfaces import (
+
+from src.interfaces import (
     BlockType,
     Segment, SegmentId,
 )
-from text_widget import TextEditWidget
-from waveform_widget import WaveformWidget, Handle
-from interfaces import MyTextBlockUserData
-from utils import (
+from src.text_widget import TextEditWidget
+from src.waveform_widget import WaveformWidget, Handle
+from src.interfaces import MyTextBlockUserData
+from src.utils import (
     LINE_BREAK,
     extract_sentence_regions,
 )
-from commands import (
+from src.commands import (
     AddSegmentCommand, DeleteSegmentsCommand, ResizeSegmentCommand,
     DeleteUtterancesCommand, JoinUtterancesCommand,
     InsertBlockCommand,
     MoveTextCursor,
 )
-from aligner import (
+from src.aligner import (
     smart_split_text, smart_split_time,
     SmartSplitError
 )
-from cache_system import cache
-from strings import strings
+from src.cache_system import cache
+from src.strings import app_strings
 
 
 
@@ -396,20 +397,42 @@ class DocumentController(QObject):
                 return block
 
 
-    def getSegmentAtTime(
+    def getSegmentsAtTime(
         self,
         position_sec: float,
         onset = 0.0,
         offset = 0.0
-    ) -> SegmentId:
-        """Return the ID of any segment at a given position, or -1 if none is present"""
+    ) -> List[SegmentId]:
+        """Return the list of IDs of all segment at a given positiont"""
         log.debug(f"getSegmentAtTime({position_sec=})")
+        segment_ids = []
         for segment_id, (start, end) in self.getSortedSegments():
             # Give precedence to the segment that starts at this timecode
             # rather than the one that ends at this timecode
-            if start - 0.001 + onset <= position_sec < end + offset:
-                return segment_id
-        return -1
+            if start - 0.001 - onset <= position_sec < end + offset:
+                segment_ids.append(segment_id)
+            elif start - onset > position_sec:
+                return segment_ids
+        return segment_ids
+    
+
+    def getSegmentsAtTimeOffsets(
+        self,
+        position_sec: float,
+        offsets: Dict[SegmentId, Tuple]
+    ) -> List[SegmentId]:
+        """Return the list of IDs of all segment at a given positiont"""
+        log.debug(f"getSegmentAtTime({position_sec=})")
+        segment_ids = []
+        for segment_id, (start, end) in self.getSortedSegments():
+            # Give precedence to the segment that starts at this timecode
+            # rather than the one that ends at this timecode
+            onset, offset = offsets.get(segment_id, (0.0, 0.0))
+            if start - onset <= position_sec < end + offset:
+                segment_ids.append(segment_id)
+            elif start - onset > position_sec:
+                return segment_ids
+        return segment_ids
     
 
     def getTextById(self, segment_id: SegmentId) -> str | None:
@@ -552,9 +575,10 @@ class DocumentController(QObject):
         if self.text_widget is None:
             return (-1, "")
 
-        seg_id = self.getSegmentAtTime(position_sec)
-        if seg_id == -1:
+        seg_ids = self.getSegmentsAtTime(position_sec)
+        if not seg_ids:
             return (-1, "")
+        seg_id = seg_ids[0]
         
         # Remove metadata from subtitle text
         block = self.getBlockById(seg_id)
@@ -669,10 +693,10 @@ class DocumentController(QObject):
                     right_seg[1] = seg_end
                 except SmartSplitError as e:
                     log.warning(e)
-                    self.message.emit(strings.TR_CANT_SMART_SPLIT + f": {e}")
+                    self.message.emit(app_strings.TR_CANT_SMART_SPLIT + f": {e}")
                 except Exception as e:
                     log.warning(e)
-                    self.message.emit(strings.TR_CANT_SMART_SPLIT + f": {e}")
+                    self.message.emit(app_strings.TR_CANT_SMART_SPLIT + f": {e}")
 
         if not left_seg or not right_seg:
             # Revert to naive splitting method
@@ -720,7 +744,7 @@ class DocumentController(QObject):
                     log.info("smart splitting")
                     left_text, right_text = smart_split_time(text, timepos, tokens_range)
                 except Exception as e:
-                    self.message.emit(strings.TR_CANT_SMART_SPLIT)
+                    self.message.emit(app_strings.TR_CANT_SMART_SPLIT)
                     log.error(f"Could not smart split: {e}")
 
         if left_text is None or right_text is None:

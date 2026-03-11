@@ -33,9 +33,9 @@ from PySide6.QtCore import (
 
 from ostilhou.asr.models import load_model
 
-from cache_system import cache
-from interfaces import Segment, SegmentId
-from lang import getModelPath, getCurrentLanguage
+from src.cache_system import cache
+from src.interfaces import Segment, SegmentId
+from src.lang import getModelPath, getCurrentLanguage
 
 
 

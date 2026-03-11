@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from pathlib import Path
 import logging
 import subprocess
@@ -12,15 +12,15 @@ from PySide6.QtCore import (
     QObject,
     QThread,
 )
-from tqdm import tqdm
 
 from ostilhou.asr.dataset import MetadataParser
 
-from utils import get_audiofile_info
-from cache_system import cache
-from text_widget import LINE_BREAK
-from document_controller import DocumentController
-from interfaces import SegmentId, Segment
+from src.utils import get_audiofile_info
+from src.cache_system import cache
+from src.text_widget import LINE_BREAK
+from src.document_controller import DocumentController
+from src.interfaces import SegmentId, Segment
+from src.utils import find_system_fonts
 
 
 log = logging.getLogger(__name__)
@@ -44,7 +44,6 @@ class CaptionRenderer:
         self.document: DocumentController
         self.fps: float
         self.segments = []
-        # self.frames: List[Image.Image] = []
         self.frame_size: Tuple[int, int]
 
         self.render_cache = dict()
@@ -54,17 +53,24 @@ class CaptionRenderer:
         self.background_images = []
         self.empty_frame: Image.Image
         self.segment_properties: Dict[SegmentId, dict] = dict()
-        self.fonts = dict()
-        self.default_font = ImageFont.load_default(self.DEFAULT_FONT_SIZE)
+        self.loaded_fonts = {("default", self.DEFAULT_FONT_SIZE): ImageFont.load_default(self.DEFAULT_FONT_SIZE)}
         self.global_properties = dict()
+
+        self.fonts = {
+            font_path.stem.lower(): (font_path.stem, font_path)
+            for font_path in find_system_fonts()
+        }
 
         self.metadata_parser = MetadataParser()
         for param_name in (
+                "font", "font-size",
                 "position",
                 "bg-color", "fg-color",
                 "bg-outline-color", "fg-outline-color",
+                "bg-outline-width", "fg-outline-width",
                 "progress",
                 "fade-in", "fade-out",
+                "x-offset", "y-offset"
             ):
             self.metadata_parser.add_param(param_name)
 
@@ -74,9 +80,9 @@ class CaptionRenderer:
 
     def set_output_dir(self, dir: Path) -> None:
         self.output_dir = dir
-        print(f"Render output directory set to {self.output_dir}")
+        log.info(f"Render output directory set to {self.output_dir}")
     
-
+    
     def set_output_prefix(self, prefix: str) -> None:
         self.output_prefix = prefix
 
@@ -107,19 +113,22 @@ class CaptionRenderer:
             self.background_images = list(files)
         else:
             self.background_images = [Path(filepath_pattern)]
+        log.info(f"Background images found: {len(self.background_images)}")
 
 
-    def set_font(self, font_path: Path, font_size: int = 30) -> None:
-        try:
-            self.default_font = ImageFont.truetype(font_path, font_size)
-        except Exception as e:
-            log.error(f"Could not load requested font {e}")
-            self.default_font = ImageFont.load_default(font_size)
+    # def set_font(self, font_path: Path, font_size: int = 30) -> None:
+    #     try:
+    #         self.default_font = ImageFont.truetype(font_path, font_size)
+    #     except Exception as e:
+    #         log.error(f"Could not load requested font {e}")
+    #         self.default_font = ImageFont.load_default(font_size)
     
 
     def set_properties(self, **kwargs):
         """
         Args:
+            font
+            font_size
             bg_color
             fg_color
             outline_color
@@ -128,8 +137,13 @@ class CaptionRenderer:
             bg_outline_width
             fg_outline_color
             fg_outline_width
+            fade_in
+            fade_out
+            x_offset
+            y_offset
         """
-        self.global_properties = kwargs
+        self.global_properties.update(kwargs)
+        log.info(f"Renderer properties set {self.global_properties}")
     
 
     def _set_document(self, document: DocumentController) -> None:
@@ -156,7 +170,6 @@ class CaptionRenderer:
 
         # Read and store properties for every text block in document        
         for block in document.getAllBlocks():
-            print(block.text())
             data, _ = self.metadata_parser.parse_sentence(block.text())
 
             segment_id = document.getBlockId(block)
@@ -168,7 +181,8 @@ class CaptionRenderer:
             # Join all regions's metadata
             properties = {}
             for region in data:
-                properties.update(region)
+                # Convert keys
+                properties.update({k.lower().replace('-', '_'): v for k, v in region.items()})
 
             properties["text"] = ''.join([ region["text"] for region in data ])
             properties["segment"] = segment
@@ -176,11 +190,8 @@ class CaptionRenderer:
             auto_transcription = self.document.getTranscriptionForSegment(segment[0], segment[1])
             auto_transcription = [ t[0:3] for t in auto_transcription ]
 
-            print(' '.join([ t[2] for t in auto_transcription ]))
-            print(f"{properties=}")
-
             self.segment_properties[segment_id] = properties
-
+       
 
     def render_frame(self, frame_number: int) -> None:
         """Render a full-size frame with open captions overlaid"""
@@ -190,21 +201,14 @@ class CaptionRenderer:
         save_path = self.output_dir / f"{self.output_prefix}{frame_number:05d}.png"
 
         time_s = frame_number / self.fps
-        segment_id = self.document.getSegmentAtTime(time_s)
-
-        if segment_id == -1:
+        time_offsets = self._get_time_offsets()
+        segment_ids = self.document.getSegmentsAtTimeOffsets(time_s, time_offsets)
+        
+        if not segment_ids:
             # No subtitles to render
             self.empty_frame.save(str(save_path))
             return
         
-        properties = self.global_properties.copy()
-        properties.update(self.segment_properties[segment_id])
-        
-        segment = properties["segment"]
-        text = properties["text"]
-            
-        font = self.default_font
-
         # Optional background image sequence of solid color
         if self.background_images:
             img_idx = min(len(self.background_images) - 1, frame_number)
@@ -213,77 +217,125 @@ class CaptionRenderer:
             self.frame_size = bg_img.size
         else:
             bg_img = Image.new("RGBA", self.frame_size, self.background_color)
-
-        # Calculate relative progress
-        start, end = segment
-        segment_duration = end - start
         
-        match properties.get("progress", "bg"):
-            case "bg":
-                progress = 0.0
-            case "fg":
-                progress = 1.0
-            case "interpolation":
-                progress = (time_s - start) / segment_duration
+        for segment_id in segment_ids:
+            properties = self.global_properties.copy()
+            properties.update(self.segment_properties[segment_id])
+                
+            font = self.get_font(
+                properties.get("font", "default"),
+                int(properties.get("font_size", self.DEFAULT_FONT_SIZE))
+            )
+            ascent, descent = font.getmetrics()
+            font_height = ascent + descent
 
-        text_image, bbox = self.render_colored_text(
-            text,
-            font,
-            properties,
-            color_pc = progress,
-            caching = True
-        )
-        ascent, descent = font.getmetrics()
-        font_height = ascent + descent
-        n_lines = len(text.split(LINE_BREAK))
+            segment = properties["segment"]
+            text = properties["text"]
+            n_lines = len(text.split(LINE_BREAK))
 
-        interline_size = int(font.size * properties.get("interline", 0.0))
-        text_box_height = font_height * n_lines + interline_size * (n_lines - 1)
+            # Calculate relative progress
+            start, end = segment
+            segment_duration = end - start
+            
+            match properties.get("progress", "bg"):
+                case "bg":
+                    progress = 0.0
+                case "fg":
+                    progress = 1.0 if (start < time_s < end) else 0.0
+                case "interpolation":
+                    progress = (time_s - start) / segment_duration
 
-        # Caption vertical position
-        match properties.get("position", "bottom"):
-            case "top":
-                top = 0
-            case "bottom":
-                top = bg_img.height - text_box_height
-            case "center":
-                top = (bg_img.height - text_box_height) // 2
-            case "center-top":
-                top = (bg_img.height // 2) - text_box_height
-            case "center-bottom":
-                top = (bg_img.height // 2)
-            case _:
-                # Defaults to bottom
-                print(f"bad argument: {properties['position']}")
-                top = bg_img.height - text_box_height
+            text_image, bbox = self.render_colored_text(
+                text,
+                properties,
+                color_pc = progress,
+                caching = True
+            )
 
-        # Center text horizontally
-        left = (bg_img.width - text_image.width) // 2
+            interline_size = int(font.size * properties.get("interline", 0.0))
+            text_box_height = font_height * n_lines + interline_size * (n_lines - 1)
 
-        bg_img.paste(text_image, (left, top + bbox[1]), mask=text_image)
+            # Caption vertical position
+            match properties.get("position", "bottom"):
+                case "top":
+                    top = 0
+                case "bottom":
+                    top = bg_img.height - text_box_height
+                case "center":
+                    top = (bg_img.height - text_box_height) // 2
+                case "center-top":
+                    top = (bg_img.height // 2) - text_box_height
+                case "center-bottom":
+                    top = (bg_img.height // 2)
+                case _:
+                    # Defaults to bottom
+                    log.warning(f"bad argument: {properties['position']}")
+                    top = bg_img.height - text_box_height
+
+            if "y_offset" in properties:
+                top += round(float(properties["y_offset"]) * bg_img.height)
+
+            # Center text horizontally
+            left = (bg_img.width - text_image.width) // 2
+
+            # Opacity
+            if ("fade_in" in properties) or ("fade_out" in properties):
+                # Calculate fade-in and fade-out transparency
+                fade_in = float(properties["fade_in"])
+                fade_out = float(properties["fade_out"])
+                if (start - fade_in) < time_s < start:
+                    opacity = (time_s - (start - fade_in)) / fade_in
+                    text_image = modify_opacity(text_image, opacity)
+                elif end < time_s < (end + fade_out):
+                    opacity = (end + fade_out - time_s) / fade_out
+                    text_image = modify_opacity(text_image, opacity)
+
+            bg_img.paste(text_image, (left, top + bbox[1]), mask = text_image)
 
         bg_img.save(str(save_path))
 
+        # Render outside of frame warning
+        if (
+            left < 0
+            or top < 0
+            or left + text_image.width > bg_img.width
+            or top + text_image.height > bg_img.height
+        ):
+            log.warning(f"Rendered outside of frame: {(top, left)}")
 
-    def get_font(self, font_path: str, font_size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+
+    def _get_time_offsets(self) -> Dict[SegmentId, Tuple]:
+        """Returns time offsets (if any) for every segment"""
+        offsets = dict()
+        for seg_id, prop in self.segment_properties.items():
+            offset = float(prop.get("fade_in", 0.0)), float(prop.get("fade_out", 0.0))
+            if offset != (0.0, 0.0):
+                offsets[seg_id] = offset
+        return offsets
+
+
+    def get_font(self, font_name: str, font_size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         try:
-            key = (str(font_path), font_size)
-            if key in self.fonts:
-                return self.fonts[key]
+            key = (font_name.lower(), font_size)
+            if key in self.loaded_fonts:
+                return self.loaded_fonts[key]
             else:
-                font = ImageFont.truetype(font_path, font_size)
-                self.fonts[key] = font
+                font_path = self.fonts.get(font_name.lower(), "default")
+                if font_path == "default":
+                    font = ImageFont.load_default(font_size)
+                else:
+                    font = ImageFont.truetype(font_path[1], font_size)
+                self.loaded_fonts[key] = font
                 return font
         except Exception as e:
             log.error(f"Could not load requested font {e}")
-            return self.default_font
+            return self.loaded_fonts[("default", self.DEFAULT_FONT_SIZE)]
 
 
     def render_colored_text(
         self,
         text,
-        font = None,
-        properties = None,
+        properties = {},
         color_pc = 0.0,
         # shadow_color = "#000000AA",
         # shadow_offset = (0, 0)   # (x, y) offset
@@ -294,17 +346,18 @@ class CaptionRenderer:
         Args:
             color_pc (float): normalized time progression, between 0.0 and 1.0
         """
-        if not font:
-            font = self.default_font
-        font_size = font.size
-
         properties = properties or self.global_properties
-        text_bg_color = properties.get("bg-color", self.DEFAULT_FONT_BG_COLOR)
-        text_fg_color = properties.get("fg-color", self.DEFAULT_FONT_FG_COLOR)
-        text_bg_outline_color = properties.get("bg-outline-color", self.DEFAULT_FONT_OUTLINE_COLOR)
-        text_bg_outline_width = properties.get("bg-outline-width", self.DEFAULT_FONT_OUTLINE_WIDTH)
-        text_fg_outline_color = properties.get("fg-outline-color", self.DEFAULT_FONT_OUTLINE_COLOR)
-        text_fg_outline_width = properties.get("fg-outline-width", self.DEFAULT_FONT_OUTLINE_WIDTH)
+        font = self.get_font(
+            properties.get("font", "default"),
+            int(properties.get("font_size", self.DEFAULT_FONT_SIZE))
+        )
+        font_size = font.size
+        text_bg_color = properties.get("bg_color", self.DEFAULT_FONT_BG_COLOR)
+        text_fg_color = properties.get("fg_color", self.DEFAULT_FONT_FG_COLOR)
+        text_bg_outline_color = properties.get("bg_outline_color", self.DEFAULT_FONT_OUTLINE_COLOR)
+        text_bg_outline_width = int(properties.get("bg_outline_width", self.DEFAULT_FONT_OUTLINE_WIDTH))
+        text_fg_outline_color = properties.get("fg_outlin_color", self.DEFAULT_FONT_OUTLINE_COLOR)
+        text_fg_outline_width = int(properties.get("fg_outline_width", self.DEFAULT_FONT_OUTLINE_WIDTH))
 
         # Split by lines and words
         words_lines = [ line.split() for line in text.split(LINE_BREAK) ]
@@ -556,43 +609,16 @@ class VideoBurningThread(QThread):
             self.error.emit(str(e))
 
 
-def render_all(document: DocumentController, output_dir: Path) -> None:
-    # system_fonts = list_fonts_linux()
-    # for font_path in system_fonts:
-    #     if can_font_render_char(str(font_path), 'ñ'):
-    #         print(str(font_path))
-    # assert document.media_path is not None
 
-    renderer = CaptionRenderer(document)
-    renderer.set_output_dir(output_dir / "renders")
-    # renderer.set_background_color("#000000FF")
-    renderer.set_font(Path("~/.local/share/fonts/SimpleBreakfast-nRyn4.ttf").expanduser(), 38)
-    renderer.set_properties(
-        bg_color = "#FFFFFFBB",
-        fg_color = "#FFFFFFFF",
-        bg_outline_color = "#000000",
-        bg_outline_width = 2,
-        fg_outline_color = "#000000",
-        fg_outline_width = 2,
-        interline = -0.6,
-        #y_offset = -0.01
-    )
-    renderer.set_background_images("/home/gweltaz/Projets/art generatif/processing/karaokan1/renders/p_frame_%05d.png")
-
-    if document.media_path:
-        media_metadata = cache.get_media_metadata(document.media_path)
-        duration = media_metadata.get("duration", 0.0)
-    else:
-        duration = document.getSortedSegments()[-1][1][1]
+def modify_opacity(img: Image.Image, opacity: float) -> Image.Image:
+        """
+        Args:
+            opacity (float): between 0.0 and 1.0
+        """
+        r, g, b, a = img.split()
+        new_a = a.point(lambda x: x * opacity)
+        return Image.merge("RGBA", (r, g, b, new_a))
     
-    n_frames = int(duration * renderer.fps)
-    print(f"{n_frames=}")
-
-    for frame_i in tqdm(range(n_frames)):
-        renderer.render_frame(frame_i)
-    
-    print("done")
-
 
 def can_font_render_char(font_path, char):
     """Check if a font can render a specific character."""
@@ -607,11 +633,5 @@ def can_font_render_char(font_path, char):
                 return True
         return False
     except Exception as e:
-        print(f"Error reading {font_path}: {e}")
+        log.error(f"Error reading {font_path}: {e}")
         return False
-
-
-if __name__ == "__main__":
-    r = CaptionRenderer(None)
-    img = r.render_colored_text("Ur plac'h yaouank diwar ar maez,\u2028en garnizon Lannuon, ")
-    img[0].show()

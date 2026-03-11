@@ -10,7 +10,7 @@ from PySide6.QtGui import QTextCursor
 from src.main import MainWindow
 from ui.icons import loadIcons
 from src.text_widget import TextEditWidget
-from src.strings import strings
+from src.strings import app_strings
 
 
 @pytest.fixture(scope="session")
@@ -21,7 +21,7 @@ def qapp():
         app = QApplication([])
     
     loadIcons()
-    strings.initialize()
+    app_strings.initialize()
     
     yield app
     

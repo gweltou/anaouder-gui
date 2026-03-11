@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -38,13 +38,13 @@ from PySide6.QtGui import (
     QMouseEvent, QKeySequence, QShortcut
 )
 
-from actions import ActionManager
-from ui.theme import theme
-from settings import app_settings, shortcuts
-from utils import lerpColor, mapNumber
-from commands import ResizeSegmentCommand
-from interfaces import Segment, SegmentId, DocumentInterface
-from strings import strings
+from src.actions import ActionManager
+from src.ui.theme import theme
+from src.settings import app_settings, shortcuts
+from src.utils import lerpColor, mapNumber
+from src.commands import ResizeSegmentCommand
+from src.interfaces import Segment, SegmentId, DocumentInterface
+from src.strings import app_strings
 
 
 ZOOM_Y = 3.5    # In pixels per second
@@ -1360,7 +1360,7 @@ class WaveformWidget(QWidget):
         if current_dur < min_dur:
             # Draw text
             t = start + min_dur
-            self._drawMarkerText(t, strings.TR_MIN, ypos=2)
+            self._drawMarkerText(t, app_strings.TR_MIN, ypos=2)
             
             markers.append(t)
         
@@ -1372,13 +1372,13 @@ class WaveformWidget(QWidget):
             markers.append(next_segment_boundary)
         else:
             t = start + max_dur
-            self._drawMarkerText(t, strings.TR_MAX, ypos=1)
+            self._drawMarkerText(t, app_strings.TR_MAX, ypos=1)
             markers.append(t)
                 
         # Ideal density
         ideal_density_dur = self.resizing_textlen / self._target_density
         t = start + ideal_density_dur
-        tag = str(round(self._target_density, 1)) + strings.TR_UNIT_CPS
+        tag = str(round(self._target_density, 1)) + app_strings.TR_UNIT_CPS
         self._drawMarkerText(t, tag, ypos=-6)
 
         markers.append(t)
@@ -1473,11 +1473,11 @@ class WaveformWidget(QWidget):
                 t_string = f"{hour}:{minutes:02}:{secs:02}"
             else:
                 if secs == 0:
-                    t_string = f"{minutes}{strings.TR_UNIT_MINUTE[0]}"
+                    t_string = f"{minutes}{app_strings.TR_UNIT_MINUTE[0]}"
                 elif minutes == 0:
-                    t_string = f"{secs}{strings.TR_UNIT_SECOND}"
+                    t_string = f"{secs}{app_strings.TR_UNIT_SECOND}"
                 else:
-                    t_string = f"{minutes}{strings.TR_UNIT_MINUTE[0]}{secs:02}{strings.TR_UNIT_SECOND}"
+                    t_string = f"{minutes}{app_strings.TR_UNIT_MINUTE[0]}{secs:02}{app_strings.TR_UNIT_SECOND}"
             
             self.painter.drawText(t_x-8 * len(t_string) // 2, 12, t_string)
 

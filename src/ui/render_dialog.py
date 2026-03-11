@@ -17,6 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import logging
+from pathlib import Path
+
+from tqdm import tqdm
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -27,10 +30,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QImage, QPixmap
 
-from services.caption_renderer import CaptionRenderer
+from src.services.caption_renderer import CaptionRenderer
 from src.document_controller import DocumentController
 from src.utils import find_system_fonts
 from src.settings import app_settings
+from src.cache_system import cache
 
 
 
@@ -44,6 +48,7 @@ class RenderCaptionsDialog(QDialog):
             self,
             parent,
             document_controller: DocumentController,
+            output_dir: Path
             # text_widget: TextEditWidget,
             # fps: float,
             # undo_stack: QUndoStack
@@ -51,12 +56,15 @@ class RenderCaptionsDialog(QDialog):
         super().__init__(parent)
 
         self.document_controller = document_controller
+        self.output_dir = output_dir
+
+        self.renderer = CaptionRenderer(document_controller)
+        print(self.renderer.fps)
+
         # self.text_widget = text_widget
         # self.undo_stack = undo_stack
         # self.fps = fps
-        self.fonts = sorted(find_system_fonts())
-
-        self.renderer = CaptionRenderer()
+        self.font_names = [self.renderer.fonts[k][0] for k in sorted(self.renderer.fonts.keys())]
 
         self.example_text = "Disoñjal deoc'h"
 
@@ -79,7 +87,7 @@ class RenderCaptionsDialog(QDialog):
         font_layout = QHBoxLayout()  # No parent; will be added to the main layout
         font_label = QLabel(self.tr("Font:"), self)
         self.fonts_combo = QComboBox(self)
-        self.fonts_combo.addItems([path.name for path in self.fonts])
+        self.fonts_combo.addItems(self.font_names)
         self.fonts_combo.currentIndexChanged.connect(self.fontChanged)
 
         font_layout.addWidget(font_label)
@@ -111,11 +119,30 @@ class RenderCaptionsDialog(QDialog):
     def accept(self) -> None:
         super().accept()
 
+        self.renderer.set_output_dir(self.output_dir / "renders")
+        self.renderer.set_properties(
+            # font = self.font_names[self.fonts_combo.currentIndex()],
+            font_size = self.renderer.DEFAULT_FONT_SIZE,
+            bg_color = "#FFFFFFBB",
+            fg_color = "#FFFFFFFF",
+            bg_outline_color = "#000000",
+            bg_outline_width = 2,
+            fg_outline_color = "#000000",
+            fg_outline_width = 2,
+            interline = 0.0,
+            #y_offset = -0.01
+        )
+        self.renderer.set_background_images("/home/gweltaz/Projets/art generatif/processing/karaokan1/renders/p_frame_%05d.png")
+        
+        self.render_all()
+
     
     def fontChanged(self) -> None:
-        font_path = self.fonts[self.fonts_combo.currentIndex()]
-        log.info(f"Font changed to {font_path}")
-        self.renderer.set_font(font_path)
+        font_name = self.font_names[self.fonts_combo.currentIndex()].lower()
+        log.info(f"Font changed to {self.renderer.fonts[font_name]}")
+        self.renderer.set_properties(
+            font = font_name
+        )
         image, bbox = self.renderer.render_colored_text(self.example_text)
 
         # Store data on self to prevent garbage collection before QImage is done with it
@@ -134,24 +161,41 @@ class RenderCaptionsDialog(QDialog):
 
 
     def get_parameters(self) -> dict:
-        return {
-            "apply_to_all": self.all_radio_button.isChecked(),
-            "apply_subtitle_rules": self.subtitle_rules_checkbox.isChecked(),
-            "remove_verbal_fillers": self.remove_fillers_checkbox.isChecked(),
-            "convert_quotation_marks": self.quotation_mark_checkbox.isChecked(),
-            "convert_apostrophes": self.apostrophe_checkbox.isChecked(),
-            "apostrophe_type": "fr" if self.fr_apostrophe_radiobtn.isChecked() else "en"
-        }
+        return {}
+        # return {
+        #     "apply_to_all": self.all_radio_button.isChecked(),
+        #     "apply_subtitle_rules": self.subtitle_rules_checkbox.isChecked(),
+        #     "remove_verbal_fillers": self.remove_fillers_checkbox.isChecked(),
+        #     "convert_quotation_marks": self.quotation_mark_checkbox.isChecked(),
+        #     "convert_apostrophes": self.apostrophe_checkbox.isChecked(),
+        #     "apostrophe_type": "fr" if self.fr_apostrophe_radiobtn.isChecked() else "en"
+        # }
     
 
     def set_parameters(self, params: dict):
-        self.all_radio_button.setChecked(params.get("apply_to_all", False))
-        self.subtitle_rules_checkbox.setChecked(params.get("apply_subtitle_rules", False))
-        self.remove_fillers_checkbox.setChecked(params.get("remove_verbal_fillers", False))
-        self.quotation_mark_checkbox.setChecked(params.get("convert_quotation_marks", False))
-        self.apostrophe_checkbox.setChecked(params.get("convert_apostrophes", False))
-        apostrophe_type = params.get("apostrophe_type", 'fr')
-        if apostrophe_type == 'fr':
-            self.fr_apostrophe_radiobtn.setChecked(True)
+        pass
+        # self.all_radio_button.setChecked(params.get("apply_to_all", False))
+        # self.subtitle_rules_checkbox.setChecked(params.get("apply_subtitle_rules", False))
+        # self.remove_fillers_checkbox.setChecked(params.get("remove_verbal_fillers", False))
+        # self.quotation_mark_checkbox.setChecked(params.get("convert_quotation_marks", False))
+        # self.apostrophe_checkbox.setChecked(params.get("convert_apostrophes", False))
+        # apostrophe_type = params.get("apostrophe_type", 'fr')
+        # if apostrophe_type == 'fr':
+        #     self.fr_apostrophe_radiobtn.setChecked(True)
+        # else:
+        #     self.en_apostrophe_radiobtn.setChecked(True)
+
+
+    def render_all(self) -> None:
+        # Calculate total number of frames
+        if self.document_controller.media_path:
+            media_metadata = cache.get_media_metadata(self.document_controller.media_path)
+            duration = media_metadata.get("duration", 0.0)
         else:
-            self.en_apostrophe_radiobtn.setChecked(True)
+            duration = self.document_controller.getSortedSegments()[-1][1][1]
+        n_frames = int(duration * self.renderer.fps)
+
+        for frame_i in tqdm(range(n_frames)):
+            self.renderer.render_frame(frame_i)
+        
+        print("done")
