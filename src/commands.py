@@ -450,8 +450,6 @@ class InsertBlockCommand(QUndoCommand):
         self.after = after
     
     def undo(self):
-        log.debug("InsertBlockCommand UNDO")
-
         was_blocked = self.text_edit.signalsBlocked()
         self.text_edit.blockSignals(True)
         # self.text_edit.document().blockSignals(True)
@@ -566,8 +564,6 @@ class ReplaceTextCommand(QUndoCommand):
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
         cursor.insertHtml(self.new_text.replace('\u2028', "<br>"))
-        # cursor.setPosition(self.block.position() + self.cursor_pos_new)
-        # self.text_edit.setTextCursor(cursor)
         self.text_edit.setCursorState(self.prev_cursor)
     
     def id(self):

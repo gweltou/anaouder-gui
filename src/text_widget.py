@@ -561,6 +561,69 @@ class TextEditWidget(QTextEdit):
         self.document().blockSignals(was_blocked)
     
 
+    def insertNewline(self, block: QTextBlock, cursor: QTextCursor) -> None:
+        html, mask = self.getBlockHtml(block)
+        text = block.text()
+        pos_in_block = cursor.positionInBlock()
+        
+        # Hack to account for line-breaks that count for 2 chars
+        pos_in_block -= text[:pos_in_block].count('\u2028')
+        
+        # Find position in html string
+        html_idx = 0
+        mask_idx = 0
+        while mask_idx < pos_in_block:
+            if mask[html_idx] == True:
+                mask_idx += 1
+            html_idx += 1
+        
+        left_part = html[:html_idx].rstrip()
+        right_part = html[html_idx:].lstrip()
+        new_text = left_part + "<BR>" + right_part
+        
+        self.undo_stack.push(
+            ReplaceTextCommand(
+                self,
+                block,
+                new_text
+            )
+        )
+        # Set the cursor at the beginning of the new line
+        cursor.setPosition(block.position() + len(left_part) + 1)
+        self.setTextCursor(cursor)
+
+
+    def insertEmDash(self):
+        cursor = self.textCursor()
+        pos_in_block = cursor.positionInBlock()
+        block = cursor.block()
+        text = block.text()            
+        
+        cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
+        cursor_offset = 0
+        lines = []
+        for i, l in enumerate(text.split(LINE_BREAK)):
+            if not l.strip().startswith(EM_DASH):
+                lines.append(EM_DASH + ' ' + l.strip())
+            else:
+                lines.append(l)
+            if i <= cursor_line_n:
+                cursor_offset += len(lines[-1]) - len(l)
+        new_text = LINE_BREAK.join(lines)
+
+        if new_text == text:
+            return
+
+        self.undo_stack.push(
+            ReplaceTextCommand(
+                self,
+                block,
+                new_text
+            )
+        )
+        return
+    
+
     def zoomIn(self, *args):
         super().zoomIn(*args)
         self._updateSubtitleMargin()
@@ -917,37 +980,6 @@ class TextEditWidget(QTextEdit):
             self.undo_stack.push(InsertTextCommand(self, char, pos))
 
 
-    def insertEmDash(self):
-        cursor = self.textCursor()
-        pos_in_block = cursor.positionInBlock()
-        block = cursor.block()
-        text = block.text()            
-        
-        cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
-        cursor_offset = 0
-        lines = []
-        for i, l in enumerate(text.split(LINE_BREAK)):
-            if not l.strip().startswith(EM_DASH):
-                lines.append(EM_DASH + ' ' + l.strip())
-            else:
-                lines.append(l)
-            if i <= cursor_line_n:
-                cursor_offset += len(lines[-1]) - len(l)
-        new_text = LINE_BREAK.join(lines)
-
-        if new_text == text:
-            return
-
-        self.undo_stack.push(
-            ReplaceTextCommand(
-                self,
-                block,
-                new_text
-            )
-        )
-        return
-    
-
     def keyPressEvent(self, event: QKeyEvent) -> None:
         # Block TAB
         if event.key() == Qt.Key.Key_Tab:
@@ -1040,7 +1072,7 @@ class TextEditWidget(QTextEdit):
         block_data: MyTextBlockUserData = block.userData()
 
         if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-            self._handle_insert_newline(block, cursor)
+            self.insertNewline(block, cursor)
             return True
 
         last_letter_idx = len(text.rstrip())
@@ -1348,38 +1380,6 @@ class TextEditWidget(QTextEdit):
             return True
         
         return False
-
-
-    def _handle_insert_newline(self, block: QTextBlock, cursor: QTextCursor) -> None:
-        html, mask = self.getBlockHtml(block)
-        text = block.text()
-        pos_in_block = cursor.positionInBlock()
-        
-        # Hack to account for line-breaks that count for 2 chars
-        pos_in_block -= text[:pos_in_block].count('\u2028')
-        
-        # Find position in html string
-        html_idx = 0
-        mask_idx = 0
-        while mask_idx < pos_in_block:
-            if mask[html_idx] == True:
-                mask_idx += 1
-            html_idx += 1
-        
-        left_part = html[:html_idx].rstrip()
-        right_part = html[html_idx:].lstrip()
-        new_text = left_part + "<BR>" + right_part
-        
-        self.undo_stack.push(
-            ReplaceTextCommand(
-                self,
-                block,
-                new_text
-            )
-        )
-        # Set the cursor at the beginning of the new line
-        cursor.setPosition(block.position() + len(left_part) + 1)
-        self.setTextCursor(cursor)
 
 
     def mouseReleaseEvent(self, event):

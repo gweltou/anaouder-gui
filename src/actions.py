@@ -54,6 +54,9 @@ class ActionManager(QObject):
     undo_requested = Signal()
     redo_requested = Signal()
 
+    play_pause_requested = Signal()
+    play_segment_requested = Signal()
+
     follow_playhead_requested = Signal(bool)
 
     transcribe_requested = Signal(bool)
@@ -157,6 +160,17 @@ class ActionManager(QObject):
         self.redo.setIcon(icons["redo"])
         self.redo.setToolTip(getActionTooltip(self.redo))
         self.redo.triggered.connect(self.redo_requested.emit)
+
+        ## Play actions
+        self.play_pause = QAction(self.tr("Play/Pause"))
+        self.play_pause.setShortcut(shortcuts["play_pause"])
+        self.play_pause.setIcon(icons["play"])
+        self.play_pause.setToolTip(getActionTooltip(self.play_pause))
+        self.play_pause.triggered.connect(self.play_pause_requested.emit)
+
+        self.play_segment = QAction(self.tr("Replay segment"))
+        self.play_segment.setShortcut(shortcuts["play_segment"])
+        self.play_segment.triggered.connect(self.play_segment_requested.emit)
 
         ## Follow playhead
         self.follow_playhead = QAction(self.tr("Follow playhead"), self)

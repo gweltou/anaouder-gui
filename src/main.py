@@ -146,12 +146,6 @@ class MainWindow(QMainWindow):
         ## Search TODO
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
         shortcut.activated.connect(self.search)
-        ## Play
-        shortcut = QShortcut(shortcuts["play_stop"], self)
-        shortcut.activated.connect(self.playAction)
-
-        shortcut = QShortcut(shortcuts["play_pause"], self)
-        shortcut.activated.connect(self.playAction)
 
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.document_controller.selectAll)
@@ -341,6 +335,12 @@ class MainWindow(QMainWindow):
         self.action.transcribe_hidden_requested.connect(
             lambda checked: self.toggleHiddenTranscription(checked)
         )
+
+        # Media actions
+        self.action.play_pause_requested.connect(self.onPlayPauseAction)
+
+        self.addAction(self.action.play_segment)
+        self.action.play_segment_requested.connect(self.onPlaySegmentAction)
 
         self.action.follow_playhead_requested.connect(self.toggleFollowPlayhead)
         self.action.delete_segment_requested.connect(
@@ -734,10 +734,8 @@ class MainWindow(QMainWindow):
         play_buttons_layout.addWidget(prev_button)
 
         self.play_button = QToolButton()
-        self.play_button.setIcon(icons["play"])
+        self.play_button.setDefaultAction(self.action.play_pause)
         self.play_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
-        self.play_button.setToolTip(self.tr("Play current utterance") + f" &lt;{shortcuts["play_stop"].toString()}&gt;")
-        self.play_button.clicked.connect(self.playAction)
         play_buttons_layout.addWidget(self.play_button)
 
         next_button = QToolButton()
@@ -1780,7 +1778,22 @@ class MainWindow(QMainWindow):
         self.updateSubtitle(position_sec)
     
 
-    def playAction(self) -> None:
+    def onPlayPauseAction(self) -> None:
+        if not self.media_controller.hasMedia():
+            return
+
+        # Stop playback
+        if self.media_controller.isPlaying():
+            self.media_controller.pause()
+            self.play_button.setIcon(icons["play"])
+            return
+        
+        # Start playback
+        self.media_controller.play()
+        self.play_button.setIcon(icons["pause"])
+
+
+    def onPlaySegmentAction(self) -> None:
         if not self.media_controller.hasMedia():
             return
 
@@ -1834,11 +1847,11 @@ class MainWindow(QMainWindow):
         self.play_button.setIcon(icons["pause"])
 
 
-    def stop(self) -> None:
-        """Stop playback"""
-        if self.media_controller.isPlaying():
-            self.media_controller.stop()
-            self.play_button.setIcon(icons["play"])
+    # def stop(self) -> None:
+    #     """Stop playback"""
+    #     if self.media_controller.isPlaying():
+    #         self.media_controller.stop()
+    #         self.play_button.setIcon(icons["play"])
 
 
     def playSegment(self, segment: Segment, segment_id: SegmentId = -1) -> None:
