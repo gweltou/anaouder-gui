@@ -124,6 +124,15 @@ def download(url: str, root: str) -> str:
 
 
 
+#### Text utility functions
+
+def filter_out_chars(text: str, chars: str) -> str:
+    """Remove specified characters from text"""
+    for char in chars:
+        text = text.replace(char, '')
+    return text
+
+
 def extract_sentence_regions(text: str) -> List[tuple]:
     """
     Return a list of text regions,
@@ -217,6 +226,7 @@ def splitForSubtitle(text: str, size: int):
     return (text,)
 
 
+#### Color utility functions
 
 def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
     """Linear interpolation between two QColors"""
@@ -225,19 +235,6 @@ def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
     green = col1.greenF() * (1.0 - t) + col2.greenF() * t
     blue = col1.blueF() * (1.0 - t) + col2.blueF() * t
     return QColor(int(red*255), int(green*255), int(blue*255))
-
-
-
-def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) -> float:
-    """Map a number from a range to another"""
-    #  if n <= min_n:
-    #       return min_m
-    #  elif n >= max_n:
-    #       return max_m
-    dm = (max_m - min_m)
-    dn = (max_n - min_n)
-    d = dm / dn
-    return min_m + (n - min_n) * d
 
 
 def yuv_to_rgb(y: float, u: float, v: float, color_range='full') -> tuple:
@@ -270,6 +267,20 @@ def bt709_to_rgb(g: float, b: float, r: float, color_range='tv') -> tuple:
     return (r, g, b)
 
 
+def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) -> float:
+    """Map a number from a range to another"""
+    #  if n <= min_n:
+    #       return min_m
+    #  elif n >= max_n:
+    #       return max_m
+    dm = (max_m - min_m)
+    dn = (max_n - min_n)
+    d = dm / dn
+    return min_m + (n - min_n) * d
+
+
+#### Time utility functions
+
 def sec2hms(
         seconds,
         precision=0,
@@ -289,6 +300,8 @@ def sec2hms(
     return sep.join(parts)
 
 
+#### Audio file utility functions
+
 def get_audiofile_info(filename) -> dict:
     r = subprocess.check_output(['ffprobe', '-hide_banner', '-v', 'panic', '-show_streams', '-of', 'json', filename])
     r = json.loads(r)
@@ -296,7 +309,7 @@ def get_audiofile_info(filename) -> dict:
 
 
 
-#### Fonts
+#### Fonts utility functions
 
 def find_system_fonts():
     """Simple cross-platform font finder."""

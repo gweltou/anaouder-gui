@@ -24,8 +24,8 @@ from src.commands import (
     InsertBlockCommand,
     ReplaceTextCommand
 )
-from ui.icons import loadIcons
-from strings import strings
+from src.ui.icons import loadIcons
+from src.strings import app_strings
 
 
 
@@ -37,7 +37,7 @@ def qapp():
         app = QApplication([])
     
     loadIcons()
-    strings.initialize()
+    app_strings.initialize()
     
     yield app
     
@@ -75,7 +75,7 @@ def load_document(main_window):
 def load_document_2(main_window):
     main_window.document_controller.clear()
 
-    main_window.openFile(Path("tests/MeliMilaMalou.ali"))
+    main_window.onOpenFile(Path("tests/MeliMilaMalou.ali"))
 
 
 

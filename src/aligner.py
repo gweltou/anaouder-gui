@@ -33,7 +33,7 @@ from src.interfaces import DocumentInterface
 from src.commands import AlignBlockWithSegment
 from src.cache_system import cache
 from src.lang import prepTextForAlignment
-from src.utils import PUNCTUATION
+from src.utils import PUNCTUATION, filter_out_chars
 
 
 
@@ -172,7 +172,6 @@ def can_smart_split(text: str, vosk_tokens: list):
     gt = prep_sentence(text)
     hyp = prep_sentence(' '.join([t[2] for t in vosk_tokens]))
     cer = jiwer.cer(gt, hyp)
-    print(f"{cer=}")
     return cer < 0.5
 
 
@@ -205,14 +204,19 @@ def _print_matrix(matrix):
         print(f"[{' '.join(r)}]")
 
 
-def filter_out_chars(text: str, chars: str) -> str:
-    """Remove given characters from a string"""
-
-    filtered_text = ""
-    for l in text:
-        if not l in chars: filtered_text += l
-    return filtered_text
-
+def print_alignment(alignment: List) -> None:
+    top_line = []
+    bottom_line = []
+    for gt_word, hyp in alignment:
+        gt_word = gt_word if gt_word else '*'
+        hyp = hyp[0] if hyp else '*'
+        max_len = max(len(gt_word), len(hyp))
+        top_line.append(gt_word.ljust(max_len))
+        bottom_line.append(hyp.ljust(max_len))
+    
+    print("--------")
+    print(' '.join(top_line))
+    print(' '.join(bottom_line))
 
 
 class TextAlignerThread(QThread):
@@ -361,7 +365,7 @@ def align_text_with_vosk_tokens(text: str, vosk_tokens: list, cancel_check=None)
 
 
 class TextAligner(QObject):
-    error = Signal(str)
+    error_msg = Signal(str)
 
     def __init__(
             self,
@@ -370,6 +374,8 @@ class TextAligner(QObject):
             media_controller: MediaPlayerController,
             recognizer: TranscriptionService
         ):
+        super().__init__(parent)
+
         self.parent_window = parent
         self.document_controller = document_controller
         self.media_controller = media_controller
@@ -381,9 +387,10 @@ class TextAligner(QObject):
 
     def autoAlign(self) -> None:
         """
-        media_path
-        progress_bar
-        document_controller
+        Dependecies:
+            media_path
+            progress_bar
+            document_controller
         """
         log.debug("autoAlign()")
 
@@ -391,6 +398,7 @@ class TextAligner(QObject):
 
         if media_path is None:
             log.error("No media file detected")
+            self.error_msg.emit(self.tr("No media file loaded"))
             return
         
         # Check if there is a cached transcription for this media
@@ -401,8 +409,10 @@ class TextAligner(QObject):
             is_missing_transcription = True
 
         alignment_data = self.document_controller.getSelectedBlocksAndTimeRange()
+        
         if alignment_data is None:
             return
+        
         blocks, time_range = alignment_data
 
         self.loading_dialog = ProgressDialog(self.parent_window)
@@ -418,7 +428,7 @@ class TextAligner(QObject):
 
             self.alignment_thread = TextAlignerThread(blocks, tokens, self.parent_window)
             self.alignment_thread.finished.connect(on_alignment_complete)
-            self.alignment_thread.error.connect(self.error.emit)
+            self.alignment_thread.error.connect(self.error_msg.emit)
 
             self.alignment_thread.start()
 

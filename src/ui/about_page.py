@@ -24,9 +24,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
-from version import __version__
-from ui.icons import icons
-from strings import strings
+from src.version import __version__
+from src.ui.icons import icons
+from src.strings import app_strings
 
 
 trugarekaat = ', '. join(sorted([
@@ -174,7 +174,7 @@ class AboutDialog(QDialog):
         layout.addWidget(scroll_area)
         
         # OK button
-        ok_button = QPushButton(strings.TR_OK)
+        ok_button = QPushButton(app_strings.TR_OK)
         ok_button.clicked.connect(self.accept)
         button_layout = QHBoxLayout()
         button_layout.addStretch()

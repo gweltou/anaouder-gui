@@ -832,7 +832,7 @@ class DocumentController(QObject):
 
 
     def getSelectedBlocksAndTimeRange(self) -> Tuple[List[QTextBlock], List] | None:
-        """Returns the selected text and the corresponding time range"""
+        """Returns the selected text blocks and the corresponding time range"""
         log.info("autoAlignSelectedBlocks()")
 
         if self.text_widget is None or self.waveform_widget is None:

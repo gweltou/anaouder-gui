@@ -39,6 +39,7 @@ class ActionManager(QObject):
 
     import_media_requested = Signal()
     import_subtitles_requested = Signal()
+    import_rtf_movie_script_requested = Signal()
 
     export_srt_requested = Signal()
     export_txt_requested = Signal()
@@ -53,9 +54,12 @@ class ActionManager(QObject):
     undo_requested = Signal()
     redo_requested = Signal()
 
+    follow_playhead_requested = Signal(bool)
+
     transcribe_requested = Signal(bool)
     transcribe_hidden_requested = Signal(bool)
-    follow_playhead_requested = Signal(bool)
+    request_auto_align = Signal()
+
     show_about_requested = Signal()
     delete_segment_requested = Signal()
     delete_utterance_requested = Signal()
@@ -95,6 +99,10 @@ class ActionManager(QObject):
         self.import_subtitles = QAction(app_strings.TR_IMPORT_SUBTITLES + '...', self)
         self.import_subtitles.setStatusTip(self.tr("Import a subtitles file, keep current media"))
         self.import_subtitles.triggered.connect(self.import_subtitles_requested.emit)
+
+        self.import_rtf = QAction(self.tr("Import a RTF file") + '...', self)
+        self.import_rtf.setStatusTip(self.tr("Import a RTF movie script file (DIZALE)"))
+        self.import_rtf.triggered.connect(self.import_rtf_movie_script_requested.emit)
 
         ## Export actions
         self.export_srt = QAction(self.tr("&SubRip (.srt)"), self)
@@ -150,6 +158,15 @@ class ActionManager(QObject):
         self.redo.setToolTip(getActionTooltip(self.redo))
         self.redo.triggered.connect(self.redo_requested.emit)
 
+        ## Follow playhead
+        self.follow_playhead = QAction(self.tr("Follow playhead"), self)
+        self.follow_playhead.setShortcut(shortcuts["follow_playhead"])
+        self.follow_playhead.setIcon(icons["follow_playhead"])
+        self.follow_playhead.setToolTip(getActionTooltip(self.follow_playhead))
+        self.follow_playhead.setCheckable(True)
+        # self.follow_playhead.setChecked(self.waveform.follow_playhead)
+        self.follow_playhead.toggled.connect(self.follow_playhead_requested.emit)
+
         ## Transcribe actions
         self.transcribe = QAction(self.tr("Transcribe"), self)
         self.transcribe.setShortcut(shortcuts["transcribe"])
@@ -166,14 +183,8 @@ class ActionManager(QObject):
         self.hidden_transcription.setChecked(False)
         self.hidden_transcription.toggled.connect(self.transcribe_hidden_requested.emit)
 
-        ## Follow playhead
-        self.follow_playhead = QAction(self.tr("Follow playhead"), self)
-        self.follow_playhead.setShortcut(shortcuts["follow_playhead"])
-        self.follow_playhead.setIcon(icons["follow_playhead"])
-        self.follow_playhead.setToolTip(getActionTooltip(self.follow_playhead))
-        self.follow_playhead.setCheckable(True)
-        # self.follow_playhead.setChecked(self.waveform.follow_playhead)
-        self.follow_playhead.toggled.connect(self.follow_playhead_requested.emit)
+        self.auto_align = QAction(self.tr("&Auto align"), self)
+        self.auto_align.triggered.connect(self.request_auto_align.emit)
 
         # Segments actions
         self.delete_segment = QAction(f"{self.tr("Delete audio segment")}", self)

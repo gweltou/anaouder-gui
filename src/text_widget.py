@@ -867,8 +867,7 @@ class TextEditWidget(QTextEdit):
                 # -------------------------
             else:
                 # Auto-alignment
-                auto_align_action = context_menu.addAction("Auto align")
-                auto_align_action.triggered.connect(self.request_auto_align.emit)
+                context_menu.addAction(self.action.auto_align)
                 context_menu.addSeparator()
                 # -------------------------
         cut_action = QAction(QIcon.fromTheme("edit-cut"), "Cut", self)
@@ -969,7 +968,7 @@ class TextEditWidget(QTextEdit):
             # Send the event to the parent widget
             if self.main_window:
                 QApplication.sendEvent(self.main_window, new_event)
-                return event.ignore()
+            return event.ignore()
         
         if event.matches(QKeySequence.StandardKey.Cut):
             self.cut()
@@ -1041,30 +1040,7 @@ class TextEditWidget(QTextEdit):
         block_data: MyTextBlockUserData = block.userData()
 
         if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-            html, mask = self.getBlockHtml(block)
-            
-            # Hack to account for line-breaks that count for 2 chars
-            pos_in_block -= text[:pos_in_block].count('\u2028')
-            
-            # Find position in html string
-            html_idx = 0
-            mask_idx = 0
-            while mask_idx < pos_in_block:
-                if mask[html_idx] == True:
-                    mask_idx += 1
-                html_idx += 1
-            
-            left_part = html[:html_idx].rstrip()
-            right_part = html[html_idx:].lstrip()
-            new_text = left_part + "<BR>" + right_part
-            
-            self.undo_stack.push(
-                ReplaceTextCommand(
-                    self,
-                    block,
-                    new_text
-                )
-            )
+            self._handle_insert_newline(block, cursor)
             return True
 
         last_letter_idx = len(text.rstrip())
@@ -1372,6 +1348,38 @@ class TextEditWidget(QTextEdit):
             return True
         
         return False
+
+
+    def _handle_insert_newline(self, block: QTextBlock, cursor: QTextCursor) -> None:
+        html, mask = self.getBlockHtml(block)
+        text = block.text()
+        pos_in_block = cursor.positionInBlock()
+        
+        # Hack to account for line-breaks that count for 2 chars
+        pos_in_block -= text[:pos_in_block].count('\u2028')
+        
+        # Find position in html string
+        html_idx = 0
+        mask_idx = 0
+        while mask_idx < pos_in_block:
+            if mask[html_idx] == True:
+                mask_idx += 1
+            html_idx += 1
+        
+        left_part = html[:html_idx].rstrip()
+        right_part = html[html_idx:].lstrip()
+        new_text = left_part + "<BR>" + right_part
+        
+        self.undo_stack.push(
+            ReplaceTextCommand(
+                self,
+                block,
+                new_text
+            )
+        )
+        # Set the cursor at the beginning of the new line
+        cursor.setPosition(block.position() + len(left_part) + 1)
+        self.setTextCursor(cursor)
 
 
     def mouseReleaseEvent(self, event):

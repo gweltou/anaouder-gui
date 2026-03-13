@@ -70,7 +70,7 @@ class RenderCaptionsDialog(QDialog):
 
         self.setWindowTitle(self.tr("Render captions"))
         self.setMinimumWidth(500)
-        self.build_ui()
+        self.initUI()
 
         self.fontChanged()
 
@@ -78,10 +78,15 @@ class RenderCaptionsDialog(QDialog):
         # self.set_parameters(saved_params)
         
     
-    def build_ui(self) -> None:
+    def initUI(self) -> None:
         # Main layout
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
+
+        columns = QHBoxLayout()
+
+        # Left column
+        left_column = QVBoxLayout()
 
         # Font selector
         font_layout = QHBoxLayout()  # No parent; will be added to the main layout
@@ -92,18 +97,31 @@ class RenderCaptionsDialog(QDialog):
 
         font_layout.addWidget(font_label)
         font_layout.addWidget(self.fonts_combo, stretch=1)  # Combo stretches to fill space
-        layout.addLayout(font_layout)
+        left_column.addLayout(font_layout)
+
+        columns.addLayout(left_column)
+
+        # ----------------
+
+        # Right column
+        right_column = QVBoxLayout()
 
         # Preview area
         preview_label = QLabel(self.tr("Preview:"), self)
-        layout.addWidget(preview_label)
+        right_column.addWidget(preview_label)
 
         self.font_image_label = QLabel(self)
         self.font_image_label.setMinimumSize(400, 80)
         self.font_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.font_image_label.setFrameShape(QFrame.Shape.StyledPanel)  # Visible border
         self.font_image_label.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(self.font_image_label)
+        right_column.addWidget(self.font_image_label)
+
+        columns.addLayout(right_column)
+
+        layout.addLayout(columns)
+
+        # ----------------
 
         layout.addStretch()
 
@@ -132,7 +150,7 @@ class RenderCaptionsDialog(QDialog):
             interline = 0.0,
             #y_offset = -0.01
         )
-        self.renderer.set_background_images("/home/gweltaz/Projets/art generatif/processing/karaokan1/renders/p_frame_%05d.png")
+        #self.renderer.set_background_images("/home/gweltaz/Projets/art generatif/processing/karaokan1/renders/p_frame_%05d.png")
         
         self.render_all()
 

@@ -371,12 +371,15 @@ class MainWindow(QMainWindow):
         self.recognizer.finished.connect(self.finishTranscriptionAction)
         self.recognizer.end_of_file.connect(self.onRecognizerEOF)
 
+        # Aligner
+        self.action.request_auto_align.connect(self.aligner.autoAlign)
+        self.aligner.error_msg.connect(self.setErrorMessage)
+
         # Text widgets
         self.text_widget.auto_transcribe.connect(self.action.transcribe.trigger)
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
         self.text_widget.align_with_selection.connect(self.alignWithSelection)
-        self.text_widget.request_auto_align.connect(self.aligner.autoAlign)
         self.action.insert_em_dash_requested.connect(self.text_widget.insertEmDash)
 
         # Waveform widget
@@ -480,8 +483,11 @@ class MainWindow(QMainWindow):
         auto_segment_action.triggered.connect(self.onAutoSegment)
         operation_menu.addAction(auto_segment_action)
         
+        # Auto Align
+        operation_menu.addAction(self.action.auto_align)
+
         ## Adapt to subtitle
-        adapt_to_subtitle_action = QAction(self.tr("&Adapt to subtitles"), self)
+        adapt_to_subtitle_action = QAction(self.tr("Adapt to &subtitles"), self)
         adapt_to_subtitle_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
         adapt_to_subtitle_action.triggered.connect(self.adaptToSubtitle)
         operation_menu.addAction(adapt_to_subtitle_action)
@@ -847,6 +853,10 @@ class MainWindow(QMainWindow):
     def setStatusMessage(self, message: str, timeout=STATUS_BAR_TIMEOUT) -> None:
         """Sets a temporary status message"""
         self.statusBar().showMessage(message, timeout)
+    
+    def setErrorMessage(self, message: str, timeout=STATUS_BAR_TIMEOUT) -> None:
+        """Sets a temporary error message"""
+        self.statusBar().showMessage('⚠️ ' + message, timeout)
 
 
     def updateWindowTitle(self) -> None:
@@ -1017,8 +1027,8 @@ class MainWindow(QMainWindow):
                     old_backups[i].unlink()                               
         except Exception as e:
             log.error(f"Autosave failed {e}")
-            self.setStatusMessage(
-                '⚠️ ' + self.tr("Autosave failed: {exception}").format(exception=str(e))
+            self.setErrorMessage(
+                self.tr("Autosave failed: {exception}").format(exception=str(e))
             )
 
 
@@ -1092,6 +1102,7 @@ class MainWindow(QMainWindow):
                 self.openMediaFile(Path(media_path))
         else:
             log.error(f"Bad file type: {file_path}")
+            self.setErrorMessage(self.tr(f"Bad file type: {file_path}"))
 
         self._loadDocumentState(file_path)
 
