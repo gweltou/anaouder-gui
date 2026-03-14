@@ -400,6 +400,7 @@ class TranscriptionService(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        
         self._recognizer_worker = RecognizerWorker()
         self._thread = QThread()
         self._recognizer_worker.moveToThread(self._thread)

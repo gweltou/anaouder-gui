@@ -136,9 +136,6 @@ class TextEditWidget(QTextEdit):
         self._click_count = 0
         self._last_click = None
 
-        # shortcut = QShortcut(shortcuts["dialog_char"], self)
-        # shortcut.activated.connect(self.insertEmDash)
-
 
     def updateThemeColors(self):        
         self._margin_color = theme.margin
@@ -561,7 +558,11 @@ class TextEditWidget(QTextEdit):
         self.document().blockSignals(was_blocked)
     
 
-    def insertNewline(self, block: QTextBlock, cursor: QTextCursor) -> None:
+    def insertNewline(self) -> None:
+        log.debug("insertNewline()")
+
+        cursor = self.textCursor()
+        block = cursor.block()
         html, mask = self.getBlockHtml(block)
         text = block.text()
         pos_in_block = cursor.positionInBlock()
@@ -579,6 +580,7 @@ class TextEditWidget(QTextEdit):
         
         left_part = html[:html_idx].rstrip()
         right_part = html[html_idx:].lstrip()
+        print(left_part, right_part)
         new_text = left_part + "<BR>" + right_part
         
         self.undo_stack.push(
@@ -589,7 +591,8 @@ class TextEditWidget(QTextEdit):
             )
         )
         # Set the cursor at the beginning of the new line
-        cursor.setPosition(block.position() + len(left_part) + 1)
+        n_spaces_stripped = html_idx - len(left_part)
+        cursor.setPosition(block.position() + pos_in_block - n_spaces_stripped + 1)
         self.setTextCursor(cursor)
 
 
@@ -862,7 +865,6 @@ class TextEditWidget(QTextEdit):
 
     
     def contextMenuEvent(self, event):
-        print("contextmenu")
         te_cursor = self.textCursor()
         cursor = self.cursorForPosition(event.pos()) # event.pos() is cursor pos in pixels
         block = cursor.block()
@@ -984,23 +986,19 @@ class TextEditWidget(QTextEdit):
         # Block TAB
         if event.key() == Qt.Key.Key_Tab:
             return
+        
+        # Intercept insert newline action shortcut
+        if event.keyCombination() == self.action.insert_newline.shortcut()[0]:
+            self.action.insert_newline.trigger()
+            return event.accept()
 
-        if (event.matches(QKeySequence.StandardKey.Undo) or
-            event.matches(QKeySequence.StandardKey.Redo)):
-            # Handle by parent widget
-            new_event = QKeyEvent(
-                event.type(),
-                event.key(),
-                event.modifiers(),
-                event.text(),
-                event.isAutoRepeat(),
-                event.count()
-            )
-            
-            # Send the event to the parent widget
-            if self.main_window:
-                QApplication.sendEvent(self.main_window, new_event)
-            return event.ignore()
+        if event.matches(QKeySequence.StandardKey.Undo):
+            self.action.undo.trigger()
+            return event.accept()
+
+        if event.matches(QKeySequence.StandardKey.Redo):
+            self.action.redo.trigger()
+            return event.accept()
         
         if event.matches(QKeySequence.StandardKey.Cut):
             self.cut()
@@ -1070,10 +1068,6 @@ class TextEditWidget(QTextEdit):
         cursor_pos = cursor.position()
         pos_in_block = cursor.positionInBlock()
         block_data: MyTextBlockUserData = block.userData()
-
-        if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-            self.insertNewline(block, cursor)
-            return True
 
         last_letter_idx = len(text.rstrip())
         first_letter_idx = 0

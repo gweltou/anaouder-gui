@@ -380,6 +380,7 @@ class MainWindow(QMainWindow):
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
         self.text_widget.align_with_selection.connect(self.alignWithSelection)
+        self.action.insert_newline_requested.connect(self.text_widget.insertNewline)
         self.action.insert_em_dash_requested.connect(self.text_widget.insertEmDash)
 
         # Waveform widget
@@ -630,6 +631,11 @@ class MainWindow(QMainWindow):
         bold_button.setShortcut(QKeySequence.StandardKey.Bold)
         bold_button.clicked.connect(lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.BOLD))
         format_buttons_layout.addWidget(bold_button)
+
+        newline_button = QToolButton()
+        newline_button.setFixedWidth(BUTTON_SIZE)
+        newline_button.setDefaultAction(self.action.insert_newline)
+        format_buttons_layout.addWidget(newline_button)
 
         dash_button = QToolButton()
         dash_button.setFixedWidth(BUTTON_SIZE)

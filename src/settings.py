@@ -21,7 +21,7 @@ from typing import Dict
 import platform
 
 from PySide6.QtCore import Qt, QSettings
-from PySide6.QtGui import QShortcut, QKeySequence, QColor
+from PySide6.QtGui import QKeySequence, QColor
 
 
 _is_darwin = platform.system() == "Darwin"
@@ -78,13 +78,18 @@ AUTOSAVE_BACKUP_NUMBER = 3         # Number of files to keep at most
 
 shortcuts: Dict[str, QKeySequence] = {
     "transcribe":      QKeySequence("Ctrl+R"),
+    
     "play_pause":      Qt.Key.Key_Space,
-    "play_stop":       QKeySequence("Alt+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
+    "play_segment":    QKeySequence("Alt+Space") if _is_darwin else QKeySequence("Ctrl+Space"),
     "play_next":       QKeySequence("Alt+Down") if _is_darwin else QKeySequence("Ctrl+Down"),
     "play_prev":       QKeySequence("Alt+Up") if _is_darwin else QKeySequence("Ctrl+Up"),
+    
     "select":          QKeySequence("S"), #Qt.Key.Key_S,
     "follow_playhead": QKeySequence("F"),
+
+    "new_line":        QKeySequence(Qt.Modifier.SHIFT | Qt.Key.Key_Return),
     "em_dash":         QKeySequence("Ctrl+D"),
+
     "crop_head":       QKeySequence("Ctrl+H"),
     "crop_tail":       QKeySequence("Ctrl+T"),
     "segment_from_selection": QKeySequence("A"),

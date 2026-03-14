@@ -37,6 +37,7 @@ INCLUDE_SPEAKER_NAMES = False
 IGNORE_SPEAKERS = ["NAD"]
 IGNORE_WORDS = [
     "aaa", "aah", "aaah", "argh", "ahm",
+    "eee",
     "huu",
     "hañ", "mhañ", "mfhañ", "hañf",
     "mm", "mh", "hm", "mmm", "mmr", "mmrr", "mff", "mrh",
@@ -142,4 +143,4 @@ class RTFImporter(QObject):
             for subline in split_sentences(line):
                 new_lines.append(subline)
 
-        return lines
+        return new_lines

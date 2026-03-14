@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import Qt, QObject, Signal
 from PySide6.QtGui import QAction, QKeySequence, QActionGroup
 
 from src.settings import shortcuts
@@ -68,6 +68,7 @@ class ActionManager(QObject):
     delete_utterance_requested = Signal()
 
     # Text actions signals
+    insert_newline_requested = Signal()
     insert_em_dash_requested = Signal()
     
 
@@ -151,12 +152,14 @@ class ActionManager(QObject):
         ## Undo/Redo
         self.undo = QAction(self.tr("Undo"), self)
         self.undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.undo.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         self.undo.setIcon(icons["undo"])
         self.undo.setToolTip(getActionTooltip(self.undo))
         self.undo.triggered.connect(self.undo_requested.emit)
 
         self.redo = QAction(self.tr("Redo"), self)
         self.redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self.redo.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         self.redo.setIcon(icons["redo"])
         self.redo.setToolTip(getActionTooltip(self.redo))
         self.redo.triggered.connect(self.redo_requested.emit)
@@ -208,6 +211,13 @@ class ActionManager(QObject):
         self.delete_utterance.triggered.connect(self.delete_utterance_requested.emit)
 
         # Text actions
+        self.insert_newline = QAction(self.tr("Insert new line"))
+        self.insert_newline.setShortcut(shortcuts["new_line"])
+        self.insert_newline.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        self.insert_newline.setIcon(icons["new_line"])
+        self.insert_newline.setToolTip(getActionTooltip(self.insert_newline))
+        self.insert_newline.triggered.connect(self.insert_newline_requested.emit)
+
         self.insert_em_dash = QAction(self.tr("Insert em dashes"))
         self.insert_em_dash.setShortcut(shortcuts["em_dash"])
         self.insert_em_dash.setIcon(icons["em_dashes"])
