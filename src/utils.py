@@ -56,7 +56,7 @@ def get_resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-def color_yellow(text):
+def yellow(text):
     return f"\033[93m{text}\033[0m"
 
 

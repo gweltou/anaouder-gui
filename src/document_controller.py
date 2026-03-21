@@ -39,6 +39,7 @@ from src.interfaces import MyTextBlockUserData
 from src.utils import (
     LINE_BREAK,
     extract_sentence_regions,
+    yellow
 )
 from src.commands import (
     AddSegmentCommand, DeleteSegmentsCommand, ResizeSegmentCommand,
@@ -83,12 +84,13 @@ class DocumentController(QObject):
 
     def clear(self) -> None:
         """ Clears the document """
-        self.media_path = None
+        # self.media_path = None
         self.segments.clear()
         self.id_counter = 0
         self.must_sort = True
 
-        # self.waveform_widget.clear()
+        if self.waveform_widget:
+            self.waveform_widget.must_redraw = True
         
         # Clear text document
         if self.text_widget is not None:
@@ -115,8 +117,7 @@ class DocumentController(QObject):
         self.waveform_widget.split_utterance.connect(self.splitFromWaveform)
     
 
-    def setMediaPath(self, media_path: Path) -> None:
-        print("setting media path", media_path)
+    def setMediaPath(self, media_path: Path | None) -> None:
         self.media_path = media_path
 
 

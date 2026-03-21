@@ -17,39 +17,24 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-from typing import List, Optional, Tuple
 from enum import Enum
 import logging
 
 
 from PySide6.QtCore import (
-    Qt, Signal, Slot, QMimeData,
-    QRegularExpression,
-    QRect, QSize
+    Qt, QRegularExpression,
 )
 from PySide6.QtGui import (
     QColor, QFont,
-    QTextBlock, QTextCursor,
+    QTextCursor,
     QTextBlockFormat, QTextCharFormat,
     QSyntaxHighlighter,
 )
 
-from ostilhou.asr import extract_metadata
-from ostilhou.hspell import get_hunspell_spylls
-
-from actions import ActionManager
-from interfaces import (
-    DocumentInterface,
-    TextDocumentInterface,
-    SegmentId,
-    MyTextBlockUserData,
-    BlockType
-)
-from ui.theme import theme
-from utils import (
-    extract_sentence_regions,
-)
-from settings import app_settings, SUBTITLES_CPS
+from src.interfaces import DocumentInterface, TextDocumentInterface
+from src.ui.theme import theme
+from src.utils import extract_sentence_regions
+from src.settings import app_settings, SUBTITLES_CPS
 
 
 
@@ -93,22 +78,22 @@ class Highlighter(QSyntaxHighlighter):
         self.aligned_block_format.setBottomMargin(self.utt_block_margin)
 
         self.green_block_format = QTextBlockFormat()
-        self.green_block_format.setBackground(theme.green_light)
+        self.green_block_format.setBackground(theme.colors.green)
         self.green_block_format.setTopMargin(self.utt_block_margin)
         self.green_block_format.setBottomMargin(self.utt_block_margin)
 
         self.red_block_format = QTextBlockFormat()
-        self.red_block_format.setBackground(theme.red_light)
+        self.red_block_format.setBackground(theme.colors.red)
         self.red_block_format.setTopMargin(self.utt_block_margin)
         self.red_block_format.setBottomMargin(self.utt_block_margin)
 
         self.active_green_block_format = QTextBlockFormat()
-        self.active_green_block_format.setBackground(theme.active_green_light)
+        self.active_green_block_format.setBackground(theme.colors.active_green)
         self.active_green_block_format.setTopMargin(self.utt_block_margin)
         self.active_green_block_format.setBottomMargin(self.utt_block_margin)
 
         self.active_red_block_format = QTextBlockFormat()
-        self.active_red_block_format.setBackground(theme.active_green_light)
+        self.active_red_block_format.setBackground(theme.colors.active_green)
         self.active_red_block_format.setTopMargin(self.utt_block_margin)
         self.active_red_block_format.setBottomMargin(self.utt_block_margin)
 
@@ -128,10 +113,11 @@ class Highlighter(QSyntaxHighlighter):
 
 
     def updateThemeColors(self):
-        self.green_block_format.setBackground(theme.green)
-        self.red_block_format.setBackground(theme.red)
-        self.active_green_block_format.setBackground(theme.active_green)
-        self.active_red_block_format.setBackground(theme.active_red)
+        print("Hightligher updateTheme", theme.mode)
+        self.green_block_format.setBackground(theme.colors.green)
+        self.red_block_format.setBackground(theme.colors.red)
+        self.active_green_block_format.setBackground(theme.colors.active_green)
+        self.active_red_block_format.setBackground(theme.colors.active_red)
 
 
     def isSubsentence(self, segments: list, start: int, end: int) -> bool:

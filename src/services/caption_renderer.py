@@ -15,12 +15,12 @@ from PySide6.QtCore import (
 
 from ostilhou.asr.dataset import MetadataParser
 
-from src.utils import get_audiofile_info
+from src.interfaces import SegmentId, Segment
 from src.cache_system import cache
 from src.text_widget import LINE_BREAK
 from src.document_controller import DocumentController
-from src.interfaces import SegmentId, Segment
-from src.utils import find_system_fonts
+from src.aligner import align_text_with_vosk_tokens, print_alignment
+from src.utils import get_audiofile_info, find_system_fonts
 
 
 log = logging.getLogger(__name__)
@@ -184,11 +184,17 @@ class CaptionRenderer:
                 # Convert keys
                 properties.update({k.lower().replace('-', '_'): v for k, v in region.items()})
 
-            properties["text"] = ''.join([ region["text"] for region in data ])
+            text = ''.join([ region["text"] for region in data ])
+            properties["text"] = text
             properties["segment"] = segment
 
+            # Alignment data
             auto_transcription = self.document.getTranscriptionForSegment(segment[0], segment[1])
             auto_transcription = [ t[0:3] for t in auto_transcription ]
+            
+            alignment = align_text_with_vosk_tokens(text, auto_transcription)
+            properties["alignment"] = alignment
+            print_alignment(alignment)
 
             self.segment_properties[segment_id] = properties
        
@@ -242,13 +248,13 @@ class CaptionRenderer:
                     progress = 0.0
                 case "fg":
                     progress = 1.0 if (start < time_s < end) else 0.0
-                case "interpolation":
+                case _:
                     progress = (time_s - start) / segment_duration
-
+            
             text_image, bbox = self.render_colored_text(
                 text,
                 properties,
-                color_pc = progress,
+                segment_prog = progress,
                 caching = True
             )
 
@@ -281,12 +287,12 @@ class CaptionRenderer:
             # Opacity
             if ("fade_in" in properties) or ("fade_out" in properties):
                 # Calculate fade-in and fade-out transparency
-                fade_in = float(properties["fade_in"])
-                fade_out = float(properties["fade_out"])
-                if (start - fade_in) < time_s < start:
+                fade_in = float(properties.get("fade_in", 0.0))
+                fade_out = float(properties.get("fade_out", 0.0))
+                if fade_in and ((start - fade_in) < time_s < start):
                     opacity = (time_s - (start - fade_in)) / fade_in
                     text_image = modify_opacity(text_image, opacity)
-                elif end < time_s < (end + fade_out):
+                elif fade_out and (end < time_s < (end + fade_out)):
                     opacity = (end + fade_out - time_s) / fade_out
                     text_image = modify_opacity(text_image, opacity)
 
@@ -336,7 +342,7 @@ class CaptionRenderer:
         self,
         text,
         properties = {},
-        color_pc = 0.0,
+        segment_prog = 0.0,
         # shadow_color = "#000000AA",
         # shadow_offset = (0, 0)   # (x, y) offset
         caching = True
@@ -347,6 +353,7 @@ class CaptionRenderer:
             color_pc (float): normalized time progression, between 0.0 and 1.0
         """
         properties = properties or self.global_properties
+
         font = self.get_font(
             properties.get("font", "default"),
             int(properties.get("font_size", self.DEFAULT_FONT_SIZE))
@@ -363,29 +370,53 @@ class CaptionRenderer:
         words_lines = [ line.split() for line in text.split(LINE_BREAK) ]
         n_lines = len(words_lines)
 
-        # Count the number of characters (the complicated way)
+
+        def get_word_progress(segment_prog, char_n, total_chars, word_len, word_n):
+            mode = properties.get("progress")
+
+            if mode == "interpolation":
+                # Calculate word spans (between 0.0 and 1.0) relative to the sentence length
+                word_span = (char_n / total_chars, (char_n + word_len) / total_chars)
+
+                if word_span[1] < segment_prog:
+                    return 1.0
+                if word_span[0] > segment_prog:
+                    return 0.0
+                
+                rel_progress = segment_prog - word_span[0]
+                return rel_progress / (word_span[1] - word_span[0])
+
+            if mode == "word" and "alignment" in properties:
+                # Use alignment data
+                segment = properties["segment"]
+                segment_dur = segment[1] - segment[0]
+                absolute_time = segment[0] + segment_dur * segment_prog
+                aligment = properties["alignment"]
+                print(aligment[word_n])
+                word_boundaries = aligment[word_n][1][1:]
+
+                if absolute_time < word_boundaries[0]:
+                    return 0.0
+                if absolute_time > word_boundaries[1]:
+                    return 0.0
+                
+                rel_progress = absolute_time - word_boundaries[0]
+                return rel_progress / segment_dur
+            
+            return 1.0
+
+        # Count the number of characters to account for spaces
         total_chars = len(words_lines) - 1
         for line in words_lines:
             total_chars += sum([len(word) for word in line], start = len(line) - 1)
-
-        def get_word_coloring_pc(word_span, sentence_pc):
-            if word_span[1] < sentence_pc:
-                return 1.0
-            if word_span[0] > sentence_pc:
-                return 0.0
-            rel_progress = sentence_pc - word_span[0]
-            return rel_progress / (word_span[1] - word_span[0])
         
         # Render each word separetly
         rendered_words = []
-        accumulated = 0
+        accumulated_chars = 0
+        accumulated_words = 0
         for line in words_lines:
             rendered_line = []
             for word in line:
-                # Calculate word spans (between 0.0 and 1.0) relative to the sentence length
-                word_span = (accumulated / total_chars, (accumulated + len(word)) / total_chars)
-                accumulated += len(word) + 1
-                
                 # Render word colored, uncolored or partially colored
                 rendered_word = self.get_colored_word(
                     word,
@@ -393,11 +424,13 @@ class CaptionRenderer:
                     text_bg_color, text_fg_color,
                     text_bg_outline_color, text_bg_outline_width,
                     text_fg_outline_color, text_fg_outline_width,
-                    get_word_coloring_pc(word_span, color_pc),
+                    get_word_progress(segment_prog, accumulated_chars, total_chars, len(word), accumulated_words),
                     # shadow_color, shadow_offset
                     caching = caching
                 )
                 rendered_line.append(rendered_word)
+                accumulated_chars += len(word) + 1
+                accumulated_words += 1
             rendered_words.append(rendered_line)
         
         # Calculate rendered sentence size

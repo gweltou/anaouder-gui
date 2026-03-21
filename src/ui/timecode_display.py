@@ -1,6 +1,9 @@
 from PySide6.QtWidgets import QLineEdit
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QColor
+
+from src.ui.theme import theme
+
 
 
 
@@ -82,6 +85,24 @@ class TimecodeWidget(QLineEdit):
 
         formatted_tc = f"{hh:02d}:{mm:02d}:{ss:02d}:{ff:02d}"
         self.setText(formatted_tc)
+    
+
+    def updateThemeColors(self) -> None:
+        #if theme.
+        self.setStyleSheet(f"""
+            /* Default state (when not clicking/typing) */
+            QLineEdit {{
+                background-color: {theme.colors.tc_bg_color.name(QColor.NameFormat.HexArgb)};
+                color: {theme.colors.tc_font_color.name(QColor.NameFormat.HexArgb)};
+                border-radius: 4px; 
+            }}
+            
+            /* Focus state (when the user clicks and is actively typing) */
+            QLineEdit:focus {{
+                background-color: {theme.colors.tc_focus_bg_color.name(QColor.NameFormat.HexArgb)};
+                color: {theme.colors.tc_focus_font_color.name(QColor.NameFormat.HexArgb)};
+            }}
+        """)
 
 
     def focusInEvent(self, event) -> None:

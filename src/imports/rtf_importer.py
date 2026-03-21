@@ -25,7 +25,7 @@ from PySide6.QtWidgets import QFileDialog
 
 from ostilhou.text import split_sentences, normalize_sentence
 
-from src.interfaces import DocumentInterface
+from src.interfaces import MainWindowInterface, DocumentInterface
 from src.utils import filter_out_chars
 
 
@@ -57,19 +57,20 @@ REPLACE_WORDS = [
 
 
 class RTFImporter(QObject):
-    def __init__(self, parent, document_controller: DocumentInterface):
+    def __init__(
+            self,
+            parent: MainWindowInterface,
+            document_controller: DocumentInterface
+        ):
         super().__init__(parent)
+        
         self.main_window = parent
         self.document_controller = document_controller
     
 
     def importRTFDialog(self) -> bool:
-        file_path, _ = QFileDialog.getOpenFileName(
-            self.main_window,
-            "Select Input RTF File",
-            "",
-            "RTF Files (*.rtf);;Text Files (*.txt);;All Files (*.*)"
-        )
+        rtf_filter = "RTF Files (*.rtf);;Text Files (*.txt);;All Files (*.*)"
+        file_path = self.main_window.getOpenFileDialog(self.tr("Select Input RTF File"), rtf_filter)
         if not file_path:
             return False
         

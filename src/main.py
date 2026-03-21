@@ -142,6 +142,8 @@ class MainWindow(QMainWindow):
         self._connectSignals()
         self._restoreSettings()
 
+        self.updateThemeColors()
+
         # Keyboard shortcuts
         ## Search TODO
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
@@ -157,9 +159,12 @@ class MainWindow(QMainWindow):
 
 
     def updateThemeColors(self) -> None:
-         theme.updateThemeColors(QApplication.styleHints().colorScheme())
-         self.text_widget.updateThemeColors()
-         self.waveform.updateThemeColors()
+        """Propagate the colorSchemeChanged signal to chilren widget components"""
+        print("main call updatethemecolors")
+        theme.updateTheme(QApplication.styleHints().colorScheme())
+        self.text_widget.updateThemeColors()
+        self.waveform.updateThemeColors()
+        self.timecode_widget.updateThemeColors()
 
 
     def _initializeState(self) -> None:
@@ -234,7 +239,6 @@ class MainWindow(QMainWindow):
         self.updateWindowTitle()
         self.setGeometry(50, 50, 800, 600)  # Default window size
         self.setAcceptDrops(True)           # For file drag&drops
-        self.updateThemeColors()
 
 
     def _initializeUI(self) -> None:
@@ -673,12 +677,12 @@ class MainWindow(QMainWindow):
     def _createMediaToolbarLayout(self):
         media_toolbar_layout = QHBoxLayout()
         media_toolbar_layout.setContentsMargins(0, 2, 0, 0)
-        media_toolbar_layout.setSpacing(BUTTON_SPACING)
+        media_toolbar_layout.setSpacing(BUTTON_SPACING * 4)
         media_toolbar_layout.addStretch(1)
 
         # Segment action buttons
         segment_buttons_layout = QHBoxLayout()
-        segment_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        # segment_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
         segment_buttons_layout.setSpacing(BUTTON_SPACING)
 
         self.selection_button = QToolButton()
@@ -718,7 +722,7 @@ class MainWindow(QMainWindow):
 
         # Play buttons
         play_buttons_layout = QHBoxLayout()
-        play_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        # play_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
         play_buttons_layout.setSpacing(BUTTON_SPACING)
         play_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
@@ -800,7 +804,7 @@ class MainWindow(QMainWindow):
 
         # View buttons
         view_buttons_layout = QHBoxLayout()
-        view_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        view_buttons_layout.setContentsMargins(0, 0, BUTTON_MARGIN, 0)
         view_buttons_layout.setSpacing(BUTTON_SPACING)
         view_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
@@ -810,9 +814,9 @@ class MainWindow(QMainWindow):
         self.follow_playhead_button.setFixedWidth(BUTTON_SIZE)
         self.follow_playhead_button.setDefaultAction(self.action.follow_playhead)
         view_buttons_layout.addWidget(self.follow_playhead_button)
+        view_buttons_layout.addSpacing(BUTTON_SPACING)
 
         ## Zoom out
-        view_buttons_layout.addSpacing(8)
         view_buttons_layout.addWidget(IconWidget(icons["waveform"], BUTTON_LABEL_SIZE))
         wave_zoom_out_button = QToolButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
@@ -1074,6 +1078,7 @@ class MainWindow(QMainWindow):
         self.document_controller.clear()
         if not keep_media:
             self.waveform.clear()
+            self.document_controller.setMediaPath(None)
             self.timecode_widget.setFps(100)
 
         self.file_path = file_path

@@ -33,7 +33,7 @@ from src.interfaces import DocumentInterface
 from src.commands import AlignBlockWithSegment
 from src.cache_system import cache
 from src.lang import prepTextForAlignment
-from src.utils import PUNCTUATION, filter_out_chars
+from src.utils import PUNCTUATION, filter_out_chars, yellow
 
 
 

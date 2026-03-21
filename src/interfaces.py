@@ -23,6 +23,7 @@ from typing import (
     Optional
 )
 from enum import Enum
+from pathlib import Path
 
 from PySide6.QtCore import (
     Signal,
@@ -68,12 +69,14 @@ class MyTextBlockUserData(QTextBlockUserData):
 
 class MainWindowInterface(Protocol):
 
-    def setStatusMessage(self, message: str, timeout: int) -> None:
-        ...
+    def setStatusMessage(self, message: str, timeout: int) -> None: ...
+    
+    def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]: ...
 
 
 
 class DocumentInterface(Protocol):
+    media_path: Path | None
     undo_stack: QUndoStack
     segments: Dict[SegmentId, Segment]
     must_sort: bool

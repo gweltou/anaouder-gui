@@ -104,7 +104,7 @@ def test_remove_fillers(main_window):
     load_document(main_window)
 
     third_block = main_window.document_controller.getBlockById(2)
-
+    
     remove_fillers(
         third_block, third_block,
         main_window.text_widget,
@@ -113,4 +113,5 @@ def test_remove_fillers(main_window):
 
     # Make sure the apostrophe conversion didn't supress the formatting elements
     block_html, _ = main_window.text_widget.getBlockHtml(third_block)
+    print(block_html)
     assert block_html == "<I>... mont a ra ?</I>"

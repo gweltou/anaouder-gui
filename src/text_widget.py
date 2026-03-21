@@ -57,9 +57,9 @@ from src.ui.text_highlighter import Highlighter
 from src.ui.theme import theme
 from src.utils import (
     LINE_BREAK, EM_DASH, STOP_CHARS,
-    color_yellow,
+    yellow,
 )
-from src.settings import app_settings, shortcuts, SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS
+from src.settings import app_settings, SUBTITLES_MARGIN_SIZE
 
 
 
@@ -130,7 +130,7 @@ class TextEditWidget(QTextEdit):
         self._text_margin = False
         self._margin_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
         self._char_width = -1
-        self._margin_color = theme.margin
+        self._margin_color = theme.colors.margin
 
         # Used to handle double and triple-clicks
         self._click_count = 0
@@ -138,7 +138,7 @@ class TextEditWidget(QTextEdit):
 
 
     def updateThemeColors(self):        
-        self._margin_color = theme.margin
+        self._margin_color = theme.colors.margin
         self.highlighter.updateThemeColors()
         self.highlighter.rehighlight()
 
@@ -580,7 +580,7 @@ class TextEditWidget(QTextEdit):
         
         left_part = html[:html_idx].rstrip()
         right_part = html[html_idx:].lstrip()
-        print(left_part, right_part)
+
         new_text = left_part + "<BR>" + right_part
         
         self.undo_stack.push(
@@ -1511,7 +1511,7 @@ class TextEditWidget(QTextEdit):
         """ Paints the line numbers in the sidebar """
 
         painter = QPainter(self.line_number_area)
-        painter.fillRect(event.rect(), theme.line_number) # Light gray background
+        painter.fillRect(event.rect(), theme.colors.line_number) # Light gray background
 
         doc_layout = self.document().documentLayout()
         
@@ -1579,10 +1579,10 @@ class TextEditWidget(QTextEdit):
         block = self.document().firstBlock()
         while block.isValid():
             text = block.text()
-            print(color_yellow(f"* block {i} (pos {block.position()}):"))
-            print(color_yellow(f"    {text=}"))
+            print(yellow(f"* block {i} (pos {block.position()}):"))
+            print(yellow(f"    {text=}"))
             metadata = block.userData()
             if metadata:
-                print(color_yellow(f"    userData='{metadata.data}'"))
+                print(yellow(f"    userData='{metadata.data}'"))
             block = block.next()
             i += 1

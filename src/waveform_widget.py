@@ -201,7 +201,7 @@ class WaveformWidget(QWidget):
 
         self.wavepen = QPen(QColor(0, 162, 180))  # Blue color
 
-        color = theme.segment_green
+        color = theme.colors.segment_green
         self.segment_active_pen = QPen(color, 1)
         color.setAlpha(60)
         self.segment_active_shadow_pen = QPen(color, 3)
@@ -213,7 +213,7 @@ class WaveformWidget(QWidget):
         color.setAlpha(40)
         self.segment_inactive_brush = QBrush(color)
 
-        color = theme.selection_blue
+        color = theme.colors.selection_blue
         self.selection_active_pen = QPen(color, 1)
         color.setAlpha(60)
         self.selection_active_shadow_pen = QPen(color, 3)
@@ -1444,7 +1444,7 @@ class WaveformWidget(QWidget):
             time_step = 60
         else:
             time_step = 300 # Every 5 min
-        self.painter.setPen(QPen(theme.wf_timeline))
+        self.painter.setPen(QPen(theme.colors.wf_timeline))
 
         # Video frames timecodes
         if self.fps > 0 and time_step == 1:
@@ -1488,10 +1488,10 @@ class WaveformWidget(QWidget):
         
         # Empty background when no media is loaded
         if self.audio_len == 0:
-            self.pixmap.fill(theme.wf_bg_color)
+            self.pixmap.fill(theme.colors.wf_bg_color)
             return
         
-        self.pixmap.fill(theme.wf_bg_color)
+        self.pixmap.fill(theme.colors.wf_bg_color)
 
         width = self.width()
     
@@ -1505,7 +1505,7 @@ class WaveformWidget(QWidget):
         # Draw recognizer background progress bar
         if self.recognizer_progress > self.t_left:
             self.painter.setPen(Qt.PenStyle.NoPen)
-            self.painter.setBrush(QBrush(theme.wf_progress))
+            self.painter.setBrush(QBrush(theme.colors.wf_progress))
             w = (self.recognizer_progress - self.t_left) * self.ppsec
             self.painter.drawRect(QRect(0, 0, int(w), self.height()))
 

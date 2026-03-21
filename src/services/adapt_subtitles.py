@@ -301,11 +301,32 @@ def remove_fillers(
     ) -> None:
     block = start_block
     while block.isValid() and block != end_block.next():
-        html_text, _ = text_widget.getBlockHtml(block)
-        new_text = lang.removeVerbalFillers(html_text)
-        if html_text != new_text:
-            print(html_text)
-            print(new_text)
+        html_text, map = text_widget.getBlockHtml(block)
+
+        # Isolate and preserve HTML elements 
+        new_text_parts = []
+        region_start_idx = 0
+        last_val = None
+        for idx, map_val in enumerate(map):
+            if map_val != last_val and last_val is not None:
+                if map_val == True:
+                    # html element, copy text without modification
+                    new_text_parts.append(html_text[region_start_idx:idx])
+                else:
+                    # raw text
+                    cleaned_text = lang.removeVerbalFillers(html_text[region_start_idx:idx])
+                    new_text_parts.append(cleaned_text)
+                region_start_idx = idx
+            last_val = map_val
+
+        if last_val == True:
+            cleaned_text = lang.removeVerbalFillers(html_text[region_start_idx:])
+            new_text_parts.append(cleaned_text)
+        else:
+            new_text_parts.append(html_text[region_start_idx:])
+
+        new_text = ''.join(new_text_parts)
+
         undo_stack.push(ReplaceTextCommand(text_widget, block, new_text))
 
         block = block.next()
