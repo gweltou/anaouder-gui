@@ -7,6 +7,10 @@ macOs packaging:
 
 import platform
 import os
+from PIL import Image, ImageFont, ImageDraw
+
+from version import __version__
+
 
 ARCH = os.getenv("ARCH") or 'x86_64' # Set to 'x86_64', or 'arm64' or 'universal2' for macOS
 DEBUG = True if os.getenv("DEBUG") == 'True' else False
@@ -60,6 +64,7 @@ a = Analysis(
 
         ("./icons/italic.png", "icons/"),
         ("./icons/bold.png", "icons/"),
+        ("./icons/em_dashes.png", "icons/"),
 
         ("./icons/zoom_in.png", "icons/"),
         ("./icons/zoom_out.png", "icons/"),
@@ -77,7 +82,7 @@ a = Analysis(
 
         ("./icons/magnet.png", "icons/"),
         ("./icons/select_segment.png", "icons/"),
-        # ("./icons/add_segment.png", "icons/"),
+        ("./icons/add_segment.png", "icons/"),
         ("./icons/trash.png", "icons/"),
         ("./icons/del_segment.png", "icons/"),
         ("./icons/follow_playhead.png", "icons/"),
@@ -118,7 +123,6 @@ pyz = PYZ(a.pure)
 
 if platform.system() == "Darwin":
     # MAC OS BUILD
-
     # Without splash screen
     
     exe = EXE(
@@ -173,10 +177,21 @@ if platform.system() == "Darwin":
 else:
     # LINUX AND WINDOWS BUILD
 
+    # Burn version number on copy of splash image
+    splash_image = Image.open("icons/anaouder_splash.png", 'r')
+    draw = ImageDraw.Draw(splash_image)
+    draw.text(
+        (splash_image.width - 32, 2),
+        f"v{__version__}",
+        font = ImageFont.load_default(14), 
+        fill = "#000000",
+    )
+    splash_image.save("icons/anaouder_splash_ver.png")
+
     splash = None
     if platform.system() in ("Windows", "Linux"):
         splash = Splash(
-            "icons/anaouder_splash.png",
+            "icons/anaouder_splash_ver.png",
             binaries=a.binaries,
             datas=a.datas,
             text_pos=(516, 134),

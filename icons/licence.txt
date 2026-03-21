@@ -19,3 +19,4 @@ italic.png	flaticon
 redo.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
 folder.png	<a href="https://www.flaticon.com/free-icons/folder" title="folder icons">Folder icons created by cahiwak - Flaticon</a>
 	<a href="https://www.flaticon.com/free-icons/dots" title="dots icons">Dots icons created by kemal-gokbas - Flaticon</a>
+	<a href="https://www.flaticon.com/free-icons/break" title="break icons">Break icons created by Fajrul Fitrianto - Flaticon</a>
