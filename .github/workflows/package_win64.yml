@@ -25,28 +25,20 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
 
-    - name: Create virtual environment
+    - name: Install dependencies
       run: |
-        python -m venv .venv
-      shell: pwsh
-
-    - name: Activate venv and install dependencies
-      run: |
-        .\.venv\Scripts\Activate.ps1
         python -m pip install --upgrade pip
         pip install -e .
       shell: pwsh
 
     - name: Initialize static_ffmpeg binaries
       run: |
-        .\.venv\Scripts\Activate.ps1
         Write-Host "Triggering static_ffmpeg download..."
         python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
       shell: pwsh
 
     - name: Build with PyInstaller
       run: |
-        .\.venv\Scripts\Activate.ps1
         $env:ARCH = "x86_64"
         $env:DEBUG = "False"
         pyinstaller anaouder.spec
@@ -54,9 +46,9 @@ jobs:
 
     - name: Verify build output
       run: |
-        if (Test-Path "dist\Anaouder\Anaouder.exe") {
+        if (Test-Path "dist/Anaouder/Anaouder.exe") {
           Write-Host "Build successful - Anaouder.exe found"
-          Get-ChildItem -Path "dist\Anaouder" -Recurse | Select-Object FullName
+          Get-ChildItem -Path "dist/Anaouder" -Recurse | Select-Object FullName
         } else {
           Write-Error "Build failed - Anaouder.exe not found"
           exit 1
@@ -70,14 +62,15 @@ jobs:
 
     - name: Update Inno Setup script paths
       run: |
-        $issContent = Get-Content "building\Windows\anaouder_installer.iss" -Raw
-        $issContent = $issContent -replace 'D:\\anaouder-gui\\', "$PWD\"
-        $issContent | Set-Content "building\Windows\anaouder_installer_updated.iss"
+        $issContent = Get-Content "building/Windows/anaouder_installer.iss" -Raw
+        # Note: In regex, '\\' matches a literal '\'.
+        $issContent = $issContent -replace 'D:\\anaouder-gui\\', "$($PWD.Path)\"
+        $issContent | Set-Content "building/Windows/anaouder_installer_updated.iss"
       shell: pwsh
 
     - name: Build installer with Inno Setup
       run: |
-        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "building\Windows\anaouder_installer_updated.iss"
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "building/Windows/anaouder_installer_updated.iss"
       shell: pwsh
 
     - name: Rename installer
@@ -86,8 +79,8 @@ jobs:
         if ("${{ github.ref }}" -match "refs/tags/v(.+)") {
           $version = $matches[1]
         }
-        if (Test-Path "Output\mysetup.exe") {
-          Rename-Item "Output\mysetup.exe" "Anaouder-${version}-Setup.exe"
+        if (Test-Path "building/Windows/Output/mysetup.exe") {
+          Rename-Item -Path "building/Windows/Output/mysetup.exe" -NewName "Anaouder-${version}-Setup.exe"
         }
       shell: pwsh
 
@@ -110,7 +103,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          Output/*.exe
+          building/Windows/Output/*.exe
         draft: false
         prerelease: false
       env:
