@@ -102,7 +102,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Anaouder-Windows-Installer
-        path: Output/*.exe
+        path: building/Windows/Output/*.exe
         retention-days: 30
 
     - name: Create Release
