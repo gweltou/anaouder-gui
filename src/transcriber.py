@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 import logging
 import locale
@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 
 
 
-def commit_transcription_to_cache(media_path: str, tokens: list) -> None:
+def commit_transcription_to_cache(media_path: str, tokens: List) -> None:
     """Backup transcription in cache"""
 
     if not tokens:
@@ -125,7 +125,7 @@ class RecognizerWorker(QObject):
             locale.setlocale(locale.LC_ALL, ("en_us", "UTF-8")) # locale en_US works on macOS
 
 
-    def set_model_path(self, model_name) -> None:
+    def load_model(self, model_name) -> None:
         model_path = getModelPath(model_name)
         if model_path != self.loaded_model_path:
             self.message.emit(f"Loading {model_name}")
@@ -193,7 +193,7 @@ class RecognizerWorker(QObject):
 
                 cumul_samples += len(data) // 2 # 2 bytes per sample
                 self.progress.emit(start_time + (cumul_samples / self.SAMPLE_RATE))
-                    
+                
                 if self.recognizer.AcceptWaveform(data):
                     result = json.loads(self.recognizer.Result())
                     if "result" in result:
@@ -395,7 +395,7 @@ class TranscriptionService(QObject):
     # Add signals to trigger worker methods
     start_file_transcription = Signal(str, float, bool)
     start_segments_transcription = Signal(str, list)
-    set_model_path = Signal(str)
+    load_model = Signal(str)
 
 
     def __init__(self, parent=None):
@@ -416,14 +416,14 @@ class TranscriptionService(QObject):
         # Connect service's trigger signals to worker's slots
         self.start_file_transcription.connect(self._recognizer_worker.transcribe_file)
         self.start_segments_transcription.connect(self._recognizer_worker.transcribeSegments)
-        self.set_model_path.connect(self._recognizer_worker.set_model_path)
+        self.load_model.connect(self._recognizer_worker.load_model)
 
         self._thread.start()
 
 
     @Slot(str)
-    def setModelPath(self, model_name) -> None:
-        self.set_model_path.emit(model_name)
+    def loadModel(self, model_name) -> None:
+        self.load_model.emit(model_name)
 
 
     @Slot(str, float, bool)

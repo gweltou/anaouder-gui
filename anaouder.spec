@@ -64,6 +64,7 @@ a = Analysis(
 
         ("./icons/italic.png", "icons/"),
         ("./icons/bold.png", "icons/"),
+        ("./icons/newline.png", "icons/"),
         ("./icons/em_dashes.png", "icons/"),
 
         ("./icons/zoom_in.png", "icons/"),

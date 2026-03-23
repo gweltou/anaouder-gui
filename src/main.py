@@ -600,7 +600,7 @@ class MainWindow(QMainWindow):
         # self.model_selection.addItems(self.available_models)
         self.model_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.model_selection.setToolTip(self.tr("Speech-to-text model"))
-        self.model_selection.currentTextChanged.connect(self.recognizer.setModelPath)
+        self.model_selection.currentTextChanged.connect(self.recognizer.loadModel)
         transcription_buttons_layout.addWidget(self.model_selection)
 
         transcription_buttons_layout.addWidget(
