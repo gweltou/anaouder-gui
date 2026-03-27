@@ -2,11 +2,11 @@ name: Build Windows Installer
 
 on:
   push:
-    branches: [ main, master ]
+  #  branches: [ main, master ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ main, master ]
+  #pull_request:
+  #  branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -94,7 +94,7 @@ jobs:
         Write-Host "Renaming installer to version: $version"
 
         if (Test-Path "building/Windows/Output/mysetup.exe") {
-          Rename-Item -Path "building/Windows/Output/mysetup.exe" -NewName "Anaouder-${version}-Setup.exe"
+          Rename-Item -Path "building/Windows/Output/mysetup.exe" -NewName "Anaouder_${version}-win64_Setup.exe"
         }
       shell: pwsh
 
