@@ -94,7 +94,7 @@ jobs:
         Write-Host "Renaming installer to version: $version"
 
         if (Test-Path "building/Windows/Output/mysetup.exe") {
-          Rename-Item -Path "building/Windows/Output/mysetup.exe" -NewName "Anaouder_${version}-win64_Setup.exe"
+          Rename-Item -Path "building/Windows/Output/mysetup.exe" -NewName "Anaouder-${version}_win64_Setup.exe"
         }
       shell: pwsh
 

@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,13 +29,13 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, QUrl
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
-from interfaces import Segment, SegmentId
-from video_widget import VideoWidget
-from cache_system import cache
+from src.interfaces import Segment, SegmentId
+from src.video_widget import VideoWidget
+from src.cache_system import cache
 
 # To trace the segmentation error when playing problematic segments
-import faulthandler
-faulthandler.enable()
+# import faulthandler
+# faulthandler.enable()
 
 
 
