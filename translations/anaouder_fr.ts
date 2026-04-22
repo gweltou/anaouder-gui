@@ -78,7 +78,7 @@
     <message>
         <location filename="../src/actions.py" line="124"/>
         <source>&amp;Audio segments</source>
-        <translation>&amp;Segments audio</translation>
+        <translation>Segments &amp;audio</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="125"/>
@@ -629,7 +629,7 @@
     <message>
         <location filename="../src/main.py" line="495"/>
         <source>Adapt to &amp;subtitles</source>
-        <translation>Adapter aux &amp;sous-titres</translation>
+        <translation>A&amp;dapter aux sous-titres</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="502"/>
