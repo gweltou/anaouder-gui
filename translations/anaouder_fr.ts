@@ -13,157 +13,157 @@
     <message>
         <location filename="../src/actions.py" line="82"/>
         <source>&amp;Open</source>
-        <translation type="unfinished">&amp;Ouvrir</translation>
+        <translation>&amp;Ouvrir</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="86"/>
         <source>&amp;Save</source>
-        <translation type="unfinished">&amp;Enregistrer</translation>
+        <translation>&amp;Enregistrer</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="90"/>
         <source>Save as</source>
-        <translation type="unfinished">Enregistrer sous</translation>
+        <translation>Enregistrer sous</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="94"/>
         <source>E&amp;xit</source>
-        <translation type="unfinished">&amp;Quitter</translation>
+        <translation>&amp;Quitter</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="100"/>
         <source>Import a media file (audio or video)</source>
-        <translation type="unfinished">Importer un média (audio ou video)</translation>
+        <translation>Importer un média (audio ou vidéo)</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="104"/>
         <source>Import a subtitles file, keep current media</source>
-        <translation type="unfinished">Importer un fichier de sous-titres, garder le média</translation>
+        <translation>Importer un fichier de sous-titres, garder le média actuel</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="107"/>
         <source>Import a RTF file</source>
-        <translation type="unfinished"></translation>
+        <translation>Importer un fichier RTF</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="108"/>
         <source>Import a RTF movie script file (DIZALE)</source>
-        <translation type="unfinished"></translation>
+        <translation>Importer un fichier RTF de script de film (Dizale)</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="112"/>
         <source>&amp;SubRip (.srt)</source>
-        <translation type="unfinished">&amp;SubRip (.srt)</translation>
+        <translation>&amp;SubRip (.srt)</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="113"/>
         <source>Export as SubRip subtitle file</source>
-        <translation type="unfinished"></translation>
+        <translation>Exporter comme fichier de sous-titres SubRip</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="116"/>
         <source>Raw &amp;text (.txt)</source>
-        <translation type="unfinished">Texte &amp;brut (.txt)</translation>
+        <translation>Texte &amp;brut (.txt)</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="117"/>
         <source>Export as simple text document</source>
-        <translation type="unfinished"></translation>
+        <translation>Exporter comme texte brut</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="121"/>
         <source>Export as ELAN annotation file</source>
-        <translation type="unfinished"></translation>
+        <translation>Exporter en tant que fichier d&apos;annotation ELAN</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="124"/>
         <source>&amp;Audio segments</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Segments audio</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="125"/>
         <source>Export audio segments as individual audio files</source>
-        <translation type="unfinished"></translation>
+        <translation>Exporter les segments comme fichiers individuels</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="129"/>
         <source>&amp;Parameters</source>
-        <translation type="unfinished">&amp;Paramètres</translation>
+        <translation>&amp;Paramètres</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="134"/>
         <source>Unaligned sentences</source>
-        <translation type="unfinished">Phrases non-alignées</translation>
+        <translation>Phrases non-alignées</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="139"/>
         <source>Speech density</source>
-        <translation type="unfinished">Densité de la paroles</translation>
+        <translation>Densité de la parole</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="149"/>
         <source>&amp;About</source>
-        <translation type="unfinished">À &amp;propos</translation>
+        <translation>À &amp;propos</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="153"/>
         <source>Undo</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="160"/>
         <source>Redo</source>
-        <translation type="unfinished">Refaire</translation>
+        <translation>Refaire</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="168"/>
         <source>Play/Pause</source>
-        <translation type="unfinished"></translation>
+        <translation>Jouer/Pause</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="174"/>
         <source>Replay segment</source>
-        <translation type="unfinished"></translation>
+        <translation>Rejouer le segment</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="179"/>
         <source>Follow playhead</source>
-        <translation type="unfinished">Suivre la tête de lecture</translation>
+        <translation>Suivre la tête de lecture</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="188"/>
         <source>Transcribe</source>
-        <translation type="unfinished">Transcrire</translation>
+        <translation>Transcrire</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="197"/>
         <source>&amp;Hidden transcription</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Transcription cachée</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="198"/>
         <source>Allow for smart splitting and auto-alignment operations</source>
-        <translation type="unfinished"></translation>
+        <translation>Permet les fonctions de découpe intelligente et d&apos;auto-alignement</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="203"/>
         <source>&amp;Auto align</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Alignement automatique</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="210"/>
         <source>Delete utterance</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer le segment</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="214"/>
         <source>Insert new line</source>
-        <translation type="unfinished"></translation>
+        <translation>Insérer une nouvelle ligne</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="221"/>
         <source>Insert em dashes</source>
-        <translation type="unfinished"></translation>
+        <translation>Insérer des tirets cadratin</translation>
     </message>
 </context>
 <context>
@@ -245,7 +245,7 @@
     <message>
         <location filename="../src/document_controller.py" line="917"/>
         <source>Select one or more utterances first</source>
-        <translation type="unfinished">Sélectionnez d&apos;abord une ou plusieurs énonciations</translation>
+        <translation>Sélectionnez d&apos;abord un ou plusieurs segments</translation>
     </message>
 </context>
 <context>
@@ -624,37 +624,37 @@
     <message>
         <location filename="../src/main.py" line="452"/>
         <source>&amp;Import</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Importer</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="495"/>
         <source>Adapt to &amp;subtitles</source>
-        <translation type="unfinished"></translation>
+        <translation>Adapter aux &amp;sous-titres</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="502"/>
         <source>&amp;Render frames</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Rendu des images</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="964"/>
         <source>Couldn&apos;t save file to &apos;{filename}&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec lors de l&apos;enregistrement de &apos;{filename}&apos;</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1039"/>
         <source>Autosave failed: {exception}</source>
-        <translation type="unfinished"></translation>
+        <translation>Échet de la sauvegarde automatique : {exception}</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1115"/>
         <source>Bad file type: {file_path}</source>
-        <translation type="unfinished"></translation>
+        <translation>Mauvais format de fichier&#xa0;: {file_path}</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1147"/>
         <source>Couldn&apos;t read file &apos;{filename}&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossible de lire le fichier &apos;{filename}&apos;</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1172"/>
@@ -684,12 +684,12 @@
     <message>
         <location filename="../src/main.py" line="1494"/>
         <source>Media total duration</source>
-        <translation type="unfinished"></translation>
+        <translation>Durée totale</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="1519"/>
         <source>No image</source>
-        <translation type="unfinished"></translation>
+        <translation>Pas d&apos;image</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2092"/>
@@ -733,7 +733,7 @@
     <message>
         <location filename="../src/main.py" line="2562"/>
         <source>start: {}</source>
-        <translation>début: {}</translation>
+        <translation>début&#xa0;: {}</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="2563"/>
@@ -819,12 +819,12 @@
     <message>
         <location filename="../src/hunspell.py" line="54"/>
         <source>Loading hunspell dictionary</source>
-        <translation type="unfinished"></translation>
+        <translation>Chargement du dictionnaire hunspell</translation>
     </message>
     <message>
         <location filename="../src/hunspell.py" line="58"/>
         <source>Hunspell dictionary loaded</source>
-        <translation type="unfinished"></translation>
+        <translation>Dictionnaire hunspell chargé</translation>
     </message>
 </context>
 <context>
@@ -841,7 +841,7 @@
     <message>
         <location filename="../src/transcriber.py" line="234"/>
         <source>Error during transcription: {error}</source>
-        <translation>Problème lors de la transcription: {error}</translation>
+        <translation>Problème lors de la transcription&#xa0;: {error}</translation>
     </message>
     <message>
         <location filename="../src/transcriber.py" line="265"/>
@@ -879,7 +879,7 @@
     <message>
         <location filename="../src/strings.py" line="37"/>
         <source>Transcribing...</source>
-        <translation type="unfinished"></translation>
+        <translation>En cours de transcription...</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="38"/>
@@ -1004,7 +1004,7 @@
     <message>
         <location filename="../src/strings.py" line="69"/>
         <source>h</source>
-        <translation type="unfinished"></translation>
+        <translation>h</translation>
     </message>
     <message>
         <location filename="../src/strings.py" line="70"/>
@@ -1134,17 +1134,17 @@
     <message>
         <location filename="../src/aligner.py" line="401"/>
         <source>No media file loaded</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun média chargé</translation>
     </message>
     <message>
         <location filename="../src/aligner.py" line="425"/>
         <source>Aligning text with speech...</source>
-        <translation type="unfinished"></translation>
+        <translation>Alignement du texte et de la parole...</translation>
     </message>
     <message>
         <location filename="../src/aligner.py" line="463"/>
         <source>Hidden transcription...</source>
-        <translation type="unfinished"></translation>
+        <translation>Transcription cachée...</translation>
     </message>
 </context>
 <context>
@@ -1176,27 +1176,27 @@
     <message>
         <location filename="../src/waveform_widget.py" line="1130"/>
         <source>Join segments</source>
-        <translation type="unfinished"></translation>
+        <translation>Joindre les segments</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="1135"/>
         <source>Delete utterances</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer les segments</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="1135"/>
         <source>Delete utterance</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer le segment</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="1136"/>
         <source>Delete audio segments</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer les segments audio</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="1136"/>
         <source>Delete audio segment</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer le segment audio</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="1371"/>
