@@ -439,12 +439,12 @@
     <message>
         <location filename="../src/main.py" line="523"/>
         <source>&amp;Misspelling</source>
-        <translation>&amp;Correction</translation>
+        <translation>&amp;Auto-correction</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="529"/>
         <source>Subtitle margin</source>
-        <translation>Marge des sous-titres</translation>
+        <translation>&amp;Marge des sous-titres</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="535"/>
