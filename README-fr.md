@@ -39,6 +39,8 @@ Ce projet est le fruit d'une collaboration entre développeurs et acteurs cultur
   <img src="icons/logo_dizale_small.png" alt="Dizale" height="100">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="icons/logo_rannvro_breizh.png" alt="Région Bretagne" height="100">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="icons/logo_an_drouizig.png" alt="An Drouizig" height="70">
 </div>
 
 ---

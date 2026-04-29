@@ -118,7 +118,7 @@ class AboutDialog(QDialog):
         # Logo section
         logo_layout = QHBoxLayout()
         
-        for icon_name in ["otile", "dizale", "rannvro"]:
+        for icon_name in ["otilde", "dizale", "rannvro", "drouizig"]:
             if icon_name in icons:
                 label = QLabel()
                 pixmap = icons[icon_name].pixmap(64, 64)
@@ -133,7 +133,7 @@ class AboutDialog(QDialog):
         content = QLabel()
         content.setText(f"""
         <h4>Darempred</h4>
-        <p>anaouder@dizale.bzh</p>
+        <a href="mailto:anaouder@dizale.bzh">anaouder@dizale.bzh</a>
         <h4>Kod mammen</h4>
         <p><a href="https://github.com/gweltou/anaouder-gui">https://github.com/gweltou/anaouder-gui</a></p>
         <h4>Trugarekaat</h4>

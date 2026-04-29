@@ -2,7 +2,7 @@ from PySide6.QtGui import QIcon, QMouseEvent
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QLabel
 
-from utils import get_resource_path
+from src.utils import get_resource_path
 
 
 
@@ -10,10 +10,12 @@ icons = dict()
 
 def loadIcons():
     """This function must be called AFTER creating a QGuiApplication"""
+
     icons["anaouder"] = QIcon(get_resource_path("icons/anaouder_256.png"))
-    icons["otile"] = QIcon(get_resource_path("icons/OTilde.png"))
+    icons["otilde"] = QIcon(get_resource_path("icons/OTilde.png"))
     icons["dizale"] = QIcon(get_resource_path("icons/logo_dizale_small.png"))
     icons["rannvro"] = QIcon(get_resource_path("icons/logo_rannvro_breizh.png"))
+    icons["drouizig"] = QIcon(get_resource_path("icons/logo_an_drouizig.png"))
 
     icons["sparkles"] = QIcon(get_resource_path("icons/sparkles-yellow.png"))
 

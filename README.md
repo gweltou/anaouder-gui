@@ -39,6 +39,8 @@ Frouezh ur c'henlabour etre ar **Rannvro Breizh**, ar gevredigezh **Dizale** hag
   <img src="icons/logo_dizale_small.png" alt="Dizale" height="100">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="icons/logo_rannvro_breizh.png" alt="Rannvro Breizh" height="100">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="icons/logo_an_drouizig.png" alt="An Drouizig" height="70">
 </div>
 
 ---
