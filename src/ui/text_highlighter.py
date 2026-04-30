@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from enum import Enum
 import logging
-
+import re
 
 from PySide6.QtCore import (
     Qt, QRegularExpression,
@@ -57,6 +57,11 @@ class Highlighter(QSyntaxHighlighter):
         self.mode = self.ColorMode.ALIGNMENT
         self.hunspell = None
         self.show_misspelling = False
+
+        # Regular expressions
+        self.metadata_expression = re.compile(r"{\s*(.+?)\s*}")
+        self.special_token_expression = re.compile(r"<[a-zA-Z _\'\/]+>")
+
 
         self.ali_metadata_format = QTextCharFormat()
         self.ali_metadata_format.setForeground(QColor(165, 0, 165)) # semi-dark magenta
@@ -183,15 +188,13 @@ class Highlighter(QSyntaxHighlighter):
         if i >= 0:
             self.setFormat(i, len(text)-i, self.comment_format)
             text = text[:i]
-        
-        # if not text.strip():
-        #     block = self.currentBlock()
-        #     cursor = QTextCursor(block)
-        #     cursor.setBlockFormat(QTextBlockFormat())
-        #     self.text_edit.document().blockSignals(was_blocked)
-        #     return
 
-        # Ali DSL Metadata  
+        # Ali DSL Metadata
+        # for match in self.metadata_expression.finditer(text):
+        #     start = match.start()
+        #     len = match.end() - start
+        #     self.setFormat(start, len, self.ali_metadata_format)
+
         expression = QRegularExpression(r"{\s*(.+?)\s*}")
         matches = expression.globalMatch(text)
         while matches.hasNext():
@@ -199,6 +202,11 @@ class Highlighter(QSyntaxHighlighter):
             self.setFormat(match.capturedStart(), match.capturedLength(), self.ali_metadata_format)
         
         # Special tokens
+        # for match in self.special_token_expression.finditer(text):
+        #     start = match.start()
+        #     len = match.end() - start
+        #     self.setFormat(start, len, self.special_token_format)
+
         expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
         matches = expression.globalMatch(text)
         while matches.hasNext():

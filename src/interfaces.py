@@ -25,9 +25,6 @@ from typing import (
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import (
-    Signal,
-)
 from PySide6.QtGui import (
     QUndoStack,
     QTextBlock, QTextDocument, QTextBlockUserData,
@@ -70,6 +67,8 @@ class MyTextBlockUserData(QTextBlockUserData):
 class MainWindowInterface(Protocol):
 
     def setStatusMessage(self, message: str, timeout: int) -> None: ...
+
+    def setErrorMessage(self, message: str, timeout: int) -> None: ...
     
     def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]: ...
 

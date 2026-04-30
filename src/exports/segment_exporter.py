@@ -1,3 +1,22 @@
+"""
+Anaouder - Automatic transcription and subtitling for the Breton language
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+
 import os
 from typing import List, Optional
 import subprocess
@@ -8,10 +27,14 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QWidget, QDialog, QFileDialog,
     QVBoxLayout, QHBoxLayout, QGroupBox,
-    QLineEdit, QPushButton
+    QLineEdit, QPushButton,
+    QCheckBox, QButtonGroup, QDialogButtonBox, QRadioButton,
+    QLabel, QComboBox
 )
 
 from src.interfaces import Segment, MainWindowInterface
+from src.settings import app_settings
+from src.services.logger import logger
 from src.ui.icons import icons
 
 
@@ -20,34 +43,52 @@ log = logging.getLogger(__name__)
 
 
 
-class ExportAudioDialog(QDialog):
+class ExportSegmentDialog(QDialog):
+
     def __init__(
             self,
-            parent: Optional[QWidget],
-            default_path: Optional[str] = None,
-            file_type: str = "unknown",
+            parent,
+            default_path: Optional[Path] = None,
         ):
         super().__init__(parent)
         
-        self.file_type = file_type.lower()
-        self.setWindowTitle(self.tr("Export to") + f" {file_type.upper()}")
-        self.resize(500, 150) # Reasonable default size
-        self.setModal(True)
+        self.output_dir = default_path or Path.home()
+        self.export_format = 0
 
-        self._init_ui(default_path)
+        self.setWindowTitle(self.tr("Export segments"))
+        self.setMinimumWidth(420)
+        # self.resize(500, 150)
+        # self.setModal(True)
+        self.build_ui()
+
+        saved_params = app_settings.value("export_segments/saved_parameters", {})
+        self.set_parameters(saved_params)
 
 
-    def _init_ui(self, default_path: Optional[str]):
+    def build_ui(self):
         main_layout = QVBoxLayout(self)
+        # main_layout.setSpacing(16)
+        # main_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Scope ("Apply to")
+        apply_to_group = QGroupBox(self.tr("Apply to"))
+        apply_to_layout = QHBoxLayout(apply_to_group)
+        apply_to_layout.setContentsMargins(15, 15, 15, 15)
+
+        self.selected_radio_button = QRadioButton(self.tr("Selected segments"))
+        self.selected_radio_button.setChecked(True)
+        self.all_radio_button = QRadioButton(self.tr("All segments"))
+        
+        apply_to_layout.addWidget(self.selected_radio_button)
+        apply_to_layout.addWidget(self.all_radio_button)
         
         # File selection
-        file_group = QGroupBox(self.tr("Output File"))
-        file_layout = QHBoxLayout()
+        file_group = QGroupBox(self.tr("Output File(s)"))
+        file_layout = QHBoxLayout(file_group)
+        file_layout.setContentsMargins(15, 15, 15, 15)
         
         self.file_path_input = QLineEdit()
         self.file_path_input.setPlaceholderText(self.tr("Select a file") + "...")
-        if default_path:
-            self.file_path_input.setText(default_path)
         
         browse_button = QPushButton()
         if "folder" in icons:
@@ -59,7 +100,16 @@ class ExportAudioDialog(QDialog):
         
         file_layout.addWidget(self.file_path_input)
         file_layout.addWidget(browse_button)
-        file_group.setLayout(file_layout)
+        # file_group.setLayout(file_layout)
+
+        format_group = QGroupBox(self.tr("Output Format"))
+        format_layout = QHBoxLayout(format_group)
+        format_layout.setContentsMargins(15, 15, 15, 15)
+        self.format_combobox = QComboBox()
+        self.format_combobox.addItems(["Keep media format", "mp3"])
+        self.format_combobox.currentIndexChanged.connect(self._on_format_index_changed)
+
+        format_layout.addWidget(self.format_combobox)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -67,64 +117,86 @@ class ExportAudioDialog(QDialog):
         cancel_button.clicked.connect(self.reject)
         
         export_button = QPushButton(self.tr("&Export"))
-        export_button.clicked.connect(self.accept)
+        export_button.clicked.connect(self.on_export)
         export_button.setDefault(True)
         
         button_layout.addStretch()
         button_layout.addWidget(cancel_button)
         button_layout.addWidget(export_button)
         
+        main_layout.addWidget(apply_to_group)
         main_layout.addWidget(file_group)
+        main_layout.addWidget(format_group)
         main_layout.addStretch()
         main_layout.addLayout(button_layout)
 
 
     def _browse_file(self):
-        type_map = {
-            "srt": self.tr("SubRip Subtitle"),
-            "txt": self.tr("Text File"),
-            "eaf": self
-        }
-        type_desc = type_map.get(self.file_type, self.tr("File"))
-        filter_str = f"{type_desc} (*.{self.file_type});;{self.tr("All files")} (*.*)"
-        
-        current_path = self.file_path_input.text() or os.path.expanduser("~")
-        dir_path = os.path.dirname(current_path) if os.path.exists(current_path) \
-            else current_path
-
-        file_path, _ = QFileDialog.getSaveFileName(
+        # file_path, _ = QFileDialog.getSaveFileName(
+        dir_path = QFileDialog.getExistingDirectory(
             self,
-            self.tr("Export to {type}").format(type=self.file_type.upper()),
-            dir_path,
-            filter_str
+            self.tr("Export directory"),
+            str(self.output_dir),
+            options=QFileDialog.Option.ShowDirsOnly
         )
         
-        if file_path:
-            file_path = os.path.abspath(file_path)
-            self.file_path_input.setText(file_path)
-            self.accept()
+        if dir_path:
+            dir_path = os.path.abspath(dir_path)
+            print(dir_path)
+            # self.accept()
+    
+
+    def _on_format_index_changed(self, format_idx):
+        self.export_format = format_idx
 
 
     def get_file_path(self) -> str:
         return self.file_path_input.text()
+    
+
+    def get_parameters(self) -> dict:
+        return {
+            "apply_to_all": self.all_radio_button.isChecked(),
+            "output_format": self.format_combobox.currentIndex(),
+        }
+    
+
+    def set_parameters(self, params: dict):
+        self.all_radio_button.setChecked(params.get("apply_to_all", False))
+        self.format_combobox.setCurrentIndex(params.get("output_format", 0))
+    
+
+    def on_export(self):
+        # Save parameters
+        params = self.get_parameters()
+        app_settings.setValue("adapt_to_subtitles/saved_parameters", params)
+
+        self.accept()
 
 
 
-class _AudioWorker(QObject):
+class _FFMPEGWorker(QObject):
     """
     Internal Worker class. The Main Window never sees this.
     It handles the actual FFmpeg subprocess calls.
     """
     # Internal signals to communicate with the Controller
-    finished = Signal()
     progress_update = Signal(int, int, str)
-    error_occurred = Signal(str)
+    finished = Signal()
+    error_occurred = Signal()
 
-    def __init__(self, media_path: Path, segments: List[Segment], output_dir: Path):
+    def __init__(
+            self,
+            media_path: Path,
+            segments: List[Segment],
+            output_dir: Path,
+            export_format: int
+        ):
         super().__init__()
         self.media_path = media_path
         self.output_dir = output_dir
         self.segments = segments
+        self.export_format = export_format
         self._must_stop = False
 
     @Slot()
@@ -143,14 +215,26 @@ class _AudioWorker(QObject):
             ext = self.media_path.suffix
             output_path = self.output_dir / f"segment_{i:03}_{round(start)}_{round(end)}{ext}"
 
-            cmd = [
-                'ffmpeg', '-y',
-                '-i', self.media_path,
-                '-ss', str(start), '-to', str(end),
-                '-vn',
-                '-c', 'copy',
-                output_path
-            ]
+            match self.export_format:
+                case 0:
+                    cmd = [
+                        'ffmpeg', '-y',
+                        '-ss', str(start),
+                        '-i', self.media_path,
+                        '-t', str(end - start),
+                        # '-to', str(end),
+                        '-map', '0:v', 
+                        '-map', '0:a',
+                        '-c', 'copy',
+                        output_path
+                    ]
+                case 1:
+                    cmd = [
+                        'ffmpeg', '-y',
+                        '-i', self.media_path,
+                        '-ss', str(start), '-to', str(end),
+                        output_path.with_suffix(".mp3")
+                    ]
 
             try:
                 # Windows users might see a popup CMD window without startupinfo
@@ -169,12 +253,15 @@ class _AudioWorker(QObject):
                 )
 
                 if result.returncode != 0:
-                    self.error_occurred.emit(f"FFmpeg Error on {os.path.basename(output_path)}")
+                    self.error_occurred.emit()
+                    logger.error_message(f"FFmpeg Error on {os.path.basename(output_path)}")
                 else:
                     self.progress_update.emit(i + 1, total, os.path.basename(output_path))
+                    logger.message(f"Segment exported to '{output_path}'")
 
             except Exception as e:
-                self.error_occurred.emit(str(e))
+                self.error_occurred.emit()
+                logger.error_message(str(e))
                 break
 
         self.finished.emit()
@@ -184,7 +271,7 @@ class _AudioWorker(QObject):
 
 
 
-class AudioSegmentExtractor(QObject):
+class SegmentExporterController(QObject):
     """
     The Specialized Controller Class.
     The Main Window instantiates this and connects to its signals.
@@ -192,7 +279,7 @@ class AudioSegmentExtractor(QObject):
     # Public Signals (The UI connects to these)
     on_progress = Signal(int, int, str) # current, total, filename
     on_finished = Signal()
-    on_error = Signal(str)
+    on_error = Signal()
 
 
     def __init__(self):
@@ -201,7 +288,13 @@ class AudioSegmentExtractor(QObject):
         self._worker = None
 
 
-    def start_job(self, media_path: Path, segments: List[Segment]):
+    def start_job(
+            self,
+            media_path: Path,
+            segments: List[Segment],
+            output_dir: Path,
+            export_format: int
+        ):
         """
         Initializes the thread and worker, connects signals, and starts.
         """
@@ -210,7 +303,7 @@ class AudioSegmentExtractor(QObject):
 
         # Setup Thread and Worker
         self._thread = QThread()
-        self._worker = _AudioWorker(media_path, segments, media_path.parent)
+        self._worker = _FFMPEGWorker(media_path, segments, output_dir, export_format)
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.process)
@@ -253,20 +346,21 @@ class AudioSegmentExtractor(QObject):
         self._worker = None
 
 
-audio_extractor: AudioSegmentExtractor | None = None
+
+audio_extractor: SegmentExporterController | None = None
 
 
-def initAudioSegmentExtractor(parent: MainWindowInterface):
+def startAudioSegmentExtractor(parent: MainWindowInterface, media_path: Path, segments: List[Segment]):
     global audio_extractor
-    audio_extractor = AudioSegmentExtractor()
-
-    # audio_extractor.on_progress.connect(parent.update_ui)
-    # audio_extractor.on_finished.connect(process_finished)
-    audio_extractor.on_error.connect(parent.setStatusMessage)
-
-
-def startAudioSegmentExtractor(media_path: Path, segments: List[Segment]):
     if audio_extractor is None:
-        return
-
-    audio_extractor.start_job(media_path, segments)
+        audio_extractor = SegmentExporterController()
+        # Connect signals
+        # audio_extractor.on_progress.connect(parent.update_ui)
+        # audio_extractor.on_finished.connect(process_finished)
+        # audio_extractor.on_error.connect(parent.setErrorMessage)
+    
+    dialog = ExportSegmentDialog(parent, media_path.parent)
+    if dialog.exec() == QDialog.DialogCode.Accepted:
+        output_dir = dialog.output_dir
+        export_format = dialog.export_format
+        audio_extractor.start_job(media_path, segments, output_dir, export_format)

@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -64,9 +64,9 @@ class AdaptUtterancesDialog(QDialog):
     
     def build_ui(self) -> None:
         # Main layout
-        dialog_layout = QVBoxLayout(self)
-        dialog_layout.setSpacing(16)
-        dialog_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(20, 20, 20, 20)
 
         # Scope ("Apply to")
         apply_to_group = QGroupBox(self.tr("Apply to"))
@@ -79,7 +79,7 @@ class AdaptUtterancesDialog(QDialog):
         
         apply_to_layout.addWidget(self.selected_radio_button)
         apply_to_layout.addWidget(self.all_radio_button)
-        dialog_layout.addWidget(apply_to_group)
+        main_layout.addWidget(apply_to_group)
 
         # Segment options
         segment_options_group = QGroupBox(self.tr("Timing & Length"))
@@ -88,7 +88,7 @@ class AdaptUtterancesDialog(QDialog):
 
         self.subtitle_rules_checkbox = QCheckBox(self.tr("Apply subtitles length and interval rules"))
         segment_options_layout.addWidget(self.subtitle_rules_checkbox)
-        dialog_layout.addWidget(segment_options_group)
+        main_layout.addWidget(segment_options_group)
         
         # Text options
         text_options_group = QGroupBox(self.tr("Text Formatting"))
@@ -154,17 +154,17 @@ class AdaptUtterancesDialog(QDialog):
 
         text_options_layout.addWidget(self.apostrophe_options_widget)
 
-        dialog_layout.addWidget(text_options_group)
+        main_layout.addWidget(text_options_group)
 
         # Add stretch to push buttons to the bottom
-        dialog_layout.addStretch()
+        main_layout.addStretch()
         
         # OK and Cancel buttons
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | 
                                       QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
-        dialog_layout.addWidget(button_box)
+        main_layout.addWidget(button_box)
 
 
     def accept(self) -> None:
@@ -173,9 +173,8 @@ class AdaptUtterancesDialog(QDialog):
 
     
     def apply_options(self) -> None:
-        params = self.get_parameters()
-
         # Save parameters
+        params = self.get_parameters()
         app_settings.setValue("adapt_to_subtitles/saved_parameters", params)
 
         if params["apply_to_all"] == True:

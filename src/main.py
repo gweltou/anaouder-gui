@@ -68,6 +68,7 @@ from src.version import __version__
 from src.ui.icons import icons, loadIcons, IconWidget
 from src.ui.theme import theme
 from src.services.media_player_controller import MediaPlayerController
+from src.services.logger import logger
 from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
 from src.text_widget import (
     TextEditWidget, Highlighter,
@@ -88,7 +89,7 @@ from src.commands import (
 from src.ui.timecode_display import TimecodeWidget
 from src.ui.parameters_dialog import ParametersDialog
 from src.ui.about_page import AboutDialog
-from src.exports.textual_exporter import export, exportSignals
+from src.exports.textual_exporter import export_to_text_format
 from src.exports import segment_exporter
 from src.auto_segment import auto_segment
 from src.hunspell import HunspellLoader
@@ -220,7 +221,7 @@ class MainWindow(QMainWindow):
         self.scene_detector = None
 
         # Audio segment extractor
-        segment_exporter.initAudioSegmentExtractor(self)
+        # segment_exporter.initAudioSegmentExtractor(self)
 
         # Undo stack
         self.undo_stack = self.document_controller.undo_stack
@@ -396,6 +397,10 @@ class MainWindow(QMainWindow):
         self.waveform.refresh_segment_info_resizing.connect(self.updateSegmentInfoResizing)
         self.waveform.select_segments.connect(self.selectFromWaveform)
         self.waveform.stop_follow.connect(self.toggleFollowPlayhead)
+
+        # Exports
+        logger.message_requested.connect(self.setStatusMessage)
+        logger.error_message_requested.connect(self.setErrorMessage)
 
 
     def _restoreSettings(self) -> None:
@@ -1072,7 +1077,7 @@ class MainWindow(QMainWindow):
             keep_media = False
         ) -> None:
         """Hub function for opening files"""
-        log.info(f"openFile({str(file_path)})")
+        log.info(f"onOpenFile({str(file_path)})")
 
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         media_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
@@ -1094,6 +1099,7 @@ class MainWindow(QMainWindow):
             self.timecode_widget.setFps(100)
 
         self.file_path = file_path
+        self.document_controller.setDocumentPath(file_path)
         ext = file_path.suffix.lower()
 
         if ext in MEDIA_FORMATS:
@@ -1578,19 +1584,19 @@ class MainWindow(QMainWindow):
 
 
     def onExportSrt(self):
-        exportSignals.message.connect(self.setStatusMessage)
-        export(self, str(self.media_path), self.getUtterancesForExport(), "srt")
-        exportSignals.message.disconnect()
+        # exportSignals.message.connect(self.setStatusMessage)
+        export_to_text_format(self, str(self.media_path), self.getUtterancesForExport(), "srt")
+        # exportSignals.message.disconnect()
 
     def onExportEaf(self):
-        exportSignals.message.connect(self.setStatusMessage)
-        export(self, str(self.media_path), self.getUtterancesForExport(), "eaf")
-        exportSignals.message.disconnect()
+        # exportSignals.message.connect(self.setStatusMessage)
+        export_to_text_format(self, str(self.media_path), self.getUtterancesForExport(), "eaf")
+        # exportSignals.message.disconnect()
 
     def onExportTxt(self):
-        exportSignals.message.connect(self.setStatusMessage)
-        export(self, str(self.media_path), self.getUtterancesForExport(), "txt")
-        exportSignals.message.disconnect()
+        # exportSignals.message.connect(self.setStatusMessage)
+        export_to_text_format(self, str(self.media_path), self.getUtterancesForExport(), "txt")
+        # exportSignals.message.disconnect()
 
 
     def getUtterancesForExport(self) -> List[Tuple[str, Segment]]:
@@ -1632,7 +1638,8 @@ class MainWindow(QMainWindow):
             ]
             selected_segments = list(filter(None, selected_segments))
 
-        segment_exporter.startAudioSegmentExtractor(self.media_path, selected_segments)
+
+        segment_exporter.startAudioSegmentExtractor(self, self.media_path, selected_segments)
 
 
     def showParametersDialog(self, tab_idx: int = 0)  -> None:

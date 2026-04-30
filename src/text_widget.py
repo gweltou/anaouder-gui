@@ -765,9 +765,9 @@ class TextEditWidget(QTextEdit):
         if cursor.hasSelection():
             pos = cursor.selectionStart()
             self.deleteSelectedText(cursor)
-        if '\n' in clipboard.text():
+        
+        if '\n' in clipboard.text() and not self.isAligned(cursor.block()):   
             paragraphs = clipboard.text().split('\n')
-            print(f"pasting {paragraphs}")
             for text in paragraphs:
                 self.undo_stack.push(
                     InsertBlockCommand(
@@ -780,19 +780,24 @@ class TextEditWidget(QTextEdit):
                 )
                 pos += len(text) + 1
         else:
-            text = clipboard.text()
+            # If the data is pasted in an aligned block, use line breaks
+            text = clipboard.text().replace('\n', LINE_BREAK)
             self.undo_stack.push(InsertTextCommand(self, text, pos))
         self.undo_stack.endMacro()
         self.updateLineNumberAreaWidth()
     
 
-    def canInsertFromMimeData(self, mime_data: QMimeData):
+    def canInsertFromMimeData(self, mime_data: QMimeData) -> bool:
         if mime_data.hasUrls():
             return False
         elif mime_data.hasText():
             return True
         else:
             return False
+    
+
+    def insertFromMimeData(self, mime_data: QMimeData) -> None:
+        print("insertFromMimeData", mime_data)
 
 
     def dropEvent(self, event: QDropEvent):

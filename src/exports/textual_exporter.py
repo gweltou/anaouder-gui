@@ -22,6 +22,7 @@ import os
 import re
 import srt
 import datetime, pytz
+import logging
 from xml.dom import minidom
 
 from PySide6.QtWidgets import (
@@ -34,12 +35,17 @@ from PySide6.QtCore import QObject, Signal
 
 from ostilhou.asr.dataset import MetadataParser, METADATA_PATTERN
 
-from ui.icons import icons
+from src.services.logger import logger
+from src.ui.icons import icons
 from src.version import __version__
 
 
 
-def export(
+log = logging.getLogger(__name__)
+
+
+
+def export_to_text_format(
         parent: QWidget,
         media_path: Optional[str],
         utterances: List[tuple],
@@ -79,27 +85,16 @@ def export(
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(data)
         
-        print(f"File saved to {file_path}")
-        exportSignals.message.emit(
-            QObject.tr("Export completed: {path}").format(path=os.path.basename(file_path))
-        )
+        log.info(f"File saved to {file_path}")
+        logger.message(QObject.tr("Exported '{path}'").format(path=os.path.basename(file_path)))
     except IOError as e:
         error_msg = f"File Error: {e.strerror}"
-        print(error_msg)
-        exportSignals.message.emit(error_msg)
+        log.error(error_msg)
+        logger.error_message(error_msg)
     except Exception as e:
-        error_msg = f"Unexpected error: {e}"
-        print(error_msg)
-        exportSignals.message.emit(
-            QObject.tr("Couldn't export file: {error}").format(error=e)
-        )
-
-
-
-class ExportSignals(QObject):
-    message = Signal(str)
-
-exportSignals = ExportSignals()
+        error_msg = QObject.tr("Couldn't export file: {error}").format(error=e)
+        log.error(error_msg)
+        logger.error_message(error_msg)
 
 
 
