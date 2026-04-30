@@ -119,6 +119,11 @@ class DocumentController(QObject):
 
     def setMediaPath(self, media_path: Path | None) -> None:
         self.media_path = media_path
+    
+
+    def setDocumentPath(self, file_path: Path | None) -> None:
+        self.document_path = file_path
+        print(f"{self.document_path=}")
 
 
     def loadDocumentData(self, data: List[Tuple[str, Optional[Segment]]]) -> None:
