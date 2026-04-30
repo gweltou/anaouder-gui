@@ -51,6 +51,7 @@ class CaptionRenderer:
         self.output_prefix = "frame_"
         self.background_color = self.DEFAULT_BACKGROUND_COLOR
         self.background_images = []
+        self.background_image_path = None
         self.empty_frame: Image.Image
         self.segment_properties: Dict[SegmentId, dict] = dict()
         self.loaded_fonts = {("default", self.DEFAULT_FONT_SIZE): ImageFont.load_default(self.DEFAULT_FONT_SIZE)}
@@ -63,6 +64,7 @@ class CaptionRenderer:
 
         self.metadata_parser = MetadataParser()
         for param_name in (
+                "background-color", "background-image",
                 "font", "font-size",
                 "position",
                 "bg-color", "fg-color",
@@ -87,35 +89,6 @@ class CaptionRenderer:
         self.output_prefix = prefix
 
 
-    def set_background_color(self, color: tuple | str) -> None:
-        self.background_color = color
-    
-
-    def set_background_images(self, filepath_pattern: str) -> None:
-        """
-        Args:
-            background_img_pattern (str):
-                a filpath with a decimal expression, for ex. "frame_%05d.png"
-        """
-        pattern = r"%0(\d+)d"
-        match = re.search(pattern, filepath_pattern)
-
-        if match:
-            num_digits = int(match.group(1))
-            glob_replacement = "[0-9]" * num_digits
-            glob_pattern = re.sub(pattern, glob_replacement, filepath_pattern)
-
-            glob_pattern = filepath_pattern.replace("%05d", "[0-9]" * 5)
-            p = Path(glob_pattern)
-
-            files = sorted(p.parent.glob(p.name))
-
-            self.background_images = list(files)
-        else:
-            self.background_images = [Path(filepath_pattern)]
-        log.info(f"Background images found: {len(self.background_images)}")
-
-
     # def set_font(self, font_path: Path, font_size: int = 30) -> None:
     #     try:
     #         self.default_font = ImageFont.truetype(font_path, font_size)
@@ -126,7 +99,12 @@ class CaptionRenderer:
 
     def set_properties(self, **kwargs):
         """
+        Sets global styling properties.
+        Global properties is used as default when there is no segment properties.
+
         Args:
+            background_color
+            background_image
             font
             font_size
             bg_color
@@ -142,7 +120,7 @@ class CaptionRenderer:
             x_offset
             y_offset
         """
-        self.global_properties.update(kwargs)
+        self.global_properties.update({ k.replace('_', '-'): v for k,v in kwargs.items() })
         log.info(f"Renderer properties set {self.global_properties}")
     
 
@@ -181,8 +159,8 @@ class CaptionRenderer:
             # Join all regions's metadata
             properties = {}
             for region in data:
-                # Convert keys
-                properties.update({k.lower().replace('-', '_'): v for k, v in region.items()})
+                # Convert key names
+                properties.update({k.lower(): v for k, v in region.items()})
 
             text = ''.join([ region["text"] for region in data ])
             properties["text"] = text
@@ -194,9 +172,76 @@ class CaptionRenderer:
             
             alignment = align_text_with_vosk_tokens(text, auto_transcription)
             properties["alignment"] = alignment
-            print_alignment(alignment)
+            #print_alignment(alignment)
 
             self.segment_properties[segment_id] = properties
+    
+
+    def set_background_color(self, color: tuple | str) -> None:
+        self.background_color = color
+    
+
+    def set_background_images(self, filepath_pattern: str) -> None:
+        """
+        Args:
+            background_img_pattern (str):
+                a filpath with a decimal expression, for ex. "frame_%05d.png"
+        """
+        pattern = r"%0(\d+)d"
+        match = re.search(pattern, filepath_pattern)
+
+        if match:
+            num_digits = int(match.group(1))
+            glob_replacement = "[0-9]" * num_digits
+            glob_pattern = re.sub(pattern, glob_replacement, filepath_pattern)
+
+            glob_pattern = filepath_pattern.replace("%05d", "[0-9]" * 5)
+            p = self.document.document_path.parent if self.document.document_path else Path()
+            p = p.resolve() / Path(glob_pattern)
+
+            files = sorted(p.parent.glob(p.name))
+            self.background_images = list(files)
+        else:
+            img_path = self.document.document_path.parent if self.document.document_path else Path()
+            img_path = img_path.resolve() / Path(filepath_pattern)
+            print(f"{img_path=}")
+            self.background_images = [img_path.resolve()]
+        
+        self.background_image_path = filepath_pattern
+
+        log.info(f"Background images found: {len(self.background_images)}")
+
+
+    def get_background_image(
+            self, frame_number: int,
+            segment_ids: List[SegmentId]
+        ) -> Image.Image:
+        properties = self.global_properties.copy()
+
+        # Read the background style from the last segment id
+        if segment_ids:
+            properties.update(self.segment_properties[segment_ids[-1]])
+
+        # Background images have precedence over solid colors
+        if "background-image" in properties:
+            filepath_pattern = properties["background-image"]
+            if filepath_pattern != self.background_image_path:
+                self.set_background_images(filepath_pattern)
+            
+            if self.background_images:
+                img_idx = min(len(self.background_images) - 1, frame_number)
+                img_path = self.background_images[img_idx]
+                bg_img = Image.open(img_path, 'r')
+                self.frame_size = bg_img.size
+                return bg_img
+        
+        if "background-color" in properties:
+            bg_color = properties["background-color"]
+            if bg_color != self.background_color:
+                self.set_background_color(bg_color)
+                self.empty_frame = Image.new("RGBA", self.frame_size, self.background_color)
+
+        return self.empty_frame
        
 
     def render_frame(self, frame_number: int) -> None:
@@ -209,31 +254,25 @@ class CaptionRenderer:
         time_s = frame_number / self.fps
         time_offsets = self._get_time_offsets()
         segment_ids = self.document.getSegmentsAtTimeOffsets(time_s, time_offsets)
+
+        bg_img = self.get_background_image(frame_number, segment_ids)
         
         if not segment_ids:
             # No subtitles to render
-            self.empty_frame.save(str(save_path))
+            bg_img.save(str(save_path))
             return
-        
-        # Optional background image sequence of solid color
-        if self.background_images:
-            img_idx = min(len(self.background_images) - 1, frame_number)
-            img_path = self.background_images[img_idx]
-            bg_img = Image.open(img_path, 'r')
-            self.frame_size = bg_img.size
-        else:
-            bg_img = Image.new("RGBA", self.frame_size, self.background_color)
         
         for segment_id in segment_ids:
             properties = self.global_properties.copy()
             properties.update(self.segment_properties[segment_id])
-                
+
             font = self.get_font(
                 properties.get("font", "default"),
-                int(properties.get("font_size", self.DEFAULT_FONT_SIZE))
+                int(properties.get("font-size", self.DEFAULT_FONT_SIZE))
             )
             ascent, descent = font.getmetrics()
             font_height = ascent + descent
+            print(font, font_height)
 
             segment = properties["segment"]
             text = properties["text"]
@@ -278,17 +317,17 @@ class CaptionRenderer:
                     log.warning(f"bad argument: {properties['position']}")
                     top = bg_img.height - text_box_height
 
-            if "y_offset" in properties:
-                top += round(float(properties["y_offset"]) * bg_img.height)
+            if "y-offset" in properties:
+                top += round(float(properties["y-offset"]) * bg_img.height)
 
             # Center text horizontally
             left = (bg_img.width - text_image.width) // 2
 
             # Opacity
-            if ("fade_in" in properties) or ("fade_out" in properties):
+            if ("fade-in" in properties) or ("fade-out" in properties):
                 # Calculate fade-in and fade-out transparency
-                fade_in = float(properties.get("fade_in", 0.0))
-                fade_out = float(properties.get("fade_out", 0.0))
+                fade_in = float(properties.get("fade-in", 0.0))
+                fade_out = float(properties.get("fade-out", 0.0))
                 if fade_in and ((start - fade_in) < time_s < start):
                     opacity = (time_s - (start - fade_in)) / fade_in
                     text_image = modify_opacity(text_image, opacity)
@@ -314,7 +353,7 @@ class CaptionRenderer:
         """Returns time offsets (if any) for every segment"""
         offsets = dict()
         for seg_id, prop in self.segment_properties.items():
-            offset = float(prop.get("fade_in", 0.0)), float(prop.get("fade_out", 0.0))
+            offset = float(prop.get("fade-in", 0.0)), float(prop.get("fade-out", 0.0))
             if offset != (0.0, 0.0):
                 offsets[seg_id] = offset
         return offsets
@@ -356,15 +395,15 @@ class CaptionRenderer:
 
         font = self.get_font(
             properties.get("font", "default"),
-            int(properties.get("font_size", self.DEFAULT_FONT_SIZE))
+            int(properties.get("font-size", self.DEFAULT_FONT_SIZE))
         )
         font_size = font.size
-        text_bg_color = properties.get("bg_color", self.DEFAULT_FONT_BG_COLOR)
-        text_fg_color = properties.get("fg_color", self.DEFAULT_FONT_FG_COLOR)
-        text_bg_outline_color = properties.get("bg_outline_color", self.DEFAULT_FONT_OUTLINE_COLOR)
-        text_bg_outline_width = int(properties.get("bg_outline_width", self.DEFAULT_FONT_OUTLINE_WIDTH))
-        text_fg_outline_color = properties.get("fg_outlin_color", self.DEFAULT_FONT_OUTLINE_COLOR)
-        text_fg_outline_width = int(properties.get("fg_outline_width", self.DEFAULT_FONT_OUTLINE_WIDTH))
+        text_bg_color = properties.get("bg-color", self.DEFAULT_FONT_BG_COLOR)
+        text_fg_color = properties.get("fg-color", self.DEFAULT_FONT_FG_COLOR)
+        text_bg_outline_color = properties.get("bg-outline-color", self.DEFAULT_FONT_OUTLINE_COLOR)
+        text_bg_outline_width = int(properties.get("bg-outline-width", self.DEFAULT_FONT_OUTLINE_WIDTH))
+        text_fg_outline_color = properties.get("fg-outlin-color", self.DEFAULT_FONT_OUTLINE_COLOR)
+        text_fg_outline_width = int(properties.get("fg-outline-width", self.DEFAULT_FONT_OUTLINE_WIDTH))
 
         # Split by lines and words
         words_lines = [ line.split() for line in text.split(LINE_BREAK) ]
