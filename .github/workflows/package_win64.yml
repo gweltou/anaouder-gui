@@ -44,6 +44,13 @@ jobs:
         python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
       shell: pwsh
 
+    - name: Compile language translation files
+      run: |
+        .\.venv\Scripts\Activate.ps1
+        pyside6-lrelease translations/anaouder_fr.ts -qm translations/anaouder_fr.qm
+        pyside6-lrelease translations/anaouder_br.ts -qm translations/anaouder_br.qm
+      shell: pwsh
+
     - name: Build with PyInstaller
       run: |
         .\.venv\Scripts\Activate.ps1
