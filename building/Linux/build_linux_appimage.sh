@@ -1,7 +1,10 @@
 #!/bin/bash
 
+# Run from the `building` directory
+
 cd ..
 rm -rf build dist
+pyside6-lrelease translations/anaouder_fr.ts -qm translations/anaouder_fr.qm && pyside6-lrelease translations/anaouder_br.ts -qm translations/anaouder_br.qm
 pyinstaller anaouder.spec
 
 cd building
