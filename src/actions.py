@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import platform
 
 from PySide6.QtCore import Qt, QObject, Signal
 from PySide6.QtGui import QAction, QKeySequence, QActionGroup
@@ -91,7 +92,9 @@ class ActionManager(QObject):
         self.save_as.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.save_as.triggered.connect(self.save_as_requested.emit)
 
-        self.close_app = QAction(self.tr("E&xit"), self)
+        # Standard practice for macOS
+        exit_text = self.tr("Quit") if platform.system() == "Darwin" else self.tr("E&xit")
+        self.close_app = QAction(exit_text, self)
         self.close_app.setShortcut(QKeySequence.StandardKey.Quit)
         self.close_app.triggered.connect(self.close_application_requested.emit)
 

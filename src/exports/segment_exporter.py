@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton
 )
 
-from interfaces import Segment, MainWindowInterface
-from ui.icons import icons
+from src.interfaces import Segment, MainWindowInterface
+from src.ui.icons import icons
 
 
 

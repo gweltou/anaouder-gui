@@ -37,7 +37,7 @@ from ostilhou.audio.audio_numpy import get_samples
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QDialog,
-    QMenuBar,
+    QMenuBar, QMenu,
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QToolButton, QDial,
     QLabel, QComboBox, QCheckBox, QMessageBox,
@@ -433,6 +433,18 @@ class MainWindow(QMainWindow):
         
         help_menu = menu_bar.addMenu(self.tr("&Help"))
         help_menu.addAction(self.action.show_about)
+
+        for menu in menu_bar.findChildren(QMenu):
+            menu.hovered.connect(self._handle_menu_hover)
+    
+
+    def _handle_menu_hover(self, action):
+        # This manually forces the status tip to the status bar.
+        # Necessary for macOS
+        if action and action.statusTip():
+            self.statusBar().showMessage(action.statusTip())
+        else:
+            self.statusBar().clearMessage()
     
 
     def _createFileMenu(self, menu_bar: QMenuBar) -> None:
