@@ -587,7 +587,7 @@
     <message>
         <location filename="../src/main.py" line="496"/>
         <source>Apply subtitles rules to the segments</source>
-        <translation>Kemmañ ar rannoù hervez reolennoù an istitlañ</translation>
+        <translation>Kemmañ ar rannoù hag and destenn hervez reolennoù an istitlañ</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="502"/>
@@ -622,7 +622,7 @@
     <message>
         <location filename="../src/main.py" line="691"/>
         <source>Create a selection</source>
-        <translation>Krouiñ ur rann diuz</translation>
+        <translation>Tresañ un diuz</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="699"/>
