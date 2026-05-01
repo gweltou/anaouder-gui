@@ -33,7 +33,7 @@
     <message>
         <location filename="../src/actions.py" line="100"/>
         <source>Import a media file (audio or video)</source>
-        <translation>Enporzhiañ ur media (aodio pe video)</translation>
+        <translation>Enporzhiañ ur media aodio pe video</translation>
     </message>
     <message>
         <location filename="../src/actions.py" line="104"/>
