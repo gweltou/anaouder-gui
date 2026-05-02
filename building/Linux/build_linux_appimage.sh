@@ -1,11 +1,13 @@
 #!/bin/bash
 
+VERSION="1.1"
+
 # Run from the root directory
 
 pip install .
 
+# 1. Clean and Build
 rm -rf build dist
-
 pyside6-lrelease translations/anaouder_fr.ts -qm translations/anaouder_fr.qm && pyside6-lrelease translations/anaouder_br.ts -qm translations/anaouder_br.qm
 pyinstaller anaouder.spec
 

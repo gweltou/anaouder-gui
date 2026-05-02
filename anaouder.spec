@@ -95,6 +95,7 @@ a = Analysis(
         ("./icons/OTilde.png", "icons/"),
         ("./icons/logo_dizale_small.png", "icons/"),
         ("./icons/logo_rannvro_breizh.png", "icons/"),
+        ("./icons/logo_an_drouizig.png", "icons/"),
 
         # Translation files
         ("./translations/anaouder_br.qm", "translations/"),

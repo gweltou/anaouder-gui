@@ -3,11 +3,13 @@
 APP_NAME="Anaouder"
 DIST_DIR="dist"
 BUILD_DIR="build"
-VERSION="1.0"
+VERSION="1.1"
+
+pip install .
 
 # 1. Clean and Build
-cd ../..
 rm -rf $BUILD_DIR $DIST_DIR
+pyside6-lrelease translations/anaouder_fr.ts -qm translations/anaouder_fr.qm && pyside6-lrelease translations/anaouder_br.ts -qm translations/anaouder_br.qm
 ARCH="arm64" pyinstaller anaouder.spec
 
 echo "== AD-HOC SIGNING APP =="
@@ -43,6 +45,6 @@ pkgbuild --root "$DIST_DIR/$APP_NAME.app" \
          --version $VERSION \
          "$DIST_DIR/${APP_NAME}_${VERSION}_macOS-arm64_Installer.pkg"
 
-echo "Done! Share 'dist/${APP_NAME}_${VERSION}_macOS-arm64_Installer.pkg'"
+echo "Done! Share 'dist/${APP_NAME}-${VERSION}_macOS-arm64_Installer.pkg'"
 # Clean up temporary scripts
 rm -rf scripts
