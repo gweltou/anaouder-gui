@@ -14,6 +14,7 @@ from version import __version__
 
 ARCH = os.getenv("ARCH") or 'x86_64' # Set to 'x86_64', or 'arm64' or 'universal2' for macOS
 DEBUG = True if os.getenv("DEBUG") == 'True' else False
+ROOT = os.path.abspath(os.getcwd())
 
 print("Architecture set to", ARCH)
 print(f"{DEBUG=}")
@@ -49,7 +50,7 @@ def get_binaries():
 
 a = Analysis(
     ['main.py'],
-    pathex=[],
+    pathex=[ROOT],
     binaries=get_binaries(),
     datas=[
         ("./icons/back.png", "icons/"),
