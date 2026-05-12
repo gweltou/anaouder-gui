@@ -95,6 +95,7 @@ a = Analysis(
         ("./icons/OTilde.png", "icons/"),
         ("./icons/logo_dizale_small.png", "icons/"),
         ("./icons/logo_rannvro_breizh.png", "icons/"),
+        ("./icons/logo_an_drouizig.png", "icons/"),
 
         # Translation files
         ("./translations/anaouder_br.qm", "translations/"),
@@ -106,6 +107,7 @@ a = Analysis(
         (get_lib_path("ostilhou/hspell/*.txt"), "ostilhou/hspell"),
         (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.dic"), "ostilhou/hspell/hunspell-dictionary/"),
         (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.aff"), "ostilhou/hspell/hunspell-dictionary/"),
+        (get_lib_path("ostilhou/text/moses_br.txt"), "ostilhou/text"),
     ],
     hiddenimports=[
         'src.lang.br',
