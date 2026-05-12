@@ -5,163 +5,168 @@
     <name>AboutDialog</name>
     <message>
         <source>About</source>
-        <translation type="vanished">À propos</translation>
+        <translation>À propos</translation>
     </message>
 </context>
 <context>
     <name>ActionManager</name>
     <message>
-        <location filename="../src/actions.py" line="82"/>
+        <location filename="../src/actions.py" line="83"/>
         <source>&amp;Open</source>
         <translation>&amp;Ouvrir</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="86"/>
+        <location filename="../src/actions.py" line="87"/>
         <source>&amp;Save</source>
         <translation>&amp;Enregistrer</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="90"/>
+        <location filename="../src/actions.py" line="91"/>
         <source>Save as</source>
         <translation>Enregistrer sous</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="94"/>
+        <location filename="../src/actions.py" line="96"/>
         <source>E&amp;xit</source>
         <translation>&amp;Quitter</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="100"/>
+        <location filename="../src/actions.py" line="96"/>
+        <source>Quit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/actions.py" line="103"/>
         <source>Import a media file (audio or video)</source>
         <translation>Importer un média (audio ou vidéo)</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="104"/>
+        <location filename="../src/actions.py" line="107"/>
         <source>Import a subtitles file, keep current media</source>
         <translation>Importer un fichier de sous-titres, garder le média actuel</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="107"/>
+        <location filename="../src/actions.py" line="110"/>
         <source>Import a RTF file</source>
         <translation>Importer un fichier RTF</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="108"/>
+        <location filename="../src/actions.py" line="111"/>
         <source>Import a RTF movie script file (DIZALE)</source>
         <translation>Importer un fichier RTF de script de film (Dizale)</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="112"/>
+        <location filename="../src/actions.py" line="115"/>
         <source>&amp;SubRip (.srt)</source>
         <translation>&amp;SubRip (.srt)</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="113"/>
+        <location filename="../src/actions.py" line="116"/>
         <source>Export as SubRip subtitle file</source>
         <translation>Exporter comme fichier de sous-titres SubRip</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="116"/>
+        <location filename="../src/actions.py" line="119"/>
         <source>Raw &amp;text (.txt)</source>
         <translation>Texte &amp;brut (.txt)</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="117"/>
+        <location filename="../src/actions.py" line="120"/>
         <source>Export as simple text document</source>
         <translation>Exporter comme texte brut</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="121"/>
+        <location filename="../src/actions.py" line="124"/>
         <source>Export as ELAN annotation file</source>
         <translation>Exporter en tant que fichier d&apos;annotation ELAN</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="124"/>
+        <location filename="../src/actions.py" line="127"/>
         <source>&amp;Audio segments</source>
         <translation>Segments &amp;audio</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="125"/>
+        <location filename="../src/actions.py" line="128"/>
         <source>Export audio segments as individual audio files</source>
         <translation>Exporter les segments comme fichiers individuels</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="129"/>
+        <location filename="../src/actions.py" line="132"/>
         <source>&amp;Parameters</source>
         <translation>&amp;Paramètres</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="134"/>
+        <location filename="../src/actions.py" line="137"/>
         <source>Unaligned sentences</source>
         <translation>Phrases non-alignées</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="139"/>
+        <location filename="../src/actions.py" line="142"/>
         <source>Speech density</source>
         <translation>Densité de la parole</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="149"/>
+        <location filename="../src/actions.py" line="152"/>
         <source>&amp;About</source>
         <translation>À &amp;propos</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="153"/>
+        <location filename="../src/actions.py" line="156"/>
         <source>Undo</source>
         <translation>Annuler</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="160"/>
+        <location filename="../src/actions.py" line="163"/>
         <source>Redo</source>
         <translation>Refaire</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="168"/>
+        <location filename="../src/actions.py" line="171"/>
         <source>Play/Pause</source>
         <translation>Jouer/Pause</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="174"/>
+        <location filename="../src/actions.py" line="177"/>
         <source>Replay segment</source>
         <translation>Rejouer le segment</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="179"/>
+        <location filename="../src/actions.py" line="182"/>
         <source>Follow playhead</source>
         <translation>Suivre la tête de lecture</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="188"/>
+        <location filename="../src/actions.py" line="191"/>
         <source>Transcribe</source>
         <translation>Transcrire</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="197"/>
+        <location filename="../src/actions.py" line="200"/>
         <source>&amp;Hidden transcription</source>
         <translation>&amp;Transcription cachée</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="198"/>
+        <location filename="../src/actions.py" line="201"/>
         <source>Allow for smart splitting and auto-alignment operations</source>
         <translation>Permet les fonctions de découpe intelligente et d&apos;auto-alignement</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="203"/>
+        <location filename="../src/actions.py" line="206"/>
         <source>&amp;Auto align</source>
         <translation>&amp;Alignement automatique</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="210"/>
+        <location filename="../src/actions.py" line="213"/>
         <source>Delete utterance</source>
         <translation>Supprimer le segment</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="214"/>
+        <location filename="../src/actions.py" line="217"/>
         <source>Insert new line</source>
         <translation>Insérer une nouvelle ligne</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="221"/>
+        <location filename="../src/actions.py" line="224"/>
         <source>Insert em dashes</source>
         <translation>Insérer des tirets cadratin</translation>
     </message>
@@ -170,80 +175,80 @@
     <name>AdaptDialog</name>
     <message>
         <source>Adapt to subtitles</source>
-        <translation type="vanished">Adapter aux sous-titres</translation>
+        <translation>Adapter aux sous-titres</translation>
     </message>
     <message>
         <source>Options</source>
-        <translation type="vanished">Options</translation>
+        <translation>Options</translation>
     </message>
     <message>
         <source>Apply subtitles length and interval rules</source>
-        <translation type="vanished">Appliquer les règles de longueur et d&apos;intervalle aux sous-titres</translation>
+        <translation>Appliquer les règles de longueur et d&apos;intervalle aux sous-titres</translation>
     </message>
     <message>
         <source>Remove verbal fillers (&quot;hum&quot;, &quot;err&quot;...)</source>
-        <translation type="vanished">Enlever les mots de remplissager (&quot;hum&quot;, &quot;euh&quot;...)</translation>
+        <translation>Enlever les mots de remplissager (&quot;hum&quot;, &quot;euh&quot;...)</translation>
     </message>
     <message>
         <source>Apply to</source>
-        <translation type="vanished">Appliquer à</translation>
+        <translation>Appliquer à</translation>
     </message>
     <message>
         <source>Selected segments</source>
-        <translation type="vanished">Segments séléctionnées</translation>
+        <translation>Segments séléctionnées</translation>
     </message>
     <message>
         <source>All segments</source>
-        <translation type="vanished">Tous les segments</translation>
+        <translation>Tous les segments</translation>
     </message>
 </context>
 <context>
     <name>CachePanel</name>
     <message>
         <source>Current file cache</source>
-        <translation type="vanished">Cache du fichier actuel</translation>
+        <translation>Cache du fichier actuel</translation>
     </message>
     <message>
         <source>Media fingerprint</source>
-        <translation type="vanished">Empreinte digitale du media</translation>
+        <translation>Empreinte digitale du media</translation>
     </message>
     <message>
         <source>Size on disk</source>
-        <translation type="vanished">Place sur le disque</translation>
+        <translation>Place sur le disque</translation>
     </message>
     <message>
         <source>Clear cache</source>
-        <translation type="vanished">Vider le cache</translation>
+        <translation>Vider le cache</translation>
     </message>
     <message>
         <source>Clear cache for current file only</source>
-        <translation type="vanished">Vider le cache pour le fichier actuel uniquement</translation>
+        <translation>Vider le cache pour le fichier actuel uniquement</translation>
     </message>
     <message>
         <source>Global cache</source>
-        <translation type="vanished">Cache global</translation>
+        <translation>Cache global</translation>
     </message>
     <message>
         <source>Open folder</source>
-        <translation type="vanished">Ouvrir le dossier</translation>
+        <translation>Ouvrir le dossier</translation>
     </message>
     <message>
         <source>Open cache folder in file explorer</source>
-        <translation type="vanished">Ouvrir le dossier de cache dans l&apos;explorateur de fichier</translation>
+        <translation>Ouvrir le dossier de cache dans l&apos;explorateur de fichier</translation>
     </message>
     <message>
         <source>Size limit</source>
-        <translation type="vanished">Limite de taille</translation>
+        <translation>Limite de taille</translation>
     </message>
     <message>
         <source>Clear global cache</source>
-        <translation type="vanished">Vider le cache global</translation>
+        <translation>Vider le cache global</translation>
     </message>
 </context>
 <context>
     <name>DocumentController</name>
     <message>
-        <location filename="../src/document_controller.py" line="917"/>
+        <location filename="../src/document_controller.py" line="912"/>
         <source>Select one or more utterances first</source>
         <translation>Sélectionnez d&apos;abord un ou plusieurs segments</translation>
     </message>
@@ -252,217 +257,217 @@
     <name>DownloadProgressDialog</name>
     <message>
         <source>Downloading {}</source>
-        <translation type="vanished">Téléchargement {}</translation>
+        <translation>Téléchargement {}</translation>
     </message>
     <message>
         <source>Downloading {}...</source>
-        <translation type="vanished">Téléchargement {}...</translation>
+        <translation>Téléchargement {}...</translation>
     </message>
     <message>
         <source>Verifying checksum...</source>
-        <translation type="vanished">Vérification de la somme de contrôle...</translation>
+        <translation>Vérification de la somme de contrôle...</translation>
     </message>
     <message>
         <source>Extracting downloaded files...</source>
-        <translation type="vanished">Extraction des fichiers téléchargés...</translation>
+        <translation>Extraction des fichiers téléchargés...</translation>
     </message>
 </context>
 <context>
     <name>ExportTxtDialog</name>
     <message>
         <source>Export to TXT</source>
-        <translation type="vanished">Exporter au format TXT</translation>
+        <translation>Exporter au format TXT</translation>
     </message>
     <message>
         <source>Output File</source>
-        <translation type="vanished">Fichier de sortie</translation>
+        <translation>Fichier de sortie</translation>
     </message>
     <message>
         <source>No file selected</source>
-        <translation type="vanished">Aucun fichier séléctionné</translation>
+        <translation>Aucun fichier séléctionné</translation>
     </message>
     <message>
         <source>Export Options</source>
-        <translation type="vanished">Options d&apos;export</translation>
+        <translation>Options d&apos;export</translation>
     </message>
     <message>
         <source>Apostrophe normalization</source>
-        <translation type="vanished">Normalisation des apostrophes</translation>
+        <translation>Normalisation des apostrophes</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="vanished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Export</source>
-        <translation type="vanished">Export</translation>
+        <translation>Export</translation>
     </message>
     <message>
         <source>Save TXT File</source>
-        <translation type="vanished">Enregistrer le fichier TXT</translation>
+        <translation>Enregistrer le fichier TXT</translation>
     </message>
 </context>
 <context>
     <name>GeneralPanel</name>
     <message>
         <source>Language of user interface</source>
-        <translation type="vanished">Langue de l&apos;interface utilisateur</translation>
+        <translation>Langue de l&apos;interface utilisateur</translation>
     </message>
     <message>
         <source>Subtitles style</source>
-        <translation type="vanished">Style des sous-titres</translation>
+        <translation>Style des sous-titres</translation>
     </message>
     <message>
         <source>Subtitles font color</source>
-        <translation type="vanished">Couleur de la police des sous-titres</translation>
+        <translation>Couleur de la police des sous-titres</translation>
     </message>
     <message>
         <source>Background rectangle</source>
-        <translation type="vanished">Cartouche</translation>
+        <translation>Cartouche</translation>
     </message>
     <message>
         <source>Reset to default</source>
-        <translation type="vanished">Réglages par défaut</translation>
+        <translation>Réglages par défaut</translation>
     </message>
     <message>
         <source>Auto Save</source>
-        <translation type="vanished">Sauvegarde Automatique</translation>
+        <translation>Sauvegarde Automatique</translation>
     </message>
     <message>
         <source>Save every</source>
-        <translation type="vanished">Sauver tous les</translation>
+        <translation>Sauver tous les</translation>
     </message>
     <message>
         <source>Keep only</source>
-        <translation type="vanished">Ne garder que</translation>
+        <translation>Ne garder que</translation>
     </message>
 </context>
 <context>
     <name>MainWindow</name>
     <message>
         <source>Follow playhead</source>
-        <translation type="vanished">Suivre la tête de lecture</translation>
+        <translation>Suivre la tête de lecture</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="439"/>
+        <location filename="../src/main.py" line="451"/>
         <source>&amp;File</source>
         <translation>&amp;Fichier</translation>
     </message>
     <message>
         <source>&amp;Open</source>
-        <translation type="vanished">&amp;Ouvrir</translation>
+        <translation>&amp;Ouvrir</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="444"/>
+        <location filename="../src/main.py" line="456"/>
         <source>Open &amp;recent</source>
         <translation>Ouvrir à &amp;nouveau</translation>
     </message>
     <message>
         <source>&amp;Save</source>
-        <translation type="vanished">&amp;Enregistrer</translation>
+        <translation>&amp;Enregistrer</translation>
     </message>
     <message>
         <source>Save as</source>
-        <translation type="vanished">Enregistrer sous</translation>
+        <translation>Enregistrer sous</translation>
     </message>
     <message>
         <source>Import a media file (audio or video)</source>
-        <translation type="vanished">Importer un média (audio ou video)</translation>
+        <translation>Importer un média (audio ou video)</translation>
     </message>
     <message>
         <source>Import a subtitles file, keep current media</source>
-        <translation type="vanished">Importer un fichier de sous-titres, garder le média</translation>
+        <translation>Importer un fichier de sous-titres, garder le média</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="457"/>
+        <location filename="../src/main.py" line="469"/>
         <source>&amp;Export as</source>
         <translation>&amp;Exporter sous</translation>
     </message>
     <message>
         <source>&amp;SubRip (.srt)</source>
-        <translation type="vanished">&amp;SubRip (.srt)</translation>
+        <translation>&amp;SubRip (.srt)</translation>
     </message>
     <message>
         <source>Subtitle file</source>
-        <translation type="vanished">Fichier de sous-titres</translation>
+        <translation>Fichier de sous-titres</translation>
     </message>
     <message>
         <source>Raw &amp;text (.txt)</source>
-        <translation type="vanished">Texte &amp;brut (.txt)</translation>
+        <translation>Texte &amp;brut (.txt)</translation>
     </message>
     <message>
         <source>Simple text document</source>
-        <translation type="vanished">Document textuel sans formatage</translation>
+        <translation>Document textuel sans formatage</translation>
     </message>
     <message>
         <source>&amp;Parameters</source>
-        <translation type="vanished">&amp;Paramètres</translation>
+        <translation>&amp;Paramètres</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
-        <translation type="vanished">&amp;Quitter</translation>
+        <translation>&amp;Quitter</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="475"/>
+        <location filename="../src/main.py" line="487"/>
         <source>&amp;Operations</source>
         <translation>&amp;Opérations</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="486"/>
+        <location filename="../src/main.py" line="498"/>
         <source>Auto &amp;Segment</source>
         <translation>&amp;Segmentation Automatique</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="487"/>
+        <location filename="../src/main.py" line="499"/>
         <source>Find segments based on sound activity</source>
         <translation>Détection des segments d&apos;après silences</translation>
     </message>
     <message>
         <source>&amp;Adapt to subtitles</source>
-        <translation type="vanished">&amp;Adapter aux sous-titres</translation>
+        <translation>&amp;Adapter aux sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="496"/>
+        <location filename="../src/main.py" line="508"/>
         <source>Apply subtitles rules to the segments</source>
         <translation>Appliques les règles de sous-titrage</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="513"/>
+        <location filename="../src/main.py" line="525"/>
         <source>&amp;Display</source>
         <translation>&amp;Affichage</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="516"/>
+        <location filename="../src/main.py" line="528"/>
         <source>&amp;Video</source>
         <translation>&amp;Vidéo</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="523"/>
+        <location filename="../src/main.py" line="535"/>
         <source>&amp;Misspelling</source>
         <translation>&amp;Auto-correction</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="529"/>
+        <location filename="../src/main.py" line="541"/>
         <source>Subtitle margin</source>
         <translation>&amp;Marge des sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="535"/>
+        <location filename="../src/main.py" line="547"/>
         <source>Scenes transitions</source>
         <translation>Transition des scènes</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="541"/>
+        <location filename="../src/main.py" line="553"/>
         <source>Coloring</source>
         <translation>Colorisation</translation>
     </message>
     <message>
         <source>Unaligned sentences</source>
-        <translation type="vanished">Phrases non-alignées</translation>
+        <translation>Phrases non-alignées</translation>
     </message>
     <message>
         <source>Speech density</source>
-        <translation type="vanished">Densité de la paroles</translation>
+        <translation>Densité de la paroles</translation>
     </message>
     <message>
         <location filename="../src/main.py" line="434"/>
@@ -471,287 +476,287 @@
     </message>
     <message>
         <source>&amp;About</source>
-        <translation type="vanished">À &amp;propos</translation>
+        <translation>À &amp;propos</translation>
     </message>
     <message>
         <source>Undo</source>
-        <translation type="vanished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Redo</source>
-        <translation type="vanished">Refaire</translation>
+        <translation>Refaire</translation>
     </message>
     <message>
         <source>Transcribe</source>
-        <translation type="vanished">Transcrire</translation>
+        <translation>Transcrire</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="602"/>
+        <location filename="../src/main.py" line="614"/>
         <source>Speech-to-text model</source>
         <translation>Modèle de reconnaissance vocale</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="610"/>
+        <location filename="../src/main.py" line="622"/>
         <source>Normalize numbers</source>
         <translation>Normaliser les nombres</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="626"/>
+        <location filename="../src/main.py" line="638"/>
         <source>Italic</source>
         <translation>Italique</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="634"/>
+        <location filename="../src/main.py" line="646"/>
         <source>Bold</source>
         <translation>Gras</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="691"/>
+        <location filename="../src/main.py" line="703"/>
         <source>Create a selection</source>
         <translation>Créer une séléction</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="699"/>
+        <location filename="../src/main.py" line="711"/>
         <source>Create segment from selection</source>
         <translation>Créer un segment depuis la séléction</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="707"/>
+        <location filename="../src/main.py" line="719"/>
         <source>Delete segment</source>
         <translation>Supprimer le segment</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="717"/>
+        <location filename="../src/main.py" line="729"/>
         <source>Snap to video frames</source>
         <translation>Synchroniser avec la vidéo</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="732"/>
+        <location filename="../src/main.py" line="744"/>
         <source>Go to first utterance</source>
         <translation>Aller à la première énonciation</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="741"/>
+        <location filename="../src/main.py" line="753"/>
         <source>Previous utterance</source>
         <translation>Énonciation précédente</translation>
     </message>
     <message>
         <source>Play current utterance</source>
-        <translation type="vanished">Lire l&apos;énonciation actuelle</translation>
+        <translation>Lire l&apos;énonciation actuelle</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="755"/>
+        <location filename="../src/main.py" line="767"/>
         <source>Next utterance</source>
         <translation>Énonciation suivante</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="764"/>
+        <location filename="../src/main.py" line="776"/>
         <source>Loop</source>
         <translation>Boucler</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="783"/>
+        <location filename="../src/main.py" line="795"/>
         <source>Audio volume</source>
         <translation>Volume audio</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="799"/>
+        <location filename="../src/main.py" line="811"/>
         <source>Audio speed</source>
         <translation>Vitesse de lecture</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="847"/>
+        <location filename="../src/main.py" line="859"/>
         <source>Welcome</source>
         <translation>Bienvenue</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="848"/>
+        <location filename="../src/main.py" line="860"/>
         <source>A Speech-To-Text model is needed for automatic transcription.</source>
         <translation>Un modèle de reconnaissance vocale est nécessaire pour la transcription automatique.</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="849"/>
+        <location filename="../src/main.py" line="861"/>
         <source>Would you like to download one?</source>
         <translation>Voulez-vous en télécharger ?</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1070"/>
+        <location filename="../src/main.py" line="1082"/>
         <source>Open File</source>
         <translation>Ouvrir le fichier</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1141"/>
-        <location filename="../src/main.py" line="1146"/>
+        <location filename="../src/main.py" line="1152"/>
+        <location filename="../src/main.py" line="1157"/>
         <source>Read Error</source>
         <translation>Erreur de lecture</translation>
     </message>
     <message>
         <source>The autosaved file has more recent changes.</source>
-        <translation type="vanished">Le fichier de sauvegarde automatique est plus récent.</translation>
+        <translation>Le fichier de sauvegarde automatique est plus récent.</translation>
     </message>
     <message>
         <source>Load autosaved file?</source>
-        <translation type="vanished">Charger la sauvegarde automatique ?</translation>
+        <translation>Charger la sauvegarde automatique ?</translation>
     </message>
     <message>
         <source>Multiple autosaved files found.</source>
-        <translation type="vanished">Plusieurs fichiers de sauvegarde automatique ont été trouvés.</translation>
+        <translation>Plusieurs fichiers de sauvegarde automatique ont été trouvés.</translation>
     </message>
     <message>
         <source>Select one to load:</source>
-        <translation type="vanished">Choisissez une sauvegarde à restaurer :</translation>
+        <translation>Choisissez une sauvegarde à restaurer :</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1340"/>
+        <location filename="../src/main.py" line="1351"/>
         <source>Open Subtitles File</source>
         <translation>Ouvrir le fichier de sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1508"/>
+        <location filename="../src/main.py" line="1519"/>
         <source>Video framerate</source>
         <translation>Cadence d&apos;images à la seconde</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2610"/>
+        <location filename="../src/main.py" line="2621"/>
         <source>Transcribed</source>
         <translation>Transcris</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="963"/>
+        <location filename="../src/main.py" line="975"/>
         <source>Save Error</source>
         <translation>Erreur de sauvegarde</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="452"/>
+        <location filename="../src/main.py" line="464"/>
         <source>&amp;Import</source>
         <translation>&amp;Importer</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="495"/>
+        <location filename="../src/main.py" line="507"/>
         <source>Adapt to &amp;subtitles</source>
         <translation>A&amp;dapter aux sous-titres</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="502"/>
+        <location filename="../src/main.py" line="514"/>
         <source>&amp;Render frames</source>
         <translation>&amp;Rendu des images</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="964"/>
+        <location filename="../src/main.py" line="976"/>
         <source>Couldn&apos;t save file to &apos;{filename}&apos;</source>
         <translation>Échec lors de l&apos;enregistrement de &apos;{filename}&apos;</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1039"/>
+        <location filename="../src/main.py" line="1051"/>
         <source>Autosave failed: {exception}</source>
         <translation>Échet de la sauvegarde automatique : {exception}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1115"/>
+        <location filename="../src/main.py" line="1126"/>
         <source>Bad file type: {file_path}</source>
         <translation>Mauvais format de fichier&#xa0;: {file_path}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1147"/>
+        <location filename="../src/main.py" line="1158"/>
         <source>Couldn&apos;t read file &apos;{filename}&apos;</source>
         <translation>Impossible de lire le fichier &apos;{filename}&apos;</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1172"/>
+        <location filename="../src/main.py" line="1183"/>
         <source>No media file</source>
         <translation>Aucun média</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1173"/>
+        <location filename="../src/main.py" line="1184"/>
         <source>Couldn&apos;t find media file for &apos;{filename}&apos;</source>
         <translation>Impossible de trouver le média pour &apos;{filename}&apos;</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1176"/>
+        <location filename="../src/main.py" line="1187"/>
         <source>&apos;{filepath}&apos; doesn&apos;t exist.</source>
         <translation>&apos;{filepath}&apos; n&apos;existe pas.</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1388"/>
+        <location filename="../src/main.py" line="1399"/>
         <source>No recent files</source>
         <translation>Pas de fichiers récents</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1406"/>
+        <location filename="../src/main.py" line="1417"/>
         <source>Clear Recent Files</source>
         <translation>Effacer les fichiers récents</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1494"/>
+        <location filename="../src/main.py" line="1505"/>
         <source>Media total duration</source>
         <translation>Durée totale</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1519"/>
+        <location filename="../src/main.py" line="1530"/>
         <source>No image</source>
         <translation>Pas d&apos;image</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2092"/>
+        <location filename="../src/main.py" line="2103"/>
         <source>{n} segments found</source>
         <translation>{n} segments trouvés</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2180"/>
+        <location filename="../src/main.py" line="2191"/>
         <source>Can&apos;t create a segment over another segment</source>
         <translation>Impossible de créer un segment par-dessus un autre segment</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2194"/>
+        <location filename="../src/main.py" line="2205"/>
         <source>Select part of the waveform first</source>
         <translation>Sélectionnez d&apos;abord une partie de la forme d&apos;onde</translation>
     </message>
     <message>
         <source>Select one or more utterances first</source>
-        <translation type="vanished">Sélectionnez d&apos;abord une ou plusieurs énonciations</translation>
+        <translation>Sélectionnez d&apos;abord une ou plusieurs énonciations</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2386"/>
+        <location filename="../src/main.py" line="2397"/>
         <source>Drop to open: {}</source>
         <translation>Déposer pour ouvrir : {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2389"/>
+        <location filename="../src/main.py" line="2400"/>
         <source>Cannot open this file type</source>
         <translation>Impossible d&apos;ouvrir ce type de fichier</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2443"/>
+        <location filename="../src/main.py" line="2454"/>
         <source>Unsaved work</source>
         <translation>Travail non sauvegardé</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2444"/>
+        <location filename="../src/main.py" line="2455"/>
         <source>Do you want to save your changes?</source>
         <translation>Voulez-vous enregistrer votre travail ?</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2562"/>
+        <location filename="../src/main.py" line="2573"/>
         <source>start: {}</source>
         <translation>début&#xa0;: {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2563"/>
+        <location filename="../src/main.py" line="2574"/>
         <source>end: {}</source>
         <translation>fin : {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2567"/>
+        <location filename="../src/main.py" line="2578"/>
         <source>dur: {}s</source>
         <translation>durée : {}s</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2597"/>
+        <location filename="../src/main.py" line="2608"/>
         <source>Switching language</source>
         <translation>Changement de langue</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2598"/>
+        <location filename="../src/main.py" line="2609"/>
         <source>You need to restart the application to update the UI language.</source>
         <translation>Un redémarrage de l&apos;application est nécessaire pour appliquer le changement de langue.</translation>
     </message>
@@ -760,61 +765,61 @@
     <name>ModelsPanel</name>
     <message>
         <source>Language</source>
-        <translation type="vanished">Langue</translation>
+        <translation>Langue</translation>
     </message>
     <message>
         <source>Online Models</source>
-        <translation type="vanished">Modèles en ligne</translation>
+        <translation>Modèles en ligne</translation>
     </message>
     <message>
         <source>Download</source>
-        <translation type="vanished">Télécharger</translation>
+        <translation>Télécharger</translation>
     </message>
     <message>
         <source>Local Models</source>
-        <translation type="vanished">Modèles locaux</translation>
+        <translation>Modèles locaux</translation>
     </message>
 </context>
 <context>
     <name>ParametersDialog</name>
     <message>
         <source>Parameters</source>
-        <translation type="vanished">Paramètres</translation>
+        <translation>Paramètres</translation>
     </message>
     <message>
         <source>General</source>
-        <translation type="vanished">Général</translation>
+        <translation>Général</translation>
     </message>
     <message>
         <source>Models</source>
-        <translation type="vanished">Modèles</translation>
+        <translation>Modèles</translation>
     </message>
     <message>
         <source>Subtitles Rules</source>
-        <translation type="vanished">Sous-titres</translation>
+        <translation>Sous-titres</translation>
     </message>
     <message>
         <source>Cache</source>
-        <translation type="vanished">Cache</translation>
+        <translation>Cache</translation>
     </message>
 </context>
 <context>
     <name>QObject</name>
     <message>
         <source>Export to {file_path} completed</source>
-        <translation type="vanished">Export vers {file_path} terminé</translation>
+        <translation>Export vers {file_path} terminé</translation>
     </message>
     <message>
         <source>Couldn&apos;t export file: {error_msg}</source>
-        <translation type="vanished">Échec lors de l&apos;export du fichier : {error_msg}</translation>
+        <translation>Échec lors de l&apos;export du fichier : {error_msg}</translation>
     </message>
     <message>
         <source>Couldn&apos;t export file: {error}</source>
-        <translation type="vanished">Échec lors de l&apos;export du fichier : {error}</translation>
+        <translation>Échec lors de l&apos;export du fichier : {error}</translation>
     </message>
     <message>
         <source>untitled</source>
-        <translation type="vanished">Sans titre</translation>
+        <translation>Sans titre</translation>
     </message>
     <message>
         <location filename="../src/hunspell.py" line="54"/>
@@ -831,7 +836,7 @@
     <name>RecognizerWorker</name>
     <message>
         <source>Transcribing {n}/{n_segs}</source>
-        <translation type="vanished">Transcription de {n}/{n_segs}</translation>
+        <translation>Transcription de {n}/{n_segs}</translation>
     </message>
     <message>
         <location filename="../src/transcriber.py" line="150"/>
@@ -1086,47 +1091,47 @@
     <name>SubtitlesPanel</name>
     <message>
         <source>Preferences</source>
-        <translation type="vanished">Préférences</translation>
+        <translation>Préférences</translation>
     </message>
     <message>
         <source>Netflix default</source>
-        <translation type="vanished">Règles Netflix</translation>
+        <translation>Règles Netflix</translation>
     </message>
     <message>
         <source>Custom</source>
-        <translation type="vanished">Personnalisé</translation>
+        <translation>Personnalisé</translation>
     </message>
     <message>
         <source>Subtitles duration</source>
-        <translation type="vanished">Durée des sous-titres</translation>
+        <translation>Durée des sous-titres</translation>
     </message>
     <message>
         <source>Time gap between subtitles</source>
-        <translation type="vanished">Intervalle entre les sous-titres</translation>
+        <translation>Intervalle entre les sous-titres</translation>
     </message>
     <message>
         <source>Auto extend</source>
-        <translation type="vanished">Extension automatique</translation>
+        <translation>Extension automatique</translation>
     </message>
     <message>
         <source>when gap is under</source>
-        <translation type="vanished">quand l&apos;intervalle est en-dessous de</translation>
+        <translation>quand l&apos;intervalle est en-dessous de</translation>
     </message>
     <message>
         <source>Text length and density</source>
-        <translation type="vanished">Longueur et densité du texte</translation>
+        <translation>Longueur et densité du texte</translation>
     </message>
     <message>
         <source>chars</source>
-        <translation type="vanished">carac.</translation>
+        <translation>carac.</translation>
     </message>
     <message>
         <source>Text margin size</source>
-        <translation type="vanished">Taille de la marge du texte</translation>
+        <translation>Taille de la marge du texte</translation>
     </message>
     <message>
         <source>Characters per second</source>
-        <translation type="vanished">Caractères par seconde</translation>
+        <translation>Caractères par seconde</translation>
     </message>
 </context>
 <context>
@@ -1156,7 +1161,7 @@
     </message>
     <message>
         <source>Auto transcribe</source>
-        <translation type="vanished">Transcription automatique</translation>
+        <translation>Transcription automatique</translation>
     </message>
     <message>
         <location filename="../src/waveform_widget.py" line="254"/>

@@ -107,6 +107,7 @@ a = Analysis(
         (get_lib_path("ostilhou/hspell/*.txt"), "ostilhou/hspell"),
         (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.dic"), "ostilhou/hspell/hunspell-dictionary/"),
         (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.aff"), "ostilhou/hspell/hunspell-dictionary/"),
+        (get_lib_path("ostilhou/text/moses_br.txt"), "ostilhou/text"),
     ],
     hiddenimports=[
         'src.lang.br',

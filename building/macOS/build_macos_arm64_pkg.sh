@@ -43,7 +43,7 @@ pkgbuild --root "$DIST_DIR/$APP_NAME.app" \
          --scripts scripts \
          --identifier "com.anaouder.installer" \
          --version $VERSION \
-         "$DIST_DIR/${APP_NAME}_${VERSION}_macOS-arm64_Installer.pkg"
+         "$DIST_DIR/${APP_NAME}-${VERSION}_macOS-arm64_Installer.pkg"
 
 echo "Done! Share 'dist/${APP_NAME}-${VERSION}_macOS-arm64_Installer.pkg'"
 # Clean up temporary scripts
