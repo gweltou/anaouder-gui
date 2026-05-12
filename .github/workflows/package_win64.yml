@@ -64,7 +64,6 @@ jobs:
       run: |
         if (Test-Path "dist/Anaouder/Anaouder.exe") {
           Write-Host "Build successful - Anaouder.exe found"
-          Get-ChildItem -Path "dist/Anaouder" -Recurse | Select-Object FullName
         } else {
           Write-Error "Build failed - Anaouder.exe not found"
           exit 1
@@ -76,34 +75,19 @@ jobs:
         choco install innosetup -y
       shell: pwsh
 
-    - name: Update Inno Setup script paths
-      run: |
-        $issContent = Get-Content "building/Windows/anaouder_installer.iss" -Raw
-        # Note: In regex, '\\' matches a literal '\'.
-        $issContent = $issContent -replace 'D:\\anaouder-gui\\', "$($PWD.Path)\"
-        $issContent | Set-Content "building/Windows/anaouder_installer_updated.iss"
-      shell: pwsh
-
     - name: Build installer with Inno Setup
       run: |
-        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "building/Windows/anaouder_installer_updated.iss"
-      shell: pwsh
-
-    - name: Rename installer
-      run: |
-        # Extract version from pyproject.toml using Python's built-in tomllib
         $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
         
-        # If workflow was triggered by a tag (e.g. v1.2), override the toml version
         if ("${{ github.ref }}" -match "refs/tags/v(.+)") {
           $version = $matches[1]
         }
         
-        Write-Host "Renaming installer to version: $version"
+        Write-Host "Building Installer for version: $version"
 
-        if (Test-Path "building/Windows/Output/mysetup.exe") {
-          Rename-Item -Path "building/Windows/Output/mysetup.exe" -NewName "Anaouder-${version}_win64_Setup.exe"
-        }
+        # 3. Run ISCC and pass the version as a variable
+        # /DMyAppVersion overrides the #define in the script
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version "building/Windows/anaouder_installer.iss"
       shell: pwsh
 
     - name: Upload PyInstaller artifact
