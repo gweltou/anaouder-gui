@@ -517,9 +517,7 @@ class MainWindow(QMainWindow):
         if FUTURE:
             ## Render frames
             render_frames_action = QAction(self.tr("&Render frames"), self)
-            # render_frames_action.setStatusTip(self.tr("Apply subtitles rules to the segments"))
             from src.ui.render_dialog import RenderCaptionsDialog
-            # render_frames_action.triggered.connect(lambda: render_all(self.document_controller, self.file_path.parent))
             render_frames_action.triggered.connect(
                 lambda: RenderCaptionsDialog(self, self.document_controller, self.file_path.parent).exec()
             )
@@ -912,12 +910,12 @@ class MainWindow(QMainWindow):
 
 
     def onSaveFile(self) -> bool:
+        """
+        Returns:
+            True if save was successful, False otherwise
+        """
         if self.file_path and self.file_path.suffix == ".ali":
-            success = self._saveFile(self.file_path)
-            if not success:
-                # Revert to saveAs
-                return self.onSaveFileAs(self.file_path)
-            return success
+            return self._saveFile(self.file_path) or self.onSaveFileAs(self.file_path)
         else:
             path = self.file_path.with_suffix(".ali") if self.file_path else Path.home()
             return self.onSaveFileAs(path)
@@ -935,7 +933,13 @@ class MainWindow(QMainWindow):
         return str(default_dir), "nevez.ali"
 
 
-    def onSaveFileAs(self, file_path: Optional[Path] = None) -> bool:        
+    def onSaveFileAs(self, file_path: Optional[Path] = None) -> bool: 
+        """
+        Opens a dialog to ask for the save destination
+
+        Returns:
+            True if save was successful, False otherwise
+        """       
         directory, default_name = self._get_default_save_location()
         
         path = file_path or Path(directory) / default_name
@@ -949,15 +953,15 @@ class MainWindow(QMainWindow):
         
         if not file_path:
             return False
+        
         file_path = Path(file_path)
 
-        success = self._saveFile(file_path)
-
-        if success:
+        if self._saveFile(file_path):
             self.file_path = file_path
             self.addRecentFile(str(file_path))
-        
-        return success
+            return True
+
+        return False
 
 
     def _saveFile(self, file_path: Path) -> bool:
@@ -965,7 +969,7 @@ class MainWindow(QMainWindow):
         Opens a critical dialog window on error
         
         Returns:
-            bool: True if successful, False otherwise
+            True if successful, False otherwise
         """
         try:
             self._performSave(file_path)
@@ -991,6 +995,7 @@ class MainWindow(QMainWindow):
             media_path: Optional[Path] = None
         ) -> None:
         """
+        Save document as an ALI file.
         Parse the internal document and sends the data to the File Manager.
 
         Args:
@@ -1000,22 +1005,12 @@ class MainWindow(QMainWindow):
         Raise:
             FileOperationError
         """
-        blocks_data = []
-        doc = self.text_widget.document()
+        data = self.document_controller.getData()
 
-        block = doc.firstBlock()
-        while block.isValid():
-            text = self.text_widget.getBlockHtml(block)[0]
-            utt_id = self.document_controller.getBlockId(block)
+        if media_path is None:
+            media_path = self.document_controller.media_path
 
-            segment = None
-            if utt_id != -1:
-                segment = self.document_controller.getSegment(utt_id)
-
-            blocks_data.append( (text, segment) )
-            block = block.next()
-        
-        self.file_manager.save_ali_file(file_path, blocks_data, media_path)
+        self.file_manager.save_ali_file(file_path, data, media_path)
 
         self._last_saved_index = self.undo_stack.index()
         self._last_saved_time = time.time()
@@ -1113,7 +1108,7 @@ class MainWindow(QMainWindow):
 
         elif ext in (".seg", ".split"):
             data = self.file_manager.read_split_file(file_path)
-            self.document_controller.loadDocumentData(data["document"])
+            self.document_controller.loadData(data["document"])
 
             media_path = data.get("media-path", None)
             if media_path and os.path.exists(media_path) :
@@ -1122,7 +1117,7 @@ class MainWindow(QMainWindow):
         elif ext == ".srt":
             self.log.debug("Opening an SRT file...")
             data = self.file_manager.read_srt_file(str(file_path), find_media=True)
-            self.document_controller.loadDocumentData(data["document"])
+            self.document_controller.loadData(data["document"])
 
             media_path = data.get("media-path", None)
             if media_path and os.path.exists(media_path) :
@@ -1168,7 +1163,7 @@ class MainWindow(QMainWindow):
             return False
         
         # Load textual data
-        self.document_controller.loadDocumentData(data["document"])
+        self.document_controller.loadData(data["document"])
         
         # Try to open media file
         media_path = data.get("media-path", None)
@@ -1359,7 +1354,7 @@ class MainWindow(QMainWindow):
             return
 
         data = self.file_manager.read_srt_file(file_path, find_media=not self.media_controller.hasMedia())
-        self.document_controller.loadDocumentData(data["document"])
+        self.document_controller.loadData(data["document"])
         self._last_saved_index = 0
 
         # Load the media file if none is already loaded
@@ -1605,7 +1600,7 @@ class MainWindow(QMainWindow):
         block = self.text_widget.document().firstBlock()
         while block.isValid():            
             if self.document_controller.getBlockType(block) == BlockType.ALIGNED:
-                text = self.text_widget.getBlockHtml(block)[0]
+                text = self.text_widget.getBlockHtmlMap(block)[0]
 
                 # Remove extra spaces
                 lines = [' '.join(l.split()) for l in text.split(LINE_BREAK)]
@@ -1725,7 +1720,7 @@ class MainWindow(QMainWindow):
         if block is None:
             return (-1, "")
 
-        html, _ = self.text_widget.getBlockHtml(block)
+        html, _ = self.text_widget.getBlockHtmlMap(block)
         # html = extract_metadata(html)[0] if block else ""
 
         return (seg_id, html)

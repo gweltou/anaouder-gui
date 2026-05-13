@@ -23,7 +23,6 @@ Handles loading and saving of ALI, SRT, and media files.
 
 import os
 import re
-import logging
 from typing import Tuple, List, Optional
 from pathlib import Path
 
@@ -36,10 +35,9 @@ from ostilhou.asr.dataset import format_timecode
 
 from src.utils import MEDIA_FORMATS, LINE_BREAK
 from src.interfaces import Segment, WaveformInterface, TextDocumentInterface
+from src.services.logger import logger
 from src.settings import AUTOSAVE_FOLDER_NAME
 
-
-log = logging.getLogger(__name__)
 
 
 
@@ -56,19 +54,14 @@ class FileManager(QObject):
 
     def __init__(
             self,
-            # text_widget: TextDocumentInterface,
-            # waveform_widget: WaveformInterface
         ):
         super().__init__()
-        self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        # self.text_widget = text_widget
-        # self.waveform_widget = waveform_widget
 
 
     def save_ali_file(
             self,
             file_path: Path,
-            blocks_data: List[Tuple[str, Optional[Segment]]],
+            data: List[Tuple[str, Optional[Segment]]],
             media_path: Optional[Path] = None
         ) -> None:
         """
@@ -84,7 +77,9 @@ class FileManager(QObject):
         """
 
         file_path = file_path.absolute()
-        self.log.info(f"Saving file to {file_path}")
+        logger.message(f"Saving file to {file_path}")
+        print(f"{file_path=} {media_path=}")
+        print(data)
 
         try:
             with file_path.open('w', encoding="utf-8") as _fout:
@@ -92,8 +87,8 @@ class FileManager(QObject):
                     # Write media-path metadata if provided
                     _fout.write(f"{{media-path: {media_path.name}}}\n")
 
-                for text, segment in blocks_data:
-                    # Remove the previous media-path metadata if necessary
+                for text, segment in data:
+                    # Remove the next media-path metadata occurence
                     if media_path:
                         match = re.search(r"{\s*(media|audio)\-path\s*:\s*(.*?)\s*}", text)
                         if match:
@@ -108,10 +103,10 @@ class FileManager(QObject):
                     _fout.write(text + '\n')
 
         except IOError as e:
-            self.log.error(f"Failed to save file: {e}")
+            logger.error(f"Failed to save file: {e}")
             raise FileOperationError
         except Exception as e:
-            self.log.error(f"Unexpected error saving file: {e}")
+            logger.error(f"Unexpected error saving file: {e}")
             raise FileOperationError
 
 
@@ -128,7 +123,7 @@ class FileManager(QObject):
         Raise:
             FileOperationError
         """
-        self.log.debug(f"Opening ALI file... {filepath}")
+        logger.message(f"Opening ALI file... {filepath}")
         parsed_data = []
         media_path = None
         
@@ -161,10 +156,10 @@ class FileManager(QObject):
                         parsed_data.append((line, None))
         
         except IOError as e:
-            self.log.error(f"Failed to open file: {e}")
+            logger.error(f"Failed to open file: {e}")
             raise FileOperationError(f"Could not open file: {e}")
         except Exception as e:
-            self.log.error(f"Error parsing file: {e}")
+            logger.error(f"Error parsing file: {e}")
             raise FileOperationError(f"Could not parse file: {e}")
         
         if not media_path:
@@ -190,7 +185,7 @@ class FileManager(QObject):
         Raise:
             FileOperationError
         """
-        self.log.debug("Opening SRT file: {filepath}")
+        logger.message("Opening SRT file: {filepath}")
         
         # Parse subtitle file
         subtitles = self._parse_srt_file(filepath)
@@ -229,17 +224,17 @@ class FileManager(QObject):
                     content = f_in.read()
                     subtitle_generator = srt.parse(content)
                     subtitles = list(subtitle_generator)
-                    self.log.info(f"Successfully parsed {len(subtitles)} subtitles using {encoding} encoding")
+                    logger.debug(f"Successfully parsed {len(subtitles)} subtitles using {encoding} encoding")
                     break
                     
             except UnicodeDecodeError:
-                self.log.debug(f"Failed to parse with {encoding} encoding")
+                logger.error(f"Failed to parse with {encoding} encoding")
                 continue
             except srt.SRTParseError as e:
-                self.log.error(f"Error parsing file: {e}")
+                logger.error(f"Error parsing file: {e}")
                 raise FileOperationError(f"Could not read file: {e}")
             except Exception as e:
-                self.log.error(f"Error parsing file: {e}")
+                logger.error(f"Error parsing file: {e}")
                 raise FileOperationError(f"Could not open file: {e}")
         if not subtitles:
             return []
@@ -254,7 +249,7 @@ class FileManager(QObject):
             
             # Validate timing
             if start >= end:
-                self.log.warning(f"Skipping invalid subtitle {subtitle.index}: start >= end")
+                logger.debug(f"Skipping invalid subtitle {subtitle.index}: start >= end")
                 continue
             
             segment = [start, end]
@@ -270,7 +265,7 @@ class FileManager(QObject):
         txt_filepath = filepath.with_suffix('.txt')
 
         if not txt_filepath.exists():
-            self.log.error(f"Couldn't find text file {txt_filepath}")
+            logger.error(f"Couldn't find text file {txt_filepath}")
             return {"document": [], "media-path": None}
 
         with txt_filepath.open('r', encoding="utf-8") as _f:
@@ -306,10 +301,10 @@ class FileManager(QObject):
         for ext in MEDIA_FORMATS:
             media_path = filepath.with_suffix(ext)
             if media_path.exists():
-                self.log.debug(f"Found associated media: {str(media_path)}")
+                logger.debug(f"Found associated media: {str(media_path)}")
                 return media_path
         
-        self.log.debug("No associated media file found")
+        logger.debug("No associated media file found")
         return None
 
 

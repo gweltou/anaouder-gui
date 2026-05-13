@@ -53,10 +53,7 @@ from src.aligner import (
 )
 from src.cache_system import cache
 from src.strings import app_strings
-
-
-
-log = logging.getLogger(__name__)
+from src.services.logger import logger
 
 
 
@@ -64,15 +61,15 @@ class DocumentController(QObject):
     message = Signal(str)
     refresh_segment_info = Signal(int)
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(self, parent: QObject|None = None) -> None:
         super().__init__(parent)
 
-        self.media_path: Optional[Path]
+        self.media_path: Path|None = None
         self.segments: Dict[SegmentId, Segment] = dict()
         self._sorted_segments = []
 
-        self.text_widget: Optional[TextEditWidget] = None
-        self.waveform_widget: Optional[WaveformWidget] = None
+        self.text_widget: TextEditWidget|None = None
+        self.waveform_widget: WaveformWidget|None = None
 
         self.must_sort = False
         self.id_counter = 0
@@ -126,7 +123,7 @@ class DocumentController(QObject):
         print(f"{self.document_path=}")
 
 
-    def loadDocumentData(self, data: List[Tuple[str, Optional[Segment]]]) -> None:
+    def loadData(self, data: List[Tuple[str, Segment|None]]) -> None:
         """
         Load a document into the text widget and waveform widget.
         
@@ -149,6 +146,26 @@ class DocumentController(QObject):
         self.text_widget.updateLineNumberAreaWidth()
         self.text_widget.updateLineNumberArea()
     
+
+    def getData(self) -> List[Tuple[str, Segment|None]]:
+        assert self.text_widget is not None
+
+        data = []
+
+        block = self.text_widget.document().firstBlock()
+        while block.isValid():
+            text = self.getBlockHtml(block)
+            utt_id = self.getBlockId(block)
+
+            segment = None
+            if utt_id != -1:
+                segment = self.getSegment(utt_id)
+
+            data.append( (text, segment) )
+            block = block.next()
+
+        return data
+
 
     def getDocumentState(self) -> dict:
         state = dict()
@@ -185,7 +202,7 @@ class DocumentController(QObject):
             block (QTextBlock)
             segment_id: SegmentId or None
         """
-        log.debug(f"setBlockId({block=}, {segment_id=})")
+        logger.debug(f"setBlockId({block=}, {segment_id=})")
         if segment_id is None:
             block.setUserData(None)
         elif not block.userData():
@@ -252,6 +269,13 @@ class DocumentController(QObject):
         return BlockType.NOT_ALIGNED
 
 
+    def getBlockHtml(self, block: QTextBlock) -> str | None:
+        if self.text_widget is None:
+            return None
+        
+        return self.text_widget.getBlockHtmlMap(block)[0]
+
+
     def getBlockMetadata(self, block: QTextBlock) -> Dict:
         metadata: MyTextBlockUserData = block.userData()
         if metadata:
@@ -281,7 +305,7 @@ class DocumentController(QObject):
     
 
     def addSegment(self, segment: Segment, segment_id: Optional[SegmentId] = None) -> SegmentId:
-        log.debug(f"addSegment({segment=}, {segment_id=})")
+        logger.debug(f"addSegment({segment=}, {segment_id=})")
         if segment_id is None:
             segment_id = self.getNewSegmentId()
         self.segments[segment_id] = segment
@@ -410,7 +434,7 @@ class DocumentController(QObject):
         offset = 0.0
     ) -> List[SegmentId]:
         """Return the list of IDs of all segment at a given positiont"""
-        log.debug(f"getSegmentAtTime({position_sec=})")
+        logger.debug(f"getSegmentAtTime({position_sec=})")
         segment_ids = []
         for segment_id, (start, end) in self.getSortedSegments():
             # Give precedence to the segment that starts at this timecode
@@ -428,7 +452,7 @@ class DocumentController(QObject):
         offsets: Dict[SegmentId, Tuple]
     ) -> List[SegmentId]:
         """Return the list of IDs of all segment at a given positiont"""
-        log.debug(f"getSegmentAtTime({position_sec=})")
+        logger.debug(f"getSegmentAtTime({position_sec=})")
         segment_ids = []
         for segment_id, (start, end) in self.getSortedSegments():
             # Give precedence to the segment that starts at this timecode
@@ -457,7 +481,7 @@ class DocumentController(QObject):
 
     def getUtteranceDensity(self, segment_id: SegmentId) -> float:
         """Get the density (chars/s) field of an utterance"""
-        log.debug(f"getUtteranceDensity({segment_id=})")
+        logger.debug(f"getUtteranceDensity({segment_id=})")
 
         if self.waveform_widget is None:
             return 0.0
@@ -468,7 +492,7 @@ class DocumentController(QObject):
 
         block = self.getBlockById(segment_id)
         if not block:
-            log.warning("No block found for id: {seg_id}")
+            logger.warning("No block found for id: {seg_id}")
             return 0.0
         
         block_metadata = block.userData().data
@@ -480,7 +504,7 @@ class DocumentController(QObject):
 
     def updateUtteranceDensity(self, segment_id: SegmentId) -> None:
         """Update the density (chars/s) field of an utterance"""
-        log.debug(f"updateUtteranceDensity({segment_id=})")
+        logger.debug(f"updateUtteranceDensity({segment_id=})")
         assert self.text_widget is not None
                 
         block = self.getBlockById(segment_id)
@@ -511,7 +535,7 @@ class DocumentController(QObject):
 
 
     def cropHead(self) -> None:
-        log.debug("cropHead")
+        logger.debug("cropHead")
         if self.waveform_widget is None:
             return
         
@@ -538,7 +562,7 @@ class DocumentController(QObject):
 
 
     def cropTail(self) -> None:
-        log.debug("cropTail")
+        logger.debug("cropTail")
         if self.waveform_widget is None:
             return
         
@@ -591,7 +615,7 @@ class DocumentController(QObject):
         if block is None:
             return (-1, "")
 
-        html, _ = self.text_widget.getBlockHtml(block)
+        html, _ = self.text_widget.getBlockHtmlMap(block)
         return (seg_id, html)
 
 
@@ -641,7 +665,7 @@ class DocumentController(QObject):
         block = self.text_widget.document().firstBlock()
         while block.isValid():
             if self.getBlockType(block) == BlockType.ALIGNED:
-                text = self.text_widget.getBlockHtml(block)[0]
+                text = self.text_widget.getBlockHtmlMap(block)[0]
 
                 # Remove extra spaces
                 lines = [' '.join(l.split()) for l in text.split(LINE_BREAK)]
@@ -662,7 +686,7 @@ class DocumentController(QObject):
         Split audio segment, given a char relative position in sentence
         Called from the textEdit widget
         """
-        log.debug(f"splitFromText({segment_id=}, {position=})")
+        logger.debug(f"splitFromText({segment_id=}, {position=})")
 
         block = self.getBlockById(segment_id)
         segment = self.getSegment(segment_id)
@@ -693,15 +717,15 @@ class DocumentController(QObject):
                 tokens_range = cached_transcription[i:j]
 
                 try:
-                    log.info('"Smart" splitting')
+                    logger.debug('"Smart" splitting')
                     left_seg, right_seg = smart_split_text(text, position, tokens_range)
                     left_seg[0] = seg_start
                     right_seg[1] = seg_end
                 except SmartSplitError as e:
-                    log.warning(e)
+                    logger.warning(e)
                     self.message.emit(app_strings.TR_CANT_SMART_SPLIT + f": {e}")
                 except Exception as e:
-                    log.warning(e)
+                    logger.warning(e)
                     self.message.emit(app_strings.TR_CANT_SMART_SPLIT + f": {e}")
 
         if not left_seg or not right_seg:
@@ -710,7 +734,7 @@ class DocumentController(QObject):
             pc = position / len(text)
             left_seg = [seg_start, seg_start + dur*pc - 0.05]
             right_seg = [seg_start + dur*pc + 0.05, seg_end]
-            log.info("Ratio splitting")
+            logger.debug("Ratio splitting")
         
         self.splitUtterance(segment_id, left_text, right_text, left_seg, right_seg)
 
@@ -747,11 +771,11 @@ class DocumentController(QObject):
                 tokens_range = cached_transcription[i:j]
 
                 try:
-                    log.info("smart splitting")
+                    logger.debug("smart splitting")
                     left_text, right_text = smart_split_time(text, timepos, tokens_range)
                 except Exception as e:
                     self.message.emit(app_strings.TR_CANT_SMART_SPLIT)
-                    log.error(f"Could not smart split: {e}")
+                    logger.error(f"Could not smart split: {e}")
 
         if left_text is None or right_text is None:
             # Add en empty sentence after
@@ -839,7 +863,7 @@ class DocumentController(QObject):
 
     def getSelectedBlocksAndTimeRange(self) -> Tuple[List[QTextBlock], List] | None:
         """Returns the selected text blocks and the corresponding time range"""
-        log.info("autoAlignSelectedBlocks()")
+        logger.debug("autoAlignSelectedBlocks()")
 
         if self.text_widget is None or self.waveform_widget is None:
             return

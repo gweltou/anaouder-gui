@@ -546,7 +546,7 @@ class ReplaceTextCommand(QUndoCommand):
         self.text_edit = text_edit
         self.block = block
         self.block_number = text_edit.getBlockNumber(block.position())
-        self.old_text = text_edit.getBlockHtml(block)[0]
+        self.old_text = text_edit.getBlockHtmlMap(block)[0]
         self.new_text = new_text
         self.prev_cursor = self.text_edit.getCursorState()
     

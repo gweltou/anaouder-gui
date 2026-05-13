@@ -415,7 +415,7 @@ class TextEditWidget(QTextEdit):
         return block.blockNumber()
 
 
-    def getBlockHtml(self, block: QTextBlock) -> Tuple[str, List[bool]]:
+    def getBlockHtmlMap(self, block: QTextBlock) -> Tuple[str, List[bool]]:
         return self.fragmentsToHtml(self.getBlockFragments(block))
 
 
@@ -563,7 +563,7 @@ class TextEditWidget(QTextEdit):
 
         cursor = self.textCursor()
         block = cursor.block()
-        html, mask = self.getBlockHtml(block)
+        html, mask = self.getBlockHtmlMap(block)
         text = block.text()
         pos_in_block = cursor.positionInBlock()
         
@@ -685,7 +685,7 @@ class TextEditWidget(QTextEdit):
         if start_block == end_block:
             selection_start = cursor.selectionStart() - start_block.position()
             selection_end = cursor.selectionEnd() - end_block.position()
-            html, mask = self.getBlockHtml(cursor.block())
+            html, mask = self.getBlockHtmlMap(cursor.block())
 
             # Hack to account for line-breaks that count for 2 chars
             selection_start -= start_block.text()[:cursor.selectionStart()].count('\u2028')
@@ -711,7 +711,7 @@ class TextEditWidget(QTextEdit):
                 )
             )
 
-            html, mask = self.getBlockHtml(cursor.block())
+            html, mask = self.getBlockHtmlMap(cursor.block())
 
         else:
             # Selection spreads over many blocks
