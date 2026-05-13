@@ -10,7 +10,7 @@
 #define MyAppExeName "Anaouder.exe"
 
 ; Pull version from pyproject.toml
-#define MyAppVersion RemoveQuotes(ReadIni(RootDir + "\pyproject.toml", "project", "version", "0.0.0"))
+#define MyAppVersion "1.1.1"
 
 #define MyAppAssocName MyAppName + " File"
 #define MyAppAssocExt ".ali"

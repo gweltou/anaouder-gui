@@ -85,7 +85,6 @@ jobs:
         
         Write-Host "Building Installer for version: $version"
 
-        # 3. Run ISCC and pass the version as a variable
         # /DMyAppVersion overrides the #define in the script
         & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version "building/Windows/anaouder_installer.iss"
       shell: pwsh
