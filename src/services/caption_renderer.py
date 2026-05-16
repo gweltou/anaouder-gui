@@ -21,6 +21,7 @@ from src.text_widget import LINE_BREAK
 from src.document_controller import DocumentController
 from src.aligner import align_text_with_vosk_tokens, print_alignment
 from src.utils import get_audiofile_info, find_system_fonts
+from src.services.logger import logger
 
 
 log = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ class CaptionRenderer:
 
     def set_output_dir(self, dir: Path) -> None:
         self.output_dir = dir
-        log.info(f"Render output directory set to {self.output_dir}")
+        logger.debug(f"Render output directory set to {self.output_dir}")
     
     
     def set_output_prefix(self, prefix: str) -> None:
@@ -121,7 +122,7 @@ class CaptionRenderer:
             y_offset
         """
         self.global_properties.update({ k.replace('_', '-'): v for k,v in kwargs.items() })
-        log.info(f"Renderer properties set {self.global_properties}")
+        logger.debug(f"Renderer properties set {self.global_properties}")
     
 
     def _set_document(self, document: DocumentController) -> None:
@@ -209,7 +210,7 @@ class CaptionRenderer:
         
         self.background_image_path = filepath_pattern
 
-        log.info(f"Background images found: {len(self.background_images)}")
+        logger.debug(f"Background images found: {len(self.background_images)}")
 
 
     def get_background_image(
@@ -314,7 +315,7 @@ class CaptionRenderer:
                     top = (bg_img.height // 2)
                 case _:
                     # Defaults to bottom
-                    log.warning(f"bad argument: {properties['position']}")
+                    logger.warning(f"bad argument: {properties['position']}")
                     top = bg_img.height - text_box_height
 
             if "y-offset" in properties:
@@ -346,7 +347,7 @@ class CaptionRenderer:
             or left + text_image.width > bg_img.width
             or top + text_image.height > bg_img.height
         ):
-            log.warning(f"Rendered outside of frame: {(top, left)}")
+            logger.warning(f"Rendered outside of frame: {(top, left)}")
 
 
     def _get_time_offsets(self) -> Dict[SegmentId, Tuple]:
@@ -373,7 +374,7 @@ class CaptionRenderer:
                 self.loaded_fonts[key] = font
                 return font
         except Exception as e:
-            log.error(f"Could not load requested font {e}")
+            logger.error(f"Could not load requested font {e}")
             return self.loaded_fonts[("default", self.DEFAULT_FONT_SIZE)]
 
 
@@ -677,7 +678,7 @@ class VideoBurningThread(QThread):
             self.finished.emit()
         
         except Exception as e:
-            log.error(f"Rendering error: {e}")
+            logger.error(f"Rendering error: {e}")
             self.error.emit(str(e))
 
 
@@ -705,5 +706,5 @@ def can_font_render_char(font_path, char):
                 return True
         return False
     except Exception as e:
-        log.error(f"Error reading {font_path}: {e}")
+        logger.error(f"Error reading {font_path}: {e}")
         return False

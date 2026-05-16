@@ -34,12 +34,10 @@ from PySide6.QtCore import (
 from ostilhou.asr.models import load_model
 
 from src.cache_system import cache
-from src.interfaces import Segment, SegmentId
 from src.lang import getModelPath, getCurrentLanguage
+from src.services.logger import logger
 
 
-
-log = logging.getLogger(__name__)
 
 
 
@@ -102,7 +100,6 @@ class RecognizerWorker(QObject):
     segment_transcribed = Signal(str, list, int) # (re-)transcribe a pre-defined segment
     new_segment_transcribed = Signal(str, list) # Create a new utterance with transcription
     progress = Signal(float)    # In seconds since the beginning of the audio file
-    message = Signal(str)   # Sends a message to be displayed in the status bar
     end_of_file = Signal()  # Whole file transcription is completed
     finished = Signal()     # Used to toggle up the transcription button
 
@@ -128,7 +125,7 @@ class RecognizerWorker(QObject):
     def load_model(self, model_name) -> None:
         model_path = getModelPath(model_name)
         if model_path != self.loaded_model_path:
-            self.message.emit(f"Loading {model_name}")
+            logger.message(f"Loading {model_name}")
             self.loaded_model = load_model(model_path)
             self.loaded_model_path = model_path
             self.recognizer = KaldiRecognizer(self.loaded_model, self.SAMPLE_RATE)
@@ -144,10 +141,10 @@ class RecognizerWorker(QObject):
             file_path (str): Path to the audio file
             start_time (float): Start time in seconds
         """
-        log.debug(f"transcribeFile({media_path=}, {start_time=}, {is_hidden=})")
+        logger.debug(f"transcribeFile({media_path=}, {start_time=}, {is_hidden=})")
         current_language = getCurrentLanguage()
 
-        self.message.emit(self.tr("Transcribing whole file") + '...')
+        logger.message(self.tr("Transcribing whole file") + '...')
 
         # It's not enough to "reset" the recognizer, the timecodes would keep incrementing
         # so we need to create a new instance
@@ -230,8 +227,8 @@ class RecognizerWorker(QObject):
                 self.end_of_file.emit()
         
         except Exception as e:
-            log.error(e)
-            self.message.emit(self.tr("Error during transcription: {error}").format(error = e))
+            text = self.tr("Error during transcription: {error}").format(error = e)
+            logger.error(text)
 
         finally:
             if process:
@@ -261,9 +258,7 @@ class RecognizerWorker(QObject):
 
         self._must_stop = False
         for i, (seg_id, start, end) in enumerate(segments):
-            self.message.emit(
-                self.tr("Transcribing") + f" {i+1}/{len(segments)}"
-            )
+            logger.message(self.tr("Transcribing") + f" {i+1}/{len(segments)}")
             tokens = self._transcribeSegment(file_path, start, end-start, current_language)
             if self._must_stop:
                 break
@@ -349,7 +344,7 @@ class RecognizerWorker(QObject):
                     tokens.extend(result["result"])
         
         except Exception as e:
-            self.message.emit(f"Error during transcription: {e}")
+            logger.error(f"Error during transcription: {e}")
 
         finally:
             if process:
@@ -388,7 +383,6 @@ class TranscriptionService(QObject):
     segment_transcribed = Signal(str, list, int)
     new_segment_transcribed = Signal(str, list)
     progress = Signal(float)
-    message = Signal(str)
     end_of_file = Signal()
     finished = Signal()
 
@@ -411,7 +405,6 @@ class TranscriptionService(QObject):
         self._recognizer_worker.progress.connect(self.progress)
         self._recognizer_worker.end_of_file.connect(self.end_of_file)
         self._recognizer_worker.finished.connect(self.finished)
-        self._recognizer_worker.message.connect(self.message)
 
         # Connect service's trigger signals to worker's slots
         self.start_file_transcription.connect(self._recognizer_worker.transcribe_file)

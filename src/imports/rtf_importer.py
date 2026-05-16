@@ -28,10 +28,8 @@ from ostilhou.text import split_sentences, normalize_sentence
 
 from src.interfaces import MainWindowInterface, DocumentInterface
 from src.utils import filter_out_chars
+from src.services.logger import logger
 
-
-
-log = logging.getLogger(__name__)
 
 
 
@@ -79,9 +77,9 @@ class RTFImporter(QObject):
         if not file_path:
             return False
         
-        log.info(f"Importing {file_path}")
+        logger.message(f"Importing {file_path}")
         lines = self._process_rtf_file(file_path)
-        log.info(f"{len(lines)} lines imported")
+        logger.message(f"{len(lines)} lines imported")
         self.document_controller.loadDocumentData([ (text, None) for text in lines])
         return True
 

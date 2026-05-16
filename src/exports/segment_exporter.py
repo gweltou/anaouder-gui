@@ -39,9 +39,6 @@ from src.ui.icons import icons
 
 
 
-log = logging.getLogger(__name__)
-
-
 
 class ExportSegmentDialog(QDialog):
 
@@ -254,14 +251,14 @@ class _FFMPEGWorker(QObject):
 
                 if result.returncode != 0:
                     self.error_occurred.emit()
-                    logger.error_message(f"FFmpeg Error on {os.path.basename(output_path)}")
+                    logger.error(f"FFmpeg Error on {os.path.basename(output_path)}")
                 else:
                     self.progress_update.emit(i + 1, total, os.path.basename(output_path))
                     logger.message(f"Segment exported to '{output_path}'")
 
             except Exception as e:
                 self.error_occurred.emit()
-                logger.error_message(str(e))
+                logger.error(str(e))
                 break
 
         self.finished.emit()

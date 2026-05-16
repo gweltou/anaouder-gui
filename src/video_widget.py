@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,9 +17,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-from typing import Optional
-import logging
-
 from PySide6.QtCore import Qt, QMargins, QRectF, QSize, QPointF, QTimer
 from PySide6.QtGui import (
     QFont, QResizeEvent, QBrush, QPen, QColor, QTextOption,
@@ -35,10 +32,9 @@ from PySide6.QtMultimedia import QMediaPlayer
 
 from ostilhou.asr.dataset import MetadataParser
 
-
 from settings import app_settings
+from src.services.logger import logger
 
-log = logging.getLogger(__name__)
 
 
 class CenteredTextItem(QGraphicsTextItem):
@@ -75,20 +71,20 @@ class CenteredTextItem(QGraphicsTextItem):
 
 class VideoWidget(QGraphicsView):
     def __init__(self, parent=None):
-        log.info("Initializing VideoWidget")
+        logger.debug("Initializing VideoWidget")
         super().__init__(parent)
 
         # Configure the view for optimal video display
         self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
         self.setOptimizationFlags(QGraphicsView.DontAdjustForAntialiasing | QGraphicsView.DontSavePainterState)
-        self.setTransformationAnchor(QGraphicsView.AnchorViewCenter)  # Changed from AnchorUnderMouse
-        self.setResizeAnchor(QGraphicsView.AnchorViewCenter)  # Changed from AnchorUnderMouse
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setBackgroundBrush(Qt.black)
         self.setFrameStyle(QFrame.NoFrame)
-        self.setAlignment(Qt.AlignCenter)  # Uncommented and fixed
+        self.setAlignment(Qt.AlignCenter)
 
         self.setScene(QGraphicsScene(self))
 

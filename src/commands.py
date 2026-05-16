@@ -35,9 +35,8 @@ from src.interfaces import (
     DocumentInterface,
 )
 from src.services.media_player_controller import MediaPlayerController
+from src.services.logger import logger
 
-
-log = logging.getLogger(__name__)
 
 
 class CreateNewEmptyUtteranceCommand(QUndoCommand):
@@ -55,8 +54,7 @@ class CreateNewEmptyUtteranceCommand(QUndoCommand):
             segment: Segment,
             segment_id: Optional[SegmentId]=None
         ):
-        log.debug(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {segment_id=})")
-        print(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {segment_id=})")
+        logger.debug(f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {segment_id=})")
 
         super().__init__()
         self.media_controller = media_controller
@@ -171,9 +169,9 @@ class AlignWithSelectionCommand(QUndoCommand):
             waveform: WaveformInterface,
             block
         ):
-        log.debug(f"AlignWithSelectionCommand.__init__(parent, {block=})")
-        print(f"{block.text()=}")
+        logger.debug(f"AlignWithSelectionCommand.__init__(parent, {block=})")
         super().__init__()
+        
         self.parent = parent # MainWindow
         self.document_controller = document_controller
         self.waveform = waveform
@@ -210,7 +208,7 @@ class AlignBlockWithSegment(QUndoCommand):
             block: QTextBlock,
             segment: Segment,
         ):
-        log.debug(f"AlignBlockWithSegment.__init__(parent, {block=})")
+        logger.debug(f"AlignBlockWithSegment.__init__(parent, {block=})")
         super().__init__()
         self.document_controller = document
         self.block_number: int = block.blockNumber()
@@ -244,9 +242,9 @@ class DeleteUtterancesCommand(QUndoCommand):
             waveform_widget: WaveformInterface,
             seg_ids: list
         ):
-        log.debug(f"DeleteUtterancesCommand.__init__(parent, {seg_ids=})")
-
+        logger.debug(f"DeleteUtterancesCommand.__init__(parent, {seg_ids=})")
         super().__init__()
+
         self.document_controller = document_controller
         self.text_widget = text_widget
         self.waveform = waveform_widget
@@ -261,7 +259,7 @@ class DeleteUtterancesCommand(QUndoCommand):
         self.prev_cursor = self.text_widget.getCursorState()
     
     def undo(self):
-        log.debug("DeleteUtterancesCommand UNDO")
+        logger.debug("DeleteUtterancesCommand UNDO")
 
         for segment, text, seg_id, data, pos in zip(
                 self.segments, self.texts,
@@ -276,7 +274,7 @@ class DeleteUtterancesCommand(QUndoCommand):
 
     def redo(self):
         # Delete text sentences
-        log.debug("DeleteUtterancesCommand REDO")
+        logger.debug("DeleteUtterancesCommand REDO")
 
         self.text_widget.document().blockSignals(True)
         self.text_widget.setCursorState(self.prev_cursor)
@@ -299,7 +297,7 @@ class InsertTextCommand(QUndoCommand):
     """Add characters at a given position in the document"""
 
     def __init__(self, text_edit, text, position):
-        log.debug(f"InsertTextCommand.__init__(text_edit, {text=}, {position=})")
+        logger.debug(f"InsertTextCommand.__init__(text_edit, {text=}, {position=})")
         super().__init__()
 
         self.text_edit: TextDocumentInterface = text_edit
@@ -309,7 +307,7 @@ class InsertTextCommand(QUndoCommand):
         self.prev_cursor = self.text_edit.getCursorState()
     
     def undo(self):
-        log.debug(f"InsertTextCommand.UNDO")
+        logger.debug(f"InsertTextCommand.UNDO")
         cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, len(self.text))
@@ -317,7 +315,7 @@ class InsertTextCommand(QUndoCommand):
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
-        log.debug(f"InsertTextCommand.REDO")
+        logger.debug(f"InsertTextCommand.REDO")
         cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.insertText(self.text)
@@ -349,9 +347,9 @@ class DeleteTextCommand(QUndoCommand):
             size: int,
             direction: QTextCursor.MoveOperation
         ):
-        log.debug(f"DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
-        
+        logger.debug(f"DeleteTextCommand(text_edit, {position=}, {size=}, {direction=})")
         super().__init__()
+        
         self.text_edit = text_edit
         self.position = position
         self.size = size
@@ -360,7 +358,7 @@ class DeleteTextCommand(QUndoCommand):
         self.prev_cursor = self.text_edit.getCursorState()
 
     def undo(self):
-        log.debug(f"DeleteTextCommand.UNDO: {self.position=} {self.deleted_text=} {self.size=} {self.direction=}")
+        logger.debug(f"DeleteTextCommand.UNDO: {self.position=} {self.deleted_text=} {self.size=} {self.direction=}")
         cursor: QTextCursor = self.text_edit.textCursor()
         if self.direction == QTextCursor.MoveOperation.Left:
             cursor.setPosition(self.position - self.size)
@@ -376,7 +374,7 @@ class DeleteTextCommand(QUndoCommand):
         self.text_edit.setCursorState(self.prev_cursor)
     
     def redo(self):
-        log.debug("DeleteTextCommand.REDO")
+        logger.debug("DeleteTextCommand.REDO")
         cursor: QTextCursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
         cursor.movePosition(self.direction, QTextCursor.MoveMode.KeepAnchor, self.size)
@@ -428,9 +426,9 @@ class InsertBlockCommand(QUndoCommand):
             seg_id: Optional[int] = None,
             after = False
         ):
-        log.debug(f"InsertBlockCommand.__init__({text_edit=}, {position=}, {text=}, {seg_id=}, {after=})")
-
+        logger.debug(f"InsertBlockCommand.__init__({text_edit=}, {position=}, {text=}, {seg_id=}, {after=})")
         super().__init__()
+
         self.text_edit = text_edit
         self.document_controller = document_controller
         self.prev_cursor = self.text_edit.getCursorState()
@@ -484,8 +482,6 @@ class InsertBlockCommand(QUndoCommand):
 
 
     def redo(self):
-        #log.debug("InsertBlockCommand REDO")
-
         was_blocked = self.text_edit.signalsBlocked()
         self.text_edit.blockSignals(True)
 
@@ -541,8 +537,9 @@ class ReplaceTextCommand(QUndoCommand):
             block: QTextBlock,
             new_text: str,
         ):
-        log.debug(f"ReplaceTextCommand({new_text=})")
+        logger.debug(f"ReplaceTextCommand({new_text=})")
         super().__init__()
+
         self.text_edit = text_edit
         self.block = block
         self.block_number = text_edit.getBlockNumber(block.position())
@@ -575,7 +572,8 @@ class ReplaceTextCommand(QUndoCommand):
 
 
 class MoveTextCursor(QUndoCommand):
-    """Move the text cursor
+    """
+    Move the text cursor
 
     Parameters:
         text_edit (TextEdit):

@@ -33,11 +33,9 @@ from src.interfaces import DocumentInterface
 from src.commands import AlignBlockWithSegment
 from src.cache_system import cache
 from src.lang import prepTextForAlignment
-from src.utils import PUNCTUATION, filter_out_chars, yellow
+from src.utils import PUNCTUATION, filter_out_chars
+from src.services.logger import logger
 
-
-
-log = logging.getLogger(__name__)
 
 
 
@@ -72,7 +70,7 @@ def smart_split_text(text: str, position: int, vosk_tokens: list) -> tuple:
         # Will call prepare_sentence, like align_text_with_vosk_token
         # We could take advantage of that to avoid redundant calls
         raise SmartSplitError("CER is too high")
-
+    
     left_text = text[:position].rstrip()
     right_text = text[position:].lstrip()
 
@@ -168,6 +166,10 @@ def smart_split_time(text: str, timepos: float, vosk_tokens: list) -> tuple:
 
 
 def can_smart_split(text: str, vosk_tokens: list):
+    """
+    Test if this sentence is similar enough
+    to the decoded transcription (list of vosk tokens) to be aligned
+    """
     # Simplify text representation
     gt = prep_sentence(text)
     hyp = prep_sentence(' '.join([t[2] for t in vosk_tokens]))
@@ -221,7 +223,6 @@ def print_alignment(alignment: List) -> None:
 
 class TextAlignerThread(QThread):
     finished = Signal(list)
-    error = Signal(str)
 
     def __init__(self, blocks: List[QTextBlock], tokens: list, parent=None):
         super().__init__(parent)
@@ -291,8 +292,7 @@ class TextAlignerThread(QThread):
             self.finished.emit(segments)
         
         except Exception as e:
-            log.error(f"Alignment error: {e}")
-            self.error.emit(str(e))
+            logger.error(f"Alignment error: {e}")
 
 
 def align_text_with_vosk_tokens(text: str, vosk_tokens: list, cancel_check=None) -> list:
@@ -392,13 +392,12 @@ class TextAligner(QObject):
             progress_bar
             document_controller
         """
-        log.debug("autoAlign()")
+        logger.debug("autoAlign()")
 
         media_path = self.document_controller.media_path
 
         if media_path is None:
-            log.error("No media file detected")
-            self.error_msg.emit(self.tr("No media file loaded"))
+            logger.error("No media file detected")
             return
         
         # Check if there is a cached transcription for this media
@@ -428,7 +427,6 @@ class TextAligner(QObject):
 
             self.alignment_thread = TextAlignerThread(blocks, tokens, self.parent_window)
             self.alignment_thread.finished.connect(on_alignment_complete)
-            self.alignment_thread.error.connect(self.error_msg.emit)
 
             self.alignment_thread.start()
 

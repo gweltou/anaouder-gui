@@ -1,6 +1,3 @@
-#! /usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
 Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
@@ -29,7 +26,6 @@ Terminology
 import os.path
 from pathlib import Path
 from typing import List, Tuple, Optional
-import logging
 import time
 import re
 
@@ -68,8 +64,7 @@ from src.version import __version__
 from src.ui.icons import icons, loadIcons, IconWidget
 from src.ui.theme import theme
 from src.services.media_player_controller import MediaPlayerController
-from src.services.logger import logger
-from src.waveform_widget import WaveformWidget, ResizeSegmentCommand
+from src.waveform_widget import WaveformWidget
 from src.text_widget import (
     TextEditWidget, Highlighter,
     LINE_BREAK
@@ -109,10 +104,8 @@ import src.lang as lang
 from src.interfaces import Segment, SegmentId, BlockType
 from src.cache_system import cache
 from src.strings import app_strings
+from src.services.logger import logger
 
-
-
-log = logging.getLogger(__name__)
 
 
 
@@ -132,8 +125,6 @@ class MainWindow(QMainWindow):
 
     def __init__(self, file_path: Optional[Path] = None) -> None:
         """Initialize MainWindow"""
-
-        self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         super().__init__()
 
         self._initializeState()
@@ -358,18 +349,13 @@ class MainWindow(QMainWindow):
         # Timecode display
         self.timecode_widget.timeChanged.connect(self.onTimecodeDisplayChanged)
 
-        # File manager
-        self.file_manager.message.connect(self.setStatusMessage)
-
         # Media controller
         self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
 
         # Document controller
-        self.document_controller.message.connect(self.setStatusMessage)
         self.document_controller.refresh_segment_info.connect(self.updateSegmentInfo)
 
         # Recognizer
-        self.recognizer.message.connect(self.setStatusMessage)
         self.recognizer.segment_transcribed.connect(self.updateUtteranceTranscription)
         self.recognizer.new_segment_transcribed.connect(self.newSegmentTranscribed)
         self.recognizer.progress.connect(self.updateProgressBar)
@@ -398,7 +384,7 @@ class MainWindow(QMainWindow):
         self.waveform.select_segments.connect(self.selectFromWaveform)
         self.waveform.stop_follow.connect(self.toggleFollowPlayhead)
 
-        # Exports
+        # Logger
         logger.message_requested.connect(self.setStatusMessage)
         logger.error_message_requested.connect(self.setErrorMessage)
 
@@ -1034,7 +1020,7 @@ class MainWindow(QMainWindow):
         autosave_folder = self.file_path.parent / AUTOSAVE_FOLDER_NAME
         autosave_path = autosave_folder / f"{self.file_path.stem}@{time_tag}.ali"
         try:
-            self.setStatusMessage("Autosaving...", 1000) # Display for 1 second
+            logger.message("Autosaving...", timeout=1000) # Display for 1 second
 
             autosave_folder.mkdir(exist_ok=True)  # Create "autosave" folder, if necessary
             self._performSave(autosave_path)
@@ -1046,10 +1032,8 @@ class MainWindow(QMainWindow):
                 for i in range(len(old_backups) - max_backups):
                     old_backups[i].unlink()                               
         except Exception as e:
-            log.error(f"Autosave failed {e}")
-            self.setErrorMessage(
-                self.tr("Autosave failed: {exception}").format(exception=str(e))
-            )
+            message = self.tr("Autosave failed: {exception}").format(exception=str(e))
+            logger.error(message)
 
 
     def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]:
@@ -1072,7 +1056,7 @@ class MainWindow(QMainWindow):
             keep_media = False
         ) -> None:
         """Hub function for opening files"""
-        log.info(f"onOpenFile({str(file_path)})")
+        logger.debug(f"onOpenFile({str(file_path)})")
 
         supported_filter = f"Supported files ({' '.join(['*'+fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         media_filter = f"Audio files ({' '.join(['*'+fmt for fmt in MEDIA_FORMATS])})"
@@ -1115,7 +1099,7 @@ class MainWindow(QMainWindow):
                 self.openMediaFile(Path(media_path))
         
         elif ext == ".srt":
-            self.log.debug("Opening an SRT file...")
+            logger.debug("Opening an SRT file...")
             data = self.file_manager.read_srt_file(str(file_path), find_media=True)
             self.document_controller.loadData(data["document"])
 
@@ -1123,8 +1107,7 @@ class MainWindow(QMainWindow):
             if media_path and os.path.exists(media_path) :
                 self.openMediaFile(Path(media_path))
         else:
-            log.error(f"Bad file type: {file_path}")
-            self.setErrorMessage(self.tr(f"Bad file type: {file_path}"))
+            logger.error(f"Wrong file type: {file_path}")
 
         self._loadDocumentState(file_path)
 
@@ -1211,7 +1194,7 @@ class MainWindow(QMainWindow):
 
     def _loadDocumentState(self, file_path: Path) -> None:
         doc_metadata = cache.get_doc_metadata(file_path)
-        log.info(f"{doc_metadata=}")
+        logger.debug(f"{doc_metadata=}")
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
         if "cursor_pos" in doc_metadata:
@@ -1449,14 +1432,14 @@ class MainWindow(QMainWindow):
         # Load waveform
         cached_waveform = cache.get_waveform(file_path)
         if cached_waveform is not None:
-            self.log.info("Using cached waveform")
+            logger.debug("Using cached waveform")
             self.audio_samples = cached_waveform
         else:
-            self.log.info("Rendering waveform...")
+            logger.debug("Rendering waveform...")
             self.audio_samples = get_samples(str(file_path), WAVEFORM_SAMPLERATE)
             cache.set_waveform(file_path, self.audio_samples)
         
-        self.log.info(f"Loaded {len(self.audio_samples)} audio samples")
+        logger.debug(f"Loaded {len(self.audio_samples)} audio samples")
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
 
         self.document_controller.setMediaPath(file_path)
@@ -1477,9 +1460,10 @@ class MainWindow(QMainWindow):
                         fps = int(match[1]) / int(match[2])
                         media_metadata["fps"] = fps
                         cache.update_media_metadata(file_path, {"fps": fps})
-                    self.log.info(f"Unrecognized FPS: {audiofile_info["r_frame_rate"]}")
+                    else:
+                        logger.debug(f"Unrecognized FPS: {audiofile_info["r_frame_rate"]}")
                 else:
-                    self.log.info(f"Unrecognized FPS: {audiofile_info["r_frame_rate"]}")
+                    logger.debug(f"Unrecognized FPS: {audiofile_info["r_frame_rate"]}")
             # if "avg_frame_rate" in audio_metadata:
             #     print(f"Stream {audio_metadata["avg_frame_rate"]=}")
 
@@ -1617,7 +1601,7 @@ class MainWindow(QMainWindow):
 
 
     def onExportAudioSegments(self):
-        log.info("Export audio segments")
+        logger.debug("Export audio segments")
         if self.media_path is None:
             return
         
@@ -1743,7 +1727,6 @@ class MainWindow(QMainWindow):
         Updates the head position on the waveform and highlight the sentence
         in the text widget if play head is above an aligned segment
         """
-        log.debug(f"onPlayerPositionChanged({position_sec=})")
         if self.video_widget.isVisible() and not self.video_widget.video_is_valid: # XXX: is this in the right place ?
             self.video_widget.updateLayout() # fixes the video layout updating
 
@@ -1940,7 +1923,7 @@ class MainWindow(QMainWindow):
         The cursor change fires onTextCursorChanged
         onTextCursorChanged sets the segment active on the waveform
         """
-        log.debug(f"selectUtterance({seg_id=})")
+        logger.debug(f"selectUtterance({seg_id=})")
         
         block = self.document_controller.getBlockById(seg_id)
         if block:
@@ -1966,7 +1949,7 @@ class MainWindow(QMainWindow):
         Args:
             seg_ids (list): ID of selected segments or None
         """
-        log.debug(f"selectFromWaveform({seg_ids=})")
+        logger.debug(f"selectFromWaveform({seg_ids=})")
         seg_ids = seg_ids if seg_ids else None
         
         if seg_ids is None:
@@ -1977,7 +1960,7 @@ class MainWindow(QMainWindow):
 
 
     def onWaveformPlayheadManualyMoved(self, position_sec: float) -> None:
-        log.debug(f"onWaveformPlayheadManualyMoved({position_sec=})")
+        logger.debug(f"onWaveformPlayheadManualyMoved({position_sec=})")
 
         # Stop following the playhead
         if self.waveform.follow_playhead:
@@ -2004,7 +1987,7 @@ class MainWindow(QMainWindow):
 
 
     def toggleVideo(self, checked) -> None:
-        log.debug(f"toggle video {checked=}")
+        logger.debug(f"toggle video {checked=}")
         MIN_VIDEO_PANEL_WIDTH = 100
         if self.text_video_splitter.sizes()[1] < MIN_VIDEO_PANEL_WIDTH:
             self.text_video_splitter.setSizes([1, 1])
@@ -2031,10 +2014,10 @@ class MainWindow(QMainWindow):
             if self.scene_detector is None and not self.waveform.scenes:
                 # Check for cached scenes
                 if cached_scenes := cache.get_media_scenes(self.media_path):
-                    self.log.info("Using cached scene transitions")
+                    logger.debug("Using cached scene transitions")
                     self.waveform.scenes = cached_scenes
                 else:
-                    self.log.info("Start scene changes detection")
+                    logger.debug("Start scene changes detection")
                     self.scene_detector = SceneDetectWorker()
                     self.scene_detector.setMediaPath(self.media_path)
                     self.scene_detector.setThreshold(FFMPEG_SCENE_DETECTOR_THRESHOLD)
@@ -2045,7 +2028,7 @@ class MainWindow(QMainWindow):
                 self.waveform.must_redraw = True
         else:
             if self.scene_detector:
-                print("stopping")
+                logger.debug("Stopping scene detector...")
                 self.scene_detector.stop()
             self.waveform.display_scene_change = False
             self.waveform.must_redraw = True
@@ -2102,8 +2085,6 @@ class MainWindow(QMainWindow):
 
         segments = auto_segment(self.audio_samples, start_frame, end_frame)
 
-        self.setStatusMessage(self.tr("{n} segments found").format(n=len(segments)))
-
         self.undo_stack.beginMacro("Auto segment")
         for start, end in segments:
             self.undo_stack.push(
@@ -2133,7 +2114,6 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def onTextChanged(self) -> None:
-        #log.debug("onTextChanged()")
         # Update the utterance density field
         with QSignalBlocker(self.text_widget.document()):
             cursor = self.text_widget.textCursor()
@@ -2157,7 +2137,7 @@ class MainWindow(QMainWindow):
         Sets the corresponding segment active on the waveform
         Called only on aligned text blocks or with None
         """
-        log.debug(f"onTextCursorChanged({seg_ids=}) cursor_pos={self.text_widget.textCursor().position()}")
+        logger.debug(f"onTextCursorChanged({seg_ids=}) cursor_pos={self.text_widget.textCursor().position()}")
 
         seg_ids = seg_ids or None
         
@@ -2175,7 +2155,7 @@ class MainWindow(QMainWindow):
 
 
     def toggleCreateSelection(self, checked: bool) -> None:
-        log.debug(f"Toggle create selection: {checked=}")
+        logger.debug(f"Toggle create selection: {checked=}")
         self.waveform.setSelecting(checked)
 
 
@@ -2213,7 +2193,7 @@ class MainWindow(QMainWindow):
         segment: Segment,
         segment_id: SegmentId,
     ) -> None:
-        log.debug(f"updateUtteranceTranscription({text=}, {segment=}, {segment_id=})")
+        logger.debug(f"updateUtteranceTranscription({text=}, {segment=}, {segment_id=})")
         if segment_id not in self.document_controller.segments:
             # Create a new segment as a undoable action
             self.undo_stack.push(
@@ -2251,7 +2231,7 @@ class MainWindow(QMainWindow):
 
 
     def toggleTranscribe(self, toggled, is_hidden) -> None:
-        log.debug(f"toggleTranscribe({toggled=}, {is_hidden=})")
+        logger.debug(f"toggleTranscribe({toggled=}, {is_hidden=})")
         if toggled:
             if is_hidden:
                 self.toggleHiddenTranscription(toggled)
@@ -2262,7 +2242,7 @@ class MainWindow(QMainWindow):
 
 
     def toggleHiddenTranscription(self, checked: bool):
-        log.debug(f"toggleHiddenTranscription({checked})")
+        logger.debug(f"toggleHiddenTranscription({checked})")
         if not checked:
             self.recognizer.stop()
             return
@@ -2291,7 +2271,7 @@ class MainWindow(QMainWindow):
 
 
     def transcribeAction(self) -> None:
-        log.debug("transcribeAction()")
+        logger.debug("transcribeAction()")
         if self.media_path is None:
             return
     
@@ -2424,7 +2404,7 @@ class MainWindow(QMainWindow):
                 elif ext in MEDIA_FORMATS:
                     media_files.append(file_path)
                 else:
-                    log.warning(f"Wrong file type {file_path}")
+                    logger.warning(f"Wrong file type {file_path}")
                         
             for file_path in document_files:
                 ext = file_path.suffix.lower()
@@ -2435,7 +2415,7 @@ class MainWindow(QMainWindow):
                     self.onOpenFile(file_path, keep_media=True)
                     break # Load only the first document file
                 else:
-                    log.warning(f"Wrong file type {file_path}")
+                    logger.warning(f"Wrong file type {file_path}")
             
             for file_path in media_files:
                 self.openMediaFile(file_path)
@@ -2524,7 +2504,7 @@ class MainWindow(QMainWindow):
 
     def updateSegmentInfo(self, segment_id: SegmentId) -> None:
         """Rehighlight sentence in text widget and update status bar info"""
-        log.debug(f"updateSegmentInfo({segment_id=})")
+        logger.debug(f"updateSegmentInfo({segment_id=})")
         segment = self.document_controller.getSegment(segment_id)
         if segment is None:
             self.status_label.clear()
@@ -2664,8 +2644,7 @@ class TranslatedApp(QApplication):
     
 
     def switch_language(self, lang_code: str):
-        log.info(f"Switching UI language to {lang_code}")
-        print("Switching UI language to", lang_code)
+        logger.debug(f"Switching UI language to {lang_code}")
         if self.translator is not None:
             self.removeTranslator(self.translator)
         

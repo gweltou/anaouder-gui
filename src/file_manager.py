@@ -21,7 +21,6 @@ File operations manager for Anaouder.
 Handles loading and saving of ALI, SRT, and media files.
 """
 
-import os
 import re
 from typing import Tuple, List, Optional
 from pathlib import Path
@@ -34,9 +33,9 @@ from ostilhou.asr import load_segments_data, extract_metadata, MetadataParser
 from ostilhou.asr.dataset import format_timecode
 
 from src.utils import MEDIA_FORMATS, LINE_BREAK
-from src.interfaces import Segment, WaveformInterface, TextDocumentInterface
-from src.services.logger import logger
+from src.interfaces import Segment
 from src.settings import AUTOSAVE_FOLDER_NAME
+from src.services.logger import logger
 
 
 
@@ -49,8 +48,6 @@ class FileOperationError(Exception):
 
 class FileManager(QObject):
     """Manages file I/O operations for the application"""
-    message = Signal(str)    # Sends a message to be displayed in the status bar
-
 
     def __init__(
             self,
@@ -77,9 +74,7 @@ class FileManager(QObject):
         """
 
         file_path = file_path.absolute()
-        logger.message(f"Saving file to {file_path}")
-        print(f"{file_path=} {media_path=}")
-        print(data)
+        logger.debug(f"Saving ALI file to {file_path}")
 
         try:
             with file_path.open('w', encoding="utf-8") as _fout:
@@ -185,7 +180,7 @@ class FileManager(QObject):
         Raise:
             FileOperationError
         """
-        logger.message("Opening SRT file: {filepath}")
+        logger.message(f"Opening SRT file: {filepath}")
         
         # Parse subtitle file
         subtitles = self._parse_srt_file(filepath)

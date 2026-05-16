@@ -20,7 +20,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional
 import os
 import threading
-import logging
 
 import ssl
 import certifi
@@ -60,10 +59,8 @@ from src.settings import (
 )
 from src.strings import app_strings
 from src.cache_system import cache
+from src.services.logger import logger
 
-
-
-log = logging.getLogger(__name__)
 
 
 
@@ -138,7 +135,7 @@ class DownloadProgressDialog(QDialog):
     def download_worker(self):
         """Worker function that runs in a separate thread to download the file"""
         try:
-            log.info(f"Downloading {self.url}")
+            logger.message(f"Downloading {self.url}")
             os.makedirs(self.root, exist_ok=True)
             certifi_context = ssl.create_default_context(cafile=certifi.where())
               
@@ -146,7 +143,7 @@ class DownloadProgressDialog(QDialog):
             with urllib.request.urlopen(req, timeout=5.0, context=certifi_context) as source, open(self.download_target, "wb") as output:
                 # Get file size
                 self.file_size = int(source.info().get("Content-Length", 0))
-                log.info(f"File size: {self.file_size}")
+                logger.debug(f"File size: {self.file_size}")
                 
                 self.n_bytes = 0
                 self.last_percent = 0
@@ -174,7 +171,7 @@ class DownloadProgressDialog(QDialog):
                 expected_sum = lang.getSHA256(self.model_name)
                 file_checksum = hashlib.file_digest(open(self.download_target, 'rb'), "sha256").hexdigest()
                 if file_checksum != expected_sum:
-                    log.info(f"Mismatch in sha256 sum:\n\tExpected: {expected_sum}\n\tCalculated: {file_checksum}")
+                    logger.warning(f"Mismatch in sha256 sum:\n\tExpected: {expected_sum}\n\tCalculated: {file_checksum}")
                     # Remove corrupted archive
                     os.remove(self.download_target)
                     raise Exception("Wrong checksum!")
@@ -1064,7 +1061,7 @@ class CachePanel(QWidget):
     
 
     def clearCurrentCache(self):
-        log.info("Clearing current media cache")
+        logger.message("Clearing current media cache")
 
         fingerprint = self.media_metadata["fingerprint"]
 
@@ -1108,7 +1105,7 @@ class CachePanel(QWidget):
 
     
     def clearGlobalCache(self):
-        log.info("Clearing global media cache")
+        logger.message("Clearing global media cache")
 
         if self.global_waveform.isChecked():
             for file in cache.waveforms_dir.iterdir():

@@ -32,6 +32,8 @@ from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from src.interfaces import Segment, SegmentId
 from src.video_widget import VideoWidget
 from src.cache_system import cache
+from src.services.logger import logger
+
 
 # To trace the segmentation error when playing problematic segments
 # import faulthandler
@@ -39,7 +41,6 @@ from src.cache_system import cache
 
 
 
-log = logging.getLogger(__name__)
 
 
 
@@ -100,7 +101,7 @@ class MediaPlayerController(QObject):
         self.player.playbackStateChanged.connect(self._onPlaybackStateChanged)
         self.player.durationChanged.connect(self._onDurationChanged)
         
-        self.log.debug("MediaPlayerController initialized")
+        logger.debug("MediaPlayerController initialized")
     
 
     def loadMedia(self, file_path: Path) -> bool:
@@ -114,10 +115,10 @@ class MediaPlayerController(QObject):
             True if loading initiated successfully, False otherwise
         """
         if not file_path:
-            self.log.warning("Attempted to load media with empty filepath")
+            logger.warning("Attempted to load media with empty filepath")
             return False
         
-        self.log.info(f"Loading media file: {file_path}")
+        logger.debug(f"Loading media file: {file_path}")
         self.stop()
         self.state.reset()
         
@@ -131,7 +132,7 @@ class MediaPlayerController(QObject):
 
     def unloadMedia(self) -> None:
         """Unload current media and reset state"""
-        self.log.debug("Unloading media")
+        logger.debug("Unloading media")
         self.stop()
         self.player.setSource(QUrl())
         self.media_path = None
@@ -147,11 +148,11 @@ class MediaPlayerController(QObject):
             True if playback started, False otherwise
         """
         if not self.hasMedia():
-            self.log.warning("Cannot play: no media loaded")
+            logger.warning("Cannot play: no media loaded")
             return False
         
         self.player.play()
-        self.log.debug(f"Playback started at {self.state.current_position:.3f}s")
+        logger.debug(f"Playback started at {self.state.current_position:.3f}s")
         return True
     
 
@@ -159,14 +160,14 @@ class MediaPlayerController(QObject):
         """Pause playback"""
         if self.isPlaying():
             self.player.pause()
-            self.log.debug(f"Playback paused at {self.state.current_position:.3f}s")
+            logger.debug(f"Playback paused at {self.state.current_position:.3f}s")
     
 
     def stop(self) -> None:
         """Stop playback and reset to beginning"""
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.stop()
-            self.log.debug("Playback stopped")
+            logger.debug("Playback stopped")
     
 
     def togglePlayPause(self) -> bool:
@@ -195,19 +196,19 @@ class MediaPlayerController(QObject):
         Returns:
             True if playback started, False otherwise
         """
-        log.debug(f"playSegment({segment=}, {segment_id=})")
+        logger.debug(f"playSegment({segment=}, {segment_id=})")
         if not self.hasMedia():
-            self.log.warning("Cannot play segment: no media loaded")
+            logger.warning("Cannot play segment: no media loaded")
             return False
         
         start, end = segment
         
         if start < 0.0 or end > self.media_duration:
-            self.log.warning(f"Segment out of bounds: [{start}, {end}]")
+            logger.warning(f"Segment out of bounds: [{start}, {end}]")
             return False
         
         if start >= end:
-            self.log.warning(f"Invalid segment: start >= end [{start}, {end}]")
+            logger.warning(f"Invalid segment: start >= end [{start}, {end}]")
             return False
         
         self.state.playing_segment_id = segment_id
@@ -242,13 +243,13 @@ class MediaPlayerController(QObject):
             position_sec: Position in seconds
         """
         if not self.hasMedia():
-            self.log.warning("Cannot seek: no media loaded")
+            logger.warning("Cannot seek: no media loaded")
             return
         position_sec = max(0.0, min(position_sec, self.media_duration))
         position_ms = int(position_sec * 1000)
         self.player.setPosition(position_ms)
         self.state.current_position = position_sec
-        self.log.debug(f"Seeked to {position_sec:.3f}s")
+        logger.debug(f"Seeked to {position_sec:.3f}s")
     
 
     def seekRelative(self, delta_sec: float) -> None:
@@ -292,7 +293,7 @@ class MediaPlayerController(QObject):
         """
         rate = max(0.1, min(4.0, rate))  # Reasonable bounds
         self.player.setPlaybackRate(rate)
-        self.log.debug(f"Playback rate set to {rate:.2f}x")
+        logger.debug(f"Playback rate set to {rate:.2f}x")
     
 
     def getPlaybackRate(self) -> float:
@@ -308,7 +309,7 @@ class MediaPlayerController(QObject):
             enabled: True to enable looping, False to disable
         """
         self.state.looping = enabled
-        self.log.debug(f"Looping {'enabled' if enabled else 'disabled'}")
+        logger.debug(f"Looping {'enabled' if enabled else 'disabled'}")
     
 
     def isLooping(self) -> bool:
@@ -371,9 +372,9 @@ class MediaPlayerController(QObject):
         """
         try:
             video_widget.connectToMediaPlayer(self.player)
-            self.log.debug("Video widget connected")
+            logger.debug("Video widget connected")
         except Exception as e:
-            self.log.error(f"Failed to connect video widget: {e}")
+            logger.error(f"Failed to connect video widget: {e}")
     
 
     @Slot(int)
@@ -399,12 +400,12 @@ class MediaPlayerController(QObject):
     def _onDurationChanged(self, duration_ms: int) -> None:
         """Handle media duration changes"""
         self.media_duration = duration_ms / 1000.0
-        self.log.info(f"Media duration: {self.media_duration:.2f}s")
+        logger.debug(f"Media duration: {self.media_duration:.2f}s")
         self.media_duration_changed.emit(self.media_duration)
     
     
     def cleanup(self) -> None:
         """Clean up resources before destruction"""
-        self.log.debug("Cleaning up MediaPlayerController")
+        logger.debug("Cleaning up MediaPlayerController")
         self.stop()
         self.unloadMedia()

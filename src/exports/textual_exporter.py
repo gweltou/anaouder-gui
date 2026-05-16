@@ -22,7 +22,6 @@ import os
 import re
 import srt
 import datetime, pytz
-import logging
 from xml.dom import minidom
 
 from PySide6.QtWidgets import (
@@ -40,8 +39,6 @@ from src.ui.icons import icons
 from src.version import __version__
 
 
-
-log = logging.getLogger(__name__)
 
 
 
@@ -85,16 +82,13 @@ def export_to_text_format(
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(data)
         
-        log.info(f"File saved to {file_path}")
         logger.message(QObject.tr("Exported '{path}'").format(path=os.path.basename(file_path)))
     except IOError as e:
         error_msg = f"File Error: {e.strerror}"
-        log.error(error_msg)
-        logger.error_message(error_msg)
+        logger.error(error_msg)
     except Exception as e:
         error_msg = QObject.tr("Couldn't export file: {error}").format(error=e)
-        log.error(error_msg)
-        logger.error_message(error_msg)
+        logger.error(error_msg)
 
 
 

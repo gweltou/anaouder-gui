@@ -17,23 +17,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-import logging
 from typing import List, Tuple
 from numpy import ndarray
 
 from ostilhou.audio.audio_numpy import split_to_segments
 
+from PySide6.QtCore import QObject
+
 from src.settings import WAVEFORM_SAMPLERATE
+from src.services.logger import logger
 
-
-log = logging.getLogger(__name__)
 
 
 def auto_segment(samples: ndarray, start_frame: int, end_frame: int) -> List[Tuple[float, float]]:
     SEGMENTS_MAXIMUM_LENGTH = 10 # Seconds
     RATIO_THRESHOLD = 0.05
 
-    log.info("Finding segments...")
+    logger.message("Finding segments...")
 
     segments = split_to_segments(
         samples[start_frame:end_frame],
@@ -48,6 +48,7 @@ def auto_segment(samples: ndarray, start_frame: int, end_frame: int) -> List[Tup
         for start, end in segments
     ]
 
-    log.debug("Segments found:", segments)
+    logger.message(QObject.tr("{n} segments found").format(n=len(segments)))
+    logger.debug(str(segments))
 
     return segments

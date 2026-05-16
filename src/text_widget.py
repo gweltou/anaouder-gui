@@ -19,7 +19,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from typing import List, Optional, Tuple
 from enum import Enum
-import logging
 
 from PySide6.QtWidgets import (
     QApplication, QMenu, QTextEdit, QWidget
@@ -60,10 +59,7 @@ from src.utils import (
     yellow,
 )
 from src.settings import app_settings, SUBTITLES_MARGIN_SIZE
-
-
-
-log = logging.getLogger(__name__)
+from src.services.logger import logger
 
 
 
@@ -159,7 +155,7 @@ class TextEditWidget(QTextEdit):
     def setCursorState(self, cursor_state):
         prev_pos = cursor_state["position"]
         prev_anchor = cursor_state["anchor"]
-        log.debug(f"setCursorState {cursor_state=}")
+        logger.debug(f"setCursorState {cursor_state=}")
 
         cursor = self.textCursor()
         cursor.setPosition(prev_anchor)
@@ -171,7 +167,7 @@ class TextEditWidget(QTextEdit):
             offset = prev_pos - prev_anchor
             cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, offset)
         
-        log.debug(f"new cursor {cursor.position()=} {cursor.anchor()=}")
+        logger.debug(f"new cursor {cursor.position()=} {cursor.anchor()=}")
         self.setTextCursor(cursor)
 
 
@@ -211,7 +207,7 @@ class TextEditWidget(QTextEdit):
 
     def insertBlock(self, text: str, data: dict | None, pos: int) -> QTextBlock:
         """Insert a block, with user data, at a given position"""
-        log.debug(f"text_widget.insertBlock({text=}, {data=}, {pos=})")
+        logger.debug(f"text_widget.insertBlock({text=}, {data=}, {pos=})")
 
         cursor = self.textCursor()
         cursor.setPosition(pos)
@@ -251,7 +247,7 @@ class TextEditWidget(QTextEdit):
         
         This action won't be added to the undo stack.
         """
-        log.debug(f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=})")
+        logger.debug(f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=})")
 
         segment = self.document_controller.getSegment(segment_id)
         if segment is None:
@@ -339,7 +335,7 @@ class TextEditWidget(QTextEdit):
 
     def deleteSelectedText(self, cursor: QTextCursor):
         """Delete a selected portion of text, using an undoable command"""
-        log.debug(f"deleteSelectedText(cursor)")
+        logger.debug(f"deleteSelectedText(cursor)")
         pos = cursor.selectionEnd()
         start_block = self.document().findBlock(cursor.selectionStart())
         end_block = self.document().findBlock(cursor.selectionEnd())
@@ -535,7 +531,7 @@ class TextEditWidget(QTextEdit):
         Arguments:
             scroll_text (boolean): scroll the text widget to the text cursor
         """
-        log.debug(f"Highlight Utterance {segment_id=}")
+        logger.debug(f"Highlight Utterance {segment_id=}")
         was_blocked = self.document().blockSignals(True)
 
         # Reset previously selected utterance
@@ -559,7 +555,7 @@ class TextEditWidget(QTextEdit):
     
 
     def insertNewline(self) -> None:
-        log.debug("insertNewline()")
+        logger.debug("insertNewline()")
 
         cursor = self.textCursor()
         block = cursor.block()
@@ -647,7 +643,7 @@ class TextEditWidget(QTextEdit):
                 i += 1
             return i
         
-        log.debug(f"Set text formatting to {format}")
+        logger.debug(f"Set text formatting to {format}")
 
         cursor = self.textCursor()
 
@@ -739,7 +735,7 @@ class TextEditWidget(QTextEdit):
 
     def cut(self):
         cursor = self.textCursor()
-        log.debug(f"cut() {cursor.position()=} {cursor.anchor()=}")
+        logger.debug(f"cut() {cursor.position()=} {cursor.anchor()=}")
         if cursor.hasSelection():
             selected_text = cursor.selectedText()
             clipboard = QApplication.clipboard()
@@ -754,13 +750,13 @@ class TextEditWidget(QTextEdit):
         i.e. to modify what QTextEdit can paste and how it is being pasted,
         reimplement the virtual canInsertFromMimeData() and insertFromMimeData() functions.
         """
-        log.debug("paste()")
+        logger.debug("paste()")
         clipboard = QApplication.clipboard()
         # log.info(f"paste {clipboard.mimeData()}")
         cursor = self.textCursor()
         pos = cursor.position()
         # print(clipboard.mimeData())
-        log.debug(f"{clipboard.text()=}")
+        logger.debug(f"{clipboard.text()=}")
         self.undo_stack.beginMacro("Replace text")
         if cursor.hasSelection():
             pos = cursor.selectionStart()
@@ -835,7 +831,7 @@ class TextEditWidget(QTextEdit):
         """Get the list of aligned utterances under the text selection
         This signal can be blocked with the `QTextEdit.blockSignals` method
         """
-        log.debug(f"onCursorChanged")
+        logger.debug(f"onCursorChanged")
 
         cursor = self.textCursor()
         self.cursor_pos = cursor.position()
@@ -1313,7 +1309,7 @@ class TextEditWidget(QTextEdit):
             
             elif block.previous().isValid():
                 # Join with previous unaligned block
-                log.debug("Join with previous unaligned block")
+                logger.debug("Join with previous unaligned block")
                 prev_block = block.previous()
                 self.undo_stack.beginMacro("join with previous sentence")
                 # Insert the previous block's text at the beggining of this block

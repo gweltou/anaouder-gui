@@ -17,7 +17,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 from typing import List, Tuple, Dict, Optional, Iterator
-import logging
 from pathlib import Path
 from copy import deepcopy
 
@@ -58,8 +57,8 @@ from src.services.logger import logger
 
 
 class DocumentController(QObject):
-    message = Signal(str)
     refresh_segment_info = Signal(int)
+    
 
     def __init__(self, parent: QObject|None = None) -> None:
         super().__init__(parent)
@@ -722,11 +721,9 @@ class DocumentController(QObject):
                     left_seg[0] = seg_start
                     right_seg[1] = seg_end
                 except SmartSplitError as e:
-                    logger.warning(e)
-                    self.message.emit(app_strings.TR_CANT_SMART_SPLIT + f": {e}")
+                    logger.warning(app_strings.TR_CANT_SMART_SPLIT + f": {e}", show_status=True)
                 except Exception as e:
-                    logger.warning(e)
-                    self.message.emit(app_strings.TR_CANT_SMART_SPLIT + f": {e}")
+                    logger.error(app_strings.TR_CANT_SMART_SPLIT + f": {e}")
 
         if not left_seg or not right_seg:
             # Revert to naive splitting method
@@ -771,11 +768,10 @@ class DocumentController(QObject):
                 tokens_range = cached_transcription[i:j]
 
                 try:
-                    logger.debug("smart splitting")
+                    logger.debug("Smart splitting")
                     left_text, right_text = smart_split_time(text, timepos, tokens_range)
                 except Exception as e:
-                    self.message.emit(app_strings.TR_CANT_SMART_SPLIT)
-                    logger.error(f"Could not smart split: {e}")
+                    logger.error(app_strings.TR_CANT_SMART_SPLIT + f": {e}")
 
         if left_text is None or right_text is None:
             # Add en empty sentence after
@@ -938,7 +934,7 @@ class DocumentController(QObject):
                 self.refresh_segment_info.emit(-1)
             self.undo_stack.push(DeleteUtterancesCommand(self, self.text_widget, self.waveform_widget, segment_ids))
         else:
-            self.message.emit(self.tr("Select one or more utterances first"))
+            logger.message(self.tr("Select one or more utterances first"))
 
 
     def deleteSegments(self, segments_id: List[SegmentId]) -> None:
