@@ -199,30 +199,79 @@ def prep_sentence(sentence: str, remove_spaces=True) -> str:
     return sentence
 
 
-def _print_matrix(matrix):
-    # 2D matrix
-    for row in matrix:
-        r = [ f"{val:.2f}" for val in row ]
-        print(f"[{' '.join(r)}]")
 
-
-def print_alignment(alignment: List) -> None:
-    top_line = []
-    bottom_line = []
-    for gt_word, hyp in alignment:
-        gt_word = gt_word if gt_word else '*'
-        hyp = hyp[0] if hyp else '*'
-        max_len = max(len(gt_word), len(hyp))
-        top_line.append(gt_word.ljust(max_len))
-        bottom_line.append(hyp.ljust(max_len))
+def align_text_with_vosk_tokens(text: str, vosk_tokens: list, cancel_check=None) -> list:
+    """
+    Args:
+        text: ground truth text
+        vosk_tokens: list of tuples, where each tuple represents a single token
+            with the format (start_time, end_time, word, confidence, language)
     
-    print("--------")
-    print(' '.join(top_line))
-    print(' '.join(bottom_line))
+    Returns:
+        list of tuple, where each tuple represent an alignment candidate
+            with the format (ground_truth_word, (hyp_word, start, end))
+    """
+    # Simplify text representation
+    gt_words = prep_sentence(text, remove_spaces=False).split()
+
+    hyp_words = [ (prepTextForAlignment(t[2]), t[0], t[1]) for t in vosk_tokens]
+
+    n, m = len(gt_words), len(hyp_words)
+    dp = [[float('inf')] * (m + 1) for _ in range(n + 1)]
+    dp[0][0] = 0
+
+    del_cost = 2.0
+    ins_cost = 1.0
+    
+    # Fill the matrix using Levenshtein distance
+    for i in range(n + 1):
+        if cancel_check and cancel_check():
+            return []
+    
+        for j in range(m + 1):
+            if i > 0 and j > 0:
+                if gt_words[i-1] == hyp_words[j-1][0]:
+                    cost = 0 
+                else:
+                    cost = jiwer.cer(gt_words[i-1], hyp_words[j-1][0])
+                dp[i][j] = min(dp[i][j], dp[i-1][j-1] + cost)
+            if i > 0:
+                dp[i][j] = min(dp[i][j], dp[i-1][j] + del_cost)  # deletion
+            if j > 0:
+                dp[i][j] = min(dp[i][j], dp[i][j-1] + ins_cost)  # insertion
+    # _print_matrix(dp)
+
+    if cancel_check and cancel_check():
+        return []
+    
+    # Backtrack to find alignment
+    alignment = []
+    i, j = n, m
+    while i > 0 or j > 0:
+        if cancel_check and cancel_check():
+            return []
+    
+        if i > 0 and j > 0:  # Add bounds check
+            sub_cost = jiwer.cer(gt_words[i-1], hyp_words[j-1][0])
+            if dp[i][j] == dp[i-1][j-1] + sub_cost:
+                alignment.append((gt_words[i-1], hyp_words[j-1]))
+                i, j = i-1, j-1
+                continue
+    
+        if i > 0 and dp[i][j] == dp[i-1][j] + del_cost:
+            alignment.append((gt_words[i-1], None))
+            i -= 1
+        elif j > 0:  # Changed from else to elif
+            alignment.append((None, hyp_words[j-1]))
+            j -= 1
+    
+    return list(reversed(alignment))
+
 
 
 class TextAlignerThread(QThread):
     finished = Signal(list)
+
 
     def __init__(self, blocks: List[QTextBlock], tokens: list, parent=None):
         super().__init__(parent)
@@ -295,77 +344,8 @@ class TextAlignerThread(QThread):
             logger.error(f"Alignment error: {e}")
 
 
-def align_text_with_vosk_tokens(text: str, vosk_tokens: list, cancel_check=None) -> list:
-    """
-    Args:
-        text: ground truth text
-        vosk_tokens: list of tuples, where each tuple represents a single token
-            with the format (start_time, end_time, word, confidence, language)
-    
-    Returns:
-        list of tuple, where each tuple represent an alignment candidate
-            with the format (ground_truth_word, (hyp_word, start, end))
-    """
-    # Simplify text representation
-    gt_words = prep_sentence(text, remove_spaces=False).split()
-
-    hyp_words = [ (prepTextForAlignment(t[2]), t[0], t[1]) for t in vosk_tokens]
-
-    n, m = len(gt_words), len(hyp_words)
-    dp = [[float('inf')] * (m + 1) for _ in range(n + 1)]
-    dp[0][0] = 0
-
-    del_cost = 2.0
-    ins_cost = 1.0
-    
-    # Fill the matrix using Levenshtein distance
-    for i in range(n + 1):
-        if cancel_check and cancel_check():
-            return []
-    
-        for j in range(m + 1):
-            if i > 0 and j > 0:
-                if gt_words[i-1] == hyp_words[j-1][0]:
-                    cost = 0 
-                else:
-                    cost = jiwer.cer(gt_words[i-1], hyp_words[j-1][0])
-                dp[i][j] = min(dp[i][j], dp[i-1][j-1] + cost)
-            if i > 0:
-                dp[i][j] = min(dp[i][j], dp[i-1][j] + del_cost)  # deletion
-            if j > 0:
-                dp[i][j] = min(dp[i][j], dp[i][j-1] + ins_cost)  # insertion
-    # _print_matrix(dp)
-
-    if cancel_check and cancel_check():
-        return []
-    
-    # Backtrack to find alignment
-    alignment = []
-    i, j = n, m
-    while i > 0 or j > 0:
-        if cancel_check and cancel_check():
-            return []
-    
-        if i > 0 and j > 0:  # Add bounds check
-            sub_cost = jiwer.cer(gt_words[i-1], hyp_words[j-1][0])
-            if dp[i][j] == dp[i-1][j-1] + sub_cost:
-                alignment.append((gt_words[i-1], hyp_words[j-1]))
-                i, j = i-1, j-1
-                continue
-    
-        if i > 0 and dp[i][j] == dp[i-1][j] + del_cost:
-            alignment.append((gt_words[i-1], None))
-            i -= 1
-        elif j > 0:  # Changed from else to elif
-            alignment.append((None, hyp_words[j-1]))
-            j -= 1
-    
-    return list(reversed(alignment))
-
-
 
 class TextAligner(QObject):
-    error_msg = Signal(str)
 
     def __init__(
             self,
@@ -475,3 +455,27 @@ class TextAligner(QObject):
 
         # Show loading dialog
         self.loading_dialog.exec()
+
+
+
+
+def _print_matrix(matrix):
+    # 2D matrix
+    for row in matrix:
+        r = [ f"{val:.2f}" for val in row ]
+        print(f"[{' '.join(r)}]")
+
+
+def print_alignment(alignment: List) -> None:
+    top_line = []
+    bottom_line = []
+    for gt_word, hyp in alignment:
+        gt_word = gt_word if gt_word else '*'
+        hyp = hyp[0] if hyp else '*'
+        max_len = max(len(gt_word), len(hyp))
+        top_line.append(gt_word.ljust(max_len))
+        bottom_line.append(hyp.ljust(max_len))
+    
+    print("--------")
+    print(' '.join(top_line))
+    print(' '.join(bottom_line))

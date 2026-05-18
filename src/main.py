@@ -364,7 +364,6 @@ class MainWindow(QMainWindow):
 
         # Aligner
         self.action.request_auto_align.connect(self.aligner.autoAlign)
-        self.aligner.error_msg.connect(self.setErrorMessage)
 
         # Text widgets
         self.text_widget.auto_transcribe.connect(self.action.transcribe.trigger)

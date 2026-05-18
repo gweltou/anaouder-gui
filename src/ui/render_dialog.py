@@ -16,10 +16,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import logging
-from pathlib import Path
 
-from tqdm import tqdm
+from typing import List
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -30,15 +29,16 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QImage, QPixmap
 
-from src.services.caption_renderer import CaptionRenderer
+from src.ui.progess_dialog import ProgressDialog
+from src.services.caption_renderer import (
+    CaptionRenderer, RendererWorker, VideoBurnerWorker
+)
+from src.services.task import TaskWorker, TaskQueue
 from src.document_controller import DocumentController
 from src.utils import find_system_fonts
 from src.settings import app_settings
 from src.cache_system import cache
-
-
-
-log = logging.getLogger(__name__)
+from src.services.logger import logger
 
 
 
@@ -49,9 +49,6 @@ class RenderCaptionsDialog(QDialog):
             parent,
             document_controller: DocumentController,
             output_dir: Path
-            # text_widget: TextEditWidget,
-            # fps: float,
-            # undo_stack: QUndoStack
         ) -> None:
         super().__init__(parent)
 
@@ -59,11 +56,10 @@ class RenderCaptionsDialog(QDialog):
         self.output_dir = output_dir
 
         self.renderer = CaptionRenderer(document_controller)
-        print(self.renderer.fps)
+        self.loading_dialog: ProgressDialog | None = None
+        self._thread: RendererWorker | None = None
+        self._queue: TaskQueue | None = None
 
-        # self.text_widget = text_widget
-        # self.undo_stack = undo_stack
-        # self.fps = fps
         self.font_names = [self.renderer.fonts[k][0] for k in sorted(self.renderer.fonts.keys())]
 
         self.example_text = "Disoñjal deoc'h"
@@ -123,6 +119,18 @@ class RenderCaptionsDialog(QDialog):
 
         # ----------------
 
+        self.output_combo = QComboBox(self)
+        self.output_combo.addItems(
+            [
+                self.tr("Render frames"),
+                self.tr("Render frames and burn video")
+            ]
+        )
+
+        layout.addWidget(self.output_combo)
+
+        # ----------------
+
         layout.addStretch()
 
         # OK / Cancel
@@ -135,8 +143,6 @@ class RenderCaptionsDialog(QDialog):
 
 
     def accept(self) -> None:
-        super().accept()
-
         self.renderer.set_output_dir(self.output_dir / "renders")
         self.renderer.set_properties(
             # font = self.font_names[self.fonts_combo.currentIndex()],
@@ -152,12 +158,12 @@ class RenderCaptionsDialog(QDialog):
         )
         #self.renderer.set_background_images("/home/gweltaz/Projets/art generatif/processing/karaokan1/renders/p_frame_%05d.png")
         
-        self.render_all()
+        self.render()
 
     
     def fontChanged(self) -> None:
         font_name = self.font_names[self.fonts_combo.currentIndex()].lower()
-        log.info(f"Font changed to {self.renderer.fonts[font_name]}")
+        logger.debug(f"Font changed to {self.renderer.fonts[font_name]}")
         self.renderer.set_properties(
             font = font_name
         )
@@ -180,40 +186,99 @@ class RenderCaptionsDialog(QDialog):
 
     def get_parameters(self) -> dict:
         return {}
-        # return {
-        #     "apply_to_all": self.all_radio_button.isChecked(),
-        #     "apply_subtitle_rules": self.subtitle_rules_checkbox.isChecked(),
-        #     "remove_verbal_fillers": self.remove_fillers_checkbox.isChecked(),
-        #     "convert_quotation_marks": self.quotation_mark_checkbox.isChecked(),
-        #     "convert_apostrophes": self.apostrophe_checkbox.isChecked(),
-        #     "apostrophe_type": "fr" if self.fr_apostrophe_radiobtn.isChecked() else "en"
-        # }
     
 
     def set_parameters(self, params: dict):
         pass
-        # self.all_radio_button.setChecked(params.get("apply_to_all", False))
-        # self.subtitle_rules_checkbox.setChecked(params.get("apply_subtitle_rules", False))
-        # self.remove_fillers_checkbox.setChecked(params.get("remove_verbal_fillers", False))
-        # self.quotation_mark_checkbox.setChecked(params.get("convert_quotation_marks", False))
-        # self.apostrophe_checkbox.setChecked(params.get("convert_apostrophes", False))
-        # apostrophe_type = params.get("apostrophe_type", 'fr')
-        # if apostrophe_type == 'fr':
-        #     self.fr_apostrophe_radiobtn.setChecked(True)
-        # else:
-        #     self.en_apostrophe_radiobtn.setChecked(True)
 
 
-    def render_all(self) -> None:
-        # Calculate total number of frames
-        if self.document_controller.media_path:
-            media_metadata = cache.get_media_metadata(self.document_controller.media_path)
-            duration = media_metadata.get("duration", 0.0)
-        else:
-            duration = self.document_controller.getSortedSegments()[-1][1][1]
-        n_frames = int(duration * self.renderer.fps)
+    def _on_operation_cancelled(self) -> None:
+        # Called if the render operation was cancelled
+        # Dialog stays open with disabled button until stopped signal arrives
+        if self._thread is not None and self._thread.isRunning():
+            self._thread.stop()
 
-        for frame_i in tqdm(range(n_frames)):
-            self.renderer.render_frame(frame_i)
+
+    def _on_operation_completed(self) -> None:
+        # Called after the operation is carried successfuly
+        logger.message(self.tr("Frames rendered successfuly"))
+        self._close_loading_dialog()
+        self.close()
         
-        print("done")
+    
+    def _on_operation_stopped(self) -> None:
+        self._close_loading_dialog()
+    
+
+    def _close_loading_dialog(self):
+        # Clean up thread
+        if self._thread is not None:
+            self._thread.wait()
+            self._thread.deleteLater()
+            self._thread = None
+
+        # Close loading dialog
+        if self.loading_dialog is not None:
+            self.loading_dialog.close()
+    
+
+    def _on_task_started(self, index: int, total: int, description: str):
+        if self.loading_dialog is not None:
+            message = description + "..."
+            if total > 1:
+                message = f"[{index + 1}/{total}]\t {message}"
+            self.loading_dialog.setMessage(message)
+
+
+    def render(self) -> None:
+        """
+        Dependecies:
+            media_path
+            progress_bar
+            document_controller
+        """
+        logger.message("Rendering frames")
+
+        media_path = self.document_controller.media_path
+
+        if media_path is None:
+            logger.error("No media file detected")
+            return
+    
+        tasks: List[TaskWorker] = [
+            RendererWorker(self, self.renderer),
+        ]
+
+        if self.output_combo.currentIndex() == 1:
+            # Burn to video
+            output_path = media_path.parent / (media_path.stem + "_burn" + media_path.suffix) 
+            tasks.append(
+                VideoBurnerWorker(self, self.renderer, output_path)
+            )
+
+        self._queue = TaskQueue(tasks, parent=self)
+
+        self.loading_dialog = ProgressDialog(self)
+        self.loading_dialog.setWindowFlags(
+        self.loading_dialog.windowFlags() | 
+            Qt.WindowType.WindowStaysOnTopHint | 
+            Qt.WindowType.Tool  # 'Tool' windows often layer better on Mac
+        )
+        self.loading_dialog.setMessage(self.tr("Rendering frames") + '...')
+        self.loading_dialog.progress_bar.setRange(0, 100)
+
+        self._queue.progress_pc.connect(self.loading_dialog.setValue)
+        self._queue.task_started.connect(self._on_task_started)
+
+        self._queue.all_completed.connect(self._on_operation_completed)
+        self._queue.all_stopped.connect(self._on_operation_stopped)
+        self._queue.any_failed.connect(self._on_operation_stopped)
+
+        self.loading_dialog.cancelled.connect(self._queue.stop)
+        # self.loading_dialog.cancelled.connect(self._on_operation_cancelled)
+
+        # Start queue
+        self._queue.start()
+
+        # Show loading dialog
+        self.loading_dialog.exec()

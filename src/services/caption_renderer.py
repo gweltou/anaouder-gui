@@ -2,16 +2,12 @@
 
 from typing import List, Tuple, Dict
 from pathlib import Path
-import logging
 import subprocess
 import re
 
 from PIL import Image, ImageDraw, ImageFont
-from PySide6.QtCore import (
-    Signal,
-    QObject,
-    QThread,
-)
+
+from PySide6.QtCore import QThread
 
 from ostilhou.asr.dataset import MetadataParser
 
@@ -19,12 +15,11 @@ from src.interfaces import SegmentId, Segment
 from src.cache_system import cache
 from src.text_widget import LINE_BREAK
 from src.document_controller import DocumentController
-from src.aligner import align_text_with_vosk_tokens, print_alignment
+from src.aligner import align_text_with_vosk_tokens
 from src.utils import get_audiofile_info, find_system_fonts
+from src.services.task import TaskWorker
 from src.services.logger import logger
 
-
-log = logging.getLogger(__name__)
 
 
 class CaptionRenderer:
@@ -41,8 +36,10 @@ class CaptionRenderer:
     DEFAULT_PROGRESS = "bg"
 
 
-    def __init__(self, document: DocumentController | None = None) -> None:
-        self.document: DocumentController
+    def __init__(self, document_controller: DocumentController) -> None:
+
+        self.document_controller: DocumentController
+
         self.fps: float
         self.segments = []
         self.frame_size: Tuple[int, int]
@@ -75,11 +72,10 @@ class CaptionRenderer:
                 "fade-in", "fade-out",
                 "x-offset", "y-offset"
             ):
-            self.metadata_parser.add_param(param_name)
-
-        if document:
-            self._set_document(document)
+            self.metadata_parser.add_param(param_name)            
     
+        self._set_document(document_controller)
+        
 
     def set_output_dir(self, dir: Path) -> None:
         self.output_dir = dir
@@ -125,9 +121,9 @@ class CaptionRenderer:
         logger.debug(f"Renderer properties set {self.global_properties}")
     
 
-    def _set_document(self, document: DocumentController) -> None:
-        self.document = document
-        media_path = document.media_path
+    def _set_document(self, document_controller: DocumentController) -> None:
+        self.document_controller = document_controller
+        media_path = document_controller.media_path
         # assert media_path is not None
 
         # Getting media fps
@@ -148,11 +144,11 @@ class CaptionRenderer:
         self.empty_frame = Image.new("RGBA", self.frame_size, self.background_color)
 
         # Read and store properties for every text block in document        
-        for block in document.getAllBlocks():
+        for block in document_controller.getAllBlocks():
             data, _ = self.metadata_parser.parse_sentence(block.text())
 
-            segment_id = document.getBlockId(block)
-            segment = document.getSegment(segment_id)
+            segment_id = document_controller.getBlockId(block)
+            segment = document_controller.getSegment(segment_id)
 
             if not segment:
                 continue
@@ -168,7 +164,7 @@ class CaptionRenderer:
             properties["segment"] = segment
 
             # Alignment data
-            auto_transcription = self.document.getTranscriptionForSegment(segment[0], segment[1])
+            auto_transcription = self.document_controller.getTranscriptionForSegment(segment[0], segment[1])
             auto_transcription = [ t[0:3] for t in auto_transcription ]
             
             alignment = align_text_with_vosk_tokens(text, auto_transcription)
@@ -197,13 +193,13 @@ class CaptionRenderer:
             glob_pattern = re.sub(pattern, glob_replacement, filepath_pattern)
 
             glob_pattern = filepath_pattern.replace("%05d", "[0-9]" * 5)
-            p = self.document.document_path.parent if self.document.document_path else Path()
+            p = self.document_controller.document_path.parent if self.document_controller.document_path else Path()
             p = p.resolve() / Path(glob_pattern)
 
             files = sorted(p.parent.glob(p.name))
             self.background_images = list(files)
         else:
-            img_path = self.document.document_path.parent if self.document.document_path else Path()
+            img_path = self.document_controller.document_path.parent if self.document_controller.document_path else Path()
             img_path = img_path.resolve() / Path(filepath_pattern)
             print(f"{img_path=}")
             self.background_images = [img_path.resolve()]
@@ -242,7 +238,7 @@ class CaptionRenderer:
                 self.set_background_color(bg_color)
                 self.empty_frame = Image.new("RGBA", self.frame_size, self.background_color)
 
-        return self.empty_frame
+        return self.empty_frame.copy()
        
 
     def render_frame(self, frame_number: int) -> None:
@@ -254,12 +250,12 @@ class CaptionRenderer:
 
         time_s = frame_number / self.fps
         time_offsets = self._get_time_offsets()
-        segment_ids = self.document.getSegmentsAtTimeOffsets(time_s, time_offsets)
+        segment_ids = self.document_controller.getSegmentsAtTimeOffsets(time_s, time_offsets)
 
         bg_img = self.get_background_image(frame_number, segment_ids)
         
         if not segment_ids:
-            # No subtitles to render
+            # No subtitles to render, copy background image
             bg_img.save(str(save_path))
             return
         
@@ -273,7 +269,6 @@ class CaptionRenderer:
             )
             ascent, descent = font.getmetrics()
             font_height = ascent + descent
-            print(font, font_height)
 
             segment = properties["segment"]
             text = properties["text"]
@@ -315,7 +310,7 @@ class CaptionRenderer:
                     top = (bg_img.height // 2)
                 case _:
                     # Defaults to bottom
-                    logger.warning(f"bad argument: {properties['position']}")
+                    logger.warning(f"Bad argument: {properties['position']}")
                     top = bg_img.height - text_box_height
 
             if "y-offset" in properties:
@@ -612,74 +607,169 @@ class CaptionRenderer:
         blended.paste(fg_img, (0, 0))
 
         return (blended, bbox, textlen)
-
-
-class VideoBurningThread(QThread):
-    finished = Signal(list)
-    error = Signal(str)
-
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.bg_video_path = None
-        self.output_path = None
-        self.fps = 25
-
-        self._process = None
-        self._must_stop = False
     
 
-    def set_bg_video(self, media_path: str):
-        self.bg_video_path = media_path
 
+class RendererWorker(TaskWorker):
 
-    def stop(self) -> None:
-        self._must_stop = True
+    def __init__(
+            self,
+            parent,
+            renderer: CaptionRenderer,
+            ):
+        """
+        Worker thread to render caption frames
 
-        if self._process and self._process.poll() is None:
-            try:
-                self._process.terminate()
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
+        Parameters
+        ----------
+            description (str):
+                Description of the task, to be displayed in progress bar.
+        """
+        super().__init__(parent)
+        self.description = self.tr("Rendering frames")
+
+        self.renderer = renderer
+        self.last_progress_sent = 0
 
 
     def run(self):
-        QThread.currentThread().setPriority(QThread.Priority.HighPriority)
+        self.setPriority(QThread.Priority.HighPriority)
+        logger.debug("Frames renderer thread running...")
 
+        media_path = self.renderer.document_controller.media_path
+
+        # Calculate total number of frames
+        if media_path:
+            media_metadata = cache.get_media_metadata(media_path)
+            duration = media_metadata.get("duration", 0.0)
+        else:
+            duration = self.renderer.document_controller.getSortedSegments()[-1][1][1]
+        n_frames = int(duration * self.renderer.fps)
+
+        try:
+            for frame_i in range(n_frames):
+                self.renderer.render_frame(frame_i)
+
+                progress = int((frame_i / n_frames) * 100)
+                if progress != self.last_progress_sent:
+                    self.progress_pc.emit(progress)
+                    self.last_progress_sent = progress
+
+                if self._must_stop:
+                    # Stopped intentionally, don't emit finished
+                    self.stopped.emit()
+                    return
+            
+            self.progress_pc.emit(100)
+            self.completed.emit()
+        
+        except Exception as e:
+            logger.error(f"Error during rendering: {e}")
+            self.failed.emit()
+
+
+
+class VideoBurnerWorker(TaskWorker):
+
+    def __init__(
+            self,
+            parent,
+            renderer: CaptionRenderer,
+            output_path: Path
+            ):
+        super().__init__(parent)
+        self.description = self.tr("Burning captions on video")
+
+        self.output_path = str(output_path)
+
+        self.video_source_path = renderer.document_controller.media_path
+        self.frames_path = renderer.output_dir / "frame_%05d.png"
+        self.fps = renderer.fps
+
+        self.duration = 0.0
+        if self.video_source_path:
+            media_metadata = cache.get_media_metadata(self.video_source_path)
+            self.duration = media_metadata.get("duration", 0.0)
+        else:
+            self.duration = renderer.document_controller.getSortedSegments()[-1][1][1]
+
+
+    def run(self):
         """
         Create a video from frames only:
         ffmpeg -framerate 25 -i renders/frame-%05d.png -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a copy -shortest output.mp4                                                                                                          
         """
+        
+        self.setPriority(QThread.Priority.HighPriority)
+        logger.debug("Video burning thread running...")
 
         ffmpeg_cmd = [
-            'ffmpeg',
-            '-i', self.bg_video_path,
-            '-framerate', str(self.fps),
-            '-i', 'frame_%05d.png',
-            '-filter_complex', '[0:v][1:v] overlay=0:0',
-            '-c:a', 'copy',
-            '-hide_banner',
+            "ffmpeg",
+            "-y",       # confirm overwrite
+            "-i", str(self.video_source_path),
+            "-framerate", str(self.fps),
+            "-i", str(self.frames_path),
+            "-filter_complex", "[0:v][1:v] overlay=0:0",
+            "-c:a", "copy",
+            "-hide_banner",
+            "-progress", "pipe:1",  # write progress to stdout
+            "-nostats",
             self.output_path
         ]
 
         try:
-            self._must_stop = False
-            self._process = subprocess.Popen(ffmpeg_cmd)
+            logger.debug(' '.join(ffmpeg_cmd))
+
+            self._process = subprocess.Popen(
+                ffmpeg_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True
+            )
+
+            self._read_progress()
             self._process.wait()
 
             if self._must_stop:
+                self.stopped.emit()
                 return  # Stopped intentionally, don't emit finished
 
             if self._process.returncode != 0:
-                self.error.emit(f"FFmpeg exited with code {self._process.returncode}")
+                # stderr_output = self._process.stderr.read()
+                logger.error(f"FFmpeg error")
+                self.failed.emit()
                 return
             
-            self.finished.emit()
+            self.completed.emit()
         
         except Exception as e:
-            logger.error(f"Rendering error: {e}")
-            self.error.emit(str(e))
+            print("error " + str(e), flush=True)
+            logger.error(f"Video burning error: {e}")
+            self.failed.emit()
+    
+
+    def _read_progress(self) -> None:
+        last_progress = -1
+        # Use 'readline' to avoid iterator issues during process termination
+        while True:
+            if self._must_stop or not self._process:
+                break
+                
+            line = self._process.stdout.readline()
+            if not line:
+                break
+
+            if "out_time_us=" in line:
+                try:
+                    elapsed_us = int(line.split("=", 1)[1])
+                    elapsed_s = elapsed_us / 1_000_000
+                    if self.duration > 0:
+                        progress = min(int((elapsed_s / self.duration) * 100), 99)
+                        if progress != last_progress:
+                            self.progress_pc.emit(progress)
+                            last_progress = progress
+                except (ValueError, IndexError):
+                    continue
 
 
 

@@ -42,9 +42,16 @@ class ProgressDialog(QDialog):
         layout.addStretch()
         self.setLayout(layout)
     
+
+    def setValue(self, value: int) -> None:
+        self.progress_bar.setValue(value)
+    
+
     def setMessage(self, message: str) -> None:
         self.label.setText(message)
     
+    
     def on_cancel(self) -> None:
+        self.cancel_btn.setEnabled(False)
+        self.cancel_btn.setText(self.tr("Cancelling") + '…')
         self.cancelled.emit()
-        self.reject()
