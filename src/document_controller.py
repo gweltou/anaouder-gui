@@ -450,8 +450,8 @@ class DocumentController(QObject):
         position_sec: float,
         offsets: Dict[SegmentId, Tuple]
     ) -> List[SegmentId]:
-        """Return the list of IDs of all segment at a given positiont"""
-        logger.debug(f"getSegmentAtTime({position_sec=})")
+        """Return the list of IDs of all segment at a given position"""
+        logger.debug(f"getSegmentAtTimeOffsets({position_sec=})")
         segment_ids = []
         for segment_id, (start, end) in self.getSortedSegments():
             # Give precedence to the segment that starts at this timecode

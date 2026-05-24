@@ -37,7 +37,6 @@ from src.services.task import TaskWorker, TaskQueue
 from src.document_controller import DocumentController
 from src.utils import find_system_fonts
 from src.settings import app_settings
-from src.cache_system import cache
 from src.services.logger import logger
 
 
@@ -56,7 +55,7 @@ class RenderCaptionsDialog(QDialog):
         self.output_dir = output_dir
 
         self.renderer = CaptionRenderer(document_controller)
-        self.loading_dialog: ProgressDialog | None = None
+        self.progress_dialog: ProgressDialog | None = None
         self._thread: RendererWorker | None = None
         self._queue: TaskQueue | None = None
 
@@ -218,16 +217,16 @@ class RenderCaptionsDialog(QDialog):
             self._thread = None
 
         # Close loading dialog
-        if self.loading_dialog is not None:
-            self.loading_dialog.close()
+        if self.progress_dialog is not None:
+            self.progress_dialog.close()
     
 
     def _on_task_started(self, index: int, total: int, description: str):
-        if self.loading_dialog is not None:
+        if self.progress_dialog is not None:
             message = description + "..."
             if total > 1:
                 message = f"[{index + 1}/{total}]\t {message}"
-            self.loading_dialog.setMessage(message)
+            self.progress_dialog.setMessage(message)
 
 
     def render(self) -> None:
@@ -258,27 +257,22 @@ class RenderCaptionsDialog(QDialog):
 
         self._queue = TaskQueue(tasks, parent=self)
 
-        self.loading_dialog = ProgressDialog(self)
-        self.loading_dialog.setWindowFlags(
-        self.loading_dialog.windowFlags() | 
-            Qt.WindowType.WindowStaysOnTopHint | 
-            Qt.WindowType.Tool  # 'Tool' windows often layer better on Mac
-        )
-        self.loading_dialog.setMessage(self.tr("Rendering frames") + '...')
-        self.loading_dialog.progress_bar.setRange(0, 100)
+        self.progress_dialog = ProgressDialog(self)
+        self.progress_dialog.setMessage(self.tr("Rendering frames") + '...')
+        self.progress_dialog.progress_bar.setRange(0, 100)
 
-        self._queue.progress_pc.connect(self.loading_dialog.setValue)
+        self._queue.progress_pc.connect(self.progress_dialog.setValue)
         self._queue.task_started.connect(self._on_task_started)
 
         self._queue.all_completed.connect(self._on_operation_completed)
         self._queue.all_stopped.connect(self._on_operation_stopped)
         self._queue.any_failed.connect(self._on_operation_stopped)
 
-        self.loading_dialog.cancelled.connect(self._queue.stop)
+        self.progress_dialog.cancelled.connect(self._queue.stop)
         # self.loading_dialog.cancelled.connect(self._on_operation_cancelled)
 
         # Start queue
         self._queue.start()
 
         # Show loading dialog
-        self.loading_dialog.exec()
+        self.progress_dialog.exec()

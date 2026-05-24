@@ -32,7 +32,7 @@ class TaskWorker(QThread):
                 self._process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self._process.kill()
-
+        
 
     def run(self):
         raise NotImplementedError

@@ -20,7 +20,7 @@ def get_model_dictionary() -> dict:
             "type": "vosk",
             "description-fr": "",
             "url": "https://alphacephei.com/vosk/models/vosk-model-small-fr-0.22.zip",
-            "md5": "8873b1234503f6edd55f54bfff31cf3e"
+            "sha256": "cabf6180e177eb9b3a9a9d43a437bd5e549f3a7d09525e5d69a3fed787be12ad"
         }
     }
     
