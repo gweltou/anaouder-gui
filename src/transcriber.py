@@ -106,7 +106,7 @@ class RecognizerWorker(QObject):
     finished = Signal()  # Used to toggle up the transcription button
 
     # Constants
-    SAMPLE_RATE = 16000
+    SAMPLE_RATE = 16_000
 
     def __init__(self):
         """This worker should only be created once"""
