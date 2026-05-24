@@ -13,11 +13,14 @@ class ProgressDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Please wait"))
+        self.setWindowFlags(
+            self.windowFlags()
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool  # 'Tool' windows often layer better on Mac
+            | Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint  # Remove close button
+        )
         self.setModal(True)
         self.setFixedSize(400, 120)
-        
-        # Remove window close button
-        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint)
         
         # Setup UI
         layout = QVBoxLayout()
