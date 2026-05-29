@@ -17,5 +17,6 @@ dependencies = [
     "srt",
     "pillow",
     "pyinstaller",
-    "ostilhou @ git+https://github.com/gweltou/ostilhou"
+    "ostilhou @ git+https://github.com/gweltou/ostilhou",
+    "striprtf",
 ]
