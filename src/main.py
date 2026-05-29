@@ -1567,6 +1567,7 @@ class MainWindow(QMainWindow):
 
         if not "duration" in media_metadata or not media_metadata["duration"]:
             # media_duration_s = float(audiofile_info["duration"])
+            media_duration_s = 0.0
             if "duration" in audiofile_info:
                 media_duration_s = float(audiofile_info["duration"])
             elif "tags" in audiofile_info:

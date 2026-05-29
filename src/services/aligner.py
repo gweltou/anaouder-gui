@@ -383,7 +383,9 @@ class TextAligner(QObject):
         # Check if there is a cached transcription for this media
         # or if we need to transcribe the whole file first
         media_metadata = cache.get_media_metadata(media_path)
-        is_missing_transcription = not media_metadata.get("transcription_completed", False):
+        is_missing_transcription = not media_metadata.get(
+            "transcription_completed", False
+        )
 
         alignment_args = self.document_controller.getSelectedBlocksAndTimeRange()
 
