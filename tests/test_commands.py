@@ -1,32 +1,30 @@
-from copy import deepcopy
 import random
-from typing import List
 from pathlib import Path
-import logging
+
 import pytest
-
+from PySide6.QtGui import QTextCursor, QUndoCommand
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QUndoCommand, QTextCursor
 
-from src.main import (
-    MainWindow,
-    CreateNewEmptyUtteranceCommand,
-    AlignWithSelectionCommand
-)
-from src.waveform_widget import (
-    ResizeSegmentCommand, Handle,
-)
 from src.commands import (
     AddSegmentCommand,
-    InsertTextCommand,
-    DeleteTextCommand, DeleteUtterancesCommand, DeleteSegmentsCommand,
-    JoinUtterancesCommand,
+    DeleteSegmentsCommand,
+    DeleteTextCommand,
+    DeleteUtterancesCommand,
     InsertBlockCommand,
-    ReplaceTextCommand
+    InsertTextCommand,
+    JoinUtterancesCommand,
+    ReplaceTextCommand,
 )
-from src.ui.icons import loadIcons
+from src.main import (
+    AlignWithSelectionCommand,
+    CreateNewEmptyUtteranceCommand,
+    MainWindow,
+)
 from src.strings import app_strings
-
+from src.ui.icons import loadIcons
+from src.ui.waveform.waveform_widget import (
+    ResizeSegmentCommand,
+)
 
 
 @pytest.fixture(scope="session")
@@ -35,12 +33,12 @@ def qapp():
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
-    
+
     loadIcons()
     app_strings.initialize()
-    
+
     yield app
-    
+
     # Cleanup after all tests
     app.quit()
 
@@ -57,7 +55,6 @@ def main_window(qapp):
     qapp.processEvents()  # Process pending events
 
 
-
 def load_document(main_window):
     main_window.document_controller.clear()
 
@@ -66,7 +63,7 @@ def load_document(main_window):
         ("Eil linenn.", (16.05, 21.6)),
         ("Trede linenn", (23.73, 31.2)),
         ("Pevare linenn", (32, 35)),
-        ("Pempvet linenn", (40, 41))
+        ("Pempvet linenn", (40, 41)),
     ]:
         seg_id = main_window.document_controller.addSegment(list(segment))
         main_window.text_widget.appendSentence(text, seg_id)
@@ -76,7 +73,6 @@ def load_document_2(main_window):
     main_window.document_controller.clear()
 
     main_window.onOpenFile(Path("tests/MeliMilaMalou.ali"))
-
 
 
 def undo_redo_command(main_window, command: QUndoCommand, random_cursor=False):
@@ -89,7 +85,7 @@ def undo_redo_command(main_window, command: QUndoCommand, random_cursor=False):
         doc_size = main_window.text_widget.document().lastBlock().position()
         new_pos = random.randint(0, doc_size)
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
-    
+
     main_window.undo_stack.undo()
     state3 = main_window.document_controller.getDocumentState()
     assert state3 == state1
@@ -98,7 +94,7 @@ def undo_redo_command(main_window, command: QUndoCommand, random_cursor=False):
         doc_size = main_window.text_widget.document().lastBlock().position()
         new_pos = random.randint(0, doc_size)
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
-    
+
     main_window.undo_stack.redo()
     state4 = main_window.document_controller.getDocumentState()
     assert state4 == state2
@@ -114,7 +110,7 @@ def undo_redo_function(main_window, function: callable, *args, random_cursor=Fal
         doc_size = main_window.text_widget.document().lastBlock().position()
         new_pos = random.randint(0, doc_size)
         main_window.text_widget.setCursorState({"position": new_pos, "anchor": new_pos})
-    
+
     main_window.undo_stack.undo()
     state3 = main_window.document_controller.getDocumentState()
     assert state3 == state1
@@ -134,11 +130,8 @@ def test_add_segment(main_window):
     undo_redo_command(
         main_window,
         AddSegmentCommand(
-            main_window.document_controller,
-            main_window.waveform,
-            [10, 12],
-            12
-        )
+            main_window.document_controller, main_window.waveform, [10, 12], 12
+        ),
     )
 
 
@@ -151,9 +144,10 @@ def test_create_new_utterance(main_window):
             main_window.document_controller,
             main_window.text_widget,
             main_window.waveform,
-            [10, 12], 12
+            [10, 12],
+            12,
         ),
-        random_cursor=True
+        random_cursor=True,
     )
 
 
@@ -165,9 +159,9 @@ def test_delete_utterances(main_window):
             main_window.document_controller,
             main_window.text_widget,
             main_window.waveform,
-            [2, 3, 4]
+            [2, 3, 4],
         ),
-        random_cursor=True
+        random_cursor=True,
     )
 
 
@@ -185,8 +179,8 @@ def test_join_utterances(main_window):
             main_window.document_controller,
             main_window.text_widget,
             main_window.waveform,
-            [2, 3, 4]
-        )
+            [2, 3, 4],
+        ),
     )
 
 
@@ -198,21 +192,15 @@ def test_delete_segments(main_window):
             main_window.document_controller,
             main_window.text_widget,
             main_window.waveform,
-            [2, 3, 4]
-        )
+            [2, 3, 4],
+        ),
     )
 
 
 def test_resize_segment(main_window):
     load_document(main_window)
     undo_redo_command(
-        main_window,
-        ResizeSegmentCommand(
-            main_window.document_controller,
-            2,
-            24,
-            30
-        )
+        main_window, ResizeSegmentCommand(main_window.document_controller, 2, 24, 30)
     )
 
 
@@ -232,18 +220,15 @@ def test_align_with_selection(main_window):
             main_window.document_controller,
             main_window.text_widget,
             main_window.waveform,
-            [block_id]
+            [block_id],
         )
     )
     main_window.waveform._selection = segment[:]
     undo_redo_command(
         main_window,
         AlignWithSelectionCommand(
-            main_window,
-            main_window.document_controller,
-            main_window.waveform,
-            block
-        )
+            main_window, main_window.document_controller, main_window.waveform, block
+        ),
     )
 
 
@@ -262,9 +247,9 @@ def test_insert_block_command(main_window):
             main_window.text_widget.textCursor().position(),
             text=text,
             seg_id=seg_id,
-        )
+        ),
     )
-    
+
     load_document(main_window)
     undo_redo_command(
         main_window,
@@ -274,8 +259,8 @@ def test_insert_block_command(main_window):
             main_window.text_widget.textCursor().position(),
             seg_id=seg_id,
             text=text,
-            after=True
-        )
+            after=True,
+        ),
     )
 
 
@@ -283,12 +268,7 @@ def test_insert_text_command(main_window):
     load_document(main_window)
 
     undo_redo_command(
-        main_window,
-        InsertTextCommand(
-            main_window.text_widget,
-            "hello",
-            20
-        )
+        main_window, InsertTextCommand(main_window.text_widget, "hello", 20)
     )
 
 
@@ -298,13 +278,10 @@ def test_delete_text_command(main_window):
     undo_redo_command(
         main_window,
         DeleteTextCommand(
-            main_window.text_widget,
-            20,
-            4,
-            QTextCursor.MoveOperation.Right
-        )
+            main_window.text_widget, 20, 4, QTextCursor.MoveOperation.Right
+        ),
     )
-    
+
 
 def test_delete_first_utterance(main_window):
     load_document_2(main_window)
@@ -315,11 +292,10 @@ def test_delete_first_utterance(main_window):
             main_window.document_controller,
             main_window.text_widget,
             main_window.waveform,
-            seg_ids=[0]
+            seg_ids=[0],
         ),
-        random_cursor=True
+        random_cursor=True,
     )
-
 
 
 def test_join_with_prev_nonaligned(main_window):
@@ -339,11 +315,7 @@ def test_join_with_prev_nonaligned(main_window):
 
         main_window.undo_stack.beginMacro("test_join_with_prev_nonaligned")
         main_window.undo_stack.push(
-            InsertTextCommand(
-                main_window.text_widget,
-                block.text(),
-                insert_pos
-            )
+            InsertTextCommand(main_window.text_widget, block.text(), insert_pos)
         )
 
         # Deleting this block
@@ -352,7 +324,7 @@ def test_join_with_prev_nonaligned(main_window):
                 main_window.text_widget,
                 block.position(),
                 block_len,
-                QTextCursor.MoveOperation.Right
+                QTextCursor.MoveOperation.Right,
             )
         )
         main_window.undo_stack.endMacro()
@@ -371,8 +343,8 @@ def test_join_with_next_nonaligned(main_window):
         main_window,
         DeleteTextCommand(
             main_window.text_widget,
-            cursor_pos, # We need to delete from pos-1 so that the metadata doens't get shifted
+            cursor_pos,  # We need to delete from pos-1 so that the metadata doens't get shifted
             1,
-            QTextCursor.MoveOperation.Right
-        )
+            QTextCursor.MoveOperation.Right,
+        ),
     )

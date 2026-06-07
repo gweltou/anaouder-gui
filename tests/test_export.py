@@ -1,18 +1,14 @@
 import pytest
 
-from PySide6.QtWidgets import QWidget
-
 from exports.textual_exporter import (
-    ExportDialog,
-    export,
     clean_subtitle_text,
-    format_txt,
+    format_eaf,
     format_srt,
-    format_eaf
+    format_txt,
 )
 
-
 # --- FIXTURES ---
+
 
 @pytest.fixture
 def sample_utterances():
@@ -20,7 +16,7 @@ def sample_utterances():
     return [
         ("Hello world", (0.0, 1.5)),
         ("Second sentence", (2.0, 3.5)),
-        ("<b>Bold</b> text", (4.0, 5.0))
+        ("<b>Bold</b> text", (4.0, 5.0)),
     ]
 
 
@@ -45,25 +41,25 @@ def test_clean_subtitle_text():
 def test_format_srt(sample_utterances):
     # Override the mock parser specifically for this test logic if needed
     # The global mock returns the input text as regions[0]['text']
-    
+
     result = format_srt(sample_utterances)
-    
+
     # Check basics of SRT format
     assert "1" in result  # Index
-    assert "00:00:00,000 --> 00:00:01,500" in result # Timestamp 1
+    assert "00:00:00,000 --> 00:00:01,500" in result  # Timestamp 1
     assert "Hello world" in result
-    
-    assert "3" in result # Index 3
-    assert "<b>Bold</b> text" in result # Should keep formatting tags
+
+    assert "3" in result  # Index 3
+    assert "<b>Bold</b> text" in result  # Should keep formatting tags
 
 
 def test_format_txt(sample_utterances):
     result = format_txt(sample_utterances)
-    
-    lines = result.split('\n')
+
+    lines = result.split("\n")
     assert len(lines) == 3
     assert lines[0] == "Hello world"
-    assert lines[2] == "Bold text" # format_txt strips HTML tags in your logic
+    assert lines[2] == "Bold text"  # format_txt strips HTML tags in your logic
 
 
 def test_format_eaf(sample_utterances):
@@ -71,16 +67,18 @@ def test_format_eaf(sample_utterances):
     # In the loop: `segment.append(segment)` calls append on a tuple.
     # We will Patch the function locally or Expect a crash if checking the bug,
     # but assuming the bug is fixed, here is the test:
-    
+
     # Let's patch the bug in the module dynamically or catch the error to prove logic flow
     try:
         result = format_eaf(sample_utterances, "test.wav")
     except AttributeError:
-        pytest.fail("Source code bug detected: 'tuple' object has no attribute 'append'. " 
-                    "In format_eaf, change 'segment.append' to 'segments.append'")
-        
+        pytest.fail(
+            "Source code bug detected: 'tuple' object has no attribute 'append'. "
+            "In format_eaf, change 'segment.append' to 'segments.append'"
+        )
+
     assert "ANNOTATION_DOCUMENT" in result
-    assert "TIME_SLOT_ID=\"ts1\"" in result
+    assert 'TIME_SLOT_ID="ts1"' in result
     assert "Hello world" in result
     # Check millisecond conversion (1.5s -> 1500)
-    assert 'TIME_VALUE="1500"' in result 
+    assert 'TIME_VALUE="1500"' in result

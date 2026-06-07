@@ -16,70 +16,72 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
-from typing import List, Optional, Tuple
 from enum import Enum
+from typing import List, Optional, Tuple
 
-from PySide6.QtWidgets import (
-    QApplication, QMenu, QTextEdit, QWidget
-)
-from PySide6.QtCore import (
-    Qt, Signal, Slot, QMimeData,
-    QRegularExpression,
-    QRect, QSize
-)
+from PySide6.QtCore import QMimeData, QRect, QRegularExpression, QSize, Qt, Signal, Slot
 from PySide6.QtGui import (
-    QAction, QColor, QFont, QIcon,
-    QKeyEvent, QKeySequence,
-    QTextBlock, QTextCursor,
-    QTextBlockFormat, QTextCharFormat, QFontMetricsF,
-    QPainter, QPaintEvent,
-    QClipboard, QEnterEvent, QDragMoveEvent, QDropEvent,
-    QUndoStack, QShortcut
+    QAction,
+    QClipboard,
+    QColor,
+    QDragMoveEvent,
+    QDropEvent,
+    QEnterEvent,
+    QFont,
+    QFontMetricsF,
+    QIcon,
+    QKeyEvent,
+    QKeySequence,
+    QPainter,
+    QPaintEvent,
+    QShortcut,
+    QTextBlock,
+    QTextBlockFormat,
+    QTextCharFormat,
+    QTextCursor,
+    QUndoStack,
 )
+from PySide6.QtWidgets import QApplication, QMenu, QTextEdit, QWidget
 
 from src.actions import ActionManager
 from src.commands import (
-    InsertTextCommand,
     DeleteTextCommand,
     InsertBlockCommand,
+    InsertTextCommand,
+    MoveTextCursor,
     ReplaceTextCommand,
-    MoveTextCursor
 )
-from src.interfaces import (
-    DocumentInterface,
-    SegmentId,
-    MyTextBlockUserData,
-    BlockType
-)
+from src.interfaces import BlockType, DocumentInterface, MyTextBlockUserData, SegmentId
+from src.services.logger import logger
+from src.settings import SUBTITLES_MARGIN_SIZE, app_settings
 from src.ui.text_highlighter import Highlighter
 from src.ui.theme import theme
 from src.utils import (
-    LINE_BREAK, EM_DASH, STOP_CHARS,
+    EM_DASH,
+    LINE_BREAK,
+    STOP_CHARS,
     yellow,
 )
-from src.settings import app_settings, SUBTITLES_MARGIN_SIZE
-from src.services.logger import logger
-
 
 
 class LineNumberArea(QWidget):
     """The widget that displays line numbers on the left"""
+
     def __init__(self, editor):
         super().__init__(editor)
         self.editor = editor
 
     def sizeHint(self):
-        return QSize(self.editor.line_number_area_width(), 0)
+        return QSize(self.editor._getLineNumberAreaWidth(), 0)
 
     def paintEvent(self, event):
         self.editor.lineNumberAreaPaintEvent(event)
 
 
-
 class TextEditWidget(QTextEdit):
-
-    cursor_changed_signal = Signal(list) # Utterance ids of segment under cursor or selection
+    cursor_changed_signal = Signal(
+        list
+    )  # Utterance ids of segment under cursor or selection
     join_utterances = Signal(list)
     delete_utterances = Signal(list)
     split_utterance = Signal(int, int)
@@ -87,18 +89,13 @@ class TextEditWidget(QTextEdit):
     auto_transcribe = Signal()
     request_auto_align = Signal()
 
-
     class TextFormat(Enum):
-        BOLD = 'B'
-        ITALIC = 'I'
-
+        BOLD = "B"
+        ITALIC = "I"
 
     def __init__(
-            self,
-            parent,
-            document_controller: DocumentInterface,
-            action: ActionManager
-        ):
+        self, parent, document_controller: DocumentInterface, action: ActionManager
+    ):
         super().__init__(parent)
         self.main_window = parent
         self.document_controller = document_controller
@@ -108,23 +105,25 @@ class TextEditWidget(QTextEdit):
         # Disable default undo stack to use our own instead
         self.setUndoRedoEnabled(False)
         self.undo_stack: QUndoStack = self.document_controller.undo_stack
-                
+
         # Signals
         self.cursorPositionChanged.connect(self.onCursorChanged)
 
-        # Signals to update the sidebar        
+        # Signals to update the sidebar
         self.document().blockCountChanged.connect(self.updateLineNumberAreaWidth)
         self.verticalScrollBar().valueChanged.connect(self.updateLineNumberArea)
         self.document().contentsChanged.connect(self.updateLineNumberArea)
         self.updateLineNumberAreaWidth()
 
-        #self.document().setDefaultStyleSheet()
+        # self.document().setDefaultStyleSheet()
         self.highlighter = Highlighter(self.document(), self, document_controller)
         self.highlighted_sentence_id = -1
 
         # Subtitles margin
         self._text_margin = False
-        self._margin_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
+        self._margin_size: int = app_settings.value(
+            "subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int
+        )
         self._char_width = -1
         self._margin_color = theme.colors.margin
 
@@ -132,16 +131,13 @@ class TextEditWidget(QTextEdit):
         self._click_count = 0
         self._last_click = None
 
-
-    def updateThemeColors(self):        
+    def updateThemeColors(self):
         self._margin_color = theme.colors.margin
         self.highlighter.updateThemeColors()
         self.highlighter.rehighlight()
 
-
     def clear(self):
         self.document().clear()
-    
 
     def getCursorState(self):
         cursor = self.textCursor()
@@ -150,7 +146,6 @@ class TextEditWidget(QTextEdit):
             "anchor": cursor.anchor(),
         }
         return state
-    
 
     def setCursorState(self, cursor_state):
         prev_pos = cursor_state["position"]
@@ -162,14 +157,17 @@ class TextEditWidget(QTextEdit):
 
         if prev_pos < prev_anchor:
             offset = prev_anchor - prev_pos
-            cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, offset)
+            cursor.movePosition(
+                QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, offset
+            )
         elif prev_pos > prev_anchor:
             offset = prev_pos - prev_anchor
-            cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, offset)
-        
+            cursor.movePosition(
+                QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, offset
+            )
+
         logger.debug(f"new cursor {cursor.position()=} {cursor.anchor()=}")
         self.setTextCursor(cursor)
-
 
     def isAligned(self, block: QTextBlock) -> bool:
         block_data = block.userData()
@@ -177,7 +175,6 @@ class TextEditWidget(QTextEdit):
             if block_data.data["seg_id"] in self.document_controller.segments:
                 return True
         return False
-
 
     def setSentenceText(self, text: str, segment_id: SegmentId):
         """
@@ -188,22 +185,24 @@ class TextEditWidget(QTextEdit):
             return
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
-        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock, QTextCursor.MoveMode.KeepAnchor)
+        cursor.movePosition(
+            QTextCursor.MoveOperation.StartOfBlock, QTextCursor.MoveMode.KeepAnchor
+        )
         cursor.insertText(text)
         self.document_controller.updateUtteranceDensity(segment_id)
 
-
     def appendSentence(self, text: str, segment_id: SegmentId | None) -> QTextBlock:
         """Insert new utterance at the end of the document"""
-        end_position = self.document().characterCount() - 1  # -1 because of implicit newline
+        end_position = (
+            self.document().characterCount() - 1
+        )  # -1 because of implicit newline
         new_block = self.insertBlock(
             text,
             {"seg_id": segment_id} if segment_id is not None else None,
-            end_position
+            end_position,
         )
         self.highlighter.rehighlightBlock(new_block)
         return new_block
-
 
     def insertBlock(self, text: str, data: dict | None, pos: int) -> QTextBlock:
         """Insert a block, with user data, at a given position"""
@@ -211,7 +210,7 @@ class TextEditWidget(QTextEdit):
 
         cursor = self.textCursor()
         cursor.setPosition(pos)
-        if pos > 0: # Account for the first preexisting block
+        if pos > 0:  # Account for the first preexisting block
             cursor.insertBlock()
 
         # Escape the special tokens ("<C'HOARZH>", "<LAU>"...)
@@ -223,7 +222,7 @@ class TextEditWidget(QTextEdit):
             match = matches.next()
             tag = match.captured(1)
             if tag.upper() not in ("I", "B", "BR"):
-                escaped_string += text[i:match.capturedStart()]
+                escaped_string += text[i : match.capturedStart()]
                 escaped_string += "&lt;" + tag + "&gt;"
                 i = match.capturedEnd()
         escaped_string += text[i:]
@@ -231,23 +230,19 @@ class TextEditWidget(QTextEdit):
         cursor.insertHtml(escaped_string)
         if data:
             cursor.block().setUserData(MyTextBlockUserData(data))
-        
+
         return cursor.block()
 
-
-    def insertSentenceWithId(
-            self,
-            text: str,
-            segment_id: SegmentId,
-            with_cursor=False
-            ):
+    def insertSentenceWithId(self, text: str, segment_id: SegmentId, with_cursor=False):
         """
         Create a new utterance from an existing segment id
         and insert it based on its segment's timecodes.
-        
+
         This action won't be added to the undo stack.
         """
-        logger.debug(f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=})")
+        logger.debug(
+            f"text_widget.insertSenteceWithId({text=}, {segment_id=}, {with_cursor=})"
+        )
 
         segment = self.document_controller.getSegment(segment_id)
         if segment is None:
@@ -256,7 +251,7 @@ class TextEditWidget(QTextEdit):
         doc = self.document()
 
         if not with_cursor:
-            self.document().blockSignals(True) # Prevent segment info display
+            self.document().blockSignals(True)  # Prevent segment info display
 
         cursor = None
         block = doc.firstBlock()
@@ -264,7 +259,7 @@ class TextEditWidget(QTextEdit):
             if not block.userData():
                 block = block.next()
                 continue
-            
+
             # Find corresponding block position
             user_data = block.userData().data
             if "seg_id" in user_data:
@@ -272,22 +267,26 @@ class TextEditWidget(QTextEdit):
                 if other_id not in self.document_controller.segments:
                     block = block.next()
                     continue
-                
+
                 other_start, _ = self.document_controller.segments[other_id]
                 if other_start > seg_end:
                     # Insert new utterance right before this one
                     cursor = QTextCursor(block)
                     cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                    cursor.movePosition(QTextCursor.MoveOperation.Left) # Go back one position
+                    cursor.movePosition(
+                        QTextCursor.MoveOperation.Left
+                    )  # Go back one position
                     cursor.insertBlock()
                     cursor.insertText(text)
-                    cursor.block().setUserData(MyTextBlockUserData({"seg_id": segment_id}))
+                    cursor.block().setUserData(
+                        MyTextBlockUserData({"seg_id": segment_id})
+                    )
                     self.highlighter.rehighlightBlock(cursor.block())
                     if with_cursor:
                         # cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
                         self.setTextCursor(cursor)
                     return
-            
+
             block = block.next()
 
         # Insert new utterance at the end
@@ -298,7 +297,6 @@ class TextEditWidget(QTextEdit):
 
         if cursor and with_cursor:
             self.setTextCursor(cursor)
-            
 
     def deleteSentence(self, seg_id: int) -> None:
         """
@@ -309,13 +307,13 @@ class TextEditWidget(QTextEdit):
         block = self.document_controller.getBlockById(seg_id)
         if not block:
             return
-        
+
         self.document().blockSignals(True)
 
         cursor = QTextCursor(block)
-        
+
         # Remove block
-        if block.text() == '':
+        if block.text() == "":
             cursor.deletePreviousChar()
         else:
             cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
@@ -326,12 +324,11 @@ class TextEditWidget(QTextEdit):
         new_block = cursor.block()
         if not new_block.text():
             new_block.setUserData(None)
-        
+
         self.setTextCursor(cursor)
-        
+
         self.document().blockSignals(False)
         self.highlighted_sentence_id = -1
-    
 
     def deleteSelectedText(self, cursor: QTextCursor):
         """Delete a selected portion of text, using an undoable command"""
@@ -360,14 +357,15 @@ class TextEditWidget(QTextEdit):
                     pos = block.position() + block.length() - 1
                     size = block.length()
                     self.undo_stack.push(
-                        DeleteTextCommand(self, pos, size, QTextCursor.MoveOperation.Left)
+                        DeleteTextCommand(
+                            self, pos, size, QTextCursor.MoveOperation.Left
+                        )
                     )
                 if block == start_block:
                     break
                 block = prev_block
-            
-            self.undo_stack.endMacro()
 
+            self.undo_stack.endMacro()
 
     def replaceWord(self, cursor: QTextCursor, new_word: str):
         """
@@ -380,29 +378,29 @@ class TextEditWidget(QTextEdit):
         # Find selected word's boundaries
         left_pos = pos_in_block
         right_pos = pos_in_block
-        while left_pos > 0 and block_text[left_pos-1] not in STOP_CHARS:
+        while left_pos > 0 and block_text[left_pos - 1] not in STOP_CHARS:
             left_pos -= 1
         while right_pos < len(block_text) and block_text[right_pos] not in STOP_CHARS:
             right_pos += 1
-        cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, pos_in_block - left_pos)
-        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, right_pos - left_pos)
+        cursor.movePosition(
+            QTextCursor.MoveOperation.Left,
+            QTextCursor.MoveMode.MoveAnchor,
+            pos_in_block - left_pos,
+        )
+        cursor.movePosition(
+            QTextCursor.MoveOperation.Right,
+            QTextCursor.MoveMode.KeepAnchor,
+            right_pos - left_pos,
+        )
         self.setTextCursor(cursor)
 
         new_text = block_text[:left_pos] + new_word + block_text[right_pos:]
 
-        self.undo_stack.push(
-                ReplaceTextCommand(
-                    self,
-                    cursor.block(),
-                    new_text
-                )
-            )
-    
+        self.undo_stack.push(ReplaceTextCommand(self, cursor.block(), new_text))
 
     def findBlock(self, position: int) -> Optional[QTextBlock]:
         pos = self.document().findBlock(position)
         return pos if pos != -1 else None
-    
 
     def getBlockNumber(self, position: int) -> int:
         block = self.findBlock(position)
@@ -410,10 +408,8 @@ class TextEditWidget(QTextEdit):
             return -1
         return block.blockNumber()
 
-
     def getBlockHtmlMap(self, block: QTextBlock) -> Tuple[str, List[bool]]:
         return self.fragmentsToHtml(self.getBlockFragments(block))
-
 
     def getBlockFragments(self, block: QTextBlock) -> List[Tuple[str, set]]:
         # Get list of text fragments and their formats
@@ -428,33 +424,35 @@ class TextEditWidget(QTextEdit):
                     format_desc.add(self.TextFormat.BOLD)
                 if fmt.fontItalic():
                     format_desc.add(self.TextFormat.ITALIC)
-                
-                fragments.append( (fragment.text(), format_desc) )
+
+                fragments.append((fragment.text(), format_desc))
             it += 1
-        
+
         return fragments
 
-
-    def setBlockFragments(self, block: QTextBlock, fragments: List[Tuple[str, set]]) -> None:
+    def setBlockFragments(
+        self, block: QTextBlock, fragments: List[Tuple[str, set]]
+    ) -> None:
         cursor = QTextCursor(block)
-        
+
         # Select the entire block content and remove it
         cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+        cursor.movePosition(
+            QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor
+        )
         cursor.removeSelectedText()
-        
+
         for text, format_desc in fragments:
             fmt = QTextCharFormat()
-            
+
             if self.TextFormat.BOLD in format_desc:
                 fmt.setFontWeight(QFont.Weight.Bold)
             else:
                 fmt.setFontWeight(QFont.Weight.Normal)
-            
+
             fmt.setFontItalic(self.TextFormat.ITALIC in format_desc)
-            
+
             cursor.insertText(text, fmt)
-    
 
     def fragmentsToHtml(self, fragments: list) -> Tuple[str, List[bool]]:
         """
@@ -468,13 +466,13 @@ class TextEditWidget(QTextEdit):
             for f in sorted(formats):
                 format_element = f"<{f.value}>"
                 html_text.append(format_element)
-                mask.extend( [False] * len(format_element) )
+                mask.extend([False] * len(format_element))
 
         def add_closing_elements(formats: set, html_text: List[str], mask: List[bool]):
             for f in sorted(formats, reverse=True):
                 format_element = f"</{f.value}>"
                 html_text.append(format_element)
-                mask.extend( [False] * len(format_element) )
+                mask.extend([False] * len(format_element))
 
         html_text = []
         mask = []
@@ -487,42 +485,40 @@ class TextEditWidget(QTextEdit):
             # Opening formatting elements
             opening_formats = formats.difference(last_formats)
             add_opening_elements(opening_formats, html_text, mask)
-            
+
             # Convert line breaks
             sub_lines = text.split(LINE_BREAK)
             html_text.append(sub_lines[0])
-            mask.extend( [True] * len(sub_lines[0]) )
+            mask.extend([True] * len(sub_lines[0]))
             for sub_line in sub_lines[1:]:
                 # Close all formatting elements
                 add_closing_elements(formats, html_text, mask)
                 # Add line break
                 html_text.append("<BR>")
-                mask.extend( [False] * len("<BR>") )
+                mask.extend([False] * len("<BR>"))
                 # Reopen formatting elements
                 add_opening_elements(formats, html_text, mask)
                 html_text.append(sub_line)
-                mask.extend( [True] * len(sub_line) )
-            
+                mask.extend([True] * len(sub_line))
+
             last_formats = formats
-        
+
         # closing_formats = last_format.difference(set())
         add_closing_elements(last_formats, html_text, mask)
 
-        return ''.join(html_text), mask
+        return "".join(html_text), mask
 
-
-    def deactivateSentence(self, seg_id: Optional[SegmentId]=None):
+    def deactivateSentence(self, seg_id: Optional[SegmentId] = None):
         """Reset format of currently active sentence"""
         if seg_id is None:
             seg_id = self.highlighted_sentence_id
         if seg_id < 0:
             return
-        
-        self.highlighted_sentence_id = -1 # Needs to be set before rehighlighting
+
+        self.highlighted_sentence_id = -1  # Needs to be set before rehighlighting
         block = self.document_controller.getBlockById(seg_id)
         if block:
             self.highlighter.rehighlightBlock(block)
-
 
     def highlightUtterance(self, segment_id: SegmentId, scroll_text=True):
         """
@@ -540,8 +536,10 @@ class TextEditWidget(QTextEdit):
         block = self.document_controller.getBlockById(segment_id)
         if block == None:
             return
-        
-        self.highlighted_sentence_id = segment_id # Needs to be set before rehighlighting
+
+        self.highlighted_sentence_id = (
+            segment_id  # Needs to be set before rehighlighting
+        )
         self.highlighter.rehighlightBlock(block)
 
         self.blockSignals(True)
@@ -552,7 +550,6 @@ class TextEditWidget(QTextEdit):
             self.ensureCursorVisible()
         self.blockSignals(False)
         self.document().blockSignals(was_blocked)
-    
 
     def insertNewline(self) -> None:
         logger.debug("insertNewline()")
@@ -562,10 +559,10 @@ class TextEditWidget(QTextEdit):
         html, mask = self.getBlockHtmlMap(block)
         text = block.text()
         pos_in_block = cursor.positionInBlock()
-        
+
         # Hack to account for line-breaks that count for 2 chars
-        pos_in_block -= text[:pos_in_block].count('\u2028')
-        
+        pos_in_block -= text[:pos_in_block].count("\u2028")
+
         # Find position in html string
         html_idx = 0
         mask_idx = 0
@@ -573,37 +570,30 @@ class TextEditWidget(QTextEdit):
             if mask[html_idx] == True:
                 mask_idx += 1
             html_idx += 1
-        
+
         left_part = html[:html_idx].rstrip()
         right_part = html[html_idx:].lstrip()
 
         new_text = left_part + "<BR>" + right_part
-        
-        self.undo_stack.push(
-            ReplaceTextCommand(
-                self,
-                block,
-                new_text
-            )
-        )
+
+        self.undo_stack.push(ReplaceTextCommand(self, block, new_text))
         # Set the cursor at the beginning of the new line
         n_spaces_stripped = html_idx - len(left_part)
         cursor.setPosition(block.position() + pos_in_block - n_spaces_stripped + 1)
         self.setTextCursor(cursor)
 
-
     def insertEmDash(self):
         cursor = self.textCursor()
         pos_in_block = cursor.positionInBlock()
         block = cursor.block()
-        text = block.text()            
-        
+        text = block.text()
+
         cursor_line_n = text[:pos_in_block].count(LINE_BREAK)
         cursor_offset = 0
         lines = []
         for i, l in enumerate(text.split(LINE_BREAK)):
             if not l.strip().startswith(EM_DASH):
-                lines.append(EM_DASH + ' ' + l.strip())
+                lines.append(EM_DASH + " " + l.strip())
             else:
                 lines.append(l)
             if i <= cursor_line_n:
@@ -613,24 +603,16 @@ class TextEditWidget(QTextEdit):
         if new_text == text:
             return
 
-        self.undo_stack.push(
-            ReplaceTextCommand(
-                self,
-                block,
-                new_text
-            )
-        )
+        self.undo_stack.push(ReplaceTextCommand(self, block, new_text))
         return
-    
 
     def zoomIn(self, *args):
         super().zoomIn(*args)
         self._updateSubtitleMargin()
-    
+
     def zoomOut(self, *args):
         super().zoomOut(*args)
         self._updateSubtitleMargin()
-
 
     def changeTextFormat(self, format: TextFormat):
         """Change the font format (bold or italic) of the selected text"""
@@ -642,7 +624,7 @@ class TextEditWidget(QTextEdit):
                     j += 1
                 i += 1
             return i
-        
+
         logger.debug(f"Set text formatting to {format}")
 
         cursor = self.textCursor()
@@ -665,7 +647,9 @@ class TextEditWidget(QTextEdit):
                 formats.remove(format)
             else:
                 formats.add(format)
-            new_fragments = fragments[:frag_i] + [(text, formats)] + fragments[frag_i+1:]
+            new_fragments = (
+                fragments[:frag_i] + [(text, formats)] + fragments[frag_i + 1 :]
+            )
 
             self.undo_stack.push(
                 ReplaceTextCommand(
@@ -684,21 +668,25 @@ class TextEditWidget(QTextEdit):
             html, mask = self.getBlockHtmlMap(cursor.block())
 
             # Hack to account for line-breaks that count for 2 chars
-            selection_start -= start_block.text()[:cursor.selectionStart()].count('\u2028')
-            selection_end -= start_block.text()[:cursor.selectionEnd()].count('\u2028')
-            
+            selection_start -= start_block.text()[: cursor.selectionStart()].count(
+                "\u2028"
+            )
+            selection_end -= start_block.text()[: cursor.selectionEnd()].count("\u2028")
+
             # Find corresponding index of 'selection_start' in html string
             selection_start_mask = find_masked_index(selection_start, mask)
             selection_end_mask = find_masked_index(selection_end, mask)
 
-            new_text = ''.join([
-                html[:selection_start_mask],
-                f"<{format.value}>",
-                html[selection_start_mask:selection_end_mask],
-                f"</{format.value}>",
-                html[selection_end_mask:]
-            ])
-            
+            new_text = "".join(
+                [
+                    html[:selection_start_mask],
+                    f"<{format.value}>",
+                    html[selection_start_mask:selection_end_mask],
+                    f"</{format.value}>",
+                    html[selection_end_mask:],
+                ]
+            )
+
             self.undo_stack.push(
                 ReplaceTextCommand(
                     self,
@@ -713,11 +701,9 @@ class TextEditWidget(QTextEdit):
             # Selection spreads over many blocks
             pass
 
-
     def toggleTextMargin(self, checked: bool):
         self._text_margin = checked
         self._updateSubtitleMargin()
-
 
     @Slot(int)
     def onMarginSizeChanged(self, size):
@@ -725,13 +711,11 @@ class TextEditWidget(QTextEdit):
         self._margin_size = size
         self._updateSubtitleMargin()
 
-
     def _updateSubtitleMargin(self):
         if self._text_margin:
             font_metrics = QFontMetricsF(self.font())
             self._char_width = font_metrics.averageCharWidth()
         self.viewport().update()
-
 
     def cut(self):
         cursor = self.textCursor()
@@ -742,7 +726,6 @@ class TextEditWidget(QTextEdit):
             clipboard.setText(selected_text)
             self.deleteSelectedText(cursor)
         return
-    
 
     def paste(self):
         """
@@ -761,27 +744,22 @@ class TextEditWidget(QTextEdit):
         if cursor.hasSelection():
             pos = cursor.selectionStart()
             self.deleteSelectedText(cursor)
-        
-        if '\n' in clipboard.text() and not self.isAligned(cursor.block()):   
-            paragraphs = clipboard.text().split('\n')
+
+        if "\n" in clipboard.text() and not self.isAligned(cursor.block()):
+            paragraphs = clipboard.text().split("\n")
             for text in paragraphs:
                 self.undo_stack.push(
                     InsertBlockCommand(
-                        self.document_controller,
-                        self, 
-                        pos,
-                        text,
-                        after=True
+                        self.document_controller, self, pos, text, after=True
                     )
                 )
                 pos += len(text) + 1
         else:
             # If the data is pasted in an aligned block, use line breaks
-            text = clipboard.text().replace('\n', LINE_BREAK)
+            text = clipboard.text().replace("\n", LINE_BREAK)
             self.undo_stack.push(InsertTextCommand(self, text, pos))
         self.undo_stack.endMacro()
         self.updateLineNumberAreaWidth()
-    
 
     def canInsertFromMimeData(self, mime_data: QMimeData) -> bool:
         if mime_data.hasUrls():
@@ -790,11 +768,9 @@ class TextEditWidget(QTextEdit):
             return True
         else:
             return False
-    
 
     def insertFromMimeData(self, mime_data: QMimeData) -> None:
         print("insertFromMimeData", mime_data)
-
 
     def dropEvent(self, event: QDropEvent):
         print("drop")
@@ -822,10 +798,9 @@ class TextEditWidget(QTextEdit):
             self.undo_stack.endMacro()
 
         event.accept()
-        mime_data.clear() # Avoid the default "cut-paste" behaviour
+        mime_data.clear()  # Avoid the default "cut-paste" behaviour
         print(f"{mime_data.text()=}")
         super().dropEvent(event)
-    
 
     def onCursorChanged(self):
         """Get the list of aligned utterances under the text selection
@@ -850,24 +825,25 @@ class TextEditWidget(QTextEdit):
                 block_id = self.document_controller.getBlockId(current_block)
                 if block_id >= 0:
                     selected_ids.append(block_id)
-                
+
                 if not tmp_cursor.movePosition(QTextCursor.MoveOperation.NextBlock):
                     break
                 current_block = tmp_cursor.block()
             self.cursor_changed_signal.emit(selected_ids)
-        
+
         else:
             current_block = cursor.block()
             block_id = self.document_controller.getBlockId(current_block)
             if block_id >= 0:
-                self.cursor_changed_signal.emit( [block_id] )
+                self.cursor_changed_signal.emit([block_id])
             else:
                 self.cursor_changed_signal.emit(None)
 
-    
     def contextMenuEvent(self, event):
         te_cursor = self.textCursor()
-        cursor = self.cursorForPosition(event.pos()) # event.pos() is cursor pos in pixels
+        cursor = self.cursorForPosition(
+            event.pos()
+        )  # event.pos() is cursor pos in pixels
         block = cursor.block()
         block_type = self.document_controller.getBlockType(block)
 
@@ -876,11 +852,18 @@ class TextEditWidget(QTextEdit):
 
         formats = block.layout().formats()
         for format_range in formats:
-            if format_range.start <= cursor.positionInBlock() <= format_range.start + format_range.length:
-                if format_range.format.underlineStyle() == QTextCharFormat.UnderlineStyle.SpellCheckUnderline:
+            if (
+                format_range.start
+                <= cursor.positionInBlock()
+                <= format_range.start + format_range.length
+            ):
+                if (
+                    format_range.format.underlineStyle()
+                    == QTextCharFormat.UnderlineStyle.SpellCheckUnderline
+                ):
                     # Found misspelled word
                     misspelled_word = self._selectWordAtPosition(cursor.position())
-        
+
         # context = self.createStandardContextMenu(event.pos())
         context_menu = QMenu(self)
 
@@ -891,7 +874,9 @@ class TextEditWidget(QTextEdit):
             for suggestion in self.highlighter.hunspell.suggest(misspelled_word):
                 n_suggestion += 1
                 action = context_menu.addAction(suggestion)
-                action.triggered.connect(lambda checked, c=cursor, s=suggestion: self.replaceWord(c, s))
+                action.triggered.connect(
+                    lambda checked, c=cursor, s=suggestion: self.replaceWord(c, s)
+                )
                 if n_suggestion >= 6:
                     break
             if n_suggestion > 0:
@@ -925,10 +910,15 @@ class TextEditWidget(QTextEdit):
                 if next_aligned_block:
                     seg_id = self.document_controller.getBlockId(next_aligned_block)
                     right_time_boundary = self.document_controller.segments[seg_id][0]
-            
-                if selection[0] >= left_time_boundary and selection[1] <= right_time_boundary:
+
+                if (
+                    selection[0] >= left_time_boundary
+                    and selection[1] <= right_time_boundary
+                ):
                     align_action.setEnabled(True)
-                    align_action.triggered.connect(lambda checked, b=block: self.align_with_selection.emit(b))
+                    align_action.triggered.connect(
+                        lambda checked, b=block: self.align_with_selection.emit(b)
+                    )
                 context_menu.addSeparator()
                 # -------------------------
             else:
@@ -956,13 +946,14 @@ class TextEditWidget(QTextEdit):
         # -------------------------
 
         # Select All Action
-        select_all_action = QAction(QIcon.fromTheme("edit-select-all"), "Select All", self)
+        select_all_action = QAction(
+            QIcon.fromTheme("edit-select-all"), "Select All", self
+        )
         select_all_action.setShortcut(QKeySequence.StandardKey.SelectAll)
         select_all_action.triggered.connect(self.selectAll)
         context_menu.addAction(select_all_action)
 
         action = context_menu.exec(event.globalPos())
-        
 
     def inputMethodEvent(self, event):
         cursor = self.textCursor()
@@ -982,12 +973,11 @@ class TextEditWidget(QTextEdit):
         else:
             self.undo_stack.push(InsertTextCommand(self, char, pos))
 
-
     def keyPressEvent(self, event: QKeyEvent) -> None:
         # Block TAB
         if event.key() == Qt.Key.Key_Tab:
             return
-        
+
         # Intercept insert newline action shortcut
         if event.keyCombination() == self.action.insert_newline.shortcut()[0]:
             self.action.insert_newline.trigger()
@@ -1000,7 +990,7 @@ class TextEditWidget(QTextEdit):
         if event.matches(QKeySequence.StandardKey.Redo):
             self.action.redo.trigger()
             return event.accept()
-        
+
         if event.matches(QKeySequence.StandardKey.Cut):
             self.cut()
             return event.accept()
@@ -1008,8 +998,10 @@ class TextEditWidget(QTextEdit):
             self.paste()
             return event.accept()
 
-        if (event.matches(QKeySequence.StandardKey.ZoomIn) or
-            (event.modifiers() & Qt.KeyboardModifier.ControlModifier and event.text() == '+')):
+        if event.matches(QKeySequence.StandardKey.ZoomIn) or (
+            event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and event.text() == "+"
+        ):
             self.zoomIn(1)
             return event.accept()
         if event.matches(QKeySequence.StandardKey.ZoomOut):
@@ -1032,7 +1024,7 @@ class TextEditWidget(QTextEdit):
             else:
                 self.undo_stack.push(InsertTextCommand(self, char, cursor_pos))
             return
-                
+
         if event.key() == Qt.Key.Key_Return:
             if self._handle_return_key(event, cursor):
                 return
@@ -1047,14 +1039,9 @@ class TextEditWidget(QTextEdit):
 
         return super().keyPressEvent(event)
 
-
-    def _handle_return_key(
-            self,
-            event: QKeyEvent,
-            cursor: QTextCursor
-        ) -> bool:
+    def _handle_return_key(self, event: QKeyEvent, cursor: QTextCursor) -> bool:
         """Returns True if the key is processed, False otherwise."""
-        
+
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
             # Prevent Ctrl + ENTER
             return True
@@ -1074,32 +1061,25 @@ class TextEditWidget(QTextEdit):
         first_letter_idx = 0
         while first_letter_idx < len(text) and text[first_letter_idx].isspace():
             first_letter_idx += 1
-        
+
         # Cursor at the beginning of sentence
         if pos_in_block <= first_letter_idx:
             # Create an empty block before
             self.undo_stack.push(
-                InsertBlockCommand(
-                    self.document_controller,
-                    self,
-                    cursor_pos
-                )
+                InsertBlockCommand(self.document_controller, self, cursor_pos)
             )
             return True
-        
+
         # Cursor at the end of sentence
         if pos_in_block >= last_letter_idx:
             # Create an empty block after
             self.undo_stack.push(
                 InsertBlockCommand(
-                    self.document_controller,
-                    self,
-                    cursor_pos,
-                    after=True
+                    self.document_controller, self, cursor_pos, after=True
                 )
             )
             return True
-        
+
         # Cursor in the middle of the sentence
         if (
             pos_in_block > first_letter_idx
@@ -1122,65 +1102,41 @@ class TextEditWidget(QTextEdit):
                 self.undo_stack.beginMacro("split non aligned")
                 self.undo_stack.push(
                     InsertBlockCommand(
-                        self.document_controller,
-                        self,
-                        cursor_pos,
-                        after=True
+                        self.document_controller, self, cursor_pos, after=True
                     )
                 )
                 print(f"1 {self.textCursor().position()=}")
                 cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
                 print(f"{self.textCursor().position()=}")
                 self.undo_stack.push(
-                    InsertTextCommand(
-                        self,
-                        right_part,
-                        cursor.position()
-                    )
+                    InsertTextCommand(self, right_part, cursor.position())
                 )
                 print(f"2 {self.textCursor().position()=}")
-                self.undo_stack.push(
-                    ReplaceTextCommand(
-                        self,
-                        block,
-                        left_part
-                    )
-                )
+                self.undo_stack.push(ReplaceTextCommand(self, block, left_part))
                 print(f"3 {self.textCursor().position()=}")
-                self.undo_stack.push(
-                    MoveTextCursor(
-                        self,
-                        cursor_pos
-                    )
-                )
+                self.undo_stack.push(MoveTextCursor(self, cursor_pos))
                 print(f"4 {self.textCursor().position()=}")
                 self.undo_stack.endMacro()
                 return True
-            
+
         return False
-    
 
     def _handle_delete_key(self, cursor: QTextCursor) -> bool:
         """Returns True if the key is processed, False otherwise."""
-        
+
         if cursor.hasSelection():
             # Special treatment when a selection is active
             self.deleteSelectedText(cursor)
             return True
-        
+
         block = cursor.block()
         cursor_pos = cursor.position()
         pos_in_block = cursor.positionInBlock()
         block_len = block.length()
-        
+
         if pos_in_block < block_len - 1:
             self.undo_stack.push(
-                DeleteTextCommand(
-                    self,
-                    cursor_pos,
-                    1,
-                    QTextCursor.MoveOperation.Right
-                )
+                DeleteTextCommand(self, cursor_pos, 1, QTextCursor.MoveOperation.Right)
             )
             return True
 
@@ -1189,30 +1145,25 @@ class TextEditWidget(QTextEdit):
             next_block = block.next()
             if not next_block.isValid():
                 return True
-            
+
             if self.isAligned(next_block):
                 # Join two aligned utterances
                 seg_id = self.document_controller.getBlockId(block)
                 next_seg_id = self.document_controller.getBlockId(next_block)
                 self.join_utterances.emit([seg_id, next_seg_id])
                 return True
-            
+
             # Join with next non-aligned sentence
             # Join with the current unaligned block
             self.undo_stack.beginMacro("join with next sentence")
-            self.undo_stack.push(
-                InsertTextCommand(
-                    self,
-                    next_block.text(),
-                    cursor_pos
-                )
-            )
+            self.undo_stack.push(InsertTextCommand(self, next_block.text(), cursor_pos))
             self.undo_stack.push(
                 DeleteTextCommand(
                     self,
-                    next_block.position() - 1, # We need to delete from pos-1 so that the metadata doens't get shifted
+                    next_block.position()
+                    - 1,  # We need to delete from pos-1 so that the metadata doens't get shifted
                     next_block.length(),
-                    QTextCursor.MoveOperation.Right
+                    QTextCursor.MoveOperation.Right,
                 )
             )
             self.undo_stack.endMacro()
@@ -1220,21 +1171,17 @@ class TextEditWidget(QTextEdit):
             cursor.setPosition(cursor_pos)
             self.setTextCursor(cursor)
             return True
-        
+
         else:
             next_block = block.next()
             if not next_block.isValid():
                 return True
-            
+
             if self.isAligned(next_block):
                 # Join this non aligned sentence with the next aligned block
                 self.undo_stack.beginMacro("join with next utterance")
                 self.undo_stack.push(
-                    InsertTextCommand(
-                        self,
-                        block.text(),
-                        cursor_pos + 1
-                    )
+                    InsertTextCommand(self, block.text(), cursor_pos + 1)
                 )
 
                 self.undo_stack.push(
@@ -1242,25 +1189,18 @@ class TextEditWidget(QTextEdit):
                         self,
                         block.position(),
                         block_len,
-                        QTextCursor.MoveOperation.Right
+                        QTextCursor.MoveOperation.Right,
                     )
                 )
                 self.undo_stack.endMacro()
                 return True
-                
-            
+
             # Current block and next block are unaligned
             self.undo_stack.push(
-                DeleteTextCommand(
-                    self,
-                    cursor_pos,
-                    1,
-                    QTextCursor.MoveOperation.Right
-                )
+                DeleteTextCommand(self, cursor_pos, 1, QTextCursor.MoveOperation.Right)
             )
-            
-            return True
 
+            return True
 
     def _handle_backspace_key(self, cursor: QTextCursor) -> bool:
         """Returns True if the key is processed, False otherwise."""
@@ -1275,19 +1215,14 @@ class TextEditWidget(QTextEdit):
         cursor_pos = cursor.position()
         pos_in_block = cursor.positionInBlock()
         block_data: MyTextBlockUserData = block.userData()
-        
+
         if pos_in_block > 0:
             # Regular deletion within the block
             self.undo_stack.push(
-                DeleteTextCommand(
-                    self,
-                    cursor_pos,
-                    1,
-                    QTextCursor.MoveOperation.Left
-                )
+                DeleteTextCommand(self, cursor_pos, 1, QTextCursor.MoveOperation.Left)
             )
             return True
-        
+
         # Cursor is at the beggining of the block
         if self.isAligned(block):
             # This is an aligned utterance block
@@ -1296,17 +1231,14 @@ class TextEditWidget(QTextEdit):
                 seg_id = block_data.data["seg_id"]
                 self.delete_utterances.emit([seg_id])
                 return True
-            
-            elif (
-                block.previous().isValid()
-                and self.isAligned(block.previous())
-            ):
+
+            elif block.previous().isValid() and self.isAligned(block.previous()):
                 # Join this aligned utterance with previous aligned utterance
                 seg_id = block_data.data["seg_id"]
                 prev_seg_id = block.previous().userData().data["seg_id"]
                 self.join_utterances.emit([prev_seg_id, seg_id])
                 return True
-            
+
             elif block.previous().isValid():
                 # Join with previous unaligned block
                 logger.debug("Join with previous unaligned block")
@@ -1314,11 +1246,7 @@ class TextEditWidget(QTextEdit):
                 self.undo_stack.beginMacro("join with previous sentence")
                 # Insert the previous block's text at the beggining of this block
                 self.undo_stack.push(
-                    InsertTextCommand(
-                        self,
-                        prev_block.text(),
-                        cursor_pos
-                    )
+                    InsertTextCommand(self, prev_block.text(), cursor_pos)
                 )
                 # We need to delete from pos-1 so that the metadata doesn't get shifted
                 # But this doesn't work to remove the first block
@@ -1327,7 +1255,7 @@ class TextEditWidget(QTextEdit):
                         self,
                         prev_block.position() - 1,
                         block_len,
-                        QTextCursor.MoveOperation.Right
+                        QTextCursor.MoveOperation.Right,
                     )
                 )
                 self.undo_stack.endMacro()
@@ -1337,24 +1265,18 @@ class TextEditWidget(QTextEdit):
             prev_block = block.previous()
             if not prev_block.isValid():
                 return True
-            
+
             if self.isAligned(prev_block):
                 insert_pos = cursor_pos - 1
                 self.undo_stack.beginMacro("join with previous utterance")
-                # Inserting this block's text at the end of the previous aligned one
-                self.undo_stack.push(
-                    InsertTextCommand(
-                        self,
-                        block.text(),
-                        insert_pos
-                    )
-                )
+                # Inserting this block's text at the end of the previous aligned one
+                self.undo_stack.push(InsertTextCommand(self, block.text(), insert_pos))
                 self.undo_stack.push(
                     DeleteTextCommand(
                         self,
                         block.position(),
                         block_len,
-                        QTextCursor.MoveOperation.Right
+                        QTextCursor.MoveOperation.Right,
                     )
                 )
                 self.undo_stack.endMacro()
@@ -1362,20 +1284,14 @@ class TextEditWidget(QTextEdit):
                 cursor.setPosition(insert_pos)
                 self.setTextCursor(cursor)
                 return True
-            
+
             # Regular mergin between unaligned sentences
             self.undo_stack.push(
-                DeleteTextCommand(
-                    self,
-                    cursor_pos,
-                    1,
-                    QTextCursor.MoveOperation.Left
-                )
+                DeleteTextCommand(self, cursor_pos, 1, QTextCursor.MoveOperation.Left)
             )
             return True
-        
-        return False
 
+        return False
 
     def mouseReleaseEvent(self, event):
         """
@@ -1392,7 +1308,7 @@ class TextEditWidget(QTextEdit):
             else:
                 self._click_count = 1
             self._last_click = event.timestamp()
-            
+
             if self._click_count == 2:
                 # Double-click (selects word under cursor)
                 event.accept()
@@ -1402,12 +1318,23 @@ class TextEditWidget(QTextEdit):
                 # Find selected word's boundaries
                 left_pos = pos_in_block
                 right_pos = pos_in_block
-                while left_pos > 0 and block_text[left_pos-1] not in STOP_CHARS:
+                while left_pos > 0 and block_text[left_pos - 1] not in STOP_CHARS:
                     left_pos -= 1
-                while right_pos < len(block_text) and block_text[right_pos] not in STOP_CHARS:
+                while (
+                    right_pos < len(block_text)
+                    and block_text[right_pos] not in STOP_CHARS
+                ):
                     right_pos += 1
-                cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, pos_in_block - left_pos)
-                cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, right_pos - left_pos)
+                cursor.movePosition(
+                    QTextCursor.MoveOperation.Left,
+                    QTextCursor.MoveMode.MoveAnchor,
+                    pos_in_block - left_pos,
+                )
+                cursor.movePosition(
+                    QTextCursor.MoveOperation.Right,
+                    QTextCursor.MoveMode.KeepAnchor,
+                    right_pos - left_pos,
+                )
                 self.setTextCursor(cursor)
                 return
             if self._click_count == 3:
@@ -1415,22 +1342,23 @@ class TextEditWidget(QTextEdit):
                 event.accept()
                 cursor = self.cursorForPosition(event.position().toPoint())
                 cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+                cursor.movePosition(
+                    QTextCursor.MoveOperation.EndOfBlock,
+                    QTextCursor.MoveMode.KeepAnchor,
+                )
                 self.setTextCursor(cursor)
                 return
-                
+
         super().mouseReleaseEvent(event)
-    
 
     def mouseDoubleClickEvent(self, event):
         """Prevent default double-click behaviour"""
         event.ignore()
 
-
     def _selectWordAtPosition(self, position: int) -> str:
         """
         Return the word under cursor, adapted for Breton language.
-        
+
         Note:
             QTextCursor.select(WordUnderCursor) won't work
             because if common use of the quote character in Breton.
@@ -1443,47 +1371,49 @@ class TextEditWidget(QTextEdit):
 
         # Find word boundaries
         word_start, word_end = position, position
-        while word_start > 0 and text[word_start-1] not in STOP_CHARS:
+        while word_start > 0 and text[word_start - 1] not in STOP_CHARS:
             word_start -= 1
         while word_end < len(text) and text[word_end] not in STOP_CHARS:
             word_end += 1
-        
+
         word = text[word_start:word_end]
         return word
-
 
     def enterEvent(self, event: QEnterEvent):
         self.setFocus()
         super().enterEvent(event)
 
-    
     def paintEvent(self, event: QPaintEvent):
         super().paintEvent(event)
 
         if not self._text_margin:
             return
-        
+
         if self._char_width <= 0:
             return
 
         viewport = self.viewport()
         painter = QPainter(viewport)
-        
+
         try:
             gray_start_x = int(self._char_width * self._margin_size)
             viewport_rect = viewport.rect()
-            
+
             painter.fillRect(
-                QRect(gray_start_x, 0, viewport_rect.width() - gray_start_x, viewport_rect.height()), 
-                self._margin_color
+                QRect(
+                    gray_start_x,
+                    0,
+                    viewport_rect.width() - gray_start_x,
+                    viewport_rect.height(),
+                ),
+                self._margin_color,
             )
         finally:
             painter.end()
 
-
     def _getLineNumberAreaWidth(self):
         """
-        Calculates the width needed for the line number area 
+        Calculates the width needed for the line number area
         based on the number of digits in the line count.
         """
         digits = 1
@@ -1491,34 +1421,33 @@ class TextEditWidget(QTextEdit):
         while max_value >= 10:
             max_value //= 10
             digits += 1
-            
-        # Add some padding (e.g., 3 + font width * digits)
-        space = 8 + self.fontMetrics().horizontalAdvance('9') * digits
-        return space
 
+        # Add some padding (e.g., 3 + font width * digits)
+        space = 8 + self.fontMetrics().horizontalAdvance("9") * digits
+        return space
 
     def updateLineNumberAreaWidth(self) -> None:
         """Updates the margin of the text edit to make room for the sidebar."""
         width = self._getLineNumberAreaWidth()
         self.setViewportMargins(width, 0, 0, 0)
 
-
     def updateLineNumberArea(self) -> None:
         """Repaints the sidebar area."""
         self.line_number_area.update()
 
-
     def lineNumberAreaPaintEvent(self, event) -> None:
-        """ Paints the line numbers in the sidebar """
+        """Paints the line numbers in the sidebar"""
 
         painter = QPainter(self.line_number_area)
-        painter.fillRect(event.rect(), theme.colors.line_number) # Light gray background
+        painter.fillRect(
+            event.rect(), theme.colors.line_number
+        )  # Light gray background
 
         doc_layout = self.document().documentLayout()
-        
+
         offset_y = self.verticalScrollBar().value()
         # page_bottom = offset_y + self.viewport().height()
-        
+
         # Iterate over all text blocks (could be optimized)
         block = self.document().begin()
         utterance_number = 0
@@ -1530,7 +1459,7 @@ class TextEditWidget(QTextEdit):
                 is_aligned = True
 
             rect = doc_layout.blockBoundingRect(block)
-            
+
             # Check if the block is visible in the viewport
             top_of_block = rect.top() - offset_y
             bottom_of_block = rect.bottom() - offset_y
@@ -1541,16 +1470,24 @@ class TextEditWidget(QTextEdit):
                     if is_aligned:
                         # Paint the number
                         painter.setPen(Qt.GlobalColor.black)
-                        painter.drawText(0, int(top_of_block), 
-                                        self.line_number_area.width() - 5, 
-                                        int(self.fontMetrics().height()),
-                                        Qt.AlignmentFlag.AlignRight, str(utterance_number))
+                        painter.drawText(
+                            0,
+                            int(top_of_block),
+                            self.line_number_area.width() - 5,
+                            int(self.fontMetrics().height()),
+                            Qt.AlignmentFlag.AlignRight,
+                            str(utterance_number),
+                        )
                     else:
                         painter.setPen(Qt.GlobalColor.gray)
-                        painter.drawText(0, int(top_of_block), 
-                                        self.line_number_area.width() - 5, 
-                                        int(self.fontMetrics().height()),
-                                        Qt.AlignmentFlag.AlignRight, '*')
+                        painter.drawText(
+                            0,
+                            int(top_of_block),
+                            self.line_number_area.width() - 5,
+                            int(self.fontMetrics().height()),
+                            Qt.AlignmentFlag.AlignRight,
+                            "*",
+                        )
 
             if top_of_block > self.viewport().height():
                 break
@@ -1558,18 +1495,17 @@ class TextEditWidget(QTextEdit):
             block = block.next()
 
         painter.end()
-    
 
     def resizeEvent(self, event):
         """
-        When the window is resized, we must resize the sidebar 
+        When the window is resized, we must resize the sidebar
         to match the height of the editor.
         """
         super().resizeEvent(event)
         cr = self.contentsRect()
-        self.line_number_area.setGeometry(QRect(cr.left(), cr.top(),
-                            self._getLineNumberAreaWidth(), cr.height()))
-
+        self.line_number_area.setGeometry(
+            QRect(cr.left(), cr.top(), self._getLineNumberAreaWidth(), cr.height())
+        )
 
     #### Debug functions ####
 

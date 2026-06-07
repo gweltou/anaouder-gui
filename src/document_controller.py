@@ -39,13 +39,15 @@ from src.interfaces import (
     MyTextBlockUserData,
     Segment,
     SegmentId,
+    TextDocumentInterface,
 )
 from src.services.aligner import SmartSplitError, smart_split_text, smart_split_time
 from src.services.logger import logger
 from src.strings import app_strings
 from src.text_widget import TextEditWidget
+from src.ui.waveform.data import Handle
+from src.ui.waveform.waveform_widget import WaveformWidget
 from src.utils import LINE_BREAK, extract_sentence_regions, yellow
-from src.waveform_widget import Handle, WaveformWidget
 
 
 class DocumentController(QObject):
@@ -58,7 +60,7 @@ class DocumentController(QObject):
         self.segments: Dict[SegmentId, Segment] = dict()
         self._sorted_segments = []
 
-        self.text_widget: TextEditWidget | None = None
+        self.text_widget: TextDocumentInterface | None = None
         self.waveform_widget: WaveformWidget | None = None
 
         self.must_sort = False
@@ -86,7 +88,7 @@ class DocumentController(QObject):
 
         self.undo_stack.clear()
 
-    def setTextWidget(self, text_widget: TextEditWidget) -> None:
+    def setTextWidget(self, text_widget: TextDocumentInterface) -> None:
         self.text_widget = text_widget
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
@@ -443,10 +445,10 @@ class DocumentController(QObject):
 
         # If resizing, return the uncommited resizing density
         if (
-            self.waveform_widget.resizing_handle
+            self.waveform_widget.resizing_state.handle
             and self.waveform_widget.active_segment_id == segment_id
         ):
-            return self.waveform_widget.resizing_density
+            return self.waveform_widget.resizing_state.density
 
         block = self.getBlockById(segment_id)
         if not block:

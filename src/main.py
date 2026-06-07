@@ -86,7 +86,7 @@ from src.exports import segment_exporter
 from src.exports.textual_exporter import export_to_text_format
 from src.file_manager import FileManager, FileOperationError
 from src.hunspell import HunspellLoader
-from src.interfaces import BlockType, Segment, SegmentId
+from src.interfaces import BlockType, Segment, SegmentId, TextDocumentInterface
 from src.scene_detector import SceneDetectWorker
 from src.services.aligner import TextAligner
 from src.services.logger import logger
@@ -123,6 +123,8 @@ from src.ui.icons import IconWidget, icons, loadIcons
 from src.ui.parameters_dialog import ParametersDialog
 from src.ui.theme import theme
 from src.ui.timecode_display import TimecodeWidget
+from src.ui.video_widget import VideoWidget
+from src.ui.waveform.waveform_widget import WaveformWidget
 
 # from PySide6.QtMultimedia import QMediaDevices
 from src.utils import (
@@ -133,8 +135,6 @@ from src.utils import (
     get_resource_path,
     sec2hms,
 )
-from src.video_widget import VideoWidget
-from src.waveform_widget import WaveformWidget
 
 
 def getActionTooltip(action: QAction) -> str:
@@ -177,7 +177,6 @@ class MainWindow(QMainWindow):
 
     def updateThemeColors(self) -> None:
         """Propagate the colorSchemeChanged signal to chilren widget components"""
-        print("main call updatethemecolors")
         theme.updateTheme(QApplication.styleHints().colorScheme())
         self.text_widget.updateThemeColors()
         self.waveform.updateThemeColors()
@@ -211,7 +210,9 @@ class MainWindow(QMainWindow):
 
         # TODO: reverse dependencies of document_controller and text/waveform widgets
         self.document_controller = DocumentController(self)
-        self.text_widget = TextEditWidget(self, self.document_controller, self.action)
+        self.text_widget: TextDocumentInterface = TextEditWidget(
+            self, self.document_controller, self.action
+        )
         self.waveform = WaveformWidget(self, self.document_controller, self.action)
         self.document_controller.setTextWidget(self.text_widget)
         self.document_controller.setWaveformWidget(self.waveform)
@@ -1287,12 +1288,12 @@ class MainWindow(QMainWindow):
             self.text_widget.setTextCursor(cursor)
             self.text_widget.ensureCursorVisible()
         if "waveform_pos" in doc_metadata:
-            self.waveform.t_left = doc_metadata["waveform_pos"]
-            self.waveform.scroll_goal = -1
+            self.waveform.view.t_left = doc_metadata["waveform_pos"]
+            self.waveform.view.scroll_goal = -1
             self.waveform.must_redraw = True
         if "waveform_pps" in doc_metadata:
-            self.waveform.ppsec = doc_metadata["waveform_pps"]
-            self.waveform.ppsec_goal = doc_metadata["waveform_pps"]
+            self.waveform.view.ppsec = doc_metadata["waveform_pps"]
+            self.waveform.view.ppsec_goal = doc_metadata["waveform_pps"]
             self.waveform.waveform.ppsec = doc_metadata["waveform_pps"]
         if "playhead_pos" in doc_metadata:
             QTimer.singleShot(
@@ -1739,7 +1740,7 @@ class MainWindow(QMainWindow):
         """
 
         def _onMinFramesChanged(i: int):
-            self._subs_max_frames = i
+            self._subs_min_frames = i
 
         def _onMaxFramesChanged(i: int):
             self._subs_max_frames = i
@@ -1875,7 +1876,7 @@ class MainWindow(QMainWindow):
                 self.media_controller.deselectSegment()
 
         # Check if end of selection range is reached (if selection is active)
-        elif (segment := self.waveform.getSelection()) != None:
+        elif (segment := self.waveform.getSelection()) is not None:
             selection_start, selection_end = segment
             if position_sec >= selection_end:
                 if self.media_controller.isLooping():
@@ -2023,7 +2024,7 @@ class MainWindow(QMainWindow):
             # self.timecode_widget.setTime(0.0)
             return
 
-        if (segment := self.document_controller.getSegment(segment_id)) != None:
+        if (segment := self.document_controller.getSegment(segment_id)) is not None:
             first_segment_id = self.document_controller.getSortedSegments()[0][0]
             self.selectUtterance(first_segment_id)
             self.media_controller.playSegment(segment, segment_id)
@@ -2151,7 +2152,7 @@ class MainWindow(QMainWindow):
         if self.scene_detector is None:
             return
 
-        if success:
+        if success and self.scene_detector.media_path:
             cache.set_media_scenes(self.scene_detector.media_path, self.waveform.scenes)
 
         self.scene_detector.new_scene.disconnect(self.onNewSceneChange)
@@ -2180,7 +2181,9 @@ class MainWindow(QMainWindow):
         start_frame = 0
         end_frame = len(self.audio_samples)
         if self.waveform.selection_is_active:
-            selection_start, selection_end = self.waveform.getSelection()
+            sel = self.waveform.getSelection()
+            assert sel
+            selection_start, selection_end = sel
             start_frame = int(selection_start * WAVEFORM_SAMPLERATE)
             end_frame = int(selection_end * WAVEFORM_SAMPLERATE)
             self.waveform.removeSelection()
@@ -2263,7 +2266,9 @@ class MainWindow(QMainWindow):
         """Create a new segment from waveform selection"""
         if self.waveform.selection_is_active:
             # Check if selection doesn't overlap other existing segments
-            selection_start, selection_end = self.waveform.getSelection()
+            sel = self.waveform.getSelection()
+            assert sel
+            selection_start, selection_end = sel
             for _, (seg_start, seg_end) in self.document_controller.getSortedSegments():
                 if (seg_start < selection_start < seg_end) or (
                     seg_start < selection_end < seg_end
@@ -2570,8 +2575,8 @@ class MainWindow(QMainWindow):
                 doc_metadata = {
                     "cursor_pos": self.text_widget.textCursor().position(),
                     "playhead_pos": self.media_controller.getCurrentPosition(),
-                    "waveform_pos": self.waveform.t_left,
-                    "waveform_pps": self.waveform.ppsec,
+                    "waveform_pos": self.waveform.view.t_left,
+                    "waveform_pps": self.waveform.view.ppsec,
                     "show_scenes": self.scene_detect_action.isChecked(),
                     "show_margin": self.toggle_margin_action.isChecked(),
                     "video_open": self.toggle_video_action.isChecked(),
@@ -2644,14 +2649,14 @@ class MainWindow(QMainWindow):
 
         start, end = segment
         start_str = sec2hms(
-            start + self.waveform.time_offset,
+            start + self.waveform.view.time_offset,
             precision=2,
             m_unit=app_strings.TR_UNIT_MINUTE[0],
             s_unit=app_strings.TR_UNIT_SECOND,
             sep="",
         )
         end_str = sec2hms(
-            end + self.waveform.time_offset,
+            end + self.waveform.view.time_offset,
             precision=2,
             m_unit=app_strings.TR_UNIT_MINUTE[0],
             s_unit=app_strings.TR_UNIT_SECOND,
@@ -2705,7 +2710,7 @@ class MainWindow(QMainWindow):
     def updateProgressBar(self, t_seconds: float) -> None:
         self.waveform.recognizer_progress = t_seconds
         if (
-            t_seconds > self.waveform.t_left
+            t_seconds > self.waveform.view.t_left
             and t_seconds < self.waveform.getTimeRight()
         ):
             self.waveform.must_redraw = True

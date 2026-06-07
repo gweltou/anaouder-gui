@@ -16,67 +16,85 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
-from typing import Optional
+import hashlib
 import os
-import threading
-
 import ssl
-import certifi
+import tarfile
+import threading
 import urllib.request
 import zipfile
-import tarfile
-import hashlib
 from pathlib import Path
 from time import sleep
+from typing import Optional
 
-from PySide6.QtWidgets import (
-    QDialog, QWidget, QApplication,
-    QTabWidget,
-    QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, 
-    QLineEdit, QCheckBox, QComboBox, QSpinBox, QDoubleSpinBox,
-    QPushButton, QGroupBox, QFormLayout,
-    QMessageBox, QListWidget,
-    QProgressBar,
-    QColorDialog,
-)
+import certifi
 from PySide6.QtCore import (
-    Qt, QObject,
-    Signal, Slot, QUrl,
+    QObject,
+    Qt,
+    QUrl,
+    Signal,
+    Slot,
 )
-from PySide6.QtGui import QDesktopServices, QPalette, QColor
+from PySide6.QtGui import QColor, QDesktopServices, QPalette
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 import src.lang as lang
-from src.utils import get_cache_directory
-from src.settings import (
-    FUTURE, app_settings, UI_LANGUAGES,
-    SUBTITLES_MIN_FRAMES, SUBTITLES_MAX_FRAMES, SUBTITLES_MIN_INTERVAL,
-    SUBTITLES_AUTO_EXTEND, SUBTITLES_AUTO_EXTEND_MAX_GAP,
-    SUBTITLES_MARGIN_SIZE, SUBTITLES_CPS,
-    SUBTITLES_DEFAULT_COLOR, SUBTITLES_BLOCK_DEFAULT_COLOR,
-    AUTOSAVE_DEFAULT_INTERVAL, AUTOSAVE_BACKUP_NUMBER
-)
-from src.strings import app_strings
 from src.cache_system import cache
 from src.services.logger import logger
-
-
+from src.settings import (
+    AUTOSAVE_BACKUP_NUMBER,
+    AUTOSAVE_DEFAULT_INTERVAL,
+    FUTURE,
+    SUBTITLES_AUTO_EXTEND,
+    SUBTITLES_AUTO_EXTEND_MAX_GAP,
+    SUBTITLES_BLOCK_DEFAULT_COLOR,
+    SUBTITLES_CPS,
+    SUBTITLES_DEFAULT_COLOR,
+    SUBTITLES_MARGIN_SIZE,
+    SUBTITLES_MAX_FRAMES,
+    SUBTITLES_MIN_FRAMES,
+    SUBTITLES_MIN_INTERVAL,
+    UI_LANGUAGES,
+    app_settings,
+)
+from src.strings import app_strings
+from src.utils import get_cache_directory
 
 
 class DownloadProgressDialog(QDialog):
     class Signals(QObject):
         """Custom signals"""
+
         progress = Signal(int)
         finished = Signal()
         error = Signal(str)
-
 
     def __init__(self, url, root, model_name, parent=None):
         super().__init__(parent)
 
         self.signals = self.Signals()
-        
+
         self.url = url
         self.root = root
         self.download_target = os.path.join(root, os.path.basename(url))
@@ -84,53 +102,49 @@ class DownloadProgressDialog(QDialog):
         self.cancelled = False
         self.download_thread = None
         self.file_size = 0
-        
+
         # Setup UI
         self.setWindowTitle(self.tr("Downloading {}").format(model_name))
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setMinimumSize(400, 150)
-        
+
         layout = QVBoxLayout()
-        
+
         self.status_label = QLabel(self.tr("Downloading {}...").format(model_name))
         layout.addWidget(self.status_label)
-        
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         layout.addWidget(self.progress_bar)
-        
+
         self.bytes_label = QLabel("0 MB / 0 MB")
         layout.addWidget(self.bytes_label)
-        
+
         self.cancel_button = QPushButton(app_strings.TR_CANCEL)
         self.cancel_button.setFixedWidth(80)
         self.cancel_button.clicked.connect(self.cancel_download)
         layout.addWidget(self.cancel_button)
-        
+
         self.setLayout(layout)
-        
+
         # Connect signals
         self.signals.progress.connect(self.update_progress)
         self.signals.finished.connect(self.download_finished)
         self.signals.error.connect(self.download_error)
         self.rejected.connect(self.cancel_download)
-        
-    
+
     def showEvent(self, event):
         """Start download when dialog is shown"""
         super().showEvent(event)
         self.start_download()
 
-
     def start_download(self):
         """Start the download in a separate thread"""
         self.download_thread = threading.Thread(
-            target=self.download_worker,
-            daemon=True
+            target=self.download_worker, daemon=True
         )
         self.download_thread.start()
-    
 
     def download_worker(self):
         """Worker function that runs in a separate thread to download the file"""
@@ -138,25 +152,27 @@ class DownloadProgressDialog(QDialog):
             logger.message(f"Downloading {self.url}")
             os.makedirs(self.root, exist_ok=True)
             certifi_context = ssl.create_default_context(cafile=certifi.where())
-              
+
             req = urllib.request.Request(self.url)
-            with urllib.request.urlopen(req, timeout=5.0, context=certifi_context) as source, open(self.download_target, "wb") as output:
+            with urllib.request.urlopen(
+                req, timeout=5.0, context=certifi_context
+            ) as source, open(self.download_target, "wb") as output:
                 # Get file size
                 self.file_size = int(source.info().get("Content-Length", 0))
                 logger.debug(f"File size: {self.file_size}")
-                
+
                 self.n_bytes = 0
                 self.last_percent = 0
                 block_size = 8192
-                
+
                 while True:
                     if self.cancelled:
                         return
-                    
+
                     buffer = source.read(block_size)
                     if not buffer:
                         break
-                    
+
                     output.write(buffer)
 
                     self.n_bytes += len(buffer)
@@ -164,14 +180,18 @@ class DownloadProgressDialog(QDialog):
                     if percent != self.last_percent:
                         self.signals.progress.emit(percent)
                         self.last_percent = percent
-            
+
             # Verifying checksum
             if not self.cancelled:
                 self.status_label.setText(self.tr("Verifying checksum..."))
                 expected_sum = lang.getSHA256(self.model_name)
-                file_checksum = hashlib.file_digest(open(self.download_target, 'rb'), "sha256").hexdigest()
+                file_checksum = hashlib.file_digest(
+                    open(self.download_target, "rb"), "sha256"
+                ).hexdigest()
                 if file_checksum != expected_sum:
-                    logger.warning(f"Mismatch in sha256 sum:\n\tExpected: {expected_sum}\n\tCalculated: {file_checksum}")
+                    logger.warning(
+                        f"Mismatch in sha256 sum:\n\tExpected: {expected_sum}\n\tCalculated: {file_checksum}"
+                    )
                     # Remove corrupted archive
                     os.remove(self.download_target)
                     raise Exception("Wrong checksum!")
@@ -181,7 +201,7 @@ class DownloadProgressDialog(QDialog):
                 self.status_label.setText(self.tr("Extracting downloaded files..."))
 
                 if zipfile.is_zipfile(self.download_target):
-                    with zipfile.ZipFile(self.download_target, 'r') as zip_ref:
+                    with zipfile.ZipFile(self.download_target, "r") as zip_ref:
                         print([zipinfo.filename for zipinfo in zip_ref.filelist])
                         zip_ref.extractall(self.root)
                 elif tarfile.is_tarfile(self.download_target):
@@ -190,43 +210,42 @@ class DownloadProgressDialog(QDialog):
                     tar.extractall(self.root)
                     # Rename extracted folder to the model name
                     if os.path.commonpath(filenames) != self.model_name:
-                        old_folder = os.path.join(self.root, os.path.normpath(filenames[0]))
+                        old_folder = os.path.join(
+                            self.root, os.path.normpath(filenames[0])
+                        )
                         new_folder = os.path.join(self.root, self.model_name)
                         os.rename(old_folder, new_folder)
 
                 os.remove(self.download_target)
-                
+
                 self.signals.finished.emit()
-                
+
         except Exception as e:
             self.signals.error.emit(str(e))
-    
-    
+
     @Slot(int)
     def update_progress(self, percent: int):
         """Update the progress bar and bytes label"""
         self.progress_bar.setValue(percent)
-        
+
         # Update bytes label
         downloaded_mb = self.n_bytes / (1024 * 1024)
         total_mb = self.file_size / (1024 * 1024)
         self.bytes_label.setText(f"{downloaded_mb:.1f} MB / {total_mb:.1f} MB")
-    
 
     @Slot()
     def download_finished(self):
         """Handle download completion"""
         QApplication.processEvents()
         self.accept()
-    
 
     @Slot(str)
     def download_error(self, error_msg: str):
         """Handle download error"""
-        QMessageBox.critical(self, "Download Error", 
-                            f"An error occurred during download:\n{error_msg}")
+        QMessageBox.critical(
+            self, "Download Error", f"An error occurred during download:\n{error_msg}"
+        )
         self.reject()
-    
 
     @Slot()
     def cancel_download(self):
@@ -241,11 +260,10 @@ class DownloadProgressDialog(QDialog):
             self.reject()
 
 
-
 class ParametersDialog(QDialog):
-
     class Signals(QObject):
-        """ Custom signals """
+        """Custom signals"""
+
         update_ui_language = Signal(str)
         toggle_autosave = Signal(bool)
 
@@ -257,8 +275,7 @@ class ParametersDialog(QDialog):
         cache_scenes_cleared = Signal()
         cache_transcription_cleared = Signal()
 
-
-    def __init__(self, parent, media_path: Optional[str]):
+    def __init__(self, parent, media_path: Optional[Path]):
         super().__init__(parent)
 
         if media_path:
@@ -270,50 +287,53 @@ class ParametersDialog(QDialog):
 
         self.setWindowTitle(self.tr("Parameters"))
         self.setMinimumSize(450, 350)
-        
+
         self.tabs = QTabWidget()
 
         self.tabs.addTab(GeneralPanel(self, parent.video_widget), self.tr("General"))
         self.tabs.addTab(ModelsPanel(self), self.tr("Models"))
-        self.tabs.addTab(SubtitlesPanel(self, media_metadata.get("fps", 0)), self.tr("Subtitles Rules"))
+        self.tabs.addTab(
+            SubtitlesPanel(self, media_metadata.get("fps", 0)),
+            self.tr("Subtitles Rules"),
+        )
         # self.tabs.addTab(UIPanel(parent.video_widget), self.tr("UI"))
         self.tabs.addTab(CachePanel(self, media_path), self.tr("Cache"))
-        
+
         # Main layout
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabs)
         self.setLayout(main_layout)
-    
 
     def setCurrentTab(self, tab_idx: int) -> None:
         """Set the current tab by its index"""
         self.tabs.setCurrentIndex(tab_idx)
-    
+
+
 """
     def create_display_tab(self):
         tab = QWidget()
         layout = QVBoxLayout()
-        
+
         # Appearance group
         appearance_group = QGroupBox("Appearance")
         form_layout = QFormLayout()
-        
+
         # Theme selection
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Light", "Dark", "System"])
         form_layout.addRow("Theme:", self.theme_combo)
-        
+
         # Font size
         self.font_size = QSpinBox()
         self.font_size.setRange(8, 24)
         self.font_size.setValue(12)
         form_layout.addRow("Font size:", self.font_size)
-        
+
         # Font family
         self.font_family = QComboBox()
         self.font_family.addItems(["Arial", "Helvetica", "Times New Roman", "Courier New"])
         form_layout.addRow("Font family:", self.font_family)
-        
+
         appearance_group.setLayout(form_layout)
 """
 
@@ -342,7 +362,7 @@ class GeneralPanel(QWidget):
         # self.lang_selection.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.lang_selection.currentIndexChanged.connect(self.updateUiLanguage)
         lang_layout.addWidget(self.lang_selection)
-        
+
         ui_lang_group.setLayout(lang_layout)
 
         # Subtitles styling
@@ -353,7 +373,9 @@ class GeneralPanel(QWidget):
         ui_subs_layout.addWidget(color_label, 0, 0)
         self.subs_font_color_button = QPushButton()
         self.subs_font_color_button.clicked.connect(self.pickColorFont)
-        current_color: QColor = app_settings.value("subtitles/font_color", SUBTITLES_DEFAULT_COLOR)
+        current_color: QColor = app_settings.value(
+            "subtitles/font_color", SUBTITLES_DEFAULT_COLOR
+        )
         if current_color.isValid():
             self.setColorButtonStyle(self.subs_font_color_button, current_color)
         ui_subs_layout.addWidget(self.subs_font_color_button, 0, 2)
@@ -362,13 +384,17 @@ class GeneralPanel(QWidget):
         ui_subs_layout.addWidget(rect_label, 1, 0)
 
         self.rect_visibility_checkbox = QCheckBox("Show")
-        self.rect_visibility_checkbox.setChecked(app_settings.value("subtitles/rect_visible", True, type=bool))
+        self.rect_visibility_checkbox.setChecked(
+            app_settings.value("subtitles/rect_visible", True, type=bool)
+        )
         self.rect_visibility_checkbox.toggled.connect(self.toggleRectVisibility)
         ui_subs_layout.addWidget(self.rect_visibility_checkbox, 1, 1)
 
         self.subs_rect_color_button = QPushButton()
         self.subs_rect_color_button.clicked.connect(self.pickColorRect)
-        current_color: QColor = app_settings.value("subtitles/rect_color", SUBTITLES_BLOCK_DEFAULT_COLOR)
+        current_color: QColor = app_settings.value(
+            "subtitles/rect_color", SUBTITLES_BLOCK_DEFAULT_COLOR
+        )
         if current_color.isValid():
             self.setColorButtonStyle(self.subs_rect_color_button, current_color)
         ui_subs_layout.addWidget(self.subs_rect_color_button, 1, 2)
@@ -376,21 +402,27 @@ class GeneralPanel(QWidget):
         reset_button = QPushButton(self.tr("Reset to default"))
         reset_button.clicked.connect(self.resetColorDefault)
         ui_subs_layout.addWidget(reset_button, 2, 2)
-        
+
         ui_subs_group.setLayout(ui_subs_layout)
 
         # Auto-save
         autosave_group = QGroupBox(self.tr("Auto Save"), checkable=True)
-        autosave_group.setChecked(bool(app_settings.value("autosave/checked", True, type=bool)))
+        autosave_group.setChecked(
+            bool(app_settings.value("autosave/checked", True, type=bool))
+        )
         autosave_group.toggled.connect(self.toggleAutosave)
         autosave_layout = QVBoxLayout()
 
         self.save_interval_spin = QDoubleSpinBox()
-        self.save_interval_spin.setSuffix(' ' + app_strings.TR_UNIT_MINUTE)
+        self.save_interval_spin.setSuffix(" " + app_strings.TR_UNIT_MINUTE)
         self.save_interval_spin.setRange(0.1, 10)
         self.save_interval_spin.setDecimals(1)
         self.save_interval_spin.setSingleStep(0.1)
-        self.save_interval_spin.setValue(app_settings.value("autosave/interval_minute", AUTOSAVE_DEFAULT_INTERVAL, type=float))
+        self.save_interval_spin.setValue(
+            app_settings.value(
+                "autosave/interval_minute", AUTOSAVE_DEFAULT_INTERVAL, type=float
+            )
+        )
         self.save_interval_spin.valueChanged.connect(self.updateSaveInterval)
         save_interval_layout = QHBoxLayout()
         save_interval_layout.addWidget(QLabel(self.tr("Save every")))
@@ -398,9 +430,13 @@ class GeneralPanel(QWidget):
         autosave_layout.addLayout(save_interval_layout)
 
         self.backup_number_spin = QSpinBox()
-        self.backup_number_spin.setSuffix(' ' + app_strings.TR_UNIT_FILES)
+        self.backup_number_spin.setSuffix(" " + app_strings.TR_UNIT_FILES)
         self.backup_number_spin.setRange(1, 10)
-        self.backup_number_spin.setValue(app_settings.value("autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int))
+        self.backup_number_spin.setValue(
+            app_settings.value(
+                "autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int
+            )
+        )
         self.backup_number_spin.valueChanged.connect(self.updateBackupNumber)
         backup_number_layout = QHBoxLayout()
         backup_number_layout.addWidget(QLabel(self.tr("Keep only")))
@@ -414,51 +450,48 @@ class GeneralPanel(QWidget):
         main_layout.addWidget(autosave_group)
         main_layout.addStretch()
         self.setLayout(main_layout)
-    
 
     def updateUiLanguage(self, index):
         lang_code = self.lang_selection.itemData(index)
         self.parent_dialog.signals.update_ui_language.emit(lang_code)
         # QApplication.instance().switch_language(lang_code)
-    
 
     def pickColorFont(self, _checked, color=None):
         if color is None:
-            prev_color = app_settings.value("subtitles/font_color", SUBTITLES_DEFAULT_COLOR)
-            color = QColorDialog.getColor(
-                prev_color,
-                self,
-                app_strings.TR_SELECT_COLOR
+            prev_color = app_settings.value(
+                "subtitles/font_color", SUBTITLES_DEFAULT_COLOR
             )
+            color = QColorDialog.getColor(prev_color, self, app_strings.TR_SELECT_COLOR)
         if color and color.isValid():
             self.setColorButtonStyle(self.subs_font_color_button, color)
             self.video_widget.adjustFontColor(color)
             app_settings.setValue("subtitles/font_color", color)
-    
 
     def pickColorRect(self, _checked, color=None):
         if color is None:
-            prev_color = app_settings.value("subtitles/rect_color", SUBTITLES_BLOCK_DEFAULT_COLOR)
+            prev_color = app_settings.value(
+                "subtitles/rect_color", SUBTITLES_BLOCK_DEFAULT_COLOR
+            )
             color = QColorDialog.getColor(
                 prev_color,
                 self,
                 app_strings.TR_SELECT_COLOR,
-                QColorDialog.ColorDialogOption.ShowAlphaChannel
+                QColorDialog.ColorDialogOption.ShowAlphaChannel,
             )
         if color and color.isValid():
             self.setColorButtonStyle(self.subs_rect_color_button, color)
             self.video_widget.adjustRectColor(color)
             app_settings.setValue("subtitles/rect_color", color)
-    
 
     def toggleRectVisibility(self, checked):
         self.video_widget.toggleRectVisibility(checked)
         app_settings.setValue("subtitles/rect_visible", checked)
 
-
     def setColorButtonStyle(self, button: QPushButton, color: QColor):
         button.setText(color.name())
-        text_color = QColor(255, 255, 255) if color.lightnessF() < 0.5 else QColor(0, 0, 0)
+        text_color = (
+            QColor(255, 255, 255) if color.lightnessF() < 0.5 else QColor(0, 0, 0)
+        )
         button.setStyleSheet(f"""
                 QPushButton {{
                     color: {text_color.name()};
@@ -472,8 +505,7 @@ class GeneralPanel(QWidget):
                 QPushButton:pressed {{
                     background-color: {color.name()};
                 }}
-            """)    
-
+            """)
 
     def resetColorDefault(self):
         self.pickColorFont(False, SUBTITLES_DEFAULT_COLOR)
@@ -481,21 +513,17 @@ class GeneralPanel(QWidget):
         if not self.rect_visibility_checkbox.isChecked():
             self.rect_visibility_checkbox.toggle()
 
-
     def toggleAutosave(self, checked):
         app_settings.setValue("autosave/checked", checked)
         self.parent_dialog.signals.toggle_autosave.emit(checked)
-
 
     def updateSaveInterval(self):
         interval_mn = self.save_interval_spin.value()
         app_settings.setValue("autosave/interval_minute", interval_mn)
 
-
     def updateBackupNumber(self):
         backup_num = self.backup_number_spin.value()
         app_settings.setValue("autosave/backup_number", backup_num)
-
 
 
 class ModelsPanel(QWidget):
@@ -518,78 +546,79 @@ class ModelsPanel(QWidget):
             self.lang_selection.currentIndexChanged.connect(self.updateLanguage)
             # lang_layout.addWidget(lang_label)
             lang_layout.addWidget(self.lang_selection)
-        
+
         # Model lists section
         models_layout = QHBoxLayout()
-        
+
         # Online available models (left side)
         online_group = QGroupBox(self.tr("Online Models"))
         online_layout = QVBoxLayout(online_group)
-        
+
         self.online_models_list = QListWidget()
         self.online_models_list.addItems(lang.getDownloadableModelList())
-        
+
         self.download_button = QPushButton(self.tr("Download"))
         self.download_button.setFixedWidth(80)
         self.download_button.clicked.connect(self.downloadModel)
-        
+
         online_layout.addWidget(self.online_models_list)
         online_layout.addWidget(self.download_button)
-        
+
         # Local downloaded models (right side)
         local_group = QGroupBox(self.tr("Local Models"))
         local_layout = QVBoxLayout(local_group)
-        
+
         self.local_models_list = QListWidget()
         # self.local_models_list.setSelectionMode(QAbstractItemView.MultiSelection)
         # Populate with some example models
         self.local_models_list.addItems(lang.getCachedModelList())
-        
+
         self.delete_button = QPushButton(app_strings.TR_DELETE)
         self.delete_button.setFixedWidth(80)
         self.delete_button.clicked.connect(self.deleteModel)
-        
+
         local_layout.addWidget(self.local_models_list)
         local_layout.addWidget(self.delete_button)
-        
+
         models_layout.addWidget(online_group)
         models_layout.addWidget(local_group)
-        
+
         if FUTURE:
             main_layout.addWidget(lang_group)
         main_layout.addLayout(models_layout)
-        
+
         self.setLayout(main_layout)
 
-    
     def downloadModel(self):
         selected_items = self.online_models_list.selectedItems()
         if not selected_items:
-            QMessageBox.information(self, "Selection Required", "Please select a model to download.")
+            QMessageBox.information(
+                self, "Selection Required", "Please select a model to download."
+            )
             return
-        
+
         model_name = selected_items[0].text()
         url = lang.getModelUrl(model_name)
         root = lang.getModelCachePath()
 
         progress_dialog = DownloadProgressDialog(url, root, model_name, self)
         result = progress_dialog.exec()
-        
+
         if result == QDialog.DialogCode.Accepted:
             self.updateLanguage()
-
 
     def deleteModel(self):
         selected_items = self.local_models_list.selectedItems()
         if not selected_items:
-            QMessageBox.information(self, "Selection Required", "Please select a model to delete.")
+            QMessageBox.information(
+                self, "Selection Required", "Please select a model to delete."
+            )
             return
-        
+
         model_name = selected_items[0].text()
 
         lang.deleteModel(model_name)
         self.updateLanguage()
-    
 
     def updateLanguage(self):
         print("updatelanguage")
@@ -601,13 +630,12 @@ class ModelsPanel(QWidget):
         self.local_models_list.addItems(lang.getCachedModelList())
 
 
-
 class SubtitlesPanel(QWidget):
     def __init__(self, parent: ParametersDialog, fps: int, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
 
         self.parent_dialog = parent
-        self.fps = fps if fps > 0 else 25 # Default to 25 fps even if irrevelant
+        self.fps = fps if fps > 0 else 25  # Default to 25 fps even if irrevelant
         self.user_params: dict = app_settings.value(
             "subtitles/user",
             {
@@ -616,7 +644,7 @@ class SubtitlesPanel(QWidget):
                 "min_interval": SUBTITLES_MIN_INTERVAL,
                 "auto_extend": SUBTITLES_AUTO_EXTEND,
                 "text_margin": SUBTITLES_MARGIN_SIZE,
-                "text_density": SUBTITLES_CPS
+                "text_density": SUBTITLES_CPS,
             },
             # type=dict
         )
@@ -636,7 +664,7 @@ class SubtitlesPanel(QWidget):
         )
         self.pref_selector.currentIndexChanged.connect(self.updateParameters)
         preference_layout.addWidget(self.pref_selector)
-        main_layout.addWidget(preference_group)        
+        main_layout.addWidget(preference_group)
 
         # Subtitles duration
         duration_group = QGroupBox(self.tr("Subtitles duration"))
@@ -644,7 +672,7 @@ class SubtitlesPanel(QWidget):
 
         ## Minimum duration for a subtitle
         self.min_frames_spin = QSpinBox()
-        self.min_frames_spin.setSuffix(' ' + app_strings.TR_UNIT_FRAMES)
+        self.min_frames_spin.setSuffix(" " + app_strings.TR_UNIT_FRAMES)
         self.min_frames_spin.setMinimum(1)
         self.min_frames_spin.valueChanged.connect(self.updateMinFrames)
         self.min_dur_label = QLabel()
@@ -656,7 +684,7 @@ class SubtitlesPanel(QWidget):
 
         ## Maximum duration for a subtitle
         self.max_frames_spin = QSpinBox()
-        self.max_frames_spin.setSuffix(' ' + app_strings.TR_UNIT_FRAMES)
+        self.max_frames_spin.setSuffix(" " + app_strings.TR_UNIT_FRAMES)
         self.max_frames_spin.setMinimum(1)
         self.max_frames_spin.setMaximum(250)
         self.max_frames_spin.valueChanged.connect(self.updateMaxFrames)
@@ -673,7 +701,7 @@ class SubtitlesPanel(QWidget):
 
         ## Minimum time interval between two subtitles
         self.min_interval_spin = QSpinBox()
-        self.min_interval_spin.setSuffix(' ' + app_strings.TR_UNIT_FRAMES)
+        self.min_interval_spin.setSuffix(" " + app_strings.TR_UNIT_FRAMES)
         self.min_interval_spin.setRange(0, 8)
         self.min_interval_spin.valueChanged.connect(self.updateMinInterval)
         self.min_interval_time_label = QLabel()
@@ -692,7 +720,7 @@ class SubtitlesPanel(QWidget):
             lambda checked: app_settings.setValue("subtitles/auto_extend", checked)
         )
         self.extend_max_gap_spin = QSpinBox()
-        self.extend_max_gap_spin.setSuffix(' ' + app_strings.TR_UNIT_FRAMES)
+        self.extend_max_gap_spin.setSuffix(" " + app_strings.TR_UNIT_FRAMES)
         self.extend_max_gap_spin.setMaximum(16)
         self.extend_max_gap_spin.valueChanged.connect(self.updateExtendMaxGap)
         self.extend_max_gap_time_label = QLabel()
@@ -709,7 +737,7 @@ class SubtitlesPanel(QWidget):
 
         ## Text margin
         self.text_margin_spin = QSpinBox()
-        self.text_margin_spin.setSuffix(' ' + self.tr("chars"))
+        self.text_margin_spin.setSuffix(" " + self.tr("chars"))
         self.text_margin_spin.valueChanged.connect(self.updateMarginSize)
         text_margin_layout = QHBoxLayout()
         text_margin_layout.addWidget(QLabel(self.tr("Text margin size")))
@@ -718,7 +746,7 @@ class SubtitlesPanel(QWidget):
 
         ## Text density
         self.text_density_spin = QDoubleSpinBox()
-        self.text_density_spin.setSuffix(' ' + app_strings.TR_UNIT_CPS)
+        self.text_density_spin.setSuffix(" " + app_strings.TR_UNIT_CPS)
         self.text_density_spin.setDecimals(1)
         self.text_density_spin.setSingleStep(0.1)
         self.text_density_spin.valueChanged.connect(self.updateDensity)
@@ -741,7 +769,7 @@ class SubtitlesPanel(QWidget):
                 self.pref_selector.setCurrentIndex(0)
         else:
             self.pref_selector.setCurrentIndex(1)
-    
+
     def updateMinFrames(self):
         min_frames = self.min_frames_spin.value()
         app_settings.setValue("subtitles/min_frames", min_frames)
@@ -752,7 +780,7 @@ class SubtitlesPanel(QWidget):
         if not self.default_params_lock:
             self.user_params["min_frames"] = min_frames
             self.switchToUserParams()
-    
+
     def updateMaxFrames(self):
         max_frames = self.max_frames_spin.value()
         app_settings.setValue("subtitles/max_frames", max_frames)
@@ -774,7 +802,7 @@ class SubtitlesPanel(QWidget):
         if not self.default_params_lock:
             self.user_params["min_interval"] = min_interval
             self.switchToUserParams()
-    
+
     def updateExtendMaxGap(self):
         max_gap = self.extend_max_gap_spin.value()
         app_settings.setValue("subtitles/auto_extend_max_gap", max_gap)
@@ -784,7 +812,7 @@ class SubtitlesPanel(QWidget):
         if not self.default_params_lock:
             self.user_params["auto_extend_max_gap"] = max_gap
             self.switchToUserParams()
-    
+
     def updateMarginSize(self):
         margin_size = self.text_margin_spin.value()
         app_settings.setValue("subtitles/margin_size", margin_size)
@@ -792,7 +820,7 @@ class SubtitlesPanel(QWidget):
         if not self.default_params_lock:
             self.user_params["text_margin"] = margin_size
             self.switchToUserParams()
-    
+
     def updateDensity(self):
         density = self.text_density_spin.value()
         app_settings.setValue("subtitles/cps", density)
@@ -800,7 +828,7 @@ class SubtitlesPanel(QWidget):
         if not self.default_params_lock:
             self.user_params["text_density"] = density
             self.switchToUserParams()
-    
+
     def updateParameters(self, idx):
         if idx == 0:
             # Set back to default parameters
@@ -821,7 +849,7 @@ class SubtitlesPanel(QWidget):
             self.text_margin_spin.setValue(self.user_params["text_margin"])
             self.text_density_spin.setValue(self.user_params["text_density"])
             app_settings.setValue("subtitles/use_default", False)
-    
+
     def switchToUserParams(self):
         if self.pref_selector.currentIndex() == 0:
             self.pref_selector.setCurrentIndex(1)
@@ -830,13 +858,13 @@ class SubtitlesPanel(QWidget):
         app_settings.setValue("subtitles/user", self.user_params)
 
 
-
 class CachePanel(QWidget):
-
-    def __init__(self, parent: ParametersDialog, media_path: Optional[Path], *args, **kwargs):
+    def __init__(
+        self, parent: ParametersDialog, media_path: Optional[Path], *args, **kwargs
+    ):
         super().__init__(parent, *args, **kwargs)
         self.parent_dialog = parent
-        
+
         self.media_metadata = cache.get_media_metadata(media_path) if media_path else {}
 
         main_layout = QVBoxLayout()
@@ -853,14 +881,15 @@ class CachePanel(QWidget):
         self.setLayout(main_layout)
 
         self.update()
-    
 
     def _create_current_media_cache_group(self) -> QGroupBox:
         current_media_group = QGroupBox(self.tr("Current file cache"))
-        current_media_group.setEnabled(bool(self.media_metadata) and "fingerprint" in self.media_metadata)
-        
+        current_media_group.setEnabled(
+            bool(self.media_metadata) and "fingerprint" in self.media_metadata
+        )
+
         current_file_layout = QVBoxLayout()
-        
+
         if current_media_group.isEnabled():
             label = QLabel(self.media_metadata["fingerprint"])
             label.setToolTip(self.tr("Media fingerprint"))
@@ -871,14 +900,14 @@ class CachePanel(QWidget):
         # Current media size layout
         current_size_layout = QHBoxLayout()
         current_size_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        label = QLabel(self.tr("Size on disk") + ':')
+        label = QLabel(self.tr("Size on disk") + ":")
         current_size_layout.addWidget(label)
         self.current_size_label = QLabel("")
         current_size_layout.addWidget(self.current_size_label)
         if current_media_group.isEnabled():
             current_file_layout.addLayout(current_size_layout)
 
-        current_delete_group = QGroupBox(self.tr("Clear cache"))        
+        current_delete_group = QGroupBox(self.tr("Clear cache"))
         current_delete_layout = QHBoxLayout()
         current_delete_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.current_waveform = QCheckBox(app_strings.TR_WAVEFORM)
@@ -902,7 +931,6 @@ class CachePanel(QWidget):
 
         return current_media_group
 
-
     def _create_global_cache_group(self) -> QGroupBox:
         global_group = QGroupBox(self.tr("Global cache"))
         global_layout = QVBoxLayout()
@@ -918,27 +946,29 @@ class CachePanel(QWidget):
         global_size_layout = QHBoxLayout()
         global_size_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        label = QLabel(self.tr("Size on disk") + ':')
+        label = QLabel(self.tr("Size on disk") + ":")
         global_size_layout.addWidget(label)
         self.global_size_label = QLabel("")
         global_size_layout.addWidget(self.global_size_label)
         global_size_layout.addSpacing(16)
-        label = QLabel(self.tr("Size limit") + ':')
+        label = QLabel(self.tr("Size limit") + ":")
         global_size_layout.addWidget(label)
 
         self.global_size_spinbox = QSpinBox()
-        self.global_size_spinbox.setSuffix(' ' + app_strings.TR_UNIT_MEGA_OCTED)
+        self.global_size_spinbox.setSuffix(" " + app_strings.TR_UNIT_MEGA_OCTED)
         self.global_size_spinbox.setRange(0, 2000)
-        self.global_size_spinbox.setValue(int(app_settings.value("cache/media_cache_size", 500)))
+        self.global_size_spinbox.setValue(
+            int(app_settings.value("cache/media_cache_size", 500))
+        )
         self.global_size_spinbox.valueChanged.connect(self.changeCacheSize)
-        self.global_size_spinbox.setEnabled(False) # TODO
-        
+        self.global_size_spinbox.setEnabled(False)  # TODO
+
         global_size_layout.addWidget(self.global_size_spinbox)
         global_layout.addLayout(global_size_layout)
 
         # Delete layout
         global_delete_group = QGroupBox(self.tr("Clear cache"))
-        
+
         global_delete_layout = QHBoxLayout()
         global_delete_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.global_waveform = QCheckBox(app_strings.TR_WAVEFORMS)
@@ -958,15 +988,14 @@ class CachePanel(QWidget):
 
         global_delete_group.setLayout(global_delete_layout)
         global_layout.addWidget(global_delete_group)
-        
+
         global_group.setLayout(global_layout)
 
         return global_group
 
-
     def update(self):
         """Update values of cache sizes by calculating its footprint on the hard-drive"""
-        
+
         if self.current_media_group.isEnabled():
             fingerprint = self.media_metadata["fingerprint"]
             size_strings = []
@@ -976,7 +1005,9 @@ class CachePanel(QWidget):
                 f"{app_strings.TR_WAVEFORM} ({self.simplifySize(size_current_waveform)})"
             )
             if cache._get_transcription_path(fingerprint).exists():
-                size_current_transcription = cache._get_transcription_path(fingerprint).stat().st_size
+                size_current_transcription = (
+                    cache._get_transcription_path(fingerprint).stat().st_size
+                )
                 current_total_size += size_current_transcription
                 size_strings.append(
                     f"{app_strings.TR_TRANSCRIPTION} ({self.simplifySize(size_current_transcription)})"
@@ -984,7 +1015,7 @@ class CachePanel(QWidget):
                 self.current_transcription.setHidden(False)
             else:
                 self.current_transcription.setHidden(True)
-            
+
             if cache._get_scenes_path(fingerprint).exists():
                 size_current_scenes = cache._get_scenes_path(fingerprint).stat().st_size
                 current_total_size += size_current_scenes
@@ -994,16 +1025,20 @@ class CachePanel(QWidget):
                 self.current_scenes.setHidden(False)
             else:
                 self.current_scenes.setHidden(True)
-            
+
             self.current_size_label.setText(self.simplifySize(current_total_size))
-            self.current_size_label.setToolTip('\n'.join([f"* {s}" for s in size_strings]))
+            self.current_size_label.setToolTip(
+                "\n".join([f"* {s}" for s in size_strings])
+            )
 
         size_strings = []
         size_all_waveforms = self.getSizeAllWaveforms()
         size_all_transcriptions = self.getSizeAllTranscriptions()
         size_all_scenes = self.getSizeAllScenes()
 
-        total_cache_size = size_all_waveforms + size_all_transcriptions + size_all_scenes
+        total_cache_size = (
+            size_all_waveforms + size_all_transcriptions + size_all_scenes
+        )
         if cache.media_cache_path.exists():
             total_cache_size += cache.media_cache_path.stat().st_size
         if cache.doc_cache_path.exists():
@@ -1012,14 +1047,17 @@ class CachePanel(QWidget):
         size_strings = [
             f"{app_strings.TR_WAVEFORMS} ({self.simplifySize(size_all_waveforms)})",
             f"{app_strings.TR_TRANSCRIPTIONS} ({self.simplifySize(size_all_transcriptions)})",
-            f"{app_strings.TR_SCENES} ({self.simplifySize(size_all_scenes)})"
+            f"{app_strings.TR_SCENES} ({self.simplifySize(size_all_scenes)})",
         ]
         self.global_size_label.setText(self.simplifySize(total_cache_size))
-        self.global_size_label.setToolTip('\n'.join([f"* {s}" for s in size_strings]))
-
+        self.global_size_label.setToolTip("\n".join([f"* {s}" for s in size_strings]))
 
     def simplifySize(self, size: int) -> str:
-        units = [app_strings.TR_UNIT_OCTED, app_strings.TR_UNIT_KILO_OCTED, app_strings.TR_UNIT_MEGA_OCTED]
+        units = [
+            app_strings.TR_UNIT_OCTED,
+            app_strings.TR_UNIT_KILO_OCTED,
+            app_strings.TR_UNIT_MEGA_OCTED,
+        ]
         unit_i = 0
         while size >= 1000 and unit_i < len(units):
             size /= 1000
@@ -1030,35 +1068,32 @@ class CachePanel(QWidget):
     def getSizeAllWaveforms(self) -> int:
         total_size = 0
         for file in cache.waveforms_dir.iterdir():
-            if file.suffix == '.npy':
+            if file.suffix == ".npy":
                 total_size += file.stat().st_size
         return total_size
 
     def getSizeAllTranscriptions(self) -> int:
         total_size = 0
         for file in cache.transcriptions_dir.iterdir():
-            if file.suffix == '.tsv':
+            if file.suffix == ".tsv":
                 total_size += file.stat().st_size
         return total_size
-    
+
     def getSizeAllScenes(self) -> int:
         total_size = 0
         for file in cache.scenes_dir.iterdir():
-            if file.suffix == '.tsv':
+            if file.suffix == ".tsv":
                 total_size += file.stat().st_size
         return total_size
-    
 
     def openCacheDirectory(self):
         file_url = QUrl.fromLocalFile(get_cache_directory())
         QDesktopServices.openUrl(file_url)
-    
 
     def changeCacheSize(self):
         cache_size = int(self.global_size_spinbox.value())
         app_settings.setValue("cache/media_cache_size", cache_size)
         app_settings.value("cache/media_cache_size", 500)
-    
 
     def clearCurrentCache(self):
         logger.message("Clearing current media cache")
@@ -1084,17 +1119,17 @@ class CachePanel(QWidget):
             self.media_metadata.pop("transcription_progress", None)
             self.media_metadata.pop("transcription_completed", None)
             self.parent_dialog.signals.cache_transcription_cleared.emit()
-        
+
         if self.current_scenes.isChecked():
             transcription_path = cache._get_transcription_path(fingerprint)
             transcription_path.unlink(missing_ok=True)
             self.media_metadata.pop("scenes", None)
             self.parent_dialog.signals.cache_scenes_cleared.emit()
-        
+
         if (
-            self.current_waveform.isChecked() and
-            self.current_transcription.isChecked() and
-            self.current_scenes.isChecked()
+            self.current_waveform.isChecked()
+            and self.current_transcription.isChecked()
+            and self.current_scenes.isChecked()
         ):
             # Remove media record from cache root
             cache.media_cache.pop(fingerprint, None)
@@ -1103,22 +1138,21 @@ class CachePanel(QWidget):
         cache._save_root_cache_to_disk()
         self.update()
 
-    
     def clearGlobalCache(self):
         logger.message("Clearing global media cache")
 
         if self.global_waveform.isChecked():
             for file in cache.waveforms_dir.iterdir():
-                if file.suffix == '.npy':
+                if file.suffix == ".npy":
                     file.unlink()
                 fingerprint = file.stem
                 if fingerprint in cache.media_cache:
                     cache.media_cache[fingerprint].pop("waveform_size", None)
                     cache._media_cache_dirty = True
-        
+
         if self.global_transcription.isChecked():
             for file in cache.transcriptions_dir.iterdir():
-                if file.suffix == '.tsv':
+                if file.suffix == ".tsv":
                     file.unlink()
                 fingerprint = file.stem
                 if fingerprint in cache.media_cache:
@@ -1126,17 +1160,17 @@ class CachePanel(QWidget):
                     cache.media_cache[fingerprint].pop("transcription_completed", None)
                     cache._media_cache_dirty = True
             self.parent_dialog.signals.cache_transcription_cleared.emit()
-        
+
         if self.global_scenes.isChecked():
             for file in cache.scenes_dir.iterdir():
-                if file.suffix == '.tsv':
+                if file.suffix == ".tsv":
                     file.unlink()
             self.parent_dialog.signals.cache_scenes_cleared.emit()
-        
+
         if (
-            self.global_waveform.isChecked() and
-            self.global_transcription.isChecked() and
-            self.global_scenes.isChecked()
+            self.global_waveform.isChecked()
+            and self.global_transcription.isChecked()
+            and self.global_scenes.isChecked()
         ):
             # Remove media cache root
             cache.media_cache.clear()
@@ -1144,5 +1178,5 @@ class CachePanel(QWidget):
             cache._media_cache_dirty = False
         else:
             cache._save_root_cache_to_disk()
-        
+
         self.update()

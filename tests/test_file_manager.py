@@ -1,15 +1,12 @@
 import os
 from pathlib import Path
-import pytest
 
+import pytest
 from PySide6.QtWidgets import QApplication
 
-from src.main import (
-    MainWindow
-)
-from ui.icons import loadIcons
-from strings import strings
-
+from src.main import MainWindow
+from src.strings import app_strings
+from src.ui.icons import loadIcons
 
 
 @pytest.fixture(scope="session")
@@ -18,12 +15,12 @@ def qapp():
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
-    
+
     loadIcons()
-    strings.initialize()
-    
+    app_strings.initialize()
+
     yield app
-    
+
     # Cleanup after all tests
     app.quit()
 
@@ -40,7 +37,6 @@ def main_window(qapp):
     qapp.processEvents()  # Process pending events
 
 
-
 def load_document(main_window):
     main_window.document_controller.clear()
 
@@ -49,7 +45,7 @@ def load_document(main_window):
         ("Eil linenn.", (16.05, 21.6)),
         ("Trede linenn", (23.73, 31.2)),
         ("Pevare linenn", (32, 35)),
-        ("Pempvet linenn", (40, 41))
+        ("Pempvet linenn", (40, 41)),
     ]:
         seg_id = main_window.document_controller.addSegment(list(segment))
         main_window.text_widget.appendSentence(text, seg_id)
@@ -69,12 +65,14 @@ def test_save_ali(main_window, tmp_path: Path):
 
     data = output_file.read_text()
 
-    assert data.strip() == \
-"""Linenn kentañ {start: 0.45; end: 2.25}
+    assert (
+        data.strip()
+        == """Linenn kentañ {start: 0.45; end: 2.25}
 Eil linenn. {start: 16.05; end: 21.6}
 Trede linenn {start: 23.73; end: 31.2}
 Pevare linenn {start: 32; end: 35}
 Pempvet linenn {start: 40; end: 41}"""
+    )
 
     # Remove temporary file
     os.remove(output_file)
@@ -88,13 +86,15 @@ def test_save_ali_replace_media(main_window, tmp_path: Path):
 
     data = output_file.read_text()
 
-    assert data.strip() == \
-"""{media-path: media.mp3}
+    assert (
+        data.strip()
+        == """{media-path: media.mp3}
 Linenn kentañ {start: 0.45; end: 2.25}
 Eil linenn. {start: 16.05; end: 21.6}
 Trede linenn {start: 23.73; end: 31.2}
 Pevare linenn {start: 32; end: 35}
 Pempvet linenn {start: 40; end: 41}"""
+    )
 
     # Remove temporary file
     os.remove(output_file)
@@ -120,5 +120,5 @@ def test_load_ali(main_window):
     main_window.text_widget.printDocumentStructure()
     doc = main_window.text_widget.document()
     block = doc.firstBlock()
-    text, _ = main_window.text_widget.getBlockHtml(block)
+    text = main_window.document_controller.getBlockHtml(block)
     assert text == "{metadata: yes}"

@@ -1,12 +1,11 @@
-import pytest
 from pathlib import Path
 
+import pytest
 from PySide6.QtWidgets import QApplication
 
 from src.main import MainWindow
-from ui.icons import loadIcons
-from strings import strings
-
+from src.strings import app_strings
+from src.ui.icons import loadIcons
 
 
 @pytest.fixture(scope="session")
@@ -15,12 +14,12 @@ def qapp():
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
-    
+
     loadIcons()
-    strings.initialize()
-    
+    app_strings.initialize()
+
     yield app
-    
+
     # Cleanup after all tests
     app.quit()
 
@@ -47,7 +46,7 @@ def load_document(main_window):
         ("Eil linenn.", (18, 20)),
         ("Trede linenn", (25, 30)),
         ("Pevare linenn", (32, 35)),
-        ("Pempvet linenn", (40, 41))
+        ("Pempvet linenn", (40, 41)),
     ]:
         seg_id = main_window.document_controller.addSegment(list(segment))
         main_window.text_widget.appendSentence(text, seg_id)
@@ -62,7 +61,7 @@ def load_document_2(main_window):
 
 def test_density(main_window):
     load_document(main_window)
-    
+
     d = main_window.document_controller.getUtteranceDensity(0)
     assert 7 < d < 8
 

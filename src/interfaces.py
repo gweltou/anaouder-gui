@@ -16,28 +16,23 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
-from typing import (
-    Protocol,
-    Dict, List, Tuple, Any,
-    Optional
-)
 from enum import Enum
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 from PySide6.QtGui import (
-    QUndoStack,
-    QTextBlock, QTextDocument, QTextBlockUserData,
-    QTextCursor,
     QSyntaxHighlighter,
+    QTextBlock,
+    QTextBlockUserData,
+    QTextCursor,
+    QTextDocument,
+    QUndoStack,
 )
-
 
 # Custom types
 
 type Segment = List[float]
 type SegmentId = int
-
 
 
 class BlockType(Enum):
@@ -47,12 +42,12 @@ class BlockType(Enum):
     NOT_ALIGNED = 3
 
 
-
 class MyTextBlockUserData(QTextBlockUserData):
     """
-        Fields:
-            - seg_id
+    Fields:
+        - seg_id
     """
+
     def __init__(self, data: dict):
         super().__init__()
         self.data = data
@@ -63,15 +58,12 @@ class MyTextBlockUserData(QTextBlockUserData):
         return MyTextBlockUserData(self.data)
 
 
-
 class MainWindowInterface(Protocol):
-
     def setStatusMessage(self, message: str, timeout: int) -> None: ...
 
     def setErrorMessage(self, message: str, timeout: int) -> None: ...
-    
-    def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]: ...
 
+    def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]: ...
 
 
 class DocumentInterface(Protocol):
@@ -82,66 +74,72 @@ class DocumentInterface(Protocol):
 
     def getSegment(self, segment_id: SegmentId) -> Segment | None: ...
 
-    def addSegment(self, segment: Segment, segment_id: SegmentId|None = None) -> SegmentId: ...
-    
+    def addSegment(
+        self, segment: Segment, segment_id: SegmentId | None = None
+    ) -> SegmentId: ...
+
     def updateSegment(self, segment_id: SegmentId, segment: Segment) -> None: ...
 
     def removeSegment(self, segment_id: SegmentId) -> None: ...
 
     def deleteUtterances(self, segment_ids: List[SegmentId]) -> None: ...
-    
+
     def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]: ...
-    
+
     def getNewSegmentId(self) -> SegmentId: ...
-    
+
     def getPrevSegmentId(self, segment_id: SegmentId) -> SegmentId: ...
-    
+
     def getNextSegmentId(self, segment_id: SegmentId) -> SegmentId: ...
-    
+
     def getNextAlignedBlock(self, block: QTextBlock) -> QTextBlock | None: ...
-    
+
     def getPrevAlignedBlock(self, block: QTextBlock) -> QTextBlock | None: ...
 
     def getBlockType(self, block: QTextBlock) -> BlockType: ...
-    
+
     def getBlockByNumber(self, block_number: int) -> QTextBlock | None: ...
-    
+
     def getBlockById(self, segment_id: SegmentId) -> QTextBlock | None: ...
-    
+
     def getBlockId(self, block: QTextBlock) -> SegmentId: ...
 
     def setBlockId(self, block: QTextBlock, segment_id: SegmentId | None) -> None: ...
 
     def getBlockHtml(self, block: QTextBlock) -> str | None: ...
 
-    def getTranscriptionForSegment(self, segment_start: float, segment_end: float) -> list: ...
+    def getTranscriptionForSegment(
+        self, segment_start: float, segment_end: float
+    ) -> list: ...
 
     def updateBlockMetadata(self, block: QTextBlock, metadata: dict) -> None: ...
-    
-    def setBlockMetadata(self, block: QTextBlock, metadata: dict|None) -> None:  ...
-    
+
+    def setBlockMetadata(self, block: QTextBlock, metadata: dict | None) -> None: ...
+
     def getBlockMetadata(self, block: QTextBlock) -> Dict: ...
 
+    def getSentenceLength(self, block: QTextBlock) -> int: ...
+
     def getUtteranceDensity(self, segment_id: SegmentId) -> float: ...
-    
+
     def updateUtteranceDensity(self, segment_id: SegmentId) -> None: ...
-    
+
     def getSelectedBlocksAndTimeRange(self) -> Tuple[List[QTextBlock], List] | None: ...
 
     def cropHead(self) -> None: ...
-    
+
     def cropTail(self) -> None: ...
-    
+
     def clear(self) -> None: ...
 
-    def getData(self) -> List[Tuple[str, Segment|None]]: ...
+    def getData(self) -> List[Tuple[str, Segment | None]]: ...
 
-    def loadData(self, data: List[Tuple[str, Segment|None]]) -> None: ...
-
+    def loadData(self, data: List[Tuple[str, Segment | None]]) -> None: ...
 
 
 class WaveformInterface(Protocol):
     """Anything with these methods can be used"""
+
     active_segments: List[SegmentId]
     active_segment_id: SegmentId
     must_redraw: bool
@@ -149,11 +147,10 @@ class WaveformInterface(Protocol):
 
     @property
     def refresh_segment_info(self) -> Any: ...
-    
-    def getSelection(self) -> Optional[Segment]: ...
-    
-    def removeSelection(self) -> None: ...
 
+    def getSelection(self) -> Optional[Segment]: ...
+
+    def removeSelection(self) -> None: ...
 
 
 class TextDocumentInterface(Protocol):
@@ -161,36 +158,31 @@ class TextDocumentInterface(Protocol):
     highlighted_sentence_id: SegmentId
 
     def document(self) -> QTextDocument: ...
-    
+
     def textCursor(self) -> QTextCursor: ...
 
-    def setTextCursor(self, cursor: QTextCursor, /) -> None: ... 
-    
+    def setTextCursor(self, cursor: QTextCursor, /) -> None: ...
+
     def appendSentence(
-            self,
-            text: str,
-            segment_id: Optional[SegmentId]
-        ) -> QTextBlock: ...
-    
+        self, text: str, segment_id: Optional[SegmentId]
+    ) -> QTextBlock: ...
+
     def insertBlock(self, text: str, data: Optional[dict], pos: int) -> QTextBlock: ...
 
     def insertSentenceWithId(
-            self,
-            text: str,
-            segment_id: SegmentId,
-            with_cursor: bool = False
-        ) -> None: ...
-    
+        self, text: str, segment_id: SegmentId, with_cursor: bool = False
+    ) -> None: ...
+
     def setSentenceText(self, text: str, segment_id: SegmentId) -> None: ...
 
     def deleteSentence(self, seg_id: SegmentId) -> None: ...
-        
-    def deactivateSentence(self, seg_id: SegmentId) -> None: ...
-    
+
+    def deactivateSentence(self, seg_id: SegmentId | None) -> None: ...
+
     def getBlockNumber(self, position: int) -> int: ...
-    
+
     def getBlockHtmlMap(self, block: QTextBlock) -> Tuple[str, List[bool]]: ...
-    
+
     def isAligned(self, block: QTextBlock) -> bool: ...
 
     def updateLineNumberAreaWidth(self) -> None: ...
@@ -198,13 +190,13 @@ class TextDocumentInterface(Protocol):
     def updateLineNumberArea(self) -> None: ...
 
     def getCursorState(self) -> dict: ...
-    
+
     def setCursorState(self, cursor_state: dict) -> None: ...
-    
+
     def blockSignals(self, b: bool, /) -> bool: ...
-    
+
     def signalsBlocked(self) -> bool: ...
-    
+
     def highlightUtterance(self, segment_id: SegmentId) -> None: ...
 
     def printDocumentStructure(self) -> None: ...
