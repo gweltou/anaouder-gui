@@ -251,9 +251,7 @@ class WaveformLayer(RenderLayer):
         cache_t_left = max(0.0, ctx.t_left - margin)
         cache_width = ctx.width * 3
 
-        chart = self._waveform.get(
-            cache_t_left, cache_t_left + cache_width / ctx.ppsec, cache_width
-        )
+        chart = self._waveform.get(cache_t_left, cache_width)
 
         self._cache = QPixmap(cache_width, ctx.height)
         self._cache.fill(Qt.GlobalColor.transparent)
@@ -279,7 +277,7 @@ class WaveformLayer(RenderLayer):
 
     def _draw_direct(self, painter: QPainter, ctx: RenderContext) -> None:
         """Used when zoomed in far enough that individual samples are visible."""
-        chart = self._waveform.get(ctx.t_left, ctx.t_right, ctx.width)
+        chart = self._waveform.get(ctx.t_left, ctx.width)
         painter.setPen(ctx.palette.wf_pen)
         lyt = ctx.layout
         wf_h = ctx.height - lyt.timecode_margin

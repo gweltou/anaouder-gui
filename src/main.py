@@ -1294,7 +1294,7 @@ class MainWindow(QMainWindow):
         if "waveform_pps" in doc_metadata:
             self.waveform.view.ppsec = doc_metadata["waveform_pps"]
             self.waveform.view.ppsec_goal = doc_metadata["waveform_pps"]
-            self.waveform.waveform.ppsec = doc_metadata["waveform_pps"]
+            self.waveform._waveform_data.ppsec = doc_metadata["waveform_pps"]
         if "playhead_pos" in doc_metadata:
             QTimer.singleShot(
                 0, lambda: self.media_controller.seekTo(doc_metadata["playhead_pos"])

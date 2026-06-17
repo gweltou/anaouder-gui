@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import List
 
 import numpy as np
 
@@ -30,61 +29,66 @@ class WaveformData:
         # Values at odd indexes are the positive value of each sample bin
         self.buffer = np.zeros(512, dtype=np.float16)
         self.filtered_audio = np.zeros(512, dtype=np.float16)
-        self.last_request = (0, 0, 0)
+        self.last_request = None
+        self.samples = []
 
         # Low-pass filter kernel (simple moving average)
         self.kernel = np.array([1 / 3, 1 / 3, 1 / 3], dtype=np.float16)
 
-    def setSamples(self, samples: List[float], sr: int):
+    def setSamples(self, samples: np.ndarray, sr: int):
         self.samples = samples
         self.sr = sr
 
-    def get(self, t_left: float, t_right: float, size: int):
+    def get(self, t_left: float, size: int):
         """
-        Return an array of tupples, representing highest and lowest mean value
-        for every given pixel between two timecodes
-        """
-        # Memoization
-        if (t_left, t_right, size) == self.last_request:
-            return self.filtered_audio
-        self.last_request = (t_left, t_right, size)
+        Compute a min/max amplitude envelope of the audio for display.
+        Apply a 3-tap low-pass filter across columns to smooth the result.
 
-        while len(self.buffer) < 2 * size:
-            # Double the size of the buffer
-            self.buffer = np.resize(self.buffer, 2 * len(self.buffer))
+        Results are memoized.
+
+        Args:
+            t_left: Start time of the visible range, in seconds.
+            size: Number of pixel columns to compute (i.e. waveform width
+                in pixels).
+
+        Returns:
+            A 1D float array of length `2 * size`. Index i holds the trough
+            (mean of negative samples, <= 0) for pixel column i.
+            Index i + size holds the peak
+            (mean of positive samples, >= 0) for the same column.
+        """
+
+        if (t_left, size) == self.last_request:
+            return self.filtered_audio
+        self.last_request = (t_left, size)
 
         samples_per_pix = self.sr / self.ppsec
-        samples_per_pix_floor = int(max(samples_per_pix, 1.0))
-
         si_left = round(t_left * self.sr)
         bi_left = int(si_left / samples_per_pix)
-        # bi_right = bi_left + size
-        s_step = 1 if samples_per_pix <= 16 else int(samples_per_pix / 16)
-        mul = samples_per_pix_floor / s_step
-        for i in range(size):
-            s0 = int((bi_left + i) * samples_per_pix)
-            ymin = 0.0
-            ymax = 0.0
-            if s0 < 0:
-                self.buffer[i] = 0.0
-                self.buffer[i + size] = 0.0
-                continue
 
-            for si in range(s0, s0 + samples_per_pix_floor, s_step):
-                if si >= len(self.samples):
-                    # End of audio data
-                    break
-                sample = self.samples[si]
-                if sample > 0.0:
-                    ymax += sample
-                else:
-                    ymin += sample
-            self.buffer[i] = ymin / mul
-            self.buffer[i + size] = ymax / mul
+        # Build start indices for each pixel column
+        starts = ((bi_left + np.arange(size)) * samples_per_pix).astype(np.int64)
+        step = max(1, int(samples_per_pix / 16)) if samples_per_pix > 16 else 1
+        width = int(max(samples_per_pix, 1.0))
 
-        self.filtered_audio = np.convolve(
-            self.buffer[: size * 2], self.kernel, mode="same"
-        )
+        ymin = np.zeros(size, dtype=np.float32)
+        ymax = np.zeros(size, dtype=np.float32)
+
+        valid = starts >= 0
+        for offset in range(0, width, step):
+            idx = starts + offset
+            in_range = valid & (idx < len(self.samples))
+            s = np.where(
+                in_range, self.samples[np.clip(idx, 0, len(self.samples) - 1)], 0.0
+            )
+            ymax += np.where(s > 0, s, 0.0)
+            ymin += np.where(s <= 0, s, 0.0)
+
+        mul = width / step
+        ymin /= mul
+        ymax /= mul
+        self.buffer = np.concatenate([ymin, ymax])
+        self.filtered_audio = np.convolve(self.buffer, self.kernel, mode="same")
         return self.filtered_audio
 
 

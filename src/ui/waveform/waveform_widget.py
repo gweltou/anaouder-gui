@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from typing import List, Tuple
 
+import numpy as np
 from PySide6.QtCore import (
     QPoint,
     QPointF,
@@ -103,7 +104,7 @@ class WaveformWidget(QWidget):
         self._action = action
         self._undo_stack = self._doc.undo_stack
 
-        self.waveform = WaveformData()
+        self._waveform_data = WaveformData()
         self._layout: LayoutMetrics
         self._pixmap = QPixmap()
         self._painter = QPainter()
@@ -123,7 +124,7 @@ class WaveformWidget(QWidget):
 
         self._layers = [
             ProgressLayer(),
-            WaveformLayer(self.waveform),
+            WaveformLayer(self._waveform_data),
             TimelineLayer(),
             SegmentsLayer(self._doc, self._subs_rules),
             SceneChangeLayer(),
@@ -216,9 +217,9 @@ class WaveformWidget(QWidget):
         self._pens = PenSet.from_theme(theme)
         self.must_redraw = True
 
-    def setSamples(self, samples, sr) -> None:
-        self.waveform.setSamples(samples, sr)
-        self.waveform.ppsec = self.view.ppsec
+    def setSamples(self, samples: np.ndarray, sr: int) -> None:
+        self._waveform_data.setSamples(samples, sr)
+        self._waveform_data.ppsec = self.view.ppsec
         self.audio_len = len(samples) / sr
 
     def getSelection(self) -> Segment | None:
@@ -355,7 +356,7 @@ class WaveformWidget(QWidget):
         # Zooming
         if self.view.ppsec_goal != self.view.ppsec:
             self.view.ppsec += (self.view.ppsec_goal - self.view.ppsec) * 0.2
-            self.waveform.ppsec = self.view.ppsec
+            self._waveform_data.ppsec = self.view.ppsec
 
         if self.view.scroll_vel != 0.0 or self.view.scroll_goal >= 0.0:
             self._updateScroll()
@@ -390,7 +391,7 @@ class WaveformWidget(QWidget):
             self.view.scroll_goal = -1
             self.view.scroll_vel = 0.0
             self.view.ppsec = self.view.ppsec_goal
-            self.waveform.ppsec = self.view.ppsec
+            self._waveform_data.ppsec = self.view.ppsec
         else:
             self.must_redraw = True
 
@@ -408,7 +409,7 @@ class WaveformWidget(QWidget):
         if self.width() > 0 and self.audio_len > 0:
             self.view.ppsec = max(self.view.ppsec, self.width() / self.audio_len)
             self.view.ppsec_goal = self.view.ppsec
-            self.waveform.ppsec = self.view.ppsec
+            self._waveform_data.ppsec = self.view.ppsec
 
         self._layout = LayoutMetrics.compute(self.width(), self.height())
 
@@ -489,7 +490,7 @@ class WaveformWidget(QWidget):
             max(self.view.t_left, 0), self.audio_len - self.width() / self.view.ppsec
         )
         self.view.ppsec_goal = self.view.ppsec
-        self.waveform.ppsec = self.view.ppsec
+        self._waveform_data.ppsec = self.view.ppsec
         self.must_redraw = True
 
     def zoomOut(self, factor=1.333, position=0.5):
@@ -504,7 +505,7 @@ class WaveformWidget(QWidget):
             max(self.view.t_left, 0), self.audio_len - self.width() / self.view.ppsec
         )
         self.view.ppsec_goal = self.view.ppsec
-        self.waveform.ppsec = self.view.ppsec
+        self._waveform_data.ppsec = self.view.ppsec
         self.must_redraw = True
 
     def _commitResizeSegment(self):
@@ -1086,7 +1087,7 @@ class WaveformWidget(QWidget):
         )
 
     def draw(self):
-        if not self._pixmap or self.audio_len == 0:
+        if self._pixmap.isNull() or self.audio_len == 0:
             self._pixmap.fill(theme.colors.wf_bg_color)
             return
 
