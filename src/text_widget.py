@@ -22,9 +22,6 @@ from typing import List, Optional, Tuple
 from PySide6.QtCore import QMimeData, QRect, QRegularExpression, QSize, Qt, Signal, Slot
 from PySide6.QtGui import (
     QAction,
-    QClipboard,
-    QColor,
-    QDragMoveEvent,
     QDropEvent,
     QEnterEvent,
     QFont,
@@ -34,9 +31,7 @@ from PySide6.QtGui import (
     QKeySequence,
     QPainter,
     QPaintEvent,
-    QShortcut,
     QTextBlock,
-    QTextBlockFormat,
     QTextCharFormat,
     QTextCursor,
     QUndoStack,
@@ -606,12 +601,12 @@ class TextEditWidget(QTextEdit):
         self.undo_stack.push(ReplaceTextCommand(self, block, new_text))
         return
 
-    def zoomIn(self, *args):
-        super().zoomIn(*args)
+    def zoomIn(self, /, range: int = 1) -> None:
+        super().zoomIn(range)
         self._updateSubtitleMargin()
 
-    def zoomOut(self, *args):
-        super().zoomOut(*args)
+    def zoomOut(self, /, range: int = 1) -> None:
+        super().zoomOut(range)
         self._updateSubtitleMargin()
 
     def changeTextFormat(self, format: TextFormat):

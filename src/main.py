@@ -86,7 +86,7 @@ from src.exports import segment_exporter
 from src.exports.textual_exporter import export_to_text_format
 from src.file_manager import FileManager, FileOperationError
 from src.hunspell import HunspellLoader
-from src.interfaces import BlockType, Segment, SegmentId, TextDocumentInterface
+from src.interfaces import BlockType, Segment, SegmentId, TextEditorInterface
 from src.scene_detector import SceneDetectWorker
 from src.services.aligner import TextAligner
 from src.services.logger import logger
@@ -108,6 +108,7 @@ from src.settings import (
     RECENT_FILES_LIMIT,
     STATUS_BAR_TIMEOUT,
     SUBTITLES_CPS,
+    SUBTITLES_MARGIN_SIZE,
     SUBTITLES_MAX_FRAMES,
     SUBTITLES_MIN_FRAMES,
     WAVEFORM_SAMPLERATE,
@@ -210,7 +211,7 @@ class MainWindow(QMainWindow):
 
         # TODO: reverse dependencies of document_controller and text/waveform widgets
         self.document_controller = DocumentController(self)
-        self.text_widget: TextDocumentInterface = TextEditWidget(
+        self.text_widget: TextEditorInterface = TextEditWidget(
             self, self.document_controller, self.action
         )
         self.waveform = WaveformWidget(self, self.document_controller, self.action)
@@ -1694,20 +1695,21 @@ class MainWindow(QMainWindow):
         utterances = []
         block = self.text_widget.document().firstBlock()
         while block.isValid():
-            if self.document_controller.getBlockType(block) == BlockType.ALIGNED:
+            if self.document_controller.getBlockType(block) in (
+                BlockType.ALIGNED,
+                BlockType.METADATA_ONLY,
+            ):
                 text = self.text_widget.getBlockHtmlMap(block)[0]
 
                 # Remove extra spaces
-                lines = [" ".join(l.split()) for l in text.split(LINE_BREAK)]
+                lines = [" ".join(line.split()) for line in text.split(LINE_BREAK)]
                 text = LINE_BREAK.join(lines)
 
                 block_id = self.document_controller.getBlockId(block)
                 segment = self.document_controller.getSegment(block_id)
-                if segment:
-                    utterances.append((text, segment))
+                utterances.append((text, segment))
 
             block = block.next()
-
         return utterances
 
     def onExportAudioSegments(self):
@@ -2217,6 +2219,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def onTextChanged(self) -> None:
+        # print("onTextChanged")
         # Update the utterance density field
         with QSignalBlocker(self.text_widget.document()):
             cursor = self.text_widget.textCursor()
@@ -2682,9 +2685,26 @@ class MainWindow(QMainWindow):
         else:
             string_parts.append(duration_string)
 
+        # Get longest line length
+        block = self.document_controller.getBlockById(seg_id)
+        if block is not None:
+            lines = block.text().split(LINE_BREAK)
+            longest = max(map(len, lines))
+            line_max_size: int = app_settings.value(
+                "subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int
+            )
+            len_string = self.tr("len: {}").format(longest)
+            if longest > line_max_size:
+                string_parts.append(
+                    f"<span style='{warning_style}'>{len_string}</span>"
+                )
+            else:
+                string_parts.append(len_string)
+
+        # Add density
         if density != -1.0:
             density_str = f"{density:.1f}{app_strings.TR_UNIT_CPS}"
-            if density >= self._target_density:
+            if density > self._target_density + 0.05:  # Slight tolerance
                 string_parts.append(
                     f"<span style='{warning_style}'>{density_str}</span>"
                 )

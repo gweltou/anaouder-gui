@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,35 +16,30 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
-from typing import List, Optional
-import sys
+import json
 import os
 import platform
-from pathlib import Path
-import subprocess
-import json
-import glob
-
+import re
 import ssl
-import certifi
+import subprocess
+import sys
 import urllib
 import zipfile
+from pathlib import Path
+from typing import List, Optional, Tuple
 
+import certifi
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtGui import QColor
 
-
-EM_DASH = '–'
-LINE_BREAK = '\u2028'
+EM_DASH = "–"
+LINE_BREAK = "\u2028"
 PUNCTUATION = '.?!,‚;:«»“”"()[]{}/\…–—-_~^•'
-STOP_CHARS = PUNCTUATION + ' \t\u2028'
+STOP_CHARS = PUNCTUATION + " \t\u2028"
 
 MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm", ".mov")
 ALL_COMPATIBLE_FORMATS = MEDIA_FORMATS + (".ali", ".seg", ".split", ".srt")
 SUBTITLES_FILE_FORMATS = (".srt",)
-
-
 
 
 def get_resource_path(relative_path):
@@ -71,27 +66,26 @@ def get_cache_directory(name: Optional[str] = None) -> Path:
     else:
         raise OSError("Unsupported operating system")
     cache_base = Path(os.getenv("XDG_CACHE_HOME", default))
-    
+
     if name:
         cache_dir = cache_base / "anaouder" / name
     else:
         cache_dir = cache_base / "anaouder"
-    
+
     # Create directory if it doesn't exist
     cache_dir.mkdir(parents=True, exist_ok=True)
-    
-    return cache_dir
 
+    return cache_dir
 
 
 def download(url: str, root: str) -> str:
     """
     Download an archive from the web and decompress it
-    
+
     Args:
         url: URL to download from
         root: Directory to save and extract the archive
-    
+
     Returns:
         Path to the downloaded file (before extraction)
     """
@@ -112,9 +106,9 @@ def download(url: str, root: str) -> str:
 
                 output.write(buffer)
                 downloaded += len(buffer)
-    
+
     # Extract the archive
-    with zipfile.ZipFile(download_target, 'r') as zip_ref:
+    with zipfile.ZipFile(download_target, "r") as zip_ref:
         zip_ref.extractall(root)
 
     # Clean up the downloaded archive
@@ -123,14 +117,52 @@ def download(url: str, root: str) -> str:
     return download_target
 
 
-
 #### Text utility functions
+
 
 def filter_out_chars(text: str, chars: str) -> str:
     """Remove specified characters from text"""
     for char in chars:
-        text = text.replace(char, '')
+        text = text.replace(char, "")
     return text
+
+
+def extract_metadata(sentence: str) -> Tuple[str, dict]:
+    """
+    Returns the sentence stripped of its metadata (if any)
+    and a dictionary of metadata
+    Keeps unknown word markers '{?}'
+    """
+    METADATA_PATTERN = re.compile(r"{\s*(.+?)\s*}")
+    metadata = dict()
+    sentence_parts = []
+    current_idx = 0
+
+    for match in METADATA_PATTERN.finditer(sentence):
+        start, end = match.span()
+        content = match.group(1).strip()
+        if content.strip() == "?":  # Unknown words {?}
+            sentence_parts.append(match.group(0))
+        else:
+            metadata_units = content.split(";")
+            for unit in metadata_units:
+                unit = unit.strip()
+                if ":" in unit:
+                    # Key-value pair
+                    key, val = unit.split(":", maxsplit=1)
+                    metadata[key.strip()] = val.strip()
+                else:
+                    # A simplified speaker name
+                    if not unit.isupper():
+                        # Keep all-caps names (Acronyms)
+                        unit = unit.replace(" ", "_").lower()
+                    metadata["speaker"] = unit
+        current_idx = end
+
+    sentence_parts.append(sentence[current_idx:])
+    sentence = "".join(sentence_parts)
+
+    return sentence.strip(), metadata
 
 
 def extract_sentence_regions(text: str) -> List[tuple]:
@@ -138,9 +170,12 @@ def extract_sentence_regions(text: str) -> List[tuple]:
     Return a list of text regions,
     stripped of their metadata and special tokens
     """
-    sentence_splits = [(0, len(text))]  # Used so that spelling checker doesn't check metadata parts
+    sentence_splits = [
+        (0, len(text))
+    ]  # Used so that spelling checker doesn't check metadata parts
 
-    # Metadata  
+    # Metadata
+    METADATA_PATTERN = re.compile(r"{\s*(.+?)\s*}")
     expression = QRegularExpression(r"{\s*(.+?)\s*}")
     matches = expression.globalMatch(text)
     while matches.hasNext():
@@ -148,20 +183,20 @@ def extract_sentence_regions(text: str) -> List[tuple]:
         sentence_splits = _cutSentence(
             sentence_splits,
             match.capturedStart(),
-            match.capturedStart() + match.capturedLength()
+            match.capturedStart() + match.capturedLength(),
         )
-    
+
     # Special tokens
     expression = QRegularExpression(r"<[a-zA-Z \'\/]+>")
     matches = expression.globalMatch(text)
     while matches.hasNext():
         match = matches.next()
         sentence_splits = _cutSentence(
-            sentence_splits, match.capturedStart(),
-            match.capturedStart() + match.capturedLength()
+            sentence_splits,
+            match.capturedStart(),
+            match.capturedStart() + match.capturedLength(),
         )
     return sentence_splits
-
 
 
 def _cutSentence(segments: list, start: int, end: int) -> list:
@@ -182,7 +217,6 @@ def _cutSentence(segments: list, start: int, end: int) -> list:
     return splitted
 
 
-
 def splitForSubtitle(text: str, size: int):
     """
     Split a single subtitle from a string
@@ -198,35 +232,35 @@ def splitForSubtitle(text: str, size: int):
 
     # Slit at dialog character
     if text.count(EM_DASH) >= 2:
-        idx = text.find(EM_DASH)    # Ignore first one
-        idx = text.find(EM_DASH, idx+1)
+        idx = text.find(EM_DASH)  # Ignore first one
+        idx = text.find(EM_DASH, idx + 1)
         return (text[:idx], text[idx:])
 
     text_segs = extract_sentence_regions(text)
-    text_len = sum([e-s for s, e in text_segs])
+    text_len = sum([e - s for s, e in text_segs])
     if text_len > size:
-        
         # Split at first dot
         dot_i = -1
         dot_rel_i = -1
         l = 0
         for start, end in text_segs:
             t = text[start:end]
-            i = t.find('.')
-            if i >= 0 and t.find('...') != i:
+            i = t.find(".")
+            if i >= 0 and t.find("...") != i:
                 dot_i = i
                 dot_rel_i = l + i
                 break
-            l += end-start
+            l += end - start
             if l > size:
-                 break
+                break
         if text_len * 0.33 < dot_rel_i < text_len * 0.66:
-             return (text[:dot_i+1], text[dot_i+1:])
-    
+            return (text[: dot_i + 1], text[dot_i + 1 :])
+
     return (text,)
 
 
 #### Color utility functions
+
 
 def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
     """Linear interpolation between two QColors"""
@@ -234,29 +268,29 @@ def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
     red = col1.redF() * (1.0 - t) + col2.redF() * t
     green = col1.greenF() * (1.0 - t) + col2.greenF() * t
     blue = col1.blueF() * (1.0 - t) + col2.blueF() * t
-    return QColor(int(red*255), int(green*255), int(blue*255))
+    return QColor(int(red * 255), int(green * 255), int(blue * 255))
 
 
-def yuv_to_rgb(y: float, u: float, v: float, color_range='full') -> tuple:
+def yuv_to_rgb(y: float, u: float, v: float, color_range="full") -> tuple:
     # https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/
-    if color_range == 'tv':
+    if color_range == "tv":
         y = mapNumber(y, 16, 235, 0.0, 1.0)
         u = mapNumber(u, 128, 235, 0.0, 1.0)
         v = mapNumber(v, 128, 235, 0.0, 1.0)
     r = y + 1.5748 * v
     g = y - 0.187324 * u - 0.468124 * v
     b = y + 1.8556 * u
-    r = min(max(int(r*256), 0), 255)
-    g = min(max(int(g*256), 0), 255)
-    b = min(max(int(b*256), 0), 255)
-    
+    r = min(max(int(r * 256), 0), 255)
+    g = min(max(int(g * 256), 0), 255)
+    b = min(max(int(b * 256), 0), 255)
+
     return (r, g, b)
 
 
-def bt709_to_rgb(g: float, b: float, r: float, color_range='tv') -> tuple:
+def bt709_to_rgb(g: float, b: float, r: float, color_range="tv") -> tuple:
     # It's BRG
     print(color_range)
-    if color_range == 'tv':
+    if color_range == "tv":
         r = mapNumber(r, 16, 235, 0, 256)
         g = mapNumber(g, 16, 235, 0, 256)
         b = mapNumber(b, 16, 235, 0, 256)
@@ -267,26 +301,26 @@ def bt709_to_rgb(g: float, b: float, r: float, color_range='tv') -> tuple:
     return (r, g, b)
 
 
-def mapNumber(n: float, min_n: float, max_n: float, min_m: float, max_m: float) -> float:
+def mapNumber(
+    n: float, min_n: float, max_n: float, min_m: float, max_m: float
+) -> float:
     """Map a number from a range to another"""
     #  if n <= min_n:
     #       return min_m
     #  elif n >= max_n:
     #       return max_m
-    dm = (max_m - min_m)
-    dn = (max_n - min_n)
+    dm = max_m - min_m
+    dn = max_n - min_n
     d = dm / dn
     return min_m + (n - min_n) * d
 
 
 #### Time utility functions
 
+
 def sec2hms(
-        seconds,
-        precision=0,
-        h_unit='h', m_unit='\'', s_unit="''",
-        sep=' ', sep2 = ''
-    ) -> str:
+    seconds, precision=0, h_unit="h", m_unit="'", s_unit="''", sep=" ", sep2=""
+) -> str:
     """Return a string of hours, minutes, seconds from a given number of seconds"""
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
@@ -302,52 +336,63 @@ def sec2hms(
 
 #### Audio file utility functions
 
-def get_audiofile_info(filename) -> dict:
-    r = subprocess.check_output(['ffprobe', '-hide_banner', '-v', 'panic', '-show_streams', '-of', 'json', filename])
-    r = json.loads(r)
-    return r['streams'][0]
 
+def get_audiofile_info(filename) -> dict:
+    r = subprocess.check_output(
+        [
+            "ffprobe",
+            "-hide_banner",
+            "-v",
+            "panic",
+            "-show_streams",
+            "-of",
+            "json",
+            filename,
+        ]
+    )
+    r = json.loads(r)
+    return r["streams"][0]
 
 
 #### Fonts utility functions
 
+
 def find_system_fonts():
     """Simple cross-platform font finder."""
     system = platform.system()
-    
+
     if system == "Linux":
         dirs = [
-            Path('/usr/share/fonts/'),
-            Path('/usr/local/share/fonts/'), 
-            Path('~/.fonts/').expanduser(), 
-            Path('~/.local/share/fonts/').expanduser()
+            Path("/usr/share/fonts/"),
+            Path("/usr/local/share/fonts/"),
+            Path("~/.fonts/").expanduser(),
+            Path("~/.local/share/fonts/").expanduser(),
         ]
     elif system == "Darwin":  # macOS
         dirs = [
-            Path('/Library/Fonts/'),
-            Path('/System/Library/Fonts/'), 
-            Path('~/Library/Fonts/')
+            Path("/Library/Fonts/"),
+            Path("/System/Library/Fonts/"),
+            Path("~/Library/Fonts/"),
         ]
     elif system == "Windows":
-        dirs = [
-            Path(os.environ.get('WINDIR', 'C:\\Windows')) / 'Fonts'
-        ]
+        dirs = [Path(os.environ.get("WINDIR", "C:\\Windows")) / "Fonts"]
     else:
         dirs = []
-    
+
     font_paths = []
     for directory in dirs:
         if directory.exists():
-            font_paths.extend(directory.rglob('*.ttf'))
-            font_paths.extend(directory.rglob('*.otf'))
-            font_paths.extend(directory.rglob('*.ttc'))
+            font_paths.extend(directory.rglob("*.ttf"))
+            font_paths.extend(directory.rglob("*.otf"))
+            font_paths.extend(directory.rglob("*.ttc"))
     return font_paths
 
 
 def list_fonts_macos():
     # Use system_profiler to get font information
-    result = subprocess.run(['system_profiler', 'SPFontsDataType', '-xml'],
-                          capture_output=True, text=True)
+    result = subprocess.run(
+        ["system_profiler", "SPFontsDataType", "-xml"], capture_output=True, text=True
+    )
     print(result)
 
 
@@ -355,8 +400,10 @@ def list_fonts_windows():
     import winreg
 
     fonts = []
-    key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
-    
+    key = winreg.OpenKey(
+        winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+    )
+
     try:
         i = 0
         while True:
@@ -367,5 +414,5 @@ def list_fonts_windows():
         pass
     finally:
         winreg.CloseKey(key)
-    
+
     return fonts

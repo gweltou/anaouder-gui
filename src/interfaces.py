@@ -153,7 +153,7 @@ class WaveformInterface(Protocol):
     def removeSelection(self) -> None: ...
 
 
-class TextDocumentInterface(Protocol):
+class TextEditorInterface(Protocol):
     highlighter: QSyntaxHighlighter
     highlighted_sentence_id: SegmentId
 

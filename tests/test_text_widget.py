@@ -1,16 +1,12 @@
-from typing import List
 import random
-from pathlib import Path
-import logging
-import pytest
 
-from PySide6.QtWidgets import QApplication
+import pytest
 from PySide6.QtGui import QTextCursor
+from PySide6.QtWidgets import QApplication
 
 from src.main import MainWindow
-from ui.icons import loadIcons
-from src.text_widget import TextEditWidget
 from src.strings import app_strings
+from src.ui.icons import loadIcons
 
 
 @pytest.fixture(scope="session")
@@ -19,12 +15,12 @@ def qapp():
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
-    
+
     loadIcons()
     app_strings.initialize()
-    
+
     yield app
-    
+
     # Cleanup after all tests
     app.quit()
 
@@ -49,7 +45,7 @@ def load_document(main_window):
         ('<b>Eil "linenn."</b>', (18, 20)),
         ("<i>Euh... beñ mont a ra euh ?</i>", (25, 30)),
         ("Pevare linenn", (32, 35)),
-        ("Pempvet linenn", (40, 41))
+        ("Pempvet linenn", (40, 41)),
     ]:
         seg_id = main_window.document_controller.addSegment(list(segment))
         main_window.text_widget.appendSentence(text, seg_id)
@@ -65,14 +61,15 @@ def random_copy_paste(main_window, i=1):
         start = random.randrange(block.position(), block.position() + block.length())
         if with_selection:
             offset = random.randrange(block.position() + block.length() - start)
-        
+
         cursor = QTextCursor(block)
         cursor.setPosition(start)
         if with_selection:
-            cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, offset)
-        
+            cursor.movePosition(
+                QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, offset
+            )
+
         return cursor
-    
 
     main_window.text_widget.setTextCursor(new_random_selection(with_selection=True))
     state_pre = main_window.document_controller.getDocumentState()
@@ -82,10 +79,10 @@ def random_copy_paste(main_window, i=1):
         main_window.text_widget.setTextCursor(new_random_selection())
 
         main_window.text_widget.paste()
-    
+
     for _i in range(2 * i):
-        main_window.undo_stack.undo() # Undo paste text selection
-    
+        main_window.undo_stack.undo()  # Undo paste text selection
+
     assert state_pre == main_window.document_controller.getDocumentState()
 
 

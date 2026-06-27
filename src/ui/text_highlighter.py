@@ -16,34 +16,32 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
-from enum import Enum
 import logging
 import re
+from enum import Enum
 
 from PySide6.QtCore import (
-    Qt, QRegularExpression,
+    QRegularExpression,
+    Qt,
 )
 from PySide6.QtGui import (
-    QColor, QFont,
-    QTextCursor,
-    QTextBlockFormat, QTextCharFormat,
+    QColor,
+    QFont,
     QSyntaxHighlighter,
+    QTextBlockFormat,
+    QTextCharFormat,
+    QTextCursor,
 )
 
-from src.interfaces import DocumentInterface, TextDocumentInterface
+from src.interfaces import DocumentInterface, TextEditorInterface
+from src.settings import SUBTITLES_CPS, app_settings
 from src.ui.theme import theme
 from src.utils import extract_sentence_regions
-from src.settings import app_settings, SUBTITLES_CPS
-
-
 
 log = logging.getLogger(__name__)
 
 
-
 class Highlighter(QSyntaxHighlighter):
-
     class ColorMode(Enum):
         ALIGNMENT = 0
         DENSITY = 1
@@ -52,7 +50,7 @@ class Highlighter(QSyntaxHighlighter):
 
     def __init__(self, parent, text_edit, document_controller):
         super().__init__(parent)
-        self.text_edit: TextDocumentInterface = text_edit
+        self.text_edit: TextEditorInterface = text_edit
         self.document_controller: DocumentInterface = document_controller
         self.mode = self.ColorMode.ALIGNMENT
         self.hunspell = None
@@ -62,9 +60,8 @@ class Highlighter(QSyntaxHighlighter):
         self.metadata_expression = re.compile(r"{\s*(.+?)\s*}")
         self.special_token_expression = re.compile(r"<[a-zA-Z _\'\/]+>")
 
-
         self.ali_metadata_format = QTextCharFormat()
-        self.ali_metadata_format.setForeground(QColor(165, 0, 165)) # semi-dark magenta
+        self.ali_metadata_format.setForeground(QColor(165, 0, 165))  # semi-dark magenta
         self.ali_metadata_format.setFontWeight(QFont.Weight.DemiBold)
 
         self.comment_format = QTextCharFormat()
@@ -73,10 +70,12 @@ class Highlighter(QSyntaxHighlighter):
         self.special_token_format = QTextCharFormat()
         self.special_token_format.setForeground(QColor(220, 180, 0))
         self.special_token_format.setFontWeight(QFont.Weight.Bold)
-        
+
         self.mispell_format = QTextCharFormat()
         self.mispell_format.setUnderlineColor(QColor("red"))
-        self.mispell_format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.SpellCheckUnderline)
+        self.mispell_format.setUnderlineStyle(
+            QTextCharFormat.UnderlineStyle.SpellCheckUnderline
+        )
 
         self.aligned_block_format = QTextBlockFormat()
         self.aligned_block_format.setTopMargin(self.utt_block_margin)
@@ -102,7 +101,6 @@ class Highlighter(QSyntaxHighlighter):
         self.active_red_block_format.setTopMargin(self.utt_block_margin)
         self.active_red_block_format.setBottomMargin(self.utt_block_margin)
 
-
     def setMode(self, mode: ColorMode):
         log.info(f"Set highlighter to {mode}")
         self.mode = mode
@@ -112,10 +110,8 @@ class Highlighter(QSyntaxHighlighter):
         self.rehighlight()
         self.text_edit.document().blockSignals(was_blocked)
 
-
     def getMode(self) -> ColorMode:
         return self.mode
-
 
     def updateThemeColors(self):
         print("Hightligher updateTheme", theme.mode)
@@ -123,7 +119,6 @@ class Highlighter(QSyntaxHighlighter):
         self.red_block_format.setBackground(theme.colors.red)
         self.active_green_block_format.setBackground(theme.colors.active_green)
         self.active_red_block_format.setBackground(theme.colors.active_red)
-
 
     def isSubsentence(self, segments: list, start: int, end: int) -> bool:
         """This is sentences' segments, NOT audio segments !"""
@@ -134,7 +129,6 @@ class Highlighter(QSyntaxHighlighter):
             elif seg_start >= end:
                 return False
         return False
-
 
     def highlightAlignment(self, sentence_splits):
         block = self.currentBlock()
@@ -152,7 +146,6 @@ class Highlighter(QSyntaxHighlighter):
         else:
             cursor.setBlockFormat(QTextBlockFormat())
 
-
     def highlightDensity(self):
         block = self.currentBlock()
         block_id = self.document_controller.getBlockId(block)
@@ -162,8 +155,10 @@ class Highlighter(QSyntaxHighlighter):
             if self.text_edit.isAligned(block):
                 utt_id = block_id
                 density = self.document_controller.getUtteranceDensity(utt_id)
-                target_density: float = app_settings.value("subtitles/cps", SUBTITLES_CPS, type=float)
-                if density < target_density:
+                target_density: float = app_settings.value(
+                    "subtitles/cps", SUBTITLES_CPS, type=float
+                )
+                if density < target_density + 0.05:  # Slight tolerance
                     if self.text_edit.highlighted_sentence_id == block_id:
                         cursor.setBlockFormat(self.active_green_block_format)
                     else:
@@ -178,15 +173,14 @@ class Highlighter(QSyntaxHighlighter):
         else:
             cursor.setBlockFormat(QTextBlockFormat())
 
-
     def highlightBlock(self, text):
         doc_was_blocked = self.text_edit.document().blockSignals(True)
         was_blocked = self.text_edit.blockSignals(True)
 
         # Find and crop comments
-        i = text.find('#')
+        i = text.find("#")
         if i >= 0:
-            self.setFormat(i, len(text)-i, self.comment_format)
+            self.setFormat(i, len(text) - i, self.comment_format)
             text = text[:i]
 
         # Ali DSL Metadata
@@ -199,8 +193,10 @@ class Highlighter(QSyntaxHighlighter):
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
-            self.setFormat(match.capturedStart(), match.capturedLength(), self.ali_metadata_format)
-        
+            self.setFormat(
+                match.capturedStart(), match.capturedLength(), self.ali_metadata_format
+            )
+
         # Special tokens
         # for match in self.special_token_expression.finditer(text):
         #     start = match.start()
@@ -211,7 +207,9 @@ class Highlighter(QSyntaxHighlighter):
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
-            self.setFormat(match.capturedStart(), match.capturedLength(), self.special_token_format)
+            self.setFormat(
+                match.capturedStart(), match.capturedLength(), self.special_token_format
+            )
 
         sentence_splits = extract_sentence_regions(text)
 
@@ -220,27 +218,34 @@ class Highlighter(QSyntaxHighlighter):
             self.highlightAlignment(sentence_splits)
         elif self.mode == self.ColorMode.DENSITY:
             self.highlightDensity()
-        
 
         # Check misspelled words
         if not (self.show_misspelling and self.hunspell):
             self.text_edit.document().blockSignals(doc_was_blocked)
             self.text_edit.blockSignals(was_blocked)
             return
-        
-        expression = QRegularExpression(r'\b([\w’\']+)\b', QRegularExpression.PatternOption.UseUnicodePropertiesOption)
+
+        expression = QRegularExpression(
+            r"\b([\w’\']+)\b",
+            QRegularExpression.PatternOption.UseUnicodePropertiesOption,
+        )
         matches = expression.globalMatch(text)
         while matches.hasNext():
             match = matches.next()
-            if not self.isSubsentence(sentence_splits, match.capturedStart(), match.capturedStart()+match.capturedLength()):
+            if not self.isSubsentence(
+                sentence_splits,
+                match.capturedStart(),
+                match.capturedStart() + match.capturedLength(),
+            ):
                 continue
-            word = match.captured().replace('’', "'")
+            word = match.captured().replace("’", "'")
             if not self.hunspell.lookup(word):
-                self.setFormat(match.capturedStart(), match.capturedLength(), self.mispell_format)
-        
+                self.setFormat(
+                    match.capturedStart(), match.capturedLength(), self.mispell_format
+                )
+
         self.text_edit.document().blockSignals(doc_was_blocked)
         self.text_edit.blockSignals(was_blocked)
-
 
     def setHunspellDictionary(self, hunspell) -> None:
         self.hunspell = hunspell

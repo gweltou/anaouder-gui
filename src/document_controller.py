@@ -20,7 +20,6 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
 
-from ostilhou.asr import extract_metadata
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QTextBlock, QTextCursor, QUndoStack
 
@@ -39,15 +38,14 @@ from src.interfaces import (
     MyTextBlockUserData,
     Segment,
     SegmentId,
-    TextDocumentInterface,
+    TextEditorInterface,
 )
 from src.services.aligner import SmartSplitError, smart_split_text, smart_split_time
 from src.services.logger import logger
 from src.strings import app_strings
-from src.text_widget import TextEditWidget
 from src.ui.waveform.data import Handle
 from src.ui.waveform.waveform_widget import WaveformWidget
-from src.utils import LINE_BREAK, extract_sentence_regions, yellow
+from src.utils import LINE_BREAK, extract_metadata, extract_sentence_regions
 
 
 class DocumentController(QObject):
@@ -60,7 +58,7 @@ class DocumentController(QObject):
         self.segments: Dict[SegmentId, Segment] = dict()
         self._sorted_segments = []
 
-        self.text_widget: TextDocumentInterface | None = None
+        self.text_widget: TextEditorInterface | None = None
         self.waveform_widget: WaveformWidget | None = None
 
         self.must_sort = False
@@ -88,7 +86,7 @@ class DocumentController(QObject):
 
         self.undo_stack.clear()
 
-    def setTextWidget(self, text_widget: TextDocumentInterface) -> None:
+    def setTextWidget(self, text_widget: TextEditorInterface) -> None:
         self.text_widget = text_widget
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
@@ -231,8 +229,8 @@ class DocumentController(QObject):
         if not text:
             return BlockType.EMPTY_OR_COMMENT
 
-        text, metadata = extract_metadata(text)  # deprecated
-        if metadata and not text.strip():
+        text, metadata = extract_metadata(text)
+        if metadata and not text:
             return BlockType.METADATA_ONLY
 
         # This block is a sentence, check if it is aligned or not

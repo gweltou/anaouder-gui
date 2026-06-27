@@ -265,18 +265,19 @@ class CaptionRenderer:
         time_offsets = self._get_time_offsets()
         segment_ids = self.document_controller.getSegmentsAtTimeOffsets(
             time_s, time_offsets
-        )
+        )  # Could be a source of error for the fade-in blink issue
 
         bg_img = self.get_background_image(frame_number, segment_ids)
 
         if not segment_ids:
-            # No subtitles to render, copy background image
+            # No subtitles to render, copy background image and stop
             bg_img.save(str(save_path))
             return
 
         for segment_id in segment_ids:
             properties = self.global_properties.copy()
-            properties.update(self.segment_properties[segment_id])
+            segment_properties = self.segment_properties[segment_id]
+            properties.update(segment_properties)
 
             font = self.get_font(
                 properties.get("font", "default"),
@@ -285,9 +286,9 @@ class CaptionRenderer:
             ascent, descent = font.getmetrics()
             font_height = ascent + descent
 
-            segment = properties["segment"]
-            text = properties["text"]
-            n_lines = len(text.split(LINE_BREAK))
+            segment = segment_properties["segment"]
+            text = segment_properties["text"]
+            n_lines = text.count(LINE_BREAK) + 1
 
             # Calculate relative progress
             start, end = segment
@@ -358,7 +359,9 @@ class CaptionRenderer:
             logger.warning(f"Rendered outside of frame: {(top, left)}")
 
     def _get_time_offsets(self) -> Dict[SegmentId, Tuple]:
-        """Returns time offsets (if any) for every segment"""
+        """
+        Returns fade in and fade out time offsets (if any) for every segment
+        """
         offsets = dict()
         for seg_id, prop in self.segment_properties.items():
             offset = float(prop.get("fade-in", 0.0)), float(prop.get("fade-out", 0.0))
@@ -369,6 +372,7 @@ class CaptionRenderer:
     def get_font(
         self, font_name: str, font_size: int
     ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        """Create a font or return it from cached fonts"""
         try:
             key = (font_name.lower(), font_size)
             if key in self.loaded_fonts:
@@ -398,6 +402,7 @@ class CaptionRenderer:
 
         Args:
             color_pc (float): normalized time progression, between 0.0 and 1.0
+            caching (bool): Save individual word bitmaps to cache if True
         """
         properties = properties or self.global_properties
 
@@ -562,7 +567,11 @@ class CaptionRenderer:
         shadow_offset=(0, 0),  # (x, y) offset
         caching=True,
     ) -> Tuple[Image.Image, tuple, float]:
-        """Generates a transparent PNG with stylized text."""
+        """Generates a transparent PNG with stylized text.
+
+        Args:
+            caching (bool): Save word bitmaps to cache if True
+        """
         font_size = font.size
 
         bg_img = fg_img = None
@@ -673,8 +682,7 @@ class RendererWorker(TaskWorker):
         """
         Worker thread to render caption frames
 
-        Parameters
-        ----------
+        Parameters:
             description (str):
                 Description of the task, to be displayed in progress bar.
         """

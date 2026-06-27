@@ -713,9 +713,6 @@ class SubtitlesPanel(QWidget):
 
         ## Auto extend subtitles for uniform gaps
         auto_extend_interval_checkbox = QCheckBox(self.tr("Auto extend"))
-        # auto_extend_interval_checkbox.setChecked(
-        #     app_settings.value("subtitles/auto_extend", SUBTITLES_AUTO_EXTEND, type=bool)
-        # )
         auto_extend_interval_checkbox.toggled.connect(
             lambda checked: app_settings.setValue("subtitles/auto_extend", checked)
         )
