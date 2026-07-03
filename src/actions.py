@@ -14,22 +14,24 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+----
+
+This is where most of the application shortcuts are defined
 """
 
 import platform
 
-from PySide6.QtCore import Qt, QObject, Signal
-from PySide6.QtGui import QAction, QKeySequence, QActionGroup
+from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 
 from src.settings import shortcuts
 from src.strings import app_strings
 from src.ui.icons import icons
 
 
-
 def getActionTooltip(action: QAction) -> str:
     return f"{action.text()} <{action.shortcut().toString()}>"
-
 
 
 class ActionManager(QObject):
@@ -71,12 +73,10 @@ class ActionManager(QObject):
     # Text actions signals
     insert_newline_requested = Signal()
     insert_em_dash_requested = Signal()
-    
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._create_actions()
-    
 
     def _create_actions(self):
         # File menu actions
@@ -93,21 +93,25 @@ class ActionManager(QObject):
         self.save_as.triggered.connect(self.save_as_requested.emit)
 
         # Standard practice for macOS
-        exit_text = self.tr("Quit") if platform.system() == "Darwin" else self.tr("E&xit")
+        exit_text = (
+            self.tr("Quit") if platform.system() == "Darwin" else self.tr("E&xit")
+        )
         self.close_app = QAction(exit_text, self)
         self.close_app.setShortcut(QKeySequence.StandardKey.Quit)
         self.close_app.triggered.connect(self.close_application_requested.emit)
 
         ## Import actions
-        self.import_media = QAction(app_strings.TR_IMPORT_MEDIA + '...', self)
+        self.import_media = QAction(app_strings.TR_IMPORT_MEDIA + "...", self)
         self.import_media.setStatusTip(self.tr("Import a media file (audio or video)"))
         self.import_media.triggered.connect(self.import_media_requested.emit)
 
-        self.import_subtitles = QAction(app_strings.TR_IMPORT_SUBTITLES + '...', self)
-        self.import_subtitles.setStatusTip(self.tr("Import a subtitles file, keep current media"))
+        self.import_subtitles = QAction(app_strings.TR_IMPORT_SUBTITLES + "...", self)
+        self.import_subtitles.setStatusTip(
+            self.tr("Import a subtitles file, keep current media")
+        )
         self.import_subtitles.triggered.connect(self.import_subtitles_requested.emit)
 
-        self.import_rtf = QAction(self.tr("Import a RTF file") + '...', self)
+        self.import_rtf = QAction(self.tr("Import a RTF file") + "...", self)
         self.import_rtf.setStatusTip(self.tr("Import a RTF movie script file (DIZALE)"))
         self.import_rtf.triggered.connect(self.import_rtf_movie_script_requested.emit)
 
@@ -125,12 +129,21 @@ class ActionManager(QObject):
         self.export_eaf.triggered.connect(self.export_eaf_requested.emit)
 
         self.export_audio_segments = QAction(self.tr("&Audio segments"), self)
-        self.export_audio_segments.setStatusTip(self.tr("Export audio segments as individual audio files"))
-        self.export_audio_segments.triggered.connect(self.export_audio_segments_resquested.emit)
+        self.export_audio_segments.setStatusTip(
+            self.tr("Export audio segments as individual audio files")
+        )
+        self.export_audio_segments.triggered.connect(
+            self.export_audio_segments_resquested.emit
+        )
 
         ## Parameters Dialog
         self.open_parameters = QAction(self.tr("&Parameters") + "...", self)
-        self.open_parameters.setShortcut(QKeySequence.StandardKey.Print)
+        if platform.system() == "Linux":
+            self.open_parameters.setShortcut(shortcuts["preferences"])
+        else:
+            # This Qt standard shortcut is broken on Linux
+            # and the key sequences is not displayed
+            self.open_parameters.setShortcut(QKeySequence.StandardKey.Preferences)
         self.open_parameters.triggered.connect(self.show_parameters_requested.emit)
 
         # Display menu actions
@@ -198,7 +211,9 @@ class ActionManager(QObject):
         self.transcribe.toggled.connect(self.transcribe_requested.emit)
 
         self.hidden_transcription = QAction(self.tr("&Hidden transcription"), self)
-        self.hidden_transcription.setStatusTip(self.tr("Allow for smart splitting and auto-alignment operations"))
+        self.hidden_transcription.setStatusTip(
+            self.tr("Allow for smart splitting and auto-alignment operations")
+        )
         self.hidden_transcription.setCheckable(True)
         self.hidden_transcription.setChecked(False)
         self.hidden_transcription.toggled.connect(self.transcribe_hidden_requested.emit)
@@ -207,7 +222,7 @@ class ActionManager(QObject):
         self.auto_align.triggered.connect(self.request_auto_align.emit)
 
         # Segments actions
-        self.delete_segment = QAction(f"{self.tr("Delete audio segment")}", self)
+        self.delete_segment = QAction(f"{self.tr('Delete audio segment')}", self)
         self.delete_segment.triggered.connect(self.delete_segment_requested.emit)
 
         self.delete_utterance = QAction(self.tr("Delete utterance"), self)
