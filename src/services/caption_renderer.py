@@ -67,13 +67,13 @@ class CaptionRenderer:
             "font",
             "font-size",
             "position",
+            "progress",
             "bg-color",
             "fg-color",
             "bg-outline-color",
             "fg-outline-color",
             "bg-outline-width",
             "fg-outline-width",
-            "progress",
             "fade-in",
             "fade-out",
             "x-offset",
@@ -165,6 +165,11 @@ class CaptionRenderer:
                 # Convert key names
                 properties.update({k.lower(): v for k, v in region.items()})
 
+            # add first seen properties to global properties
+            for key in properties:
+                if key not in self.global_properties:
+                    self.global_properties[key] = properties[key]
+
             text = "".join([region["text"] for region in data])
             properties["text"] = text
             properties["segment"] = segment
@@ -215,7 +220,6 @@ class CaptionRenderer:
                 else Path()
             )
             img_path = img_path.resolve() / Path(filepath_pattern)
-            print(f"{img_path=}")
             self.background_images = [img_path.resolve()]
 
         self.background_image_path = filepath_pattern
@@ -259,7 +263,7 @@ class CaptionRenderer:
         if not self.output_dir.exists():
             self.output_dir.mkdir()
 
-        save_path = self.output_dir / f"{self.output_prefix}{frame_number:05d}.png"
+        save_path = self.output_dir / f"{self.output_prefix}{frame_number:06d}.png"
 
         time_s = frame_number / self.fps
         time_offsets = self._get_time_offsets()
@@ -302,6 +306,7 @@ class CaptionRenderer:
                 case _:
                     progress = (time_s - start) / segment_duration
 
+            # Rendering text image
             text_image, bbox = self.render_colored_text(
                 text, properties, segment_prog=progress, caching=True
             )
@@ -339,7 +344,6 @@ class CaptionRenderer:
                 fade_out = float(properties.get("fade-out", 0.0))
                 if fade_in and ((start - fade_in) < time_s < start):
                     opacity = (time_s - (start - fade_in)) / fade_in
-                    print(f"{opacity=} {time_s=} {start=}")
                     text_image = modify_opacity(text_image, opacity)
                 elif fade_out and (end < time_s < (end + fade_out)):
                     opacity = (end + fade_out - time_s) / fade_out
@@ -347,6 +351,7 @@ class CaptionRenderer:
 
             bg_img.paste(text_image, (left, top + bbox[1]), mask=text_image)
 
+        # Write to disk
         bg_img.save(str(save_path))
 
         # Render outside of frame warning
@@ -420,7 +425,7 @@ class CaptionRenderer:
             properties.get("bg-outline-width", self.DEFAULT_FONT_OUTLINE_WIDTH)
         )
         text_fg_outline_color = properties.get(
-            "fg-outlin-color", self.DEFAULT_FONT_OUTLINE_COLOR
+            "fg-outline-color", self.DEFAULT_FONT_OUTLINE_COLOR
         )
         text_fg_outline_width = int(
             properties.get("fg-outline-width", self.DEFAULT_FONT_OUTLINE_WIDTH)
@@ -445,6 +450,10 @@ class CaptionRenderer:
                 rel_progress = segment_prog - word_span[0]
                 return rel_progress / (word_span[1] - word_span[0])
 
+            if mode == "fg":
+                # Always lit
+                return 1.0 if segment_prog > 0.0 else 0.0
+
             if mode == "word" and "alignment" in properties:
                 # Use alignment data
                 segment = properties["segment"]
@@ -462,7 +471,7 @@ class CaptionRenderer:
                 rel_progress = absolute_time - word_boundaries[0]
                 return rel_progress / segment_dur
 
-            return 1.0
+            return 0.0
 
         # Count the number of characters to account for spaces
         total_chars = len(words_lines) - 1
@@ -564,7 +573,7 @@ class CaptionRenderer:
         fg_outline_width=3,
         color_pc=0.0,
         shadow_color="#000000AA",
-        shadow_offset=(0, 0),  # (x, y) offset
+        shadow_offset=(4, 4),  # (x, y) offset
         caching=True,
     ) -> Tuple[Image.Image, tuple, float]:
         """Generates a transparent PNG with stylized text.
@@ -599,6 +608,7 @@ class CaptionRenderer:
                 shadow_offset,
             )
         )
+
         # Get text bounding box
         if key_bg in self.render_cache:
             # Check in cache
@@ -617,6 +627,8 @@ class CaptionRenderer:
         # Add extra padding for the shadow so it doesn't get cut off
         # width = text_width + abs(shadow_offset[0]) + font_size // 4
         # height = text_height + abs(shadow_offset[1]) + font_size // 4 # We need to multiply by two because it crops the shadow
+
+        # Optional shadow layer
 
         # First layer, background text
         if not bg_img and color_pc < 1.0:
@@ -674,20 +686,17 @@ class CaptionRenderer:
 
 
 class RendererWorker(TaskWorker):
-    def __init__(
-        self,
-        parent,
-        renderer: CaptionRenderer,
-    ):
+    def __init__(self, parent, renderer: CaptionRenderer, params: dict):
         """
         Worker thread to render caption frames
 
-        Parameters:
+        Args:
             description (str):
                 Description of the task, to be displayed in progress bar.
         """
         super().__init__(parent)
         self.description = self.tr("Rendering frames")
+        self.params = params
 
         self.renderer = renderer
         self.last_progress_sent = 0
@@ -704,13 +713,17 @@ class RendererWorker(TaskWorker):
             duration = media_metadata.get("duration", 0.0)
         else:
             duration = self.renderer.document_controller.getSortedSegments()[-1][1][1]
-        n_frames = int(duration * self.renderer.fps)
+        total_frames = int(duration * self.renderer.fps)
+
+        start_frame = self.params.get("start_frame", 0)
+        end_frame = min(self.params.get("end_frame", total_frames) + 1, total_frames)
+        n_frames = end_frame - start_frame
 
         try:
-            for frame_i in range(n_frames):
+            for frame_i in range(start_frame, end_frame):
                 self.renderer.render_frame(frame_i)
 
-                progress = int((frame_i / n_frames) * 100)
+                progress = int(100 * (frame_i - start_frame) / n_frames)
                 if progress != self.last_progress_sent:
                     self.progress_pc.emit(progress)
                     self.last_progress_sent = progress
@@ -729,14 +742,17 @@ class RendererWorker(TaskWorker):
 
 
 class VideoBurnerWorker(TaskWorker):
-    def __init__(self, parent, renderer: CaptionRenderer, output_path: Path):
+    def __init__(
+        self, parent, renderer: CaptionRenderer, output_path: Path, params: dict
+    ):
         super().__init__(parent)
         self.description = self.tr("Burning captions on video")
 
+        self.params = params
         self.output_path = str(output_path)
 
         self.video_source_path = renderer.document_controller.media_path
-        self.frames_path = renderer.output_dir / "frame_%05d.png"
+        self.frames_path = renderer.output_dir / "frame_%06d.png"
         self.fps = renderer.fps
 
         self.media_duration = 0.0
@@ -751,21 +767,35 @@ class VideoBurnerWorker(TaskWorker):
     def run(self):
         """
         Create a video from frames only:
-        ffmpeg -framerate 25 -i renders/frame-%05d.png -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a copy -shortest output.mp4
+        ffmpeg -framerate 25 -i renders/frame-%06d.png -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a copy -shortest output.mp4
         """
 
         self.setPriority(QThread.Priority.HighPriority)
         logger.debug("Video burning thread running...")
 
+        total_frames = int(self.media_duration * self.fps)
+        start_frame = self.params.get("start_frame", 0)
+        end_frame = min(self.params.get("end_frame", total_frames) + 1, total_frames)
+
+        start_time = start_frame / self.fps
+        num_frames = end_frame - start_frame
+        duration = num_frames / self.fps
+
         ffmpeg_cmd = [
             "ffmpeg",
             "-y",  # confirm overwrite
+            "-ss",
+            str(start_time),
             "-i",
             str(self.video_source_path),
+            "-start_number",
+            str(start_frame),
             "-framerate",
             str(self.fps),
             "-i",
             str(self.frames_path),
+            "-t",
+            str(duration),
             "-filter_complex",
             "[0:v][1:v] overlay=0:0",
             "-c:a",
@@ -784,12 +814,12 @@ class VideoBurnerWorker(TaskWorker):
                 ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
             )
 
-            self._read_progress()
+            self._read_progress(duration)
             self._process.wait()
 
             if self._must_stop:
                 self.stopped.emit()
-                return  # Stopped intentionally, don't emit finished
+                return  # Stopped intentionally, don't emit "finished"
 
             if self._process.returncode != 0:
                 # stderr_output = self._process.stderr.read()
@@ -804,7 +834,7 @@ class VideoBurnerWorker(TaskWorker):
             logger.error(f"Video burning error: {e}")
             self.failed.emit()
 
-    def _read_progress(self) -> None:
+    def _read_progress(self, duration) -> None:
         last_progress = -1
         # Use 'readline' to avoid iterator issues during process termination
         while True:
@@ -819,8 +849,8 @@ class VideoBurnerWorker(TaskWorker):
                 try:
                     elapsed_us = int(line.split("=", 1)[1])
                     elapsed_s = elapsed_us / 1_000_000
-                    if self.media_duration > 0:
-                        progress = min(int((elapsed_s / self.media_duration) * 100), 99)
+                    if duration > 0:
+                        progress = min(int((elapsed_s / duration) * 100), 99)
                         if progress != last_progress:
                             self.progress_pc.emit(progress)
                             last_progress = progress

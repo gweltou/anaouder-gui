@@ -16,50 +16,62 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
-from typing import List
 from pathlib import Path
+from typing import List
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QDialog, QWidget, QFrame,
-    QVBoxLayout, QHBoxLayout, QGroupBox, 
-    QCheckBox, QButtonGroup, QDialogButtonBox, QRadioButton,
-    QLabel, QComboBox
-)
 from PySide6.QtGui import QImage, QPixmap
-
-from src.ui.progess_dialog import ProgressDialog
-from src.services.caption_renderer import (
-    CaptionRenderer, RendererWorker, VideoBurnerWorker
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QRadioButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
 )
-from src.services.task import TaskWorker, TaskQueue
-from src.document_controller import DocumentController
-from src.utils import find_system_fonts
-from src.settings import app_settings
-from src.services.logger import logger
 
+from src.document_controller import DocumentController
+from src.services.caption_renderer import (
+    CaptionRenderer,
+    RendererWorker,
+    VideoBurnerWorker,
+)
+from src.services.logger import logger
+from src.services.media_player_controller import MediaPlayerController
+from src.services.task import TaskQueue, TaskWorker
+from src.settings import app_settings
+from src.ui.progess_dialog import ProgressDialog
+from src.utils import find_system_fonts
 
 
 class RenderCaptionsDialog(QDialog):
-
     def __init__(
-            self,
-            parent,
-            document_controller: DocumentController,
-            output_dir: Path
-        ) -> None:
+        self,
+        parent,
+        document_controller: DocumentController,
+        media_controller: MediaPlayerController,
+    ) -> None:
         super().__init__(parent)
 
         self.document_controller = document_controller
-        self.output_dir = output_dir
+        self.media_controller = media_controller
+        self.output_dir = document_controller.document_path.parent
 
         self.renderer = CaptionRenderer(document_controller)
         self.progress_dialog: ProgressDialog | None = None
         self._thread: RendererWorker | None = None
         self._queue: TaskQueue | None = None
 
-        self.font_names = [self.renderer.fonts[k][0] for k in sorted(self.renderer.fonts.keys())]
+        self.font_names = [
+            self.renderer.fonts[k][0] for k in sorted(self.renderer.fonts.keys())
+        ]
 
         self.example_text = "Disoñjal deoc'h"
 
@@ -71,8 +83,7 @@ class RenderCaptionsDialog(QDialog):
 
         # saved_params = app_settings.value("render_captions/saved_parameters", {})
         # self.set_parameters(saved_params)
-        
-    
+
     def initUI(self) -> None:
         # Main layout
         layout = QVBoxLayout(self)
@@ -91,7 +102,9 @@ class RenderCaptionsDialog(QDialog):
         self.fonts_combo.currentIndexChanged.connect(self.fontChanged)
 
         font_layout.addWidget(font_label)
-        font_layout.addWidget(self.fonts_combo, stretch=1)  # Combo stretches to fill space
+        font_layout.addWidget(
+            self.fonts_combo, stretch=1
+        )  # Combo stretches to fill space
         left_column.addLayout(font_layout)
 
         columns.addLayout(left_column)
@@ -116,14 +129,32 @@ class RenderCaptionsDialog(QDialog):
 
         layout.addLayout(columns)
 
+        # ---- Render range (start frame, end frame)
+
+        frame_range_layout = QHBoxLayout()
+        start_frame_label = QLabel(self.tr("Start frame"), self)
+        self.start_frame = QSpinBox()
+        self.start_frame.setRange(0, 999999)
+        end_frame_label = QLabel(self.tr("End frame"), self)
+        self.end_frame = QSpinBox()
+        self.end_frame.setRange(0, 999999)
+
+        duration = self.media_controller.getDuration()
+        n_frames = int(duration * self.renderer.fps)
+        self.end_frame.setValue(n_frames)
+
+        frame_range_layout.addWidget(start_frame_label)
+        frame_range_layout.addWidget(self.start_frame)
+        frame_range_layout.addWidget(end_frame_label)
+        frame_range_layout.addWidget(self.end_frame)
+
+        layout.addLayout(frame_range_layout)
+
         # ----------------
 
         self.output_combo = QComboBox(self)
         self.output_combo.addItems(
-            [
-                self.tr("Render frames"),
-                self.tr("Render frames and burn video")
-            ]
+            [self.tr("Render frames"), self.tr("Render frames and burn video")]
         )
 
         layout.addWidget(self.output_combo)
@@ -140,32 +171,28 @@ class RenderCaptionsDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
-
     def accept(self) -> None:
         self.renderer.set_output_dir(self.output_dir / "renders")
         self.renderer.set_properties(
             # font = self.font_names[self.fonts_combo.currentIndex()],
-            font_size = self.renderer.DEFAULT_FONT_SIZE,
-            bg_color = "#FFFFFFBB",
-            fg_color = "#FFFFFFFF",
-            bg_outline_color = "#000000",
-            bg_outline_width = 2,
-            fg_outline_color = "#000000",
-            fg_outline_width = 2,
-            interline = 0.0,
-            #y_offset = -0.01
+            font_size=self.renderer.DEFAULT_FONT_SIZE,
+            bg_color="#FFFFFFBB",
+            fg_color="#FFFFFFFF",
+            bg_outline_color="#000000",
+            bg_outline_width=2,
+            fg_outline_color="#000000",
+            fg_outline_width=2,
+            interline=0.0,
+            # y_offset = -0.01
         )
-        #self.renderer.set_background_images("/home/gweltaz/Projets/art generatif/processing/karaokan1/renders/p_frame_%05d.png")
-        
-        self.render()
+        # self.renderer.set_background_images("/home/gweltaz/Projets/art generatif/processing/karaokan1/renders/p_frame_%05d.png")
 
-    
+        self.run()
+
     def fontChanged(self) -> None:
         font_name = self.font_names[self.fonts_combo.currentIndex()].lower()
         logger.debug(f"Font changed to {self.renderer.fonts[font_name]}")
-        self.renderer.set_properties(
-            font = font_name
-        )
+        self.renderer.set_properties(font=font_name)
         image, bbox = self.renderer.render_colored_text(self.example_text)
 
         # Store data on self to prevent garbage collection before QImage is done with it
@@ -182,14 +209,11 @@ class RenderCaptionsDialog(QDialog):
         # )
         self.font_image_label.setPixmap(pixmap)
 
-
     def get_parameters(self) -> dict:
         return {}
-    
 
     def set_parameters(self, params: dict):
         pass
-
 
     def _on_operation_cancelled(self) -> None:
         # Called if the render operation was cancelled
@@ -197,17 +221,14 @@ class RenderCaptionsDialog(QDialog):
         if self._thread is not None and self._thread.isRunning():
             self._thread.stop()
 
-
     def _on_operation_completed(self) -> None:
         # Called after the operation is carried successfuly
         logger.message(self.tr("Frames rendered successfuly"))
         self._close_loading_dialog()
         self.close()
-        
-    
+
     def _on_operation_stopped(self) -> None:
         self._close_loading_dialog()
-    
 
     def _close_loading_dialog(self):
         # Clean up thread
@@ -219,7 +240,6 @@ class RenderCaptionsDialog(QDialog):
         # Close loading dialog
         if self.progress_dialog is not None:
             self.progress_dialog.close()
-    
 
     def _on_task_started(self, index: int, total: int, description: str):
         if self.progress_dialog is not None:
@@ -228,8 +248,7 @@ class RenderCaptionsDialog(QDialog):
                 message = f"[{index + 1}/{total}]\t {message}"
             self.progress_dialog.setMessage(message)
 
-
-    def render(self) -> None:
+    def run(self) -> None:
         """
         Dependecies:
             media_path
@@ -243,22 +262,27 @@ class RenderCaptionsDialog(QDialog):
         if media_path is None:
             logger.error("No media file detected")
             return
-    
+
+        params = {
+            "start_frame": self.start_frame.value(),
+            "end_frame": self.end_frame.value(),
+        }
+
         tasks: List[TaskWorker] = [
-            RendererWorker(self, self.renderer),
+            RendererWorker(self, self.renderer, params),
         ]
 
         if self.output_combo.currentIndex() == 1:
             # Burn to video
-            output_path = media_path.parent / (media_path.stem + "_burn" + media_path.suffix) 
-            tasks.append(
-                VideoBurnerWorker(self, self.renderer, output_path)
+            output_path = media_path.parent / (
+                media_path.stem + "_burn" + media_path.suffix
             )
+            tasks.append(VideoBurnerWorker(self, self.renderer, output_path, params))
 
         self._queue = TaskQueue(tasks, parent=self)
 
         self.progress_dialog = ProgressDialog(self)
-        self.progress_dialog.setMessage(self.tr("Rendering frames") + '...')
+        self.progress_dialog.setMessage(self.tr("Rendering frames") + "...")
         self.progress_dialog.progress_bar.setRange(0, 100)
 
         self._queue.progress_pc.connect(self.progress_dialog.setValue)
