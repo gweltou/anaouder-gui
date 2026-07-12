@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -86,7 +86,7 @@ shortcuts: Dict[str, QKeySequence] = {
     "crop_tail": QKeySequence("Ctrl+T"),
     "segment_from_selection": QKeySequence("A"),
     "loop": QKeySequence("Ctrl+L"),
-    "preferences": QKeySequence("Ctrl+,"),
+    "preferences": QKeySequence("Meta+,") if _is_darwin else QKeySequence("Ctrl+,"),
     # This creates a segmentation fault, for some reason...
     # "zoom_in":      QKeySequence(QKeySequence.StandardKey.ZoomIn),
     # "zoom_out":     QKeySequence(QKeySequence.StandardKey.ZoomOut),

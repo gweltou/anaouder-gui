@@ -543,7 +543,7 @@ class MainWindow(QMainWindow):
 
             render_frames_action.triggered.connect(
                 lambda: RenderCaptionsDialog(
-                    self, self.document_controller, self.file_path.parent
+                    self, self.document_controller, self.media_controller
                 ).exec()
             )
             operation_menu.addAction(render_frames_action)
@@ -2619,16 +2619,16 @@ class MainWindow(QMainWindow):
     def updateSegmentInfo(self, segment_id: SegmentId) -> None:
         """Rehighlight sentence in text widget and update status bar info"""
         logger.debug(f"updateSegmentInfo({segment_id=})")
+
         segment = self.document_controller.getSegment(segment_id)
-        if segment is None:
+        block = self.document_controller.getBlockById(segment_id)
+        if segment is None or block is None:
             self.status_label.clear()
             return
 
         # Refresh block color in density mode
         if self.text_widget.highlighter.mode == Highlighter.ColorMode.DENSITY:
-            block = self.document_controller.getBlockById(segment_id)
-            if block:
-                self.text_widget.highlighter.rehighlightBlock(block)
+            self.text_widget.highlighter.rehighlightBlock(block)
 
         density = self.document_controller.getUtteranceDensity(segment_id)
         self.updateSegmentInfoResizing(segment_id, segment, density)
@@ -2640,17 +2640,19 @@ class MainWindow(QMainWindow):
         Rehighlight sentence in text widget and update status bar info
 
         Args:
+            seg_id (int): The segments's ID
             segment (list): Segment boundaries
             density (float): Utterance character density (in characters per seconds)
 
         Note:
             The `segment` argument is needed when this method is called
-            while resizing a segment (which is not commited yet)
+            while resizing a segment which is not commited yet.
         """
-        # Show info in status bar
         warning_style = "background-color: red; color: white;"
 
         start, end = segment
+
+        # ---- Segment's start and end
         start_str = sec2hms(
             start + self.waveform.view.time_offset,
             precision=2,
@@ -2671,8 +2673,11 @@ class MainWindow(QMainWindow):
             self.tr("end: {}").format(f"{end_str:10}"),
         ]
 
+        # --- Duration
         duration = end - start
-        duration_string = self.tr("dur: {}s").format(f"{duration:.2f}")
+        duration_string = (
+            self.tr("dur: {}").format(f"{duration:.2f}") + app_strings.TR_UNIT_SECOND
+        )
         # Highlight value if segment is too short or too long
         fps = self.waveform.fps
         if fps > 0.0 and (
@@ -2685,7 +2690,7 @@ class MainWindow(QMainWindow):
         else:
             string_parts.append(duration_string)
 
-        # Get longest line length
+        # ---- Line length
         block = self.document_controller.getBlockById(seg_id)
         if block is not None:
             lines = block.text().split(LINE_BREAK)
@@ -2693,7 +2698,7 @@ class MainWindow(QMainWindow):
             line_max_size: int = app_settings.value(
                 "subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int
             )
-            len_string = self.tr("len: {}").format(longest)
+            len_string = self.tr("len: {}").format(longest) + app_strings.TR_UNIT_CHAR
             if longest > line_max_size:
                 string_parts.append(
                     f"<span style='{warning_style}'>{len_string}</span>"
@@ -2701,7 +2706,7 @@ class MainWindow(QMainWindow):
             else:
                 string_parts.append(len_string)
 
-        # Add density
+        # ---- Uttterance density
         if density != -1.0:
             density_str = f"{density:.1f}{app_strings.TR_UNIT_CPS}"
             if density > self._target_density + 0.05:  # Slight tolerance

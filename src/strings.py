@@ -16,14 +16,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
 from PySide6.QtCore import QObject
 
 
 class Strings(QObject):
     def __init__(self):
         super().__init__()
-    
 
     def initialize(self):
         """This method should be called after the translators are loaded"""
@@ -36,9 +34,15 @@ class Strings(QObject):
         self.TR_TRANSCRIPTION_COMPLETED = self.tr("Transcription completed")
         self.TR_TRANSCRIPTION_IN_PROGRESS = self.tr("Transcribing...")
         self.TR_NO_TRANSCRIPTION_LABEL = self.tr("No transcription")
-        self.TR_NO_TRANSCRIPTION_TOOLTIP = self.tr("This media file has not been transcribed yet.")
-        self.TR_NO_TRANSCRIPTION_LABEL_TOOLTIP = self.tr("Click on the 'Transcribe' button, with no segments selected, to start automatic transcription")
-        self.TR_PARTIAL_TRANSCRIPTION_LABEL_TOOLTIP = self.tr("Click on the 'Transcribe' button, with no segments selected, to continue automatic transcription")
+        self.TR_NO_TRANSCRIPTION_TOOLTIP = self.tr(
+            "This media file has not been transcribed yet."
+        )
+        self.TR_NO_TRANSCRIPTION_LABEL_TOOLTIP = self.tr(
+            "Click on the 'Transcribe' button, with no segments selected, to start automatic transcription"
+        )
+        self.TR_PARTIAL_TRANSCRIPTION_LABEL_TOOLTIP = self.tr(
+            "Click on the 'Transcribe' button, with no segments selected, to continue automatic transcription"
+        )
 
         # Buttons
         self.TR_OK = self.tr("OK")
@@ -63,10 +67,11 @@ class Strings(QObject):
 
         # Units
         self.TR_UNIT_FRAMES = self.tr("frames")
-        self.TR_UNIT_CPS = self.tr("c/s")
-        self.TR_UNIT_SECOND = self.tr("s")
-        self.TR_UNIT_MINUTE = self.tr("mn")
-        self.TR_UNIT_HOUR = self.tr("h")
+        self.TR_UNIT_CPS = self.tr("c/s", "character per second")
+        self.TR_UNIT_CHAR = self.tr("c", "character")
+        self.TR_UNIT_SECOND = self.tr("s", "second")
+        self.TR_UNIT_MINUTE = self.tr("mn", "minute")
+        self.TR_UNIT_HOUR = self.tr("h", "hour")
         self.TR_UNIT_FPS = self.tr("fps")
         self.TR_UNIT_OCTED = self.tr("o")
         self.TR_UNIT_KILO_OCTED = self.tr("Ko")

@@ -54,7 +54,8 @@ class DocumentController(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
 
-        self.media_path: Path | None = None
+        self.media_path: Path | None = None  # Path to media
+        self.document_path: Path | None = None  # Path to text document file
         self.segments: Dict[SegmentId, Segment] = dict()
         self._sorted_segments = []
 
@@ -71,6 +72,7 @@ class DocumentController(QObject):
     def clear(self) -> None:
         """Clears the document"""
         # self.media_path = None
+        # self.document_path = None
         self.segments.clear()
         self.id_counter = 0
         self.must_sort = True
@@ -105,7 +107,6 @@ class DocumentController(QObject):
 
     def setDocumentPath(self, file_path: Path | None) -> None:
         self.document_path = file_path
-        print(f"{self.document_path=}")
 
     def loadData(self, data: List[Tuple[str, Segment | None]]) -> None:
         """
