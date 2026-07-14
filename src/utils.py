@@ -51,10 +51,6 @@ def get_resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-def yellow(text):
-    return f"\033[93m{text}\033[0m"
-
-
 def get_cache_directory(name: Optional[str] = None) -> Path:
     # Use XDG_CACHE_HOME if available, otherwise use default
     system = platform.system()
@@ -117,7 +113,11 @@ def download(url: str, root: str) -> str:
     return download_target
 
 
-#### Text utility functions
+## -------- Text utility functions
+
+
+def yellow(text):
+    return f"\033[93m{text}\033[0m"
 
 
 def filter_out_chars(text: str, chars: str) -> str:
@@ -259,7 +259,7 @@ def splitForSubtitle(text: str, size: int):
     return (text,)
 
 
-#### Color utility functions
+## -------- Color utility functions
 
 
 def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
@@ -274,9 +274,9 @@ def lerpColor(col1: QColor, col2: QColor, t: float) -> QColor:
 def yuv_to_rgb(y: float, u: float, v: float, color_range="full") -> tuple:
     # https://mymusing.co/bt-709-yuv-to-rgb-conversion-color/
     if color_range == "tv":
-        y = mapNumber(y, 16, 235, 0.0, 1.0)
-        u = mapNumber(u, 128, 235, 0.0, 1.0)
-        v = mapNumber(v, 128, 235, 0.0, 1.0)
+        y = map_number(y, 16, 235, 0.0, 1.0)
+        u = map_number(u, 128, 235, 0.0, 1.0)
+        v = map_number(v, 128, 235, 0.0, 1.0)
     r = y + 1.5748 * v
     g = y - 0.187324 * u - 0.468124 * v
     b = y + 1.8556 * u
@@ -291,9 +291,9 @@ def bt709_to_rgb(g: float, b: float, r: float, color_range="tv") -> tuple:
     # It's BRG
     print(color_range)
     if color_range == "tv":
-        r = mapNumber(r, 16, 235, 0, 256)
-        g = mapNumber(g, 16, 235, 0, 256)
-        b = mapNumber(b, 16, 235, 0, 256)
+        r = map_number(r, 16, 235, 0, 256)
+        g = map_number(g, 16, 235, 0, 256)
+        b = map_number(b, 16, 235, 0, 256)
         print(r, g, b)
     r = min(max(int(r), 0), 255)
     g = min(max(int(g), 0), 255)
@@ -301,7 +301,10 @@ def bt709_to_rgb(g: float, b: float, r: float, color_range="tv") -> tuple:
     return (r, g, b)
 
 
-def mapNumber(
+## -------- Math functions
+
+
+def map_number(
     n: float, min_n: float, max_n: float, min_m: float, max_m: float
 ) -> float:
     """Map a number from a range to another"""
@@ -315,7 +318,7 @@ def mapNumber(
     return min_m + (n - min_n) * d
 
 
-#### Time utility functions
+## -------- Time utility functions
 
 
 def sec2hms(
@@ -334,7 +337,7 @@ def sec2hms(
     return sep.join(parts)
 
 
-#### Audio file utility functions
+## -------- Audio file utility functions
 
 
 def get_audiofile_info(filename) -> dict:
@@ -354,7 +357,7 @@ def get_audiofile_info(filename) -> dict:
     return r["streams"][0]
 
 
-#### Fonts utility functions
+## -------- Fonts utility functions
 
 
 def find_system_fonts():

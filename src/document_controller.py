@@ -324,10 +324,10 @@ class DocumentController(QObject):
         Returns:
             A segment ID or -1
         """
+        sorted_segments = self.getSortedSegments()
+
         if segment_id is None:
             segment_id = self.active_segment_id
-
-        sorted_segments = self.getSortedSegments()
 
         if segment_id == -1:
             # Check relative to playhead position
@@ -344,7 +344,7 @@ class DocumentController(QObject):
                     return -1
         return -1
 
-    def getNextSegmentId(self, segment_id: Optional[SegmentId] = None) -> SegmentId:
+    def getNextSegmentId(self, segment_id: SegmentId | None = None) -> SegmentId:
         """
         Returns the ID of the segment after the currently selected one, or -1.
         If no segment are selected, return the next one relative to the playhead.
@@ -372,7 +372,7 @@ class DocumentController(QObject):
                     return -1
         return -1
 
-    def getNextAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
+    def getNextAlignedBlock(self, block: QTextBlock) -> QTextBlock | None:
         while True:
             block = block.next()
 
@@ -382,7 +382,7 @@ class DocumentController(QObject):
             if self.getBlockType(block) == BlockType.ALIGNED:
                 return block
 
-    def getPrevAlignedBlock(self, block: QTextBlock) -> Optional[QTextBlock]:
+    def getPrevAlignedBlock(self, block: QTextBlock) -> QTextBlock | None:
         while True:
             block = block.previous()
 

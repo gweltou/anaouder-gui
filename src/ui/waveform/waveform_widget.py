@@ -342,17 +342,22 @@ class WaveformWidget(QWidget):
         #     self.t_left = t
         self.must_redraw = True
 
-    def removeSelection(self):
+    def setRecognizerProgress(self, time_s: float) -> None:
+        self.recognizer_progress = time_s
+        if time_s > self.view.t_left and time_s < self.getTimeRight():
+            self.must_redraw = True
+
+    def removeSelection(self) -> None:
         logger.debug("removeSelection()")
         self.selection_is_active = False
         self._selection = None
         self.must_redraw = True
 
-    def getTimeRight(self):
+    def getTimeRight(self) -> float:
         """Return the timecode at the right border of the window"""
         return self.view.t_left + self.width() / self.view.ppsec
 
-    def _update(self):
+    def _update(self) -> None:
         # Zooming
         if self.view.ppsec_goal != self.view.ppsec:
             self.view.ppsec += (self.view.ppsec_goal - self.view.ppsec) * 0.2

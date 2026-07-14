@@ -16,10 +16,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import math
 from enum import Enum
 from typing import List, Optional, Tuple
 
-from PySide6.QtCore import QMimeData, QRect, QRegularExpression, QSize, Qt, Signal, Slot
+from PySide6.QtCore import (
+    QMimeData,
+    QPoint,
+    QRect,
+    QRectF,
+    QRegularExpression,
+    QSize,
+    Qt,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import (
     QAction,
     QDropEvent,
@@ -31,6 +42,7 @@ from PySide6.QtGui import (
     QKeySequence,
     QPainter,
     QPaintEvent,
+    QPolygon,
     QTextBlock,
     QTextCharFormat,
     QTextCursor,
@@ -38,6 +50,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QApplication, QMenu, QTextEdit, QWidget
 
+from settings import QColor
 from src.actions import ActionManager
 from src.commands import (
     DeleteTextCommand,
@@ -51,26 +64,274 @@ from src.services.logger import logger
 from src.settings import SUBTITLES_MARGIN_SIZE, app_settings
 from src.ui.text_highlighter import Highlighter
 from src.ui.theme import theme
-from src.utils import (
-    EM_DASH,
-    LINE_BREAK,
-    STOP_CHARS,
-    yellow,
-)
+from src.utils import EM_DASH, LINE_BREAK, STOP_CHARS, map_number, yellow
 
 
 class LineNumberArea(QWidget):
     """The widget that displays line numbers on the left"""
 
-    def __init__(self, editor):
+    def __init__(
+        self, editor: "TextEditWidget", document_controller: DocumentInterface
+    ):
         super().__init__(editor)
         self.editor = editor
+        self.document_controller = document_controller
+        self.player_position = 0.0
 
-    def sizeHint(self):
+    def updatePlayerPosition(self, time_s: float) -> None:
+        self.player_position = time_s
+        self.update()
+
+    def sizeHint(self) -> QSize:
         return QSize(self.editor._getLineNumberAreaWidth(), 0)
 
-    def paintEvent(self, event):
-        self.editor.lineNumberAreaPaintEvent(event)
+    def paintEvent_old(self, event) -> None:
+        """Paints the line numbers in the sidebar."""
+
+        painter = QPainter(self)
+        painter.fillRect(event.rect(), theme.colors.line_number)
+
+        doc_layout = self.editor.document().documentLayout()
+
+        # Get the scrollbar offset (in pixels)
+        offset_y = self.editor.verticalScrollBar().value()
+        # page_bottom = offset_y + self.viewport().height()
+
+        # Iterate over all text blocks (could be optimized)
+        block = self.editor.document().begin()
+        utterance_number = 0
+
+        while block.isValid():
+            is_aligned = False
+            if self.editor.isAligned(block):
+                utterance_number += 1
+                is_aligned = True
+
+            rect = doc_layout.blockBoundingRect(block)
+
+            # Check if the block is visible in the viewport
+            top_of_block = rect.top() - offset_y
+            bottom_of_block = rect.bottom() - offset_y
+
+            # If the block is visible
+            if top_of_block <= self.editor.viewport().height() and bottom_of_block >= 0:
+                if block.isVisible():
+                    if is_aligned:
+                        # Paint the number
+                        painter.setPen(Qt.GlobalColor.black)
+                        painter.drawText(
+                            0,
+                            int(top_of_block),
+                            self.width() - 5,
+                            int(self.fontMetrics().height()),
+                            Qt.AlignmentFlag.AlignRight,
+                            str(utterance_number),
+                        )
+                    else:
+                        painter.setPen(Qt.GlobalColor.gray)
+                        painter.drawText(
+                            0,
+                            int(top_of_block),
+                            self.width() - 5,
+                            int(self.fontMetrics().height()),
+                            Qt.AlignmentFlag.AlignRight,
+                            "*",
+                        )
+
+            if top_of_block > self.editor.viewport().height():
+                break
+
+            block = block.next()
+
+        painter.end()
+
+    def _render_player_position(
+        self, painter: QPainter, blocks_data: List[tuple], y_offset: int
+    ) -> None:
+        """
+        Args:
+            blocks_data: list of
+                (block, top_y, bottom_y)
+        """
+        t_pos = self.player_position
+        width = self.width()
+        height = self.height()
+
+        playhead_y = 0
+        last_end = 0.0
+        last_bottom = -y_offset
+
+        for block, top, bottom in blocks_data:
+            segment_id = self.document_controller.getBlockId(block)
+            segment = self.document_controller.getSegment(segment_id)
+            if segment is None:
+                continue
+            start, end = segment
+
+            if t_pos < start:
+                # In between aligned segments
+                playhead_y = round(map_number(t_pos, last_end, start, last_bottom, top))
+                break
+
+            if start <= t_pos < end:
+                # Playhead is over an utterance
+                playhead_y = round(map_number(t_pos, start, end, top, bottom))
+
+                # Highlight the aligned block left margin
+                painter.fillRect(
+                    QRect(
+                        0,
+                        top,
+                        width,
+                        bottom - top,
+                    ),
+                    QColor(255, 0, 0, 40),
+                )
+                break
+
+            last_end = end
+            last_bottom = bottom
+
+        # Check if playhead is down under current view
+        last_block = blocks_data[-1][0]
+        segment_id = self.document_controller.getBlockId(last_block)
+        segment = self.document_controller.getSegment(segment_id)
+        assert segment is not None
+        last_start, _ = segment
+
+        if t_pos > last_start:
+            print(f"{t_pos=} {last_start=}")
+            playhead_y = height + 1
+
+        # Draw playhead
+        if 0 <= playhead_y <= height:
+            # Line shadow
+            painter.fillRect(
+                QRect(
+                    0,
+                    playhead_y - 1,
+                    width,
+                    3,
+                ),
+                QColor(255, 0, 0, 60),
+            )
+            painter.setPen(QColor(255, 0, 0))
+            painter.drawLine(0, playhead_y, width, playhead_y)
+            return
+
+        # Draw out of view playhead
+        arrow_h = 8
+        arrow_margin = 3
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(255, 0, 0, 140))
+        # Arrows animation
+        t = self.player_position
+        offset = round(2 * (math.sin(3 * math.pi * t) + 1) / 2) + 1
+
+        if playhead_y < 0:
+            painter.drawPolygon(
+                QPolygon(
+                    [
+                        QPoint(width // 2, offset),
+                        QPoint(width - arrow_margin, offset + arrow_h),
+                        QPoint(arrow_margin, offset + arrow_h),
+                    ]
+                )
+            )
+        elif playhead_y > height:
+            painter.drawPolygon(
+                QPolygon(
+                    [
+                        QPoint(arrow_margin, height - arrow_h - offset),
+                        QPoint(width - arrow_margin, height - arrow_h - offset),
+                        QPoint(width // 2, height - offset),
+                    ]
+                )
+            )
+
+    def paintEvent(self, event) -> None:
+        """Paints the line numbers in the sidebar."""
+
+        doc_layout = self.editor.document().documentLayout()
+
+        aligned_block_tc = []  # Relative_pos and timecodes for each aligned block
+        label_and_rect = []  # Block labels, text color and text bounding rects
+
+        # Get the scrollbar offset (in pixels)
+        offset_y = self.editor.verticalScrollBar().value()
+        # page_bottom = offset_y + self.viewport().height()
+
+        # Iterate over all text blocks (could be optimized)
+        block = self.editor.document().begin()
+        utterance_number = 0
+
+        prev_block = None
+        prev_block_top = 0
+        prev_block_bottom = 0
+
+        while block.isValid():
+            rect = doc_layout.blockBoundingRect(block)
+
+            is_aligned = False
+            if self.editor.isAligned(block):
+                utterance_number += 1
+                is_aligned = True
+
+            # Check if the block is visible in the viewport
+            top_of_block = int(rect.top() - offset_y)
+            bottom_of_block = int(rect.bottom() - offset_y)
+            block_height = bottom_of_block - top_of_block
+
+            if bottom_of_block >= 0 and top_of_block <= self.editor.viewport().height():
+                if block.isVisible():
+                    if is_aligned:
+                        # Remember the last block before the first visible block
+                        if len(aligned_block_tc) == 0 and top_of_block > 0:
+                            aligned_block_tc.append(
+                                (prev_block, prev_block_top, prev_block_bottom)
+                            )
+
+                        aligned_block_tc.append((block, top_of_block, bottom_of_block))
+                        label_and_rect.append(
+                            (
+                                str(utterance_number),
+                                Qt.GlobalColor.black,
+                                QRect(0, top_of_block, self.width() - 4, block_height),
+                            )
+                        )
+
+                    else:
+                        label_and_rect.append(
+                            (
+                                "*",
+                                Qt.GlobalColor.gray,
+                                QRect(0, top_of_block, self.width() - 5, block_height),
+                            )
+                        )
+
+            # Add the next utterance (outside of view)
+            if top_of_block > self.editor.viewport().height() and is_aligned:
+                aligned_block_tc.append((block, top_of_block, bottom_of_block))
+                break
+
+            prev_block = block
+            prev_block_top = top_of_block
+            prev_block_bottom = bottom_of_block
+            block = block.next()
+
+        # Render blocks left bar
+        painter = QPainter(self)
+        painter.fillRect(event.rect(), theme.colors.line_number)
+
+        # Highlight media player position
+        self._render_player_position(painter, aligned_block_tc, offset_y)
+
+        # Paint numbers
+        for label, color, rect in label_and_rect:
+            painter.setPen(color)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignRight, label)
+
+        painter.end()
 
 
 class TextEditWidget(QTextEdit):
@@ -95,7 +356,7 @@ class TextEditWidget(QTextEdit):
         self.main_window = parent
         self.document_controller = document_controller
         self.action = action
-        self.line_number_area = LineNumberArea(self)
+        self.line_number_area = LineNumberArea(self, document_controller)
 
         # Disable default undo stack to use our own instead
         self.setUndoRedoEnabled(False)
@@ -114,7 +375,7 @@ class TextEditWidget(QTextEdit):
         self.highlighter = Highlighter(self.document(), self, document_controller)
         self.highlighted_sentence_id = -1
 
-        # Subtitles margin
+        # Subtitles max width margin
         self._text_margin = False
         self._margin_size: int = app_settings.value(
             "subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int
@@ -696,23 +957,23 @@ class TextEditWidget(QTextEdit):
             # Selection spreads over many blocks
             pass
 
-    def toggleTextMargin(self, checked: bool):
+    def toggleTextMargin(self, checked: bool) -> None:
         self._text_margin = checked
         self._updateSubtitleMargin()
 
     @Slot(int)
-    def onMarginSizeChanged(self, size):
+    def onMarginSizeChanged(self, size) -> None:
         """Must be connected to the ParametersDialog's signal from MainWindow"""
         self._margin_size = size
         self._updateSubtitleMargin()
 
-    def _updateSubtitleMargin(self):
+    def _updateSubtitleMargin(self) -> None:
         if self._text_margin:
             font_metrics = QFontMetricsF(self.font())
             self._char_width = font_metrics.averageCharWidth()
         self.viewport().update()
 
-    def cut(self):
+    def cut(self) -> None:
         cursor = self.textCursor()
         logger.debug(f"cut() {cursor.position()=} {cursor.anchor()=}")
         if cursor.hasSelection():
@@ -722,7 +983,7 @@ class TextEditWidget(QTextEdit):
             self.deleteSelectedText(cursor)
         return
 
-    def paste(self):
+    def paste(self) -> None:
         """
         To change the behavior of this function,
         i.e. to modify what QTextEdit can paste and how it is being pasted,
@@ -1387,6 +1648,7 @@ class TextEditWidget(QTextEdit):
         if self._char_width <= 0:
             return
 
+        # Draw subtitles max length margin
         viewport = self.viewport()
         painter = QPainter(viewport)
 
@@ -1406,7 +1668,10 @@ class TextEditWidget(QTextEdit):
         finally:
             painter.end()
 
-    def _getLineNumberAreaWidth(self):
+    def updatePlayerPosition(self, time_s: float) -> None:
+        self.line_number_area.updatePlayerPosition(time_s)
+
+    def _getLineNumberAreaWidth(self) -> int:
         """
         Calculates the width needed for the line number area
         based on the number of digits in the line count.
@@ -1429,67 +1694,6 @@ class TextEditWidget(QTextEdit):
     def updateLineNumberArea(self) -> None:
         """Repaints the sidebar area."""
         self.line_number_area.update()
-
-    def lineNumberAreaPaintEvent(self, event) -> None:
-        """Paints the line numbers in the sidebar"""
-
-        painter = QPainter(self.line_number_area)
-        painter.fillRect(
-            event.rect(), theme.colors.line_number
-        )  # Light gray background
-
-        doc_layout = self.document().documentLayout()
-
-        offset_y = self.verticalScrollBar().value()
-        # page_bottom = offset_y + self.viewport().height()
-
-        # Iterate over all text blocks (could be optimized)
-        block = self.document().begin()
-        utterance_number = 0
-
-        while block.isValid():
-            is_aligned = False
-            if self.isAligned(block):
-                utterance_number += 1
-                is_aligned = True
-
-            rect = doc_layout.blockBoundingRect(block)
-
-            # Check if the block is visible in the viewport
-            top_of_block = rect.top() - offset_y
-            bottom_of_block = rect.bottom() - offset_y
-
-            # If the block is visible
-            if top_of_block <= self.viewport().height() and bottom_of_block >= 0:
-                if block.isVisible():
-                    if is_aligned:
-                        # Paint the number
-                        painter.setPen(Qt.GlobalColor.black)
-                        painter.drawText(
-                            0,
-                            int(top_of_block),
-                            self.line_number_area.width() - 5,
-                            int(self.fontMetrics().height()),
-                            Qt.AlignmentFlag.AlignRight,
-                            str(utterance_number),
-                        )
-                    else:
-                        painter.setPen(Qt.GlobalColor.gray)
-                        painter.drawText(
-                            0,
-                            int(top_of_block),
-                            self.line_number_area.width() - 5,
-                            int(self.fontMetrics().height()),
-                            Qt.AlignmentFlag.AlignRight,
-                            "*",
-                        )
-
-            if top_of_block > self.viewport().height():
-                break
-
-            block = block.next()
-
-        painter.end()
 
     def resizeEvent(self, event):
         """

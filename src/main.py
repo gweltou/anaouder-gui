@@ -354,7 +354,7 @@ class MainWindow(QMainWindow):
             lambda checked: self.toggleHiddenTranscription(checked)
         )
 
-        # Media actions
+        # Media control actions
         self.action.play_pause_requested.connect(self.onPlayPauseAction)
 
         self.addAction(self.action.play_segment)
@@ -377,6 +377,10 @@ class MainWindow(QMainWindow):
 
         # Media controller
         self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
+        self.media_controller.position_changed.connect(self.timecode_widget.setTime)
+        self.media_controller.position_changed.connect(
+            self.text_widget.updatePlayerPosition
+        )
 
         # Document controller
         self.document_controller.refresh_segment_info.connect(self.updateSegmentInfo)
@@ -384,6 +388,7 @@ class MainWindow(QMainWindow):
         # Recognizer
         self.recognizer.segment_transcribed.connect(self.updateUtteranceTranscription)
         self.recognizer.new_segment_transcribed.connect(self.newSegmentTranscribed)
+        self.recognizer.progress.connect(self.waveform.setRecognizerProgress)
         self.recognizer.progress.connect(self.updateProgressBar)
         self.recognizer.finished.connect(self.finishTranscriptionAction)
         self.recognizer.end_of_file.connect(self.onRecognizerEOF)
@@ -1845,9 +1850,6 @@ class MainWindow(QMainWindow):
         # Update playhead on waveform widget
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
 
-        # Update timecode widget
-        self.timecode_widget.setTime(position_sec)
-
         # Check if end of current selected segments is reached
         selected_segment_id = self.waveform._dev_getSelectedId()
         if selected_segment_id is not None:
@@ -2733,13 +2735,6 @@ class MainWindow(QMainWindow):
         )
 
     def updateProgressBar(self, t_seconds: float) -> None:
-        self.waveform.recognizer_progress = t_seconds
-        if (
-            t_seconds > self.waveform.view.t_left
-            and t_seconds < self.waveform.getTimeRight()
-        ):
-            self.waveform.must_redraw = True
-
         self.transcription_status_label.setText(
             self.tr("Transcribed")
             + f" {t_seconds / self.media_controller.getDuration():.0%}"
