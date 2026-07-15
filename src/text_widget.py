@@ -64,11 +64,14 @@ from src.services.logger import logger
 from src.settings import SUBTITLES_MARGIN_SIZE, app_settings
 from src.ui.text_highlighter import Highlighter
 from src.ui.theme import theme
-from src.utils import EM_DASH, LINE_BREAK, STOP_CHARS, map_number, yellow
+from src.utils import EM_DASH, LINE_BREAK, STOP_CHARS, map_number, yellow, chrono
 
 
 class LineNumberArea(QWidget):
-    """The widget that displays line numbers on the left"""
+    """Displays line numbers on the left of the text"""
+
+    arrow_h = 8
+    arrow_w = 20
 
     def __init__(
         self, editor: "TextEditWidget", document_controller: DocumentInterface
@@ -85,73 +88,18 @@ class LineNumberArea(QWidget):
     def sizeHint(self) -> QSize:
         return QSize(self.editor._getLineNumberAreaWidth(), 0)
 
-    def paintEvent_old(self, event) -> None:
-        """Paints the line numbers in the sidebar."""
-
-        painter = QPainter(self)
-        painter.fillRect(event.rect(), theme.colors.line_number)
-
-        doc_layout = self.editor.document().documentLayout()
-
-        # Get the scrollbar offset (in pixels)
-        offset_y = self.editor.verticalScrollBar().value()
-        # page_bottom = offset_y + self.viewport().height()
-
-        # Iterate over all text blocks (could be optimized)
-        block = self.editor.document().begin()
-        utterance_number = 0
-
-        while block.isValid():
-            is_aligned = False
-            if self.editor.isAligned(block):
-                utterance_number += 1
-                is_aligned = True
-
-            rect = doc_layout.blockBoundingRect(block)
-
-            # Check if the block is visible in the viewport
-            top_of_block = rect.top() - offset_y
-            bottom_of_block = rect.bottom() - offset_y
-
-            # If the block is visible
-            if top_of_block <= self.editor.viewport().height() and bottom_of_block >= 0:
-                if block.isVisible():
-                    if is_aligned:
-                        # Paint the number
-                        painter.setPen(Qt.GlobalColor.black)
-                        painter.drawText(
-                            0,
-                            int(top_of_block),
-                            self.width() - 5,
-                            int(self.fontMetrics().height()),
-                            Qt.AlignmentFlag.AlignRight,
-                            str(utterance_number),
-                        )
-                    else:
-                        painter.setPen(Qt.GlobalColor.gray)
-                        painter.drawText(
-                            0,
-                            int(top_of_block),
-                            self.width() - 5,
-                            int(self.fontMetrics().height()),
-                            Qt.AlignmentFlag.AlignRight,
-                            "*",
-                        )
-
-            if top_of_block > self.editor.viewport().height():
-                break
-
-            block = block.next()
-
-        painter.end()
-
-    def _render_player_position(
+    def _get_playhead(
         self, painter: QPainter, blocks_data: List[tuple], y_offset: int
-    ) -> None:
+    ) -> tuple[int, QRect | None]:
         """
+        Highlight the background for the currently playing utterance
+        and return playhead position
+
         Args:
             blocks_data: list of
                 (block, top_y, bottom_y)
+        Return:
+            playhead's position (float)
         """
         t_pos = self.player_position
         width = self.width()
@@ -171,37 +119,45 @@ class LineNumberArea(QWidget):
             if t_pos < start:
                 # In between aligned segments
                 playhead_y = round(map_number(t_pos, last_end, start, last_bottom, top))
-                break
+                return playhead_y, None
 
             if start <= t_pos < end:
                 # Playhead is over an utterance
                 playhead_y = round(map_number(t_pos, start, end, top, bottom))
-
-                # Highlight the aligned block left margin
-                painter.fillRect(
-                    QRect(
-                        0,
-                        top,
-                        width,
-                        bottom - top,
-                    ),
-                    QColor(255, 0, 0, 40),
+                block_rect = QRect(
+                    0,
+                    top,
+                    width,
+                    bottom - top,
                 )
-                break
+                return playhead_y, block_rect
 
             last_end = end
             last_bottom = bottom
 
-        # Check if playhead is down under current view
-        last_block = blocks_data[-1][0]
-        segment_id = self.document_controller.getBlockId(last_block)
-        segment = self.document_controller.getSegment(segment_id)
-        assert segment is not None
-        last_start, _ = segment
+        # Check if playhead is invisible down the current view
+        if blocks_data:
+            last_block = blocks_data[-1][0]
+            segment_id = self.document_controller.getBlockId(last_block)
+            segment = self.document_controller.getSegment(segment_id)
+            assert segment is not None
+            last_start, _ = segment
 
-        if t_pos > last_start:
-            print(f"{t_pos=} {last_start=}")
-            playhead_y = height + 1
+            if t_pos > last_start:
+                playhead_y = height + 1
+
+        return playhead_y, None
+
+    def _paint_block_background(self, painter: QPainter, rect: QRect) -> None:
+        painter.fillRect(
+            rect,
+            QColor(255, 0, 0, 40),
+        )
+
+    def _paint_playhead(self, painter: QPainter, playhead_y: int) -> None:
+        height = self.height()
+        width = self.width()
+        half_width = width // 2
 
         # Draw playhead
         if 0 <= playhead_y <= height:
@@ -219,22 +175,20 @@ class LineNumberArea(QWidget):
             painter.drawLine(0, playhead_y, width, playhead_y)
             return
 
-        # Draw out of view playhead
-        arrow_h = 8
-        arrow_margin = 3
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(255, 0, 0, 140))
         # Arrows animation
         t = self.player_position
         offset = round(2 * (math.sin(3 * math.pi * t) + 1) / 2) + 1
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(255, 0, 0, 220))
 
         if playhead_y < 0:
             painter.drawPolygon(
                 QPolygon(
                     [
-                        QPoint(width // 2, offset),
-                        QPoint(width - arrow_margin, offset + arrow_h),
-                        QPoint(arrow_margin, offset + arrow_h),
+                        QPoint(half_width, offset),
+                        QPoint(half_width + self.arrow_w // 2, offset + self.arrow_h),
+                        QPoint(half_width - self.arrow_w // 2, offset + self.arrow_h),
                     ]
                 )
             )
@@ -242,9 +196,9 @@ class LineNumberArea(QWidget):
             painter.drawPolygon(
                 QPolygon(
                     [
-                        QPoint(arrow_margin, height - arrow_h - offset),
-                        QPoint(width - arrow_margin, height - arrow_h - offset),
-                        QPoint(width // 2, height - offset),
+                        QPoint(half_width - self.arrow_w // 2, height - self.arrow_h - offset),
+                        QPoint(half_width + self.arrow_w // 2, height - self.arrow_h - offset),
+                        QPoint(half_width, height - offset),
                     ]
                 )
             )
@@ -319,17 +273,23 @@ class LineNumberArea(QWidget):
             prev_block_bottom = bottom_of_block
             block = block.next()
 
-        # Render blocks left bar
+        # Render blocks left bar background
         painter = QPainter(self)
         painter.fillRect(event.rect(), theme.colors.line_number)
 
-        # Highlight media player position
-        self._render_player_position(painter, aligned_block_tc, offset_y)
+        playhead_y, block_bg_rect = self._get_playhead(painter, aligned_block_tc, offset_y)
+
+        # Block background
+        if block_bg_rect is not None:
+            self._paint_block_background(painter, block_bg_rect)
 
         # Paint numbers
         for label, color, rect in label_and_rect:
             painter.setPen(color)
             painter.drawText(rect, Qt.AlignmentFlag.AlignRight, label)
+
+        # Paint playhead or out of view arrows
+        self._paint_playhead(painter, playhead_y)
 
         painter.end()
 
