@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026  Gweltaz Duval-Guennoc (gwel@ik.com)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,22 +16,18 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-
-from typing import List, Tuple
 from numpy import ndarray
-
-from ostilhou.audio.audio_numpy import split_to_segments
-
 from PySide6.QtCore import QObject
 
-from src.settings import WAVEFORM_SAMPLERATE
+from src.audio import split_to_segments
 from src.services.logger import logger
+from src.settings import WAVEFORM_SAMPLERATE
 
 
-
-def auto_segment(samples: ndarray, start_frame: int, end_frame: int) -> List[Tuple[float, float]]:
+def auto_segment(samples: ndarray, start_frame: int, end_frame: int) -> list[tuple[float, float]]:
     SEGMENTS_MAXIMUM_LENGTH = 10 # Seconds
-    RATIO_THRESHOLD = 0.05
+    RATIO_THRESHOLD = 0.1
+    MIN_SILENCE_DUR = 0.1
 
     logger.message("Finding segments...")
 
@@ -39,7 +35,8 @@ def auto_segment(samples: ndarray, start_frame: int, end_frame: int) -> List[Tup
         samples[start_frame:end_frame],
         WAVEFORM_SAMPLERATE,
         SEGMENTS_MAXIMUM_LENGTH,
-        RATIO_THRESHOLD
+        RATIO_THRESHOLD,
+        MIN_SILENCE_DUR
     )
 
     # Adjust segments to be in global audio context
