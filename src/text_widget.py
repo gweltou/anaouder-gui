@@ -293,6 +293,10 @@ class LineNumberArea(QWidget):
 
         painter.end()
 
+    def wheelEvent(self, event):
+        self.editor.wheelEvent(event)
+
+
 
 class TextEditWidget(QTextEdit):
     cursor_changed_signal = Signal(

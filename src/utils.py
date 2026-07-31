@@ -21,10 +21,12 @@ import os
 import platform
 import re
 import ssl
+import time
 import subprocess
 import sys
 import urllib
 import zipfile
+from functools import wraps
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -335,6 +337,17 @@ def sec2hms(
     seconds = round(seconds, precision)
     parts.append(f"{seconds:.{precision}f}{sep2}{s_unit}")
     return sep.join(parts)
+
+
+def chrono(func):
+    """Decorator function for benchmarking"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        debut = time.perf_counter()
+        resultat = func(*args, **kwargs)
+        print(f"{func.__name__}: {time.perf_counter() - debut:.6f}s")
+        return resultat
+    return wrapper
 
 
 ## -------- Audio file utility functions

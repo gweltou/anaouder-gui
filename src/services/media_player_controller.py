@@ -23,7 +23,6 @@ Handles all media playback operations.
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
 
 from PySide6.QtCore import QObject, QUrl, Signal, Slot
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
@@ -85,7 +84,7 @@ class MediaPlayerController(QObject):
 
         # State
         self.state = PlaybackState()
-        self.media_path: Optional[Path] = None
+        self.media_path: Path | None = None
         self.media_duration: float = 0.0  # in seconds
         self.media_metadata: dict = {}
 

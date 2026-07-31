@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from numpy import ndarray
 from PySide6.QtCore import QObject
 
-from src.audio import split_to_segments
+from src.audio.audio_splitter import split_to_segments
 from src.services.logger import logger
 from src.settings import WAVEFORM_SAMPLERATE
 

@@ -23,13 +23,12 @@ Terminology
     Utterance: The association of an audio `Segment` and a text `Sentence`
 """
 
+import argparse
 import os.path
 import re
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
 
-from ostilhou.audio.audio_numpy import get_samples
 from PySide6.QtCore import (
     QEvent,
     QLocale,
@@ -44,12 +43,10 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAction,
-    QActionGroup,
     QCloseEvent,
     QKeySequence,
     QShortcut,
     QTextBlock,
-    QTextCursor,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -66,7 +63,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QMenuBar,
     QMessageBox,
-    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -74,6 +70,7 @@ from PySide6.QtWidgets import (
 
 import src.lang as lang
 from src.actions import ActionManager
+from src.audio import get_samples
 from src.auto_segment import auto_segment
 from src.cache_system import cache
 from src.commands import (
@@ -87,10 +84,10 @@ from src.exports.textual_exporter import export_to_text_format
 from src.file_manager import FileManager, FileOperationError
 from src.hunspell import HunspellLoader
 from src.interfaces import BlockType, Segment, SegmentId, TextEditorInterface
-from src.scene_detector import SceneDetectWorker
 from src.services.aligner import TextAligner
 from src.services.logger import logger
 from src.services.media_player_controller import MediaPlayerController
+from src.services.scene_detector import SceneDetectWorker
 from src.settings import (
     APP_NAME,
     AUTOSAVE_BACKUP_NUMBER,
@@ -119,7 +116,7 @@ from src.splitter import CustomSplitter
 from src.strings import app_strings
 from src.text_widget import LINE_BREAK, Highlighter, TextEditWidget
 from src.transcriber import TranscriptionService
-from src.ui.about_page import AboutDialog
+from src.ui.about_dialog import AboutDialog
 from src.ui.icons import IconWidget, icons, loadIcons
 from src.ui.parameters_dialog import ParametersDialog
 from src.ui.theme import theme
@@ -150,7 +147,7 @@ def getActionTooltip(action: QAction) -> str:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, file_path: Optional[Path] = None) -> None:
+    def __init__(self, args: argparse.Namespace) -> None:
         """Initialize MainWindow"""
         super().__init__()
 
@@ -171,8 +168,15 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.document_controller.selectAll)
 
-        if file_path is not None:
-            self.onOpenFile(file_path)
+        if args.filename is not None:
+            self.onOpenFile(args.filename)
+        elif args.last:
+            # Load last opened file
+            recent_files: list = app_settings.value("recent_files", [], type=list)
+            if recent_files:
+                self.onOpenFile(Path(recent_files[0]))
+            else:
+                logger.error("No recent file to load...")
 
         self.changeLanguage(DEFAULT_LANGUAGE)
 
@@ -189,8 +193,8 @@ class MainWindow(QMainWindow):
         self.available_models = []
 
         # Current opened file info
-        self.file_path: Optional[Path] = None
-        self.media_path: Optional[Path] = None
+        self.file_path: Path | None = None
+        self.media_path: Path | None = None
         self.audio_samples = None  # For displaying the waveform
 
         self.loading_dialog = None
@@ -1002,7 +1006,7 @@ class MainWindow(QMainWindow):
         default_dir = app_settings.value("last_opened_folder", Path.home(), type=str)
         return str(default_dir), "nevez.ali"
 
-    def onSaveFileAs(self, file_path: Optional[Path] = None) -> bool:
+    def onSaveFileAs(self, file_path: Path | None = None) -> bool:
         """
         Opens a dialog to ask for the save destination
 
@@ -1058,7 +1062,7 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return False
 
-    def _performSave(self, file_path: Path, media_path: Optional[Path] = None) -> None:
+    def _performSave(self, file_path: Path, media_path: Path | None = None) -> None:
         """
         Save document as an ALI file.
         Parse the internal document and sends the data to the File Manager.
@@ -1123,7 +1127,7 @@ class MainWindow(QMainWindow):
             message = self.tr("Autosave failed: {exception}").format(exception=str(e))
             logger.error(message)
 
-    def getOpenFileDialog(self, title: str, filter: str) -> Optional[str]:
+    def getOpenFileDialog(self, title: str, filter: str) -> str | None:
         if self.file_path:
             dir = str(self.file_path.parent)
         else:
@@ -1136,7 +1140,7 @@ class MainWindow(QMainWindow):
         app_settings.setValue("last_opened_folder", os.path.split(file_path)[0])
         return file_path
 
-    def onOpenFile(self, file_path: Optional[Path] = None, keep_media=False) -> None:
+    def onOpenFile(self, file_path: Path | None = None, keep_media=False) -> None:
         """Hub function for opening files"""
         logger.debug(f"onOpenFile({str(file_path)})")
 
@@ -1318,7 +1322,7 @@ class MainWindow(QMainWindow):
             elif color_mode == Highlighter.ColorMode.DENSITY:
                 self.action.display_density.trigger()
 
-    def _selectFileToLoad(self, file_path: Path) -> Optional[Path]:
+    def _selectFileToLoad(self, file_path: Path) -> Path | None:
         """Determine whether to load original file or backup"""
 
         backup_list = self.file_manager.get_backup_list(file_path)
@@ -1331,7 +1335,7 @@ class MainWindow(QMainWindow):
 
         return file_path
 
-    def _promptLoadAutosaved(self, backup_files: List[Path]) -> Optional[Path]:
+    def _promptLoadAutosaved(self, backup_files: list[Path]) -> Path | None:
         """Prompt the user to select which backup file to open"""
 
         if not backup_files:
@@ -1343,7 +1347,7 @@ class MainWindow(QMainWindow):
 
         return self._promptMultipleBackups(backup_files)
 
-    def _promptSingleBackup(self, backup_file: Path) -> Optional[Path]:
+    def _promptSingleBackup(self, backup_file: Path) -> Path | None:
         """Prompt user to load a single backup file"""
 
         msg_box = QMessageBox(
@@ -1364,7 +1368,7 @@ class MainWindow(QMainWindow):
 
         return backup_file if msg_box.clickedButton() == yes_button else None
 
-    def _promptMultipleBackups(self, backup_files: List[Path]) -> Optional[Path]:
+    def _promptMultipleBackups(self, backup_files: list[Path]) -> Path | None:
         # Multiple backup files - show selection dialog
         from datetime import datetime
 
@@ -1479,7 +1483,7 @@ class MainWindow(QMainWindow):
         """Update the recent files submenu"""
         self.recent_menu.clear()
 
-        recent_files: List[str] = app_settings.value("recent_files", [], type=list)
+        recent_files: list[str] = app_settings.value("recent_files", [], type=list)
 
         if not recent_files:
             # Show "No recent files" when list is empty
@@ -1695,7 +1699,7 @@ class MainWindow(QMainWindow):
         )
         # exportSignals.message.disconnect()
 
-    def getUtterancesForExport(self) -> List[Tuple[str, Segment]]:
+    def getUtterancesForExport(self) -> list[tuple[str, Segment]]:
         """Return all sentences and segments for export"""
         utterances = []
         block = self.text_widget.document().firstBlock()
@@ -1797,7 +1801,7 @@ class MainWindow(QMainWindow):
         else:
             self._autosave_timer.stop()
 
-    def getSubtitleAtPosition(self, time: float) -> Tuple[SegmentId, str]:
+    def getSubtitleAtPosition(self, time: float) -> tuple[SegmentId, str]:
         """
         Return (seg_id, sentence) or None
         if there is any utterance at that time position
@@ -2055,7 +2059,7 @@ class MainWindow(QMainWindow):
         self.status_label.clear()
         self._text_cursor_utterance_id = -1
 
-    def selectFromWaveform(self, seg_ids: List[SegmentId] | None) -> None:
+    def selectFromWaveform(self, seg_ids: list[SegmentId] | None) -> None:
         """
         Called when the user clicks on the waveform area
         Scroll the text widget to display the sentence
@@ -2239,7 +2243,7 @@ class MainWindow(QMainWindow):
                     if start <= self.waveform.playhead <= end:
                         self.updateSubtitle(self.waveform.playhead)
 
-    def onTextCursorChanged(self, seg_ids: List[SegmentId] | None) -> None:
+    def onTextCursorChanged(self, seg_ids: list[SegmentId] | None) -> None:
         """
         Sets the corresponding segment active on the waveform
         Called only on aligned text blocks or with None
@@ -2503,8 +2507,8 @@ class MainWindow(QMainWindow):
     def dropEvent(self, event) -> None:
         mime_data = event.mimeData()
 
-        media_files: List[Path] = []
-        document_files: List[Path] = []
+        media_files: list[Path] = []
+        document_files: list[Path] = []
 
         if mime_data.hasUrls():
             for url in mime_data.urls():
@@ -2804,11 +2808,11 @@ class TranslatedApp(QApplication):
 
 
 def main(argv: list):
-
-    if len(argv) > 1:
-        file_path = Path(argv[1].strip())
-    else:
-        file_path = None
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename", nargs="?", default=None, help="File to open", type=Path)
+    parser.add_argument("--last", action="store_true", help="Load last opened file")
+    args = parser.parse_args(argv[1:])
+    print(args)
 
     app = TranslatedApp(argv)
     app.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
@@ -2821,7 +2825,7 @@ def main(argv: list):
         app_strings.initialize()  # Load strings
 
     loadIcons()
-    window = MainWindow(file_path)
+    window = MainWindow(args)
     window.show()
 
     # Close splash screen
