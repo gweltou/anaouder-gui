@@ -216,7 +216,8 @@ class WaveformLayer(RenderLayer):
         pix_per_sample = ctx.ppsec / self._waveform.sr
         if pix_per_sample > 1.0:
             # Zoomed in far enough to see individual samples —
-            # cache is not useful here, just draw directly
+            # cache is not useful here, just draw directly.
+            # (that never happens, due to the zoom limit)
             self._draw_direct(painter, ctx)
             return
 
@@ -248,7 +249,7 @@ class WaveformLayer(RenderLayer):
         This means we can scroll ~1 viewport left or right before needing a rebuild.
         """
         margin = ctx.width / ctx.ppsec  # 1 viewport in seconds
-        cache_t_left = max(0.0, ctx.t_left - margin)
+        cache_t_left = ctx.t_left - margin
         cache_width = ctx.width * 3
 
         chart = self._waveform.get(cache_t_left, cache_width)
@@ -260,14 +261,13 @@ class WaveformLayer(RenderLayer):
         p.setPen(ctx.palette.wf_pen)
         lyt = ctx.layout
         wf_h = ctx.height - lyt.timecode_margin
+        half_wf_h = wf_h // 2
 
+        center_y = (lyt.timecode_margin + wf_h) // 2
         for x in range(cache_width):
-            ymin = round(lyt.timecode_margin + wf_h * (0.5 + self.SCALE_Y * chart[x]))
-            ymax = round(
-                lyt.timecode_margin
-                + wf_h * (0.5 + self.SCALE_Y * chart[x + cache_width])
-            )
-            p.drawLine(x, ymin, x, ymax)
+            # Why are we drawing the whole cache, when 2/3 of it is invisible
+            value = round(self.SCALE_Y * half_wf_h * chart[x])
+            p.drawLine(x, center_y - value, x, center_y + value)
 
         p.end()
 

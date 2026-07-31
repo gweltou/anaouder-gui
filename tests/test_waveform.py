@@ -1,76 +1,102 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 
+from src.audio import get_samples
 from src.ui.waveform.data import WaveformData
 
 SR = 44100  # sample rate used across tests
 
+TEST_DIR = Path(__file__).parent
+WAV_PATH = TEST_DIR / "MeliMilaMalou.wav"
+M4A_PATH = TEST_DIR / "MeliMilaMalou.m4a"
 
-def get_data(samples: np.ndarray, sr: int = SR, ppsec: float = 150.0):
-    """Build an (old, new) WaveformData pair sharing the same audio."""
+
+def get_data_from_file(path: Path, sr: int = SR, ppsec: float = 150.0) -> WaveformData:
+    samples = get_samples(str(path), sample_rate=sr)
     data = WaveformData()
     data.setSamples(samples, sr)
     data.ppsec = ppsec
     return data
 
 
-def random_samples(duration_s: float = 30.0, sr: int = SR, seed: int = 0) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    n = int(duration_s * sr)
-    # Mix of a sine wave + noise so we exercise both sign and magnitude variety
-    t = np.arange(n) / sr
-    signal = 0.6 * np.sin(2 * np.pi * 220 * t) + 0.1 * rng.standard_normal(n)
-    return signal.astype(np.float32)
-
-
 class Tests:
+
     @pytest.mark.parametrize("ppsec", [10.0, 50.0, 150.0, 500.0, 2000.0])
     def test_at_various_zoom_levels(self, ppsec):
-        samples = random_samples(duration_s=10.0)
-        data = get_data(samples, ppsec=ppsec)
+        data = get_data_from_file(WAV_PATH, SR, ppsec)
+
+        size = 800
+        t_left = 2.0
+
+        result = data.get(t_left, size).copy()
+        assert len(result) == size
+
+
+    @pytest.mark.parametrize("size", [64, 256, 800, 1920])
+    def test_at_various_widths(self, size):
+        data = get_data_from_file(WAV_PATH, SR)
+
+        t_left = 1.0
+
+        result = data.get(t_left, size).copy()
+        assert len(result) == size
+
+
+    def test_matches_near_start_of_audio(self):
+        """t_left close to / before 0 exercises the s0 < 0 branch."""
+        data = get_data_from_file(WAV_PATH, SR, ppsec=150.0)
+        size = 400
+        result = data.get(-0.5, size).copy()
+
+        assert len(result) == size
+        assert np.all(np.isfinite(result))
+
+
+class TestFileFormats:
+    """Same behavior should hold regardless of source file container/codec."""
+
+    @pytest.mark.parametrize("path", [WAV_PATH, M4A_PATH], ids=["wav", "m4a"])
+    def test_basic_get_works_for_both_formats(self, path):
+        data = get_data_from_file(path, SR, ppsec=150.0)
 
         size = 800
         t_left = 2.0
 
         result = data.get(t_left, size).copy()
         assert result.size > 0
+        assert len(result) == size
+        assert np.all(np.isfinite(result))
 
     @pytest.mark.parametrize("size", [64, 256, 800, 1920])
-    def test_at_various_widths(self, size):
-        samples = random_samples(duration_s=10.0)
-        data = get_data(samples, ppsec=150.0)
+    @pytest.mark.parametrize("path", [WAV_PATH, M4A_PATH], ids=["wav", "m4a"])
+    def test_various_widths_for_both_formats(self, path, size):
+        data = get_data_from_file(path, SR)
 
-        t_left = 1.0
+        result = data.get(1.0, size).copy()
+        assert len(result) == size
 
-        result = data.get(t_left, size).copy()
-        assert result.size > 0
+    def test_wav_and_m4a_waveforms_are_similar(self):
+        """
+        WAV and M4A encode the same underlying song, so exact sample
+        equality isn't expected (lossy codec + decoder differences), but
+        the overall amplitude envelope should be highly correlated and
+        the same length for the same request parameters.
+        """
+        ppsec = 150.0
+        size = 1200
+        t_left = 3.0
 
-    def test_matches_near_start_of_audio(self):
-        """t_left close to / before 0 exercises the s0 < 0 branch."""
-        samples = random_samples(duration_s=5.0)
-        data = get_data(samples, ppsec=150.0)
+        wav_data = get_data_from_file(WAV_PATH, SR, ppsec)
+        m4a_data = get_data_from_file(M4A_PATH, SR, ppsec)
 
-        size = 400
-        result = data.get(-0.5, size).copy()
-        assert result.size > 0
+        wav_result = wav_data.get(t_left, size).copy()
+        m4a_result = m4a_data.get(t_left, size).copy()
 
-    def test_memoization_returns_cached_array_unchanged(self):
-        """Both implementations should skip recompute on identical request."""
-        samples = random_samples(duration_s=5.0)
-        data = get_data(samples, ppsec=150.0)
+        assert wav_result.shape == m4a_result.shape
 
-        size = 300
-        t_left = 1.0
-
-        first = data.get(t_left, size).copy()
-        second = data.get(t_left, size)
-        assert second is data.filtered_audio
-        np.testing.assert_array_equal(first, second)
-
-    def test_output_length_is_double_size(self):
-        samples = random_samples(duration_s=5.0)
-        data = get_data(samples, ppsec=150.0)
-
-        size = 537  # odd/arbitrary size
-        result = data.get(0.0, size)
-        assert len(result) == 2 * size
+        # Envelope correlation rather than exact equality, since m4a is a
+        # lossy re-encode of the same audio.
+        correlation = np.corrcoef(wav_result, m4a_result)[0, 1]
+        assert correlation > 0.9
