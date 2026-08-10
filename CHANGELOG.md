@@ -22,7 +22,6 @@ TODO:
 * "hidden transcription" in operation menu
 * More flexible crop head and crop tail operations
 * Better "Adapt to subtitles" dialog
-
 * Line number area
 * Timecode display with direct input
 * Improved visibility of the splitters handles
@@ -31,7 +30,6 @@ TODO:
 * "em dashes" icon
 * Changed icon for del segment
 * Fixed missing translations
-
 * Better document state save & restore
 * Better drag & drop support
 * Better save error handling
