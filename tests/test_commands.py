@@ -167,8 +167,8 @@ def test_delete_utterances(main_window):
 
 def test_split_utterance(main_window):
     load_document(main_window)
-    undo_redo_function(main_window, main_window.document_controller.splitFromText, 1, 8)
-    undo_redo_function(main_window, main_window.document_controller.splitFromText, 2, 6)
+    undo_redo_function(main_window, main_window.document_controller.splitUtteranceAtCharPos, 1, 8)
+    undo_redo_function(main_window, main_window.document_controller.splitUtteranceAtCharPos, 2, 6)
 
 
 def test_join_utterances(main_window):

@@ -48,7 +48,6 @@ class WaveformData:
             A 1D float array of length `size`.
             Each index holds the mean absolute value of the samples in a bin.
         """
-        print("get")
         samples_per_pix = self.sr / self.ppsec
         si_left = round(t_left * self.sr)
         bi_left = math.floor(si_left / samples_per_pix)

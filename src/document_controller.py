@@ -92,7 +92,7 @@ class DocumentController(QObject):
         self.text_widget = text_widget
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
-        self.text_widget.split_utterance.connect(self.splitFromText)
+        self.text_widget.split_utterance.connect(self.splitUtteranceAtCharPos)
         # self.text_widget.request_auto_align.connect(self.autoAlignSelectedBlocks)
 
     def setWaveformWidget(self, waveform_widget: WaveformWidget) -> None:
@@ -100,7 +100,6 @@ class DocumentController(QObject):
         self.waveform_widget.join_utterances.connect(self.joinUtterances)
         self.waveform_widget.delete_utterances.connect(self.deleteUtterances)
         self.waveform_widget.delete_segments.connect(self.deleteSegments)
-        self.waveform_widget.split_utterance.connect(self.splitFromWaveform)
 
     def setMediaPath(self, media_path: Path | None) -> None:
         self.media_path = media_path
@@ -172,7 +171,6 @@ class DocumentController(QObject):
             return None
 
         block = self.text_widget.document().findBlockByNumber(block_number)
-        print(f"{block=}")
         return block
 
     def setBlockId(self, block: QTextBlock, segment_id: Optional[SegmentId]) -> None:
@@ -490,48 +488,6 @@ class DocumentController(QObject):
         sentence_splits = extract_sentence_regions(block.text())
         return sum([e - s for s, e in sentence_splits], 0)
 
-    def cropHead(self) -> None:
-        logger.debug("cropHead")
-        if self.waveform_widget is None:
-            return
-
-        active_segment_id = self.waveform_widget.active_segment_id
-        playhead = self.waveform_widget.playhead
-
-        if segment := self.getSegment(active_segment_id):
-            if playhead < segment[1]:
-                # Stop at the previous segment
-                prev_segment_id = self.getPrevSegmentId(active_segment_id)
-                if prev_segment := self.getSegment(prev_segment_id):
-                    playhead = max(playhead, prev_segment[1])
-
-                self.undo_stack.push(
-                    ResizeSegmentCommand(self, active_segment_id, playhead, segment[1])
-                )
-        elif self.waveform_widget.selection_is_active:
-            self.waveform_widget.resizeSelection(playhead, Handle.LEFT)
-
-    def cropTail(self) -> None:
-        logger.debug("cropTail")
-        if self.waveform_widget is None:
-            return
-
-        active_segment_id = self.waveform_widget.active_segment_id
-        playhead = self.waveform_widget.playhead
-
-        if segment := self.getSegment(active_segment_id):
-            if playhead > segment[0]:
-                # Stop at the next segment
-                next_segment_id = self.getNextSegmentId(active_segment_id)
-                if next_segment := self.getSegment(next_segment_id):
-                    playhead = min(playhead, next_segment[0])
-
-                self.undo_stack.push(
-                    ResizeSegmentCommand(self, active_segment_id, segment[0], playhead)
-                )
-        elif self.waveform_widget.selection_is_active:
-            self.waveform_widget.resizeSelection(playhead, Handle.RIGHT)
-
     def getSubtitleAtPosition(self, position_sec: float) -> Tuple[SegmentId, str]:
         """
         Return (seg_id, sentence, tokens) or None
@@ -601,7 +557,7 @@ class DocumentController(QObject):
             return tokens_range
         return []
 
-    def getUtterancesForExport(self) -> List[Tuple[str, Segment]]:
+    def getUtterancesForExport(self) -> list[Tuple[str, Segment]]:
         """Return all sentences and segments for export"""
         if self.text_widget is None:
             return []
@@ -625,10 +581,10 @@ class DocumentController(QObject):
 
         return utterances
 
-    def splitFromText(self, segment_id: SegmentId, position: int) -> None:
+    def splitUtteranceAtCharPos(self, segment_id: SegmentId, position: int) -> None:
         """
         Split audio segment, given a char relative position in sentence
-        Called from the textEdit widget
+        Called from the textEdit widget.
         """
         logger.debug(f"splitFromText({segment_id=}, {position=})")
 
@@ -682,9 +638,14 @@ class DocumentController(QObject):
             right_seg = [seg_start + dur * pc + 0.05, seg_end]
             logger.debug("Ratio splitting")
 
-        self.splitUtterance(segment_id, left_text, right_text, left_seg, right_seg)
+        self._split_utterance(segment_id, left_text, right_text, left_seg, right_seg)
 
-    def splitFromWaveform(self, segment_id: SegmentId, timepos: float) -> None:
+    def splitUtteranceAtTimePos(self, segment_id: SegmentId, timepos: float) -> None:
+        logger.debug(f"splitFromWaveform({segment_id=}, {timepos=})")
+
+        if segment_id < 0:
+            return
+
         block = self.getBlockById(segment_id)
         if block is None:
             return
@@ -694,6 +655,9 @@ class DocumentController(QObject):
             return
 
         seg_start, seg_end = segment
+        if not (seg_start < timepos < seg_end):
+            return
+
         text = block.text()
 
         left_seg = [seg_start, timepos]
@@ -730,9 +694,14 @@ class DocumentController(QObject):
             left_text = text[:]
             right_text = ""
 
-        self.splitUtterance(segment_id, left_text, right_text, left_seg, right_seg)
+        self._split_utterance(segment_id, left_text, right_text, left_seg, right_seg)
 
-    def splitUtterance(
+    def splitUtteranceAtPlayhead(self) -> None:
+        active_segment_id = self.waveform_widget.active_segment_id
+        playhead_pos = self.waveform_widget.playhead
+        self.splitUtteranceAtTimePos(active_segment_id, playhead_pos)
+
+    def _split_utterance(
         self,
         seg_id: SegmentId,
         left_text: str,
@@ -804,7 +773,50 @@ class DocumentController(QObject):
             )
         )
 
-    def getSelectedBlocksAndTimeRange(self) -> Tuple[List[QTextBlock], List] | None:
+    def moveHead(self) -> None:
+        logger.debug("moveHead")
+        if self.waveform_widget is None:
+            return
+
+        active_segment_id = self.waveform_widget.active_segment_id
+        playhead = self.waveform_widget.playhead
+
+        if segment := self.getSegment(active_segment_id):
+            if playhead < segment[1]:
+                # Stop at the previous segment
+                prev_segment_id = self.getPrevSegmentId(active_segment_id)
+                if prev_segment := self.getSegment(prev_segment_id):
+                    playhead = max(playhead, prev_segment[1])
+
+                self.undo_stack.push(
+                    ResizeSegmentCommand(self, active_segment_id, playhead, segment[1])
+                )
+        elif self.waveform_widget.selection_is_active:
+            self.waveform_widget.resizeSelection(playhead, Handle.LEFT)
+
+    def moveTail(self) -> None:
+        logger.debug("moveTail")
+        if self.waveform_widget is None:
+            return
+
+        active_segment_id = self.waveform_widget.active_segment_id
+        playhead = self.waveform_widget.playhead
+
+        if segment := self.getSegment(active_segment_id):
+            if playhead > segment[0]:
+                # Stop at the next segment
+                next_segment_id = self.getNextSegmentId(active_segment_id)
+                if next_segment := self.getSegment(next_segment_id):
+                    playhead = min(playhead, next_segment[0])
+
+                self.undo_stack.push(
+                    ResizeSegmentCommand(self, active_segment_id, segment[0], playhead)
+                )
+        elif self.waveform_widget.selection_is_active:
+            self.waveform_widget.resizeSelection(playhead, Handle.RIGHT)
+
+
+    def getSelectedBlocksAndTimeRange(self) -> tuple[list[QTextBlock], list] | None:
         """Returns the selected text blocks and the corresponding time range"""
         logger.debug("autoAlignSelectedBlocks()")
 
@@ -870,7 +882,7 @@ class DocumentController(QObject):
 
         return (to_align, time_range)
 
-    def deleteUtterances(self, segment_ids: List[SegmentId]) -> None:
+    def deleteUtterances(self, segment_ids: list[SegmentId]) -> None:
         """Delete both segments and sentences"""
         if (self.text_widget is None) or (self.waveform_widget is None):
             return
@@ -886,7 +898,7 @@ class DocumentController(QObject):
         else:
             logger.message(self.tr("Select one or more utterances first"))
 
-    def deleteSegments(self, segments_id: List[SegmentId]) -> None:
+    def deleteSegments(self, segments_id: list[SegmentId]) -> None:
         """Delete segments but keep sentences"""
         self.undo_stack.push(
             DeleteSegmentsCommand(

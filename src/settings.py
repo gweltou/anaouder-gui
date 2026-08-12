@@ -17,17 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import platform
-from typing import Dict
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QKeySequence
 
-_is_darwin = platform.system() == "Darwin"
-
-
 APP_NAME = "Anaouder"
 DEFAULT_LANGUAGE = "br"
-FUTURE = True
+FUTURE = False
 
 AUTOSAVE_FOLDER_NAME = "_anaouder_autosave"
 
@@ -70,14 +66,17 @@ AUTOSAVE_DEFAULT_INTERVAL = 0.2  # 1 minute
 AUTOSAVE_BACKUP_NUMBER = 3  # Number of files to keep at most
 
 
-shortcuts: Dict[str, QKeySequence] = {
+is_darwin = platform.system() == "Darwin"
+
+
+shortcuts: dict[str, QKeySequence] = {
     "transcribe": QKeySequence("Ctrl+R"),
     "play_pause": Qt.Key.Key_Space,
     "play_segment": QKeySequence("Alt+Space")
-    if _is_darwin
+    if is_darwin
     else QKeySequence("Ctrl+Space"),
-    "play_next": QKeySequence("Alt+Down") if _is_darwin else QKeySequence("Ctrl+Down"),
-    "play_prev": QKeySequence("Alt+Up") if _is_darwin else QKeySequence("Ctrl+Up"),
+    "play_next": QKeySequence("Alt+Down") if is_darwin else QKeySequence("Ctrl+Down"),
+    "play_prev": QKeySequence("Alt+Up") if is_darwin else QKeySequence("Ctrl+Up"),
     "select": QKeySequence("S"),  # Qt.Key.Key_S,
     "follow_playhead": QKeySequence("F"),
     "new_line": QKeySequence(Qt.Modifier.SHIFT | Qt.Key.Key_Return),
@@ -86,7 +85,7 @@ shortcuts: Dict[str, QKeySequence] = {
     "crop_tail": QKeySequence("Ctrl+T"),
     "segment_from_selection": QKeySequence("A"),
     "loop": QKeySequence("Ctrl+L"),
-    "preferences": QKeySequence("Meta+,") if _is_darwin else QKeySequence("Ctrl+,"),
+    "preferences": QKeySequence("Meta+,") if is_darwin else QKeySequence("Ctrl+,"),
     # This creates a segmentation fault, for some reason...
     # "zoom_in":      QKeySequence(QKeySequence.StandardKey.ZoomIn),
     # "zoom_out":     QKeySequence(QKeySequence.StandardKey.ZoomOut),

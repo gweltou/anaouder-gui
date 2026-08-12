@@ -16,8 +16,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import List, Tuple
-
 import numpy as np
 from PySide6.QtCore import (
     QPoint,
@@ -71,10 +69,10 @@ from src.ui.waveform.rendering import (
     WaveformLayer,
 )
 
-ZOOM_Y = 3.5  # In pixels per second
+
 ZOOM_MIN = 0.2  # In pixels per second
-ZOOM_MAX = 512  # In pixels per second
-# SNAPPING_RADIUS = 4  # In pixels (not used !)
+ZOOM_MAX = 800  # In pixels per second
+
 
 
 class WaveformWidget(QWidget):
@@ -90,7 +88,6 @@ class WaveformWidget(QWidget):
     refresh_segment_info_resizing = Signal(int, list, float)
     select_segments = Signal(list)
     stop_follow = Signal()
-    split_utterance = Signal(int, float)
     play_pause = Signal()
 
     HANDLE_SELECT_RADIUS = 10
@@ -100,9 +97,9 @@ class WaveformWidget(QWidget):
     ):
         super().__init__(parent)
         self.main_window = parent
-        self._doc = document_controller
+        self._document_controller = document_controller
         self._action = action
-        self._undo_stack = self._doc.undo_stack
+        self._undo_stack = self._document_controller.undo_stack
 
         self._waveform_data = WaveformData()
         self._layout: LayoutMetrics
@@ -126,7 +123,7 @@ class WaveformWidget(QWidget):
             ProgressLayer(),
             WaveformLayer(self._waveform_data),
             TimelineLayer(),
-            SegmentsLayer(self._doc, self._subs_rules),
+            SegmentsLayer(self._document_controller, self._subs_rules),
             SceneChangeLayer(),
             PlayheadLayer(),
             # FocusOverlayLayer(),
@@ -176,20 +173,6 @@ class WaveformWidget(QWidget):
         )
         zoom_out_shortcut.activated.connect(self.zoomOut)
 
-        self.crop_head_action = QAction(self.tr("Crop head"))
-        self.crop_head_action.setShortcut(shortcuts["crop_head"])
-        self.crop_head_action.triggered.connect(self._doc.cropHead)  # TODO: use signal
-        self.addAction(self.crop_head_action)
-
-        self.crop_tail_action = QAction(self.tr("Crop tail"))
-        self.crop_tail_action.setShortcut(shortcuts["crop_tail"])
-        self.crop_tail_action.triggered.connect(self._doc.cropTail)  # TODO: use signal
-        self.addAction(self.crop_tail_action)
-
-        self.split_here_action = QAction(self.tr("Split here"))
-        self.split_here_action.triggered.connect(self.splitHere)
-        self.addAction(self.split_here_action)
-
         self.clear()
 
     def clear(self):
@@ -200,7 +183,7 @@ class WaveformWidget(QWidget):
         self.playhead = 0.0
         self.shift_pressed = False
 
-        self.scenes = []  # Scene transition timecodes and color channels, in the form [ts, r, g, b]
+        self.scenes = []  # Scene transition timecodes and color channels, in the form [t_s, r, g, b]
         self.active_segments = []
         self.active_segment_id = -1
 
@@ -229,19 +212,11 @@ class WaveformWidget(QWidget):
         if self.selection_is_active:
             self.new_utterance_from_selection.emit()
 
-    def splitHere(self):
-        logger.debug("splitHere")
-        if self.active_segment_id >= 0:
-            segment = self._doc.getSegment(self.active_segment_id)
-            if segment and (segment[0] <= self.playhead <= segment[1]):
-                self.split_utterance.emit(self.active_segment_id, self.playhead)
-
-    def setActive(self, seg_ids: List[SegmentId] | None, is_playing=False) -> None:
-        """
-        Select the given segment(s) and adjust view in the waveform.
+    def setActive(self, seg_ids: list[SegmentId] | None, is_playing=False) -> None:
+        """Select the given segment(s) and adjust view in the waveform.
         This method is called from MainWindow only.
 
-        Parameters:
+        Args:
             seg_ids (list): list of segmend ids to select
             is_playing (bool): True if the selection is caused by playback
         """
@@ -255,12 +230,12 @@ class WaveformWidget(QWidget):
 
         self.active_segments = seg_ids
         self.active_segment_id = seg_ids[-1]
-        if self.active_segment_id not in self._doc.segments:
+        if self.active_segment_id not in self._document_controller.segments:
             self.active_segment_id = -1
             self.must_redraw = True
             self.refresh_segment_info.emit(-1)
             return
-        start, end = self._doc.segments[self.active_segment_id]
+        start, end = self._document_controller.segments[self.active_segment_id]
 
         if not (is_playing and self.follow_playhead):
             # Center on segment, if necessary
@@ -320,9 +295,8 @@ class WaveformWidget(QWidget):
         """
 
     def updatePlayHead(self, position_sec: float, is_playing: bool) -> None:
-        """
-        Set the playing head to the given position
-        Slide the waveform window following the playhead
+        """Set the playing head to the given position.
+        Slide the waveform window following the playhead.
 
         This method is called continuously from MainWindow.
         """
@@ -402,8 +376,8 @@ class WaveformWidget(QWidget):
 
     def paintEvent(self, event: QPaintEvent):
         """
-        Override method from QWidget
-        Paint the Pixmap into the widget
+        Override method from QWidget.
+        Paint the Pixmap into the widget.
         """
         p = QPainter(self)
         p.drawPixmap(0, 0, self._pixmap)
@@ -433,14 +407,14 @@ class WaveformWidget(QWidget):
 
     def getSegmentAtPixelPosition(
         self, position: QPointF, vertical=True
-    ) -> Tuple[SegmentId, SegmentSide] | None:
+    ) -> tuple[SegmentId, SegmentSide] | None:
         """
         Return the segment id of any segment at this window position
         or None if there is no segment at this position.
 
         A given position is inside a segment if it fits both vertically and horizontally.
 
-        Arguments:
+        Args:
             position (QPointF):
                 Window position of the click
             vertical (bool):
@@ -456,7 +430,7 @@ class WaveformWidget(QWidget):
             return None
 
         t = self.view.t_left + position.x() / self.view.ppsec
-        for id, (start, end) in self._doc.segments.items():
+        for id, (start, end) in self._document_controller.segments.items():
             if start <= t <= end:
                 return (
                     id,
@@ -514,13 +488,13 @@ class WaveformWidget(QWidget):
         self.must_redraw = True
 
     def _commitResizeSegment(self):
-        """Applies only to actual segments (not the selection)"""
+        """Applies only to actual segments (not the selection)."""
         if self.active_segment_id < 0 or self.resizing_state.segment is None:
             return
 
         self._undo_stack.push(
             ResizeSegmentCommand(
-                self._doc,
+                self._document_controller,
                 self.active_segment_id,
                 self.resizing_state.segment[0],
                 self.resizing_state.segment[1],
@@ -528,8 +502,7 @@ class WaveformWidget(QWidget):
         )
 
     def resizeActiveSegment(self, time_position, handle):
-        """
-        Resize the representation of the segment on the waveform
+        """Resize the representation of the segment on the waveform.
         The actual segment is not modified
 
         Args:
@@ -540,12 +513,12 @@ class WaveformWidget(QWidget):
         if self.resizing_state.segment is None:
             return
 
-        current_segment = self._doc.segments[self.active_segment_id]
+        current_segment = self._document_controller.segments[self.active_segment_id]
 
         left_boundary = 0.0
         right_boundary = self.audio_len
 
-        sorted_segments = self._doc.getSortedSegments()
+        sorted_segments = self._document_controller.getSortedSegments()
         for _, (start, end) in sorted_segments:
             if end <= current_segment[0]:
                 left_boundary = end
@@ -656,9 +629,6 @@ class WaveformWidget(QWidget):
             event.ignore()
             return
 
-        # elif event.key() == shortcuts["play_pause"]:
-        #     self.play_pause.emit()
-
         elif event.key() == shortcuts["select"]:
             self.toggle_selection.emit()
 
@@ -672,7 +642,7 @@ class WaveformWidget(QWidget):
         elif event.key() == Qt.Key.Key_J and len(self.active_segments) > 1:
             # Join multiple segments
             segments_id = sorted(
-                self.active_segments, key=lambda x: self.segments[x][0]
+                self.active_segments, key=lambda x: self._document_controller.segments[x][0]
             )
             self.join_utterances.emit(segments_id)
 
@@ -770,10 +740,10 @@ class WaveformWidget(QWidget):
                 self.resizing_state.handle = Handle.RIGHT
 
             if self.active_segment_id >= 0:
-                segment = self._doc.getSegment(self.active_segment_id)
+                segment = self._document_controller.getSegment(self.active_segment_id)
                 self.resizing_state.segment = segment[:]
-                block = self._doc.getBlockById(self.active_segment_id)
-                self.resizing_state.textlen = self._doc.getSentenceLength(block)
+                block = self._document_controller.getBlockById(self.active_segment_id)
+                self.resizing_state.textlen = self._document_controller.getSentenceLength(block)
                 self.must_redraw = True
         else:
             self.resizing_state.handle = None
@@ -828,7 +798,7 @@ class WaveformWidget(QWidget):
         if active_id is None:
             return super().mouseDoubleClickEvent(event)
 
-        segment = self._doc.getSegment(active_id)
+        segment = self._document_controller.getSegment(active_id)
         if segment is None:
             return super().mouseDoubleClickEvent(event)
 
@@ -862,7 +832,7 @@ class WaveformWidget(QWidget):
                 if self.selection_is_active and self._selection:
                     start, end = self._selection
                 else:
-                    start, end = self._doc.segments[self.active_segment_id]
+                    start, end = self._document_controller.segments[self.active_segment_id]
                 if (
                     event.y() >= self._layout.inactive_top
                     and event.y()
@@ -989,21 +959,21 @@ class WaveformWidget(QWidget):
             self.view.scroll_vel = 0.0
             self.view.ppsec_goal = self.view.ppsec
 
-    def shouldOpenContextMenu(self, click_pos) -> bool:
-        segmentid_and_side = self.getSegmentAtPixelPosition(click_pos)
-        if segmentid_and_side is None:
-            return False
-        elif self.isSelectionAtPosition(self.click_pos):
-            return True
-        else:
-            seg_id, _ = segmentid_and_side
-            if seg_id in self.active_segments:
-                return True
-            else:
-                return False
+    # def shouldOpenContextMenu(self, click_pos) -> bool:
+    #     segmentid_and_side = self.getSegmentAtPixelPosition(click_pos)
+    #     if segmentid_and_side is None:
+    #         return False
+    #     elif self.isSelectionAtPosition(self.click_pos):
+    #         return True
+    #     else:
+    #         seg_id, _ = segmentid_and_side
+    #         if seg_id in self.active_segments:
+    #             return True
+    #         else:
+    #             return False
 
     def showContextMenu(self, pos: QPoint):
-        """Show the context menu at the given global position"""
+        """Show the context menu at the given global position."""
         context_menu = QMenu(self)
 
         if self.selection_is_active:
@@ -1012,9 +982,9 @@ class WaveformWidget(QWidget):
             context_menu.addAction(self._action.transcribe)
         else:
             # Context menu for regular segment(s)
-            context_menu.addAction(self.split_here_action)
-            context_menu.addAction(self.crop_head_action)
-            context_menu.addAction(self.crop_tail_action)
+            context_menu.addAction(self._action.split_at_playhead_action)
+            context_menu.addAction(self._action.move_head_action)
+            context_menu.addAction(self._action.move_tail_action)
             context_menu.addSeparator()
             # -------------------------
             context_menu.addAction(self._action.transcribe)

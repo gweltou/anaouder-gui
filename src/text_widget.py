@@ -50,6 +50,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QApplication, QMenu, QTextEdit, QWidget
 
+from numpy import lcm
 from settings import QColor
 from src.actions import ActionManager
 from src.commands import (
@@ -64,237 +65,8 @@ from src.services.logger import logger
 from src.settings import SUBTITLES_MARGIN_SIZE, app_settings
 from src.ui.text_highlighter import Highlighter
 from src.ui.theme import theme
+from src.ui.line_number_bar import LineNumberArea
 from src.utils import EM_DASH, LINE_BREAK, STOP_CHARS, map_number, yellow, chrono
-
-
-class LineNumberArea(QWidget):
-    """Displays line numbers on the left of the text"""
-
-    arrow_h = 8
-    arrow_w = 20
-
-    def __init__(
-        self, editor: "TextEditWidget", document_controller: DocumentInterface
-    ):
-        super().__init__(editor)
-        self.editor = editor
-        self.document_controller = document_controller
-        self.player_position = 0.0
-
-    def updatePlayerPosition(self, time_s: float) -> None:
-        self.player_position = time_s
-        self.update()
-
-    def sizeHint(self) -> QSize:
-        return QSize(self.editor._getLineNumberAreaWidth(), 0)
-
-    def _get_playhead(
-        self, painter: QPainter, blocks_data: List[tuple], y_offset: int
-    ) -> tuple[int, QRect | None]:
-        """
-        Highlight the background for the currently playing utterance
-        and return playhead position
-
-        Args:
-            blocks_data: list of
-                (block, top_y, bottom_y)
-        Return:
-            playhead's position (float)
-        """
-        t_pos = self.player_position
-        width = self.width()
-        height = self.height()
-
-        playhead_y = 0
-        last_end = 0.0
-        last_bottom = -y_offset
-
-        for block, top, bottom in blocks_data:
-            segment_id = self.document_controller.getBlockId(block)
-            segment = self.document_controller.getSegment(segment_id)
-            if segment is None:
-                continue
-            start, end = segment
-
-            if t_pos < start:
-                # In between aligned segments
-                playhead_y = round(map_number(t_pos, last_end, start, last_bottom, top))
-                return playhead_y, None
-
-            if start <= t_pos < end:
-                # Playhead is over an utterance
-                playhead_y = round(map_number(t_pos, start, end, top, bottom))
-                block_rect = QRect(
-                    0,
-                    top,
-                    width,
-                    bottom - top,
-                )
-                return playhead_y, block_rect
-
-            last_end = end
-            last_bottom = bottom
-
-        # Check if playhead is invisible down the current view
-        if blocks_data:
-            last_block = blocks_data[-1][0]
-            segment_id = self.document_controller.getBlockId(last_block)
-            segment = self.document_controller.getSegment(segment_id)
-            assert segment is not None
-            last_start, _ = segment
-
-            if t_pos > last_start:
-                playhead_y = height + 1
-
-        return playhead_y, None
-
-    def _paint_block_background(self, painter: QPainter, rect: QRect) -> None:
-        painter.fillRect(
-            rect,
-            QColor(255, 0, 0, 40),
-        )
-
-    def _paint_playhead(self, painter: QPainter, playhead_y: int) -> None:
-        height = self.height()
-        width = self.width()
-        half_width = width // 2
-
-        # Draw playhead
-        if 0 <= playhead_y <= height:
-            # Line shadow
-            painter.fillRect(
-                QRect(
-                    0,
-                    playhead_y - 1,
-                    width,
-                    3,
-                ),
-                QColor(255, 0, 0, 60),
-            )
-            painter.setPen(QColor(255, 0, 0))
-            painter.drawLine(0, playhead_y, width, playhead_y)
-            return
-
-        # Arrows animation
-        t = self.player_position
-        offset = round(2 * (math.sin(3 * math.pi * t) + 1) / 2) + 1
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(255, 0, 0, 220))
-
-        if playhead_y < 0:
-            painter.drawPolygon(
-                QPolygon(
-                    [
-                        QPoint(half_width, offset),
-                        QPoint(half_width + self.arrow_w // 2, offset + self.arrow_h),
-                        QPoint(half_width - self.arrow_w // 2, offset + self.arrow_h),
-                    ]
-                )
-            )
-        elif playhead_y > height:
-            painter.drawPolygon(
-                QPolygon(
-                    [
-                        QPoint(half_width - self.arrow_w // 2, height - self.arrow_h - offset),
-                        QPoint(half_width + self.arrow_w // 2, height - self.arrow_h - offset),
-                        QPoint(half_width, height - offset),
-                    ]
-                )
-            )
-
-    def paintEvent(self, event) -> None:
-        """Paints the line numbers in the sidebar."""
-
-        doc_layout = self.editor.document().documentLayout()
-
-        aligned_block_tc = []  # Relative_pos and timecodes for each aligned block
-        label_and_rect = []  # Block labels, text color and text bounding rects
-
-        # Get the scrollbar offset (in pixels)
-        offset_y = self.editor.verticalScrollBar().value()
-        # page_bottom = offset_y + self.viewport().height()
-
-        # Iterate over all text blocks (could be optimized)
-        block = self.editor.document().begin()
-        utterance_number = 0
-
-        prev_block = None
-        prev_block_top = 0
-        prev_block_bottom = 0
-
-        while block.isValid():
-            rect = doc_layout.blockBoundingRect(block)
-
-            is_aligned = False
-            if self.editor.isAligned(block):
-                utterance_number += 1
-                is_aligned = True
-
-            # Check if the block is visible in the viewport
-            top_of_block = int(rect.top() - offset_y)
-            bottom_of_block = int(rect.bottom() - offset_y)
-            block_height = bottom_of_block - top_of_block
-
-            if bottom_of_block >= 0 and top_of_block <= self.editor.viewport().height():
-                if block.isVisible():
-                    if is_aligned:
-                        # Remember the last block before the first visible block
-                        if len(aligned_block_tc) == 0 and top_of_block > 0:
-                            aligned_block_tc.append(
-                                (prev_block, prev_block_top, prev_block_bottom)
-                            )
-
-                        aligned_block_tc.append((block, top_of_block, bottom_of_block))
-                        label_and_rect.append(
-                            (
-                                str(utterance_number),
-                                Qt.GlobalColor.black,
-                                QRect(0, top_of_block, self.width() - 4, block_height),
-                            )
-                        )
-
-                    else:
-                        label_and_rect.append(
-                            (
-                                "*",
-                                Qt.GlobalColor.gray,
-                                QRect(0, top_of_block, self.width() - 5, block_height),
-                            )
-                        )
-
-            # Add the next utterance (outside of view)
-            if top_of_block > self.editor.viewport().height() and is_aligned:
-                aligned_block_tc.append((block, top_of_block, bottom_of_block))
-                break
-
-            prev_block = block
-            prev_block_top = top_of_block
-            prev_block_bottom = bottom_of_block
-            block = block.next()
-
-        # Render blocks left bar background
-        painter = QPainter(self)
-        painter.fillRect(event.rect(), theme.colors.line_number)
-
-        playhead_y, block_bg_rect = self._get_playhead(painter, aligned_block_tc, offset_y)
-
-        # Block background
-        if block_bg_rect is not None:
-            self._paint_block_background(painter, block_bg_rect)
-
-        # Paint numbers
-        for label, color, rect in label_and_rect:
-            painter.setPen(color)
-            painter.drawText(rect, Qt.AlignmentFlag.AlignRight, label)
-
-        # Paint playhead or out of view arrows
-        self._paint_playhead(painter, playhead_y)
-
-        painter.end()
-
-    def wheelEvent(self, event):
-        self.editor.wheelEvent(event)
 
 
 
@@ -618,7 +390,7 @@ class TextEditWidget(QTextEdit):
 
         self.undo_stack.push(ReplaceTextCommand(self, cursor.block(), new_text))
 
-    def findBlock(self, position: int) -> Optional[QTextBlock]:
+    def findBlock(self, position: int) -> QTextBlock | None:
         pos = self.document().findBlock(position)
         return pos if pos != -1 else None
 
@@ -628,10 +400,10 @@ class TextEditWidget(QTextEdit):
             return -1
         return block.blockNumber()
 
-    def getBlockHtmlMap(self, block: QTextBlock) -> Tuple[str, List[bool]]:
+    def getBlockHtmlMap(self, block: QTextBlock) -> tuple[str, list[bool]]:
         return self.fragmentsToHtml(self.getBlockFragments(block))
 
-    def getBlockFragments(self, block: QTextBlock) -> List[Tuple[str, set]]:
+    def getBlockFragments(self, block: QTextBlock) -> list[tuple[str, set]]:
         # Get list of text fragments and their formats
         fragments = []
         it = block.begin()
@@ -651,7 +423,7 @@ class TextEditWidget(QTextEdit):
         return fragments
 
     def setBlockFragments(
-        self, block: QTextBlock, fragments: List[Tuple[str, set]]
+        self, block: QTextBlock, fragments: list[tuple[str, set]]
     ) -> None:
         cursor = QTextCursor(block)
 
@@ -674,7 +446,7 @@ class TextEditWidget(QTextEdit):
 
             cursor.insertText(text, fmt)
 
-    def fragmentsToHtml(self, fragments: list) -> Tuple[str, List[bool]]:
+    def fragmentsToHtml(self, fragments: list) -> tuple[str, list[bool]]:
         """
         Convert list of fragments to an html string
 
@@ -682,13 +454,13 @@ class TextEditWidget(QTextEdit):
             An html string and a mask (list of bools) for special tokens
         """
 
-        def add_opening_elements(formats: set, html_text: List[str], mask: List[bool]):
+        def add_opening_elements(formats: set, html_text: list[str], mask: list[bool]):
             for f in sorted(formats):
                 format_element = f"<{f.value}>"
                 html_text.append(format_element)
                 mask.extend([False] * len(format_element))
 
-        def add_closing_elements(formats: set, html_text: List[str], mask: List[bool]):
+        def add_closing_elements(formats: set, html_text: list[str], mask: list[bool]):
             for f in sorted(formats, reverse=True):
                 format_element = f"</{f.value}>"
                 html_text.append(format_element)
@@ -728,7 +500,7 @@ class TextEditWidget(QTextEdit):
 
         return "".join(html_text), mask
 
-    def deactivateSentence(self, seg_id: Optional[SegmentId] = None):
+    def deactivateSentence(self, seg_id: SegmentId | None = None):
         """Reset format of currently active sentence"""
         if seg_id is None:
             seg_id = self.highlighted_sentence_id
@@ -945,7 +717,6 @@ class TextEditWidget(QTextEdit):
             clipboard = QApplication.clipboard()
             clipboard.setText(selected_text)
             self.deleteSelectedText(cursor)
-        return
 
     def paste(self) -> None:
         """
@@ -1317,25 +1088,18 @@ class TextEditWidget(QTextEdit):
                 left_part = text[:pos_in_block].rstrip()
                 right_part = text[pos_in_block:].lstrip()
 
-                print(f"{cursor_pos=}")
-                print(f"0 {self.textCursor().position()=}")
                 self.undo_stack.beginMacro("split non aligned")
                 self.undo_stack.push(
                     InsertBlockCommand(
                         self.document_controller, self, cursor_pos, after=True
                     )
                 )
-                print(f"1 {self.textCursor().position()=}")
                 cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
-                print(f"{self.textCursor().position()=}")
                 self.undo_stack.push(
                     InsertTextCommand(self, right_part, cursor.position())
                 )
-                print(f"2 {self.textCursor().position()=}")
                 self.undo_stack.push(ReplaceTextCommand(self, block, left_part))
-                print(f"3 {self.textCursor().position()=}")
                 self.undo_stack.push(MoveTextCursor(self, cursor_pos))
-                print(f"4 {self.textCursor().position()=}")
                 self.undo_stack.endMacro()
                 return True
 
@@ -1635,7 +1399,7 @@ class TextEditWidget(QTextEdit):
     def updatePlayerPosition(self, time_s: float) -> None:
         self.line_number_area.updatePlayerPosition(time_s)
 
-    def _getLineNumberAreaWidth(self) -> int:
+    def getLineNumberAreaWidth(self) -> int:
         """
         Calculates the width needed for the line number area
         based on the number of digits in the line count.
@@ -1652,7 +1416,7 @@ class TextEditWidget(QTextEdit):
 
     def updateLineNumberAreaWidth(self) -> None:
         """Updates the margin of the text edit to make room for the sidebar."""
-        width = self._getLineNumberAreaWidth()
+        width = self.getLineNumberAreaWidth()
         self.setViewportMargins(width, 0, 0, 0)
 
     def updateLineNumberArea(self) -> None:
@@ -1667,7 +1431,7 @@ class TextEditWidget(QTextEdit):
         super().resizeEvent(event)
         cr = self.contentsRect()
         self.line_number_area.setGeometry(
-            QRect(cr.left(), cr.top(), self._getLineNumberAreaWidth(), cr.height())
+            QRect(cr.left(), cr.top(), self.getLineNumberAreaWidth(), cr.height())
         )
 
     #### Debug functions ####

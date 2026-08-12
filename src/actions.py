@@ -25,13 +25,29 @@ import platform
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 
-from src.settings import shortcuts
+from src.settings import shortcuts, is_darwin
 from src.strings import app_strings
 from src.ui.icons import icons
 
 
 def getActionTooltip(action: QAction) -> str:
-    return f"{action.text()} <{action.shortcut().toString()}>"
+    return f"{action.text()} <{action.shortcut().toString(QKeySequence.NativeText)}>"
+
+
+
+class ActionWithShortcutHint(QAction):
+    def __init__(self, label: str, parent):
+        super().__init__(label, parent)
+
+    def setShortcut(self, shortcut: QKeySequence) -> None:
+        super().setShortcut(shortcut)
+
+        if is_darwin:
+            # Shortcuts are not displayed on macOS
+            text = self.text()
+            shortcut_str = self.shortcut().toString(QKeySequence.NativeText)
+            self.setText(f"{text}\t{shortcut_str}")
+
 
 
 class ActionManager(QObject):
@@ -73,6 +89,12 @@ class ActionManager(QObject):
     # Text actions signals
     insert_newline_requested = Signal()
     insert_em_dash_requested = Signal()
+
+    # Segment actions signals
+    split_at_playhead_requested = Signal()
+    move_segment_head_requested = Signal()
+    move_segment_tail_requested = Signal()
+
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -137,7 +159,7 @@ class ActionManager(QObject):
         )
 
         ## Parameters Dialog
-        self.open_parameters = QAction(self.tr("&Parameters") + "...", self)
+        self.open_parameters = ActionWithShortcutHint(self.tr("&Parameters") + "...", self)
         if platform.system() == "Linux":
             self.open_parameters.setShortcut(shortcuts["preferences"])
         else:
@@ -201,7 +223,7 @@ class ActionManager(QObject):
         self.follow_playhead.toggled.connect(self.follow_playhead_requested.emit)
 
         ## Transcribe actions
-        self.transcribe = QAction(self.tr("Transcribe"), self)
+        self.transcribe = ActionWithShortcutHint(self.tr("Transcribe"), self)
         self.transcribe.setShortcut(shortcuts["transcribe"])
         self.transcribe.setIcon(icons["sparkles"])
         self.transcribe.setToolTip(getActionTooltip(self.transcribe))
@@ -241,3 +263,15 @@ class ActionManager(QObject):
         self.insert_em_dash.setIcon(icons["em_dashes"])
         self.insert_em_dash.setToolTip(getActionTooltip(self.insert_em_dash))
         self.insert_em_dash.triggered.connect(self.insert_em_dash_requested.emit)
+
+        # Segment actions
+        self.split_at_playhead_action = QAction(self.tr("Split at playhead"))
+        self.split_at_playhead_action.triggered.connect(self.split_at_playhead_requested)
+
+        self.move_head_action = ActionWithShortcutHint(self.tr("Move segment head"), self)
+        self.move_head_action.setShortcut(shortcuts["crop_head"])
+        self.move_head_action.triggered.connect(self.move_segment_head_requested)
+
+        self.move_tail_action = ActionWithShortcutHint(self.tr("Move segment tail"), self)
+        self.move_tail_action.setShortcut(shortcuts["crop_tail"])
+        self.move_tail_action.triggered.connect(self.move_segment_tail_requested)

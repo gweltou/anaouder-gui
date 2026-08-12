@@ -147,7 +147,7 @@ def getActionTooltip(action: QAction) -> str:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, args: argparse.Namespace) -> None:
+    def __init__(self, args: argparse.Namespace | None = None) -> None:
         """Initialize MainWindow"""
         super().__init__()
 
@@ -168,15 +168,16 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.document_controller.selectAll)
 
-        if args.filename is not None:
-            self.onOpenFile(args.filename)
-        elif args.last:
-            # Load last opened file
-            recent_files: list = app_settings.value("recent_files", [], type=list)
-            if recent_files:
-                self.onOpenFile(Path(recent_files[0]))
-            else:
-                logger.error("No recent file to load...")
+        if args is not None:
+            if args.filename is not None:
+                self.onOpenFile(args.filename)
+            elif args.last:
+                # Load last opened file
+                recent_files: list = app_settings.value("recent_files", [], type=list)
+                if recent_files:
+                    self.onOpenFile(Path(recent_files[0]))
+                else:
+                    logger.error("No recent file to load...")
 
         self.changeLanguage(DEFAULT_LANGUAGE)
 
@@ -423,6 +424,9 @@ class MainWindow(QMainWindow):
         )
         self.waveform.select_segments.connect(self.selectFromWaveform)
         self.waveform.stop_follow.connect(self.toggleFollowPlayhead)
+        self.action.split_at_playhead_requested.connect(self.document_controller.splitUtteranceAtPlayhead)
+        self.action.move_segment_head_requested.connect(self.document_controller.moveHead)
+        self.action.move_segment_tail_requested.connect(self.document_controller.moveTail)
 
         # Logger
         logger.message_requested.connect(self.setStatusMessage)
@@ -2816,6 +2820,7 @@ def main(argv: list):
 
     app = TranslatedApp(argv)
     app.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
+    app.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus, False)
 
     # Internationalization
     if locale := app_settings.value("ui_language", DEFAULT_LANGUAGE, type=str):

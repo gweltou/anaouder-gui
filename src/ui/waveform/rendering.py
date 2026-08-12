@@ -197,7 +197,7 @@ class ProgressLayer(RenderLayer):
 
 
 class WaveformLayer(RenderLayer):
-    SCALE_Y = 3.5
+    SCALE_Y = 2.0
 
     def __init__(self, scaled_waveform: WaveformData):
         self._waveform = scaled_waveform
@@ -263,7 +263,7 @@ class WaveformLayer(RenderLayer):
         wf_h = ctx.height - lyt.timecode_margin
         half_wf_h = wf_h // 2
 
-        center_y = (lyt.timecode_margin + wf_h) // 2
+        center_y = lyt.timecode_margin + half_wf_h
         for x in range(cache_width):
             # Why are we drawing the whole cache, when 2/3 of it is invisible
             value = round(self.SCALE_Y * half_wf_h * chart[x])
