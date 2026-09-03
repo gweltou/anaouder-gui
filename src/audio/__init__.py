@@ -33,7 +33,7 @@ def stream_audio_file(
 
 
 def get_samples(path: str, sample_rate=16000, buffer_size=8000) -> np.ndarray:
-    """Returns a Numpy array of normalized float32 samples from an audio file"""
+    """Returns a Numpy array of normalized float32 samples from an audio file."""
     chunks = []
 
     def handle_buffer(data):

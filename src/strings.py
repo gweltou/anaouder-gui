@@ -61,9 +61,12 @@ class Strings(QObject):
         self.TR_MEDIA_FILES = self.tr("Media files")
         self.TR_SAVE_FILE = self.tr("Save File")
         self.TR_ALI_FILES = self.tr("ALI files")
-        self.TR_SAVE_ERROR = self.tr("Save Error")
-        self.TR_COULD_NOT_SAVE_FILE = self.tr("Could not save file")
         self.TR_AUTOSAVE_BACKUPS = self.tr("Autosave Backup(s)")
+        self.TR_SAVE_ERROR = self.tr("Save Error")
+
+        # Error messages
+        self.TR_ERROR_CANT_READ_FILE = self.tr("Could not read file")
+        self.TR_CANT_SAVE_FILE = self.tr("Could not save file")
 
         # Units
         self.TR_UNIT_FRAMES = self.tr("frames")

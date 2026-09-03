@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QUndoStack, QTextBlock
 
 from src.document_controller import DocumentController
-from src.text_widget import TextEditWidget, LINE_BREAK
+from src.ui.text_widget import TextEditWidget, LINE_BREAK
 from src.commands import ResizeSegmentCommand, ReplaceTextCommand
 from src.utils import splitForSubtitle
 from src.settings import app_settings, SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL
@@ -300,7 +300,7 @@ def remove_fillers(
     ) -> None:
     block = start_block
     while block.isValid() and block != end_block.next():
-        html_text, map = text_widget.getBlockHtmlMap(block)
+        html_text, map = text_widget.getBlockHtmlMask(block)
 
         # Isolate and preserve HTML elements 
         new_text_parts = []
@@ -342,7 +342,7 @@ def convert_quotation_marks(
 
     block = start_block
     while block.isValid() and block != end_block.next():
-        html_text, _ = text_widget.getBlockHtmlMap(block)
+        html_text, _ = text_widget.getBlockHtmlMask(block)
         if '"' in html_text:
             new_text = ""
             idx = 0
@@ -378,7 +378,7 @@ def convert_apostrophes(
 
     block = start_block
     while block.isValid() and block != end_block.next():
-        html_text, _ = text_widget.getBlockHtmlMap(block)
+        html_text, _ = text_widget.getBlockHtmlMask(block)
         if to_replace in html_text:
             # We asume that there is no apostrophe in the formatting HTML elements
             html_text = html_text.replace(to_replace, replacement)

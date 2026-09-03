@@ -36,6 +36,8 @@ def getActionTooltip(action: QAction) -> str:
 
 
 class ActionWithShortcutHint(QAction):
+    """Use this class to display shortcuts hints in menus."""
+
     def __init__(self, label: str, parent):
         super().__init__(label, parent)
 
@@ -87,6 +89,8 @@ class ActionManager(QObject):
     delete_utterance_requested = Signal()
 
     # Text actions signals
+    bold_requested = Signal()
+    italic_requested = Signal()
     insert_newline_requested = Signal()
     insert_em_dash_requested = Signal()
 
@@ -251,6 +255,18 @@ class ActionManager(QObject):
         self.delete_utterance.triggered.connect(self.delete_utterance_requested.emit)
 
         # Text actions
+        self.bold = QAction(self.tr("Bold"))
+        self.bold.setShortcut(QKeySequence.StandardKey.Bold)
+        self.bold.setIcon(icons["bold"])
+        self.bold.setToolTip(getActionTooltip(self.bold))
+        self.bold.triggered.connect(self.bold_requested.emit)
+
+        self.italic = QAction(self.tr("Italic"))
+        self.italic.setShortcut(QKeySequence.StandardKey.Italic)
+        self.italic.setIcon(icons["italic"])
+        self.italic.setToolTip(getActionTooltip(self.italic))
+        self.italic.triggered.connect(self.italic_requested.emit)
+
         self.insert_newline = QAction(self.tr("Insert new line"))
         self.insert_newline.setShortcut(shortcuts["new_line"])
         self.insert_newline.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)

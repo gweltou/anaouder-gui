@@ -83,8 +83,8 @@ class DocumentController(QObject):
         # Clear text document
         if self.text_widget is not None:
             self.text_widget.document().clear()
-            self.text_widget.updateLineNumberAreaWidth()
-            self.text_widget.updateLineNumberArea()
+            self.text_widget.updateLineNumberBarWidth()
+            self.text_widget.updateLineNumberBar()
 
         self.undo_stack.clear()
 
@@ -127,8 +127,8 @@ class DocumentController(QObject):
             self.text_widget.appendSentence(text, segment_id)
         self.text_widget.document().blockSignals(was_blocked)
 
-        self.text_widget.updateLineNumberAreaWidth()
-        self.text_widget.updateLineNumberArea()
+        self.text_widget.updateLineNumberBarWidth()
+        self.text_widget.updateLineNumberBar()
 
     def getData(self) -> List[Tuple[str, Segment | None]]:
         assert self.text_widget is not None
@@ -248,7 +248,7 @@ class DocumentController(QObject):
         if self.text_widget is None:
             return None
 
-        return self.text_widget.getBlockHtmlMap(block)[0]
+        return self.text_widget.getBlockHtmlMask(block)[0]
 
     def getBlockMetadata(self, block: QTextBlock) -> Dict:
         metadata: MyTextBlockUserData = block.userData()
@@ -515,7 +515,7 @@ class DocumentController(QObject):
         if block is None:
             return (-1, "")
 
-        html, _ = self.text_widget.getBlockHtmlMap(block)
+        html, _ = self.text_widget.getBlockHtmlMask(block)
         return (seg_id, html)
 
     def getTranscriptionFor(self, segment_id: SegmentId) -> list:
@@ -566,7 +566,7 @@ class DocumentController(QObject):
         block = self.text_widget.document().firstBlock()
         while block.isValid():
             if self.getBlockType(block) == BlockType.ALIGNED:
-                text = self.text_widget.getBlockHtmlMap(block)[0]
+                text = self.text_widget.getBlockHtmlMask(block)[0]
 
                 # Remove extra spaces
                 lines = [" ".join(l.split()) for l in text.split(LINE_BREAK)]

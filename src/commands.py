@@ -568,7 +568,12 @@ class InsertBlockCommand(QUndoCommand):
 
 
 class ReplaceTextCommand(QUndoCommand):
-    """Replace the content of a text block"""
+    """Replace the content of a text block.
+
+    TODO: fix special tokens disapearing when a word is replaced in the same block.
+      * the new_text arg should be in html, including text formatting elements
+      *
+    """
 
     def __init__(
         self,
@@ -582,9 +587,10 @@ class ReplaceTextCommand(QUndoCommand):
         self.text_edit = text_edit
         self.block = block
         self.block_number = text_edit.getBlockNumber(block.position())
-        self.old_text = text_edit.getBlockHtmlMap(block)[0]
+        self.old_text = text_edit.getBlockHtmlMask(block)[0]
         self.new_text = new_text
         self.prev_cursor = self.text_edit.getCursorState()
+        print(f"{self.prev_cursor=}")
 
     def undo(self):
         block = self.text_edit.document().findBlockByNumber(self.block_number)
@@ -594,6 +600,7 @@ class ReplaceTextCommand(QUndoCommand):
             QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor
         )
         cursor.insertHtml(self.old_text.replace("\u2028", "<br>"))
+        # cursor.insertText(self.old_text)
         self.text_edit.setCursorState(self.prev_cursor)
 
     def redo(self):
@@ -603,7 +610,7 @@ class ReplaceTextCommand(QUndoCommand):
         cursor.movePosition(
             QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor
         )
-        cursor.insertHtml(self.new_text.replace("\u2028", "<br>"))
+        cursor.insertHtml(self.new_text.replace("\u2028", "<BR>"))
         self.text_edit.setCursorState(self.prev_cursor)
 
     def id(self):

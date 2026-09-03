@@ -21,14 +21,13 @@ import os
 import platform
 import re
 import ssl
-import time
 import subprocess
 import sys
+import time
 import urllib
 import zipfile
 from functools import wraps
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import certifi
 from PySide6.QtCore import QRegularExpression
@@ -36,7 +35,7 @@ from PySide6.QtGui import QColor
 
 EM_DASH = "–"
 LINE_BREAK = "\u2028"
-PUNCTUATION = '.?!,‚;:«»“”"()[]{}/\…–—-_~^•'
+PUNCTUATION = r'.?!,‚;:«»“”"()[]{}<>/\…–—-_~^•'
 STOP_CHARS = PUNCTUATION + " \t\u2028"
 
 MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm", ".mov")
@@ -53,7 +52,7 @@ def get_resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-def get_cache_directory(name: Optional[str] = None) -> Path:
+def get_cache_directory(name: str | None = None) -> Path:
     # Use XDG_CACHE_HOME if available, otherwise use default
     system = platform.system()
 
@@ -129,7 +128,7 @@ def filter_out_chars(text: str, chars: str) -> str:
     return text
 
 
-def extract_metadata(sentence: str) -> Tuple[str, dict]:
+def extract_metadata(sentence: str) -> tuple[str, dict]:
     """
     Returns the sentence stripped of its metadata (if any)
     and a dictionary of metadata
@@ -167,7 +166,7 @@ def extract_metadata(sentence: str) -> Tuple[str, dict]:
     return sentence.strip(), metadata
 
 
-def extract_sentence_regions(text: str) -> List[tuple]:
+def extract_sentence_regions(text: str) -> list[tuple]:
     """
     Return a list of text regions,
     stripped of their metadata and special tokens

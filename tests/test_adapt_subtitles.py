@@ -31,7 +31,6 @@ def qapp():
 
     yield app
 
-    # Cleanup after all tests
     app.quit()
 
 
@@ -40,11 +39,11 @@ def main_window(qapp):
     """Create a fresh MainWindow for each test"""
     window = MainWindow()
     yield window
-    # Cleanup after each test
+    
     window.undo_stack.clear()
     window.close()
     window.deleteLater()
-    qapp.processEvents()  # Process pending events
+    qapp.processEvents()
 
 
 def load_document(main_window):

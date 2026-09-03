@@ -163,6 +163,10 @@ class WaveformWidget(QWidget):
         self.create_segment_action.setShortcut(shortcuts["segment_from_selection"])
         self.create_segment_action.triggered.connect(self.newUtteranceFromSelection)
 
+        ## We need to add the actions to this widget so the shortcuts are recognized
+        self.addAction(self._action.move_head_action)
+        self.addAction(self._action.move_tail_action)
+
         zoom_in_shortcut = QShortcut(
             QKeySequence(QKeySequence.StandardKey.ZoomIn), self
         )

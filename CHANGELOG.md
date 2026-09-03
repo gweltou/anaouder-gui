@@ -10,10 +10,9 @@
 * Fixed auto-align command on Windows
 * Set "preferences" shortcut to standard "ctrl+,"
 * Sets 'media-path' metadata automatically
-* Fixed display shortcut hints on macOS
-
-TODO:
-  * Fix missplaced text formatting at end of lines
+* Fixed shortcut hints in menus on macOS
+* Length of longest line in segment displayed in status bar
+* Fixed text formatting at wrong character offset
 
 ## [1.1] 2026-05-01
 

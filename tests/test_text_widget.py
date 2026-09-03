@@ -21,7 +21,6 @@ def qapp():
 
     yield app
 
-    # Cleanup after all tests
     app.quit()
 
 
@@ -30,11 +29,11 @@ def main_window(qapp):
     """Create a fresh MainWindow for each test"""
     window = MainWindow()
     yield window
-    # Cleanup after each test
+
     window.undo_stack.clear()
     window.close()
     window.deleteLater()
-    qapp.processEvents()  # Process pending events
+    qapp.processEvents()
 
 
 def load_document(main_window):
@@ -46,6 +45,7 @@ def load_document(main_window):
         ("<i>Euh... beñ mont a ra euh ?</i>", (25, 30)),
         ("Pevare linenn", (32, 35)),
         ("Pempvet linenn", (40, 41)),
+        ("Ur ger <I>stouet</I><br>hag ur ger <B>druz</B>", (50, 51))
     ]:
         seg_id = main_window.document_controller.addSegment(list(segment))
         main_window.text_widget.appendSentence(text, seg_id)
@@ -77,7 +77,6 @@ def random_copy_paste(main_window, i=1):
     for _i in range(i):
         main_window.text_widget.cut()
         main_window.text_widget.setTextCursor(new_random_selection())
-
         main_window.text_widget.paste()
 
     for _i in range(2 * i):
@@ -90,3 +89,20 @@ def test_copy_paste(main_window):
     load_document(main_window)
 
     random_copy_paste(main_window, 10)
+
+
+def test_replace_word(main_window):
+    load_document(main_window)
+
+    text_editor = main_window.text_widget
+
+    block = main_window.document_controller.getBlockByNumber(5)
+    block_html = main_window.document_controller.getBlockHtml(block)
+
+    cursor = text_editor.textCursor()
+    cursor.setPosition(block.position() + 10) # Over the word "stouet"
+
+    main_window.text_widget.replaceWord(cursor, "test")
+
+    block_html = main_window.document_controller.getBlockHtml(block)
+    #assert block_html == "Ur ger <I>test</I><BR>hag ur ger <B>druz</B>"

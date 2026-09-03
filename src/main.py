@@ -38,7 +38,6 @@ from PySide6.QtCore import (
     QThreadPool,
     QTimer,
     QTranslator,
-    Signal,
     Slot,
 )
 from PySide6.QtGui import (
@@ -68,7 +67,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-import src.lang as lang
+from src import lang
 from src.actions import ActionManager
 from src.audio import get_samples
 from src.auto_segment import auto_segment
@@ -113,12 +112,13 @@ from src.settings import (
     shortcuts,
 )
 from src.splitter import CustomSplitter
-from src.strings import app_strings
-from src.text_widget import LINE_BREAK, Highlighter, TextEditWidget
+from src.strings import Strings, app_strings
 from src.transcriber import TranscriptionService
 from src.ui.about_dialog import AboutDialog
 from src.ui.icons import IconWidget, icons, loadIcons
 from src.ui.parameters_dialog import ParametersDialog
+from src.ui.text_highlighter import Highlighter
+from src.ui.text_widget import TextEditWidget
 from src.ui.theme import theme
 from src.ui.timecode_display import TimecodeWidget
 from src.ui.video_widget import VideoWidget
@@ -127,6 +127,7 @@ from src.ui.waveform.waveform_widget import WaveformWidget
 # from PySide6.QtMultimedia import QMediaDevices
 from src.utils import (
     ALL_COMPATIBLE_FORMATS,
+    LINE_BREAK,
     MEDIA_FORMATS,
     SUBTITLES_FILE_FORMATS,
     get_audiofile_info,
@@ -401,11 +402,17 @@ class MainWindow(QMainWindow):
         # Aligner
         self.action.request_auto_align.connect(self.aligner.autoAlign)
 
-        # Text widgets
+        # Text Editor
         self.text_widget.auto_transcribe.connect(self.action.transcribe.trigger)
         self.text_widget.document().contentsChanged.connect(self.onTextChanged)
         self.text_widget.cursor_changed_signal.connect(self.onTextCursorChanged)
         self.text_widget.align_with_selection.connect(self.alignWithSelection)
+        self.action.italic_requested.connect(
+            lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.ITALIC)
+        )
+        self.action.bold_requested.connect(
+            lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.BOLD)
+        )
         self.action.insert_newline_requested.connect(self.text_widget.insertNewline)
         self.action.insert_em_dash_requested.connect(self.text_widget.insertEmDash)
 
@@ -681,29 +688,13 @@ class MainWindow(QMainWindow):
         format_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         italic_button = QToolButton()
-        italic_button.setIcon(icons["italic"])
         italic_button.setFixedWidth(BUTTON_SIZE)
-        italic_button.setToolTip(
-            self.tr("Italic")
-            + f" <{QKeySequence(QKeySequence.StandardKey.Italic).toString()}>"
-        )
-        italic_button.setShortcut(QKeySequence.StandardKey.Italic)
-        italic_button.clicked.connect(
-            lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.ITALIC)
-        )
+        italic_button.setDefaultAction(self.action.italic)
         format_buttons_layout.addWidget(italic_button)
 
         bold_button = QToolButton()
-        bold_button.setIcon(icons["bold"])
         bold_button.setFixedWidth(BUTTON_SIZE)
-        bold_button.setToolTip(
-            self.tr("Bold")
-            + f" <{QKeySequence(QKeySequence.StandardKey.Bold).toString()}>"
-        )
-        bold_button.setShortcut(QKeySequence.StandardKey.Bold)
-        bold_button.clicked.connect(
-            lambda: self.text_widget.changeTextFormat(TextEditWidget.TextFormat.BOLD)
-        )
+        bold_button.setDefaultAction(self.action.bold)
         format_buttons_layout.addWidget(bold_button)
 
         newline_button = QToolButton()
@@ -768,7 +759,7 @@ class MainWindow(QMainWindow):
         self.add_segment_button.setIcon(icons["add_segment"])
         self.add_segment_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.add_segment_button.setToolTip(
-            self.tr("Create segment from selection") + f" &lt;A&gt;"
+            self.tr("Create segment from selection") + " &lt;A&gt;"
         )
         self.add_segment_button.clicked.connect(self.newUtteranceFromSelection)
         segment_buttons_layout.addWidget(self.add_segment_button)
@@ -1054,7 +1045,7 @@ class MainWindow(QMainWindow):
             self.addRecentFile(str(file_path))
             return True
 
-        except FileOperationError as e:
+        except FileOperationError:
             msg_box = QMessageBox(
                 QMessageBox.Icon.Critical,
                 self.tr("Save Error"),
@@ -1146,7 +1137,7 @@ class MainWindow(QMainWindow):
 
     def onOpenFile(self, file_path: Path | None = None, keep_media=False) -> None:
         """Hub function for opening files"""
-        logger.debug(f"onOpenFile({str(file_path)})")
+        logger.debug(f"onOpenFile({file_path!s})")
 
         supported_filter = f"Supported files ({' '.join(['*' + fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
         media_filter = f"Audio files ({' '.join(['*' + fmt for fmt in MEDIA_FORMATS])})"
@@ -1559,8 +1550,13 @@ class MainWindow(QMainWindow):
         media_metadata = cache.get_media_metadata(file_path)
         print(media_metadata)
 
-        audiofile_info = get_audiofile_info(str(file_path))
-        print(f"{audiofile_info=}")
+        try:
+            audiofile_info = get_audiofile_info(str(file_path))
+            print(f"{audiofile_info=}")
+        except Exception as e:
+            logger.error(f"{app_strings.TR_ERROR_CANT_READ_FILE} '{file_path}'")
+            logger.debug(str(e))
+            audiofile_info = {}
 
         if not "fps" in media_metadata:
             # Check video framerate
@@ -1647,8 +1643,7 @@ class MainWindow(QMainWindow):
             progress_seconds = media_metadata["transcription_progress"]
             self.waveform.recognizer_progress = progress_seconds
             if (
-                "transcription_completed" in media_metadata
-                and media_metadata["transcription_completed"]
+                media_metadata.get("transcription_completed")
             ):
                 if "duration" in media_metadata:
                     progress_seconds = media_metadata["duration"]
@@ -1712,7 +1707,7 @@ class MainWindow(QMainWindow):
                 BlockType.ALIGNED,
                 BlockType.METADATA_ONLY,
             ):
-                text = self.text_widget.getBlockHtmlMap(block)[0]
+                text = self.text_widget.getBlockHtmlMask(block)[0]
 
                 # Remove extra spaces
                 lines = [" ".join(line.split()) for line in text.split(LINE_BREAK)]
@@ -1829,7 +1824,7 @@ class MainWindow(QMainWindow):
         if block is None:
             return (-1, "")
 
-        html, _ = self.text_widget.getBlockHtmlMap(block)
+        html, _ = self.text_widget.getBlockHtmlMask(block)
         # html = extract_metadata(html)[0] if block else ""
 
         return (seg_id, html)
@@ -2349,7 +2344,7 @@ class MainWindow(QMainWindow):
         # This action should not be added to the undo stack
         segment_id = self.document_controller.addSegment([segment_start, segment_end])
         self.text_widget.insertSentenceWithId(text, segment_id, with_cursor=False)
-        self.text_widget.updateLineNumberAreaWidth()
+        self.text_widget.updateLineNumberBarWidth()
 
     def toggleTranscribe(self, toggled, is_hidden) -> None:
         logger.debug(f"toggleTranscribe({toggled=}, {is_hidden=})")
@@ -2518,9 +2513,7 @@ class MainWindow(QMainWindow):
             for url in mime_data.urls():
                 file_path = Path(url.toLocalFile())
                 ext = file_path.suffix.lower()
-                if ext == ".ali":
-                    document_files.append(file_path)
-                elif ext == ".srt":
+                if ext == ".ali" or ext == ".srt":
                     document_files.append(file_path)
                 elif ext in MEDIA_FORMATS:
                     media_files.append(file_path)
