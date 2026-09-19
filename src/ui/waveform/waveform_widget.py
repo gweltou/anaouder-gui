@@ -47,7 +47,7 @@ from src.actions import ActionManager
 from src.commands import ResizeSegmentCommand
 from src.interfaces import DocumentInterface, Segment, SegmentId
 from src.services.logger import logger
-from src.settings import shortcuts
+from src.settings import shortcuts, USE_SCROLL_SMOOTHING
 from src.ui.theme import theme
 from src.ui.waveform.data import (
     Handle,
@@ -350,7 +350,7 @@ class WaveformWidget(QWidget):
 
     def _updateScroll(self):
         if self.view.scroll_goal >= 0.0:
-            # Scrolling
+            # Auto scrolling
             dist = self.view.scroll_goal - self.view.t_left
             self.view.scroll_vel += 0.4 * dist
             self.view.scroll_vel *= 0.5
@@ -358,13 +358,7 @@ class WaveformWidget(QWidget):
         self.view.scroll_vel *= 0.75
 
         self.view.t_left += self.view.scroll_vel
-        # Check for outside of wavefom positions
-        if self.getTimeRight() >= self.audio_len:
-            self.view.t_left = self.audio_len - self.width() / self.view.ppsec
-            self.view.scroll_vel = 0.0
-        if self.view.t_left < 0.0:
-            self.view.t_left = 0.0
-            self.view.scroll_vel = 0.0
+        self._check_for_out_of_view()
 
         # Stop updating if we're centered
         if (
@@ -378,7 +372,20 @@ class WaveformWidget(QWidget):
         else:
             self.must_redraw = True
 
-    def paintEvent(self, event: QPaintEvent):
+    def _check_for_out_of_view(self) -> None:
+        """Prevent waveform view to be out of bounds."""
+
+        if self.getTimeRight() >= self.audio_len:
+            self.view.t_left = self.audio_len - self.width() / self.view.ppsec
+            self.view.scroll_vel = 0.0
+            self.must_redraw = True
+
+        if self.view.t_left < 0.0:
+            self.view.t_left = 0.0
+            self.view.scroll_vel = 0.0
+            self.must_redraw = True
+
+    def paintEvent(self, event: QPaintEvent) -> None:
         """
         Override method from QWidget.
         Paint the Pixmap into the widget.
@@ -463,7 +470,7 @@ class WaveformWidget(QWidget):
         """Sets document absolute time for the first sample"""
         self.view.time_offset = offset_s
 
-    def zoomIn(self, factor=1.333, position=0.5):
+    def zoomIn(self, factor=1.333, position=0.5) -> None:
         prev_ppsec = self.view.ppsec
         self.view.ppsec = min(self.view.ppsec * factor, ZOOM_MAX)
 
@@ -476,7 +483,7 @@ class WaveformWidget(QWidget):
         self._waveform_data.ppsec = self.view.ppsec
         self.must_redraw = True
 
-    def zoomOut(self, factor=1.333, position=0.5):
+    def zoomOut(self, factor=1.333, position=0.5) -> None:
         prev_ppsec = self.view.ppsec
         new_ppsec = self.view.ppsec / factor
         min_ppsec = self.width() / self.audio_len
@@ -491,7 +498,34 @@ class WaveformWidget(QWidget):
         self._waveform_data.ppsec = self.view.ppsec
         self.must_redraw = True
 
-    def _commitResizeSegment(self):
+    def _scroll_view(self, delta_x: float, fast: bool = False) -> None:
+        if self.mouse_prev_pos is None or delta_x == 0.0:
+            return
+
+        # Calculate mouse direction
+        self.mouse_dir = delta_x / abs(delta_x)
+
+        # Stop movement if drag direction is opposite
+        if -1 * delta_x * self.view.scroll_vel < 0.0:
+            self.view.scroll_vel = 0.0
+
+        if fast:
+            if USE_SCROLL_SMOOTHING:
+                self.view.scroll_vel += -1.5 * delta_x / self.view.ppsec
+            else:
+                self.view.t_left += -1 * delta_x / self.view.ppsec
+                self.must_redraw = True
+        else:
+            self.view.t_left += -1 * delta_x / self.view.ppsec
+            self._check_for_out_of_view()
+            self.must_redraw = True
+
+        self.view.scroll_goal = -1  # Deactivate auto scroll
+
+        if self.follow_playhead:
+            self.stop_follow.emit()
+
+    def _commit_resize_segment(self):
         """Applies only to actual segments (not the selection)."""
         if self.active_segment_id < 0 or self.resizing_state.segment is None:
             return
@@ -769,7 +803,7 @@ class WaveformWidget(QWidget):
             self.resizing_state.handle = None
             if self.active_segment_id >= 0:
                 # resizing_handle must be reset to None before calling _commitResizeSegment
-                self._commitResizeSegment()
+                self._commit_resize_segment()
 
         if event.button() == Qt.MouseButton.LeftButton:
             self.unsetCursor()
@@ -869,12 +903,6 @@ class WaveformWidget(QWidget):
                 self.follow_playhead |= self.was_following
                 self.was_following = False
 
-        # Calculate mouse direction
-        if self.mouse_prev_pos:
-            mouse_dpos = self.mouse_pos.x() - self.mouse_prev_pos.x()
-            if mouse_dpos != 0.0:
-                self.mouse_dir = mouse_dpos / abs(mouse_dpos)
-
         # Scrolling
         if (
             event.buttons() == Qt.MouseButton.LeftButton
@@ -882,14 +910,8 @@ class WaveformWidget(QWidget):
             and self.mouse_prev_pos
             and not self.is_selecting
         ):
-            # Stop movement if drag direction is opposite
-            if -1 * mouse_dpos * self.view.scroll_vel < 0.0:
-                self.view.scroll_vel = 0.0
-            self.view.scroll_vel += -0.16 * mouse_dpos / self.view.ppsec
-            self.view.scroll_goal = -1  # Deactivate auto scroll
-
-            if self.follow_playhead:
-                self.stop_follow.emit()
+            delta_x = self.mouse_pos.x() - self.mouse_prev_pos.x()
+            self._scroll_view(delta_x)
 
         # Move play head
         elif event.buttons() == Qt.MouseButton.RightButton:
@@ -951,14 +973,20 @@ class WaveformWidget(QWidget):
             self.must_redraw = True
 
     def wheelEvent(self, event: QWheelEvent):
+        pixel_delta = event.pixelDelta()  # Trackpad data
+        angle_delta = event.angleDelta()  # Classic mouse wheel
+
+        if not pixel_delta.isNull():
+            self._scroll_view(pixel_delta.x(), fast=True)
+
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             zoomFactor = 1.08
             zoomLoc = event.position().x() / self.width()
-            if event.angleDelta().y() > 0:
+            if angle_delta.y() > 0:
                 self.zoomIn(zoomFactor, zoomLoc)
             else:
                 self.zoomOut(zoomFactor, zoomLoc)
-            # Cancel automatic motion
+            # Cancel automatic motions
             self.view.scroll_goal = -1
             self.view.scroll_vel = 0.0
             self.view.ppsec_goal = self.view.ppsec

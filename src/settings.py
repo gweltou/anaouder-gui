@@ -21,6 +21,10 @@ import platform
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QKeySequence
 
+
+is_darwin = platform.system() == "Darwin"
+
+
 APP_NAME = "Anaouder"
 DEFAULT_LANGUAGE = "br"
 FUTURE = False
@@ -45,6 +49,7 @@ BUTTON_SPACING = 4  # in pixels
 BUTTON_MARGIN = 8  # in pixels
 BUTTON_LABEL_SIZE = 16  # in pixels
 DIAL_SIZE = 30  # in pixels
+USE_SCROLL_SMOOTHING = not is_darwin    # mac trackpads already have hardware smoothing
 
 # FFMPEG settings
 FFMPEG_SCENE_DETECTOR_THRESHOLD = 0.2
@@ -65,8 +70,6 @@ SUBTITLES_BLOCK_DEFAULT_COLOR = QColor(0, 0, 0, 100)
 AUTOSAVE_DEFAULT_INTERVAL = 0.2  # 1 minute
 AUTOSAVE_BACKUP_NUMBER = 3  # Number of files to keep at most
 
-
-is_darwin = platform.system() == "Darwin"
 
 
 shortcuts: dict[str, QKeySequence] = {
