@@ -15,7 +15,7 @@ from src.interfaces import Segment, SegmentId
 from src.services.aligner import align_text_with_vosk_tokens
 from src.services.logger import logger
 from src.services.task import TaskWorker
-from src.text_widget import LINE_BREAK
+from src.ui.text_widget import LINE_BREAK
 from src.utils import find_system_fonts, get_audiofile_info
 
 

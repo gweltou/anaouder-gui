@@ -24,6 +24,7 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
     Signal,
+    QEvent
 )
 from PySide6.QtGui import (
     QAction,
@@ -40,6 +41,7 @@ from PySide6.QtGui import (
     QResizeEvent,
     QShortcut,
     QWheelEvent,
+    QNativeGestureEvent
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
@@ -653,6 +655,12 @@ class WaveformWidget(QWidget):
     ##   KEYBOARD AND MOUSE EVENTS   ##
     ###################################
 
+    def event(self, event):
+        if event.type() == QEvent.Type.NativeGesture:
+            self._handle_native_gesture(event)
+            return True
+        return super().event(event)
+
     def focusInEvent(self, event) -> None:
         """When mouse is above the waveform widget"""
         self.must_redraw = True  # For focus highlight
@@ -980,29 +988,34 @@ class WaveformWidget(QWidget):
             self._scroll_view(pixel_delta.x(), fast=True)
 
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            zoomFactor = 1.08
-            zoomLoc = event.position().x() / self.width()
+            zoom_factor = 1.08
+            zoom_pos = event.position().x() / self.width()
             if angle_delta.y() > 0:
-                self.zoomIn(zoomFactor, zoomLoc)
+                self.zoomIn(zoom_factor, zoom_pos)
             else:
-                self.zoomOut(zoomFactor, zoomLoc)
+                self.zoomOut(zoom_factor, zoom_pos)
             # Cancel automatic motions
             self.view.scroll_goal = -1
             self.view.scroll_vel = 0.0
             self.view.ppsec_goal = self.view.ppsec
 
-    # def shouldOpenContextMenu(self, click_pos) -> bool:
-    #     segmentid_and_side = self.getSegmentAtPixelPosition(click_pos)
-    #     if segmentid_and_side is None:
-    #         return False
-    #     elif self.isSelectionAtPosition(self.click_pos):
-    #         return True
-    #     else:
-    #         seg_id, _ = segmentid_and_side
-    #         if seg_id in self.active_segments:
-    #             return True
-    #         else:
-    #             return False
+    def _handle_native_gesture(self, event: QNativeGestureEvent):
+        gesture_type = event.gestureType()
+        value = event.value()
+
+        if gesture_type == Qt.NativeGestureType.ZoomNativeGesture:
+            print(f"Pincement (zoom) {value=}")
+            zoom_pos = event.position().x() / self.width()
+            if value < 0.0:
+                self.zoomOut(1.0 - value, zoom_pos)
+            else:
+                self.zoomIn(1.0 + value, zoom_pos)
+        elif gesture_type == Qt.NativeGestureType.SmartZoomNativeGesture:
+            print("Smart zoom (double-tap à deux doigts)")
+        elif gesture_type == Qt.NativeGestureType.RotateNativeGesture:
+            pass
+        elif gesture_type == Qt.NativeGestureType.SwipeNativeGesture:
+            print("Swipe")
 
     def showContextMenu(self, pos: QPoint):
         """Show the context menu at the given global position."""
