@@ -25,13 +25,13 @@ import platform
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 
-from src.settings import shortcuts, is_darwin
+from src.settings import is_darwin, shortcuts
 from src.strings import app_strings
 from src.ui.icons import icons
 
 
 def getActionTooltip(action: QAction) -> str:
-    return f"{action.text()} <{action.shortcut().toString(QKeySequence.NativeText)}>"
+    return f"{action.text()} <{action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)}>"
 
 
 
@@ -47,7 +47,7 @@ class ActionWithShortcutHint(QAction):
         if is_darwin:
             # Shortcuts are not displayed on macOS
             text = self.text()
-            shortcut_str = self.shortcut().toString(QKeySequence.NativeText)
+            shortcut_str = self.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
             self.setText(f"{text}\t{shortcut_str}")
 
 
@@ -162,7 +162,7 @@ class ActionManager(QObject):
             self.export_audio_segments_resquested.emit
         )
 
-        ## Parameters Dialog
+        ## Parameters Dialog
         self.open_parameters = ActionWithShortcutHint(self.tr("&Parameters") + "...", self)
         if platform.system() == "Linux":
             self.open_parameters.setShortcut(shortcuts["preferences"])

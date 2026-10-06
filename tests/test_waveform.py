@@ -9,8 +9,8 @@ from src.ui.waveform.data import WaveformData
 SR = 44100  # sample rate used across tests
 
 TEST_DIR = Path(__file__).parent
-WAV_PATH = TEST_DIR / "MeliMilaMalou.wav"
-M4A_PATH = TEST_DIR / "MeliMilaMalou.m4a"
+WAV_PATH = TEST_DIR / "test_file.wav"
+M4A_PATH = TEST_DIR / "test_file.m4a"
 
 
 def get_data_from_file(path: Path, sr: int = SR, ppsec: float = 150.0) -> WaveformData:

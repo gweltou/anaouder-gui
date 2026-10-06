@@ -17,24 +17,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-from math import ceil, floor
+from math import ceil
 
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QTextBlock, QUndoStack
 from PySide6.QtWidgets import (
-    QDialog, QWidget,
-    QVBoxLayout, QHBoxLayout, QGroupBox, 
-    QCheckBox, QButtonGroup, QDialogButtonBox, QRadioButton,
-    QLabel
+    QButtonGroup,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QRadioButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtGui import QUndoStack, QTextBlock
 
+from src import lang
+from src.commands import ReplaceTextCommand, ResizeSegmentCommand
 from src.document_controller import DocumentController
-from src.ui.text_widget import TextEditWidget, LINE_BREAK
-from src.commands import ResizeSegmentCommand, ReplaceTextCommand
+from src.settings import SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL, app_settings
+from src.ui.text_widget import LINE_BREAK, TextEditWidget
 from src.utils import splitForSubtitle
-from src.settings import app_settings, SUBTITLES_MARGIN_SIZE, SUBTITLES_MIN_INTERVAL
-import src.lang as lang
-
 
 
 class AdaptUtterancesDialog(QDialog):
@@ -60,8 +64,8 @@ class AdaptUtterancesDialog(QDialog):
 
         saved_params = app_settings.value("adapt_to_subtitles/saved_parameters", {})
         self.set_parameters(saved_params)
-        
-    
+
+
     def build_ui(self) -> None:
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -76,7 +80,7 @@ class AdaptUtterancesDialog(QDialog):
         self.selected_radio_button = QRadioButton(self.tr("Selected segments"))
         self.selected_radio_button.setChecked(True)
         self.all_radio_button = QRadioButton(self.tr("All segments"))
-        
+
         apply_to_layout.addWidget(self.selected_radio_button)
         apply_to_layout.addWidget(self.all_radio_button)
         main_layout.addWidget(apply_to_group)
@@ -89,7 +93,7 @@ class AdaptUtterancesDialog(QDialog):
         self.subtitle_rules_checkbox = QCheckBox(self.tr("Apply subtitles length and interval rules"))
         segment_options_layout.addWidget(self.subtitle_rules_checkbox)
         main_layout.addWidget(segment_options_group)
-        
+
         # Text options
         text_options_group = QGroupBox(self.tr("Text Formatting"))
         text_options_layout = QVBoxLayout(text_options_group)
@@ -101,7 +105,7 @@ class AdaptUtterancesDialog(QDialog):
 
         self.quotation_mark_checkbox = QCheckBox(self.tr("Convert quotation marks ( \"…\" → « … » )"))
         text_options_layout.addWidget(self.quotation_mark_checkbox)
-        
+
         # Apostrophe Options
         self.apostrophe_checkbox = QCheckBox(self.tr("Convert apostrophes"))
         text_options_layout.addWidget(self.apostrophe_checkbox)
@@ -115,17 +119,17 @@ class AdaptUtterancesDialog(QDialog):
         self.apostrophe_checkbox.toggled.connect(lambda check: self.apostrophe_options_widget.setEnabled(check))
 
         self.apostrophe_btn_group = QButtonGroup(self)
-        
+
         # --- English Apostrophe Option ---
         en_layout = QHBoxLayout()
         en_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.en_apostrophe_radiobtn = QRadioButton()
-        
+
         en_html = self.tr("<span style='font-size: 16pt; font-weight: bold;'>’</span> → <span style='font-size: 16pt; font-weight: bold;'>'</span>")
         self.en_label = QLabel(en_html)
         self.en_label.mousePressEvent = lambda event: self.en_apostrophe_radiobtn.setChecked(True)
-        
+
         en_layout.addWidget(self.en_apostrophe_radiobtn)
         en_layout.addWidget(self.en_label)
         en_layout.addStretch()
@@ -133,13 +137,13 @@ class AdaptUtterancesDialog(QDialog):
         # --- French Apostrophe Option ---
         fr_layout = QHBoxLayout()
         fr_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.fr_apostrophe_radiobtn = QRadioButton()
-        
+
         fr_html = self.tr("<span style='font-size: 16pt; font-weight: bold;'>'</span> → <span style='font-size: 16pt; font-weight: bold;'>’</span>")
         self.fr_label = QLabel(fr_html)
         self.fr_label.mousePressEvent = lambda event: self.fr_apostrophe_radiobtn.setChecked(True)
-        
+
         fr_layout.addWidget(self.fr_apostrophe_radiobtn)
         fr_layout.addWidget(self.fr_label)
         fr_layout.addStretch()
@@ -158,9 +162,9 @@ class AdaptUtterancesDialog(QDialog):
 
         # Add stretch to push buttons to the bottom
         main_layout.addStretch()
-        
+
         # OK and Cancel buttons
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | 
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
                                       QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -171,7 +175,7 @@ class AdaptUtterancesDialog(QDialog):
         self.apply_options()
         super().accept()
 
-    
+
     def apply_options(self) -> None:
         # Save parameters
         params = self.get_parameters()
@@ -186,7 +190,7 @@ class AdaptUtterancesDialog(QDialog):
             cursor = self.text_widget.textCursor()
             start_block = self.text_widget.document().findBlock(cursor.selectionStart())
             end_block = self.text_widget.document().findBlock(cursor.selectionEnd())
-        
+
         self.undo_stack.beginMacro("Adapt to subtitles")
 
         if params["apply_subtitle_rules"] == True:
@@ -228,7 +232,7 @@ class AdaptUtterancesDialog(QDialog):
             "convert_apostrophes": self.apostrophe_checkbox.isChecked(),
             "apostrophe_type": "fr" if self.fr_apostrophe_radiobtn.isChecked() else "en"
         }
-    
+
 
     def set_parameters(self, params: dict):
         self.all_radio_button.setChecked(params.get("apply_to_all", False))
@@ -255,7 +259,7 @@ def apply_subtitle_rules(
     text_widget = document_controller.text_widget
 
     line_max_size: int = app_settings.value("subtitles/margin_size", SUBTITLES_MARGIN_SIZE, type=int)
-    
+
     block = start_block
     while True:
         seg_id = document_controller.getBlockId(block)
@@ -271,7 +275,7 @@ def apply_subtitle_rules(
                         # The previous frame position overlaps the previous segment,
                         # choose next frame
                         frame_start = ceil(seg_start * fps) / fps
-                
+
                 next_segment_id = document_controller.getNextSegmentId(seg_id)
                 if segment := document_controller.getSegment(next_segment_id):
                     right_boundary = round(segment[0] * fps) / fps
@@ -287,7 +291,7 @@ def apply_subtitle_rules(
             if len(splits) > 1:
                 text = LINE_BREAK.join([ s.strip() for s in splits ])
                 undo_stack.push(ReplaceTextCommand(text_widget, block, text))
-            
+
         if block == end_block:
             break
         block = block.next()
@@ -302,7 +306,7 @@ def remove_fillers(
     while block.isValid() and block != end_block.next():
         html_text, map = text_widget.getBlockHtmlMask(block)
 
-        # Isolate and preserve HTML elements 
+        # Isolate and preserve HTML elements
         new_text_parts = []
         region_start_idx = 0
         last_val = None
@@ -353,7 +357,7 @@ def convert_quotation_marks(
                 idx += next_idx + 1
             new_text += html_text[idx:]
             undo_stack.push(ReplaceTextCommand(text_widget, block, new_text))
-        
+
         block = block.next()
 
 
@@ -383,5 +387,5 @@ def convert_apostrophes(
             # We asume that there is no apostrophe in the formatting HTML elements
             html_text = html_text.replace(to_replace, replacement)
             undo_stack.push(ReplaceTextCommand(text_widget, block, html_text))
-        
+
         block = block.next()

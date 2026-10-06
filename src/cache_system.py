@@ -49,7 +49,7 @@ def calculate_fingerprint(file_path: Path) -> Fingerprint:
     Args:
         filepath (Path)
             A path to a audio file
-    
+
     Returns:
         A unique fingerprint for any given file
     """
@@ -58,7 +58,7 @@ def calculate_fingerprint(file_path: Path) -> Fingerprint:
     block_size = 4096
     n_blocks = min(8, int(file_size / block_size))
     loc_step = file_size // n_blocks
-    
+
     sha256_hash = hashlib.sha256()
     with file_path.open('rb') as _f:
         loc = 0
@@ -90,7 +90,7 @@ class CacheSystem:
         transcription_completed
         last_access
         fingerprint
-    
+
     * Document cache (accessed by file path)
         cursor_pos
         waveform_pos
@@ -100,7 +100,7 @@ class CacheSystem:
         video_open
         show_misspelling
         last_access
-    
+
     Folders for:
         * scenes (.tsv)
         * transcriptions (.tsv)
@@ -119,7 +119,7 @@ class CacheSystem:
         self._doc_cache_dirty = False
 
         cache_dir = get_cache_directory()
-        
+
         self.transcriptions_dir = cache_dir / "transcriptions"
         self.waveforms_dir = cache_dir / "waveforms"
         self.scenes_dir = cache_dir / "scenes"
@@ -127,12 +127,12 @@ class CacheSystem:
         for d in (self.transcriptions_dir, self.waveforms_dir, self.scenes_dir):
             if not d.exists():
                 os.makedirs(d, exist_ok=True)
-        
+
         self.media_cache_path = cache_dir / "media_cache.jsonl"
         self.doc_cache_path = cache_dir / "doc_cache.jsonl"
 
         self._load_root_cache()
-    
+
 
     def _get_transcription_path(self, fingerprint: Fingerprint) -> Path:
         return self.transcriptions_dir / f"{fingerprint}.tsv"
@@ -170,8 +170,8 @@ class CacheSystem:
 
         except (FileNotFoundError, json.JSONDecodeError) as e:
             log.error(f"Could not open media cache file: {e}")
-            self.media_cache = dict()
-        
+            self.media_cache = {}
+
         # Document cache, indexed by document path
         log.info("Loading document cache")
         try:
@@ -186,9 +186,9 @@ class CacheSystem:
                     doc_path = entry.pop("file_path")
                     self.doc_cache[doc_path] = entry
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            log.error(f"Could not open media cache file: {e}")
+            log.error(f"Could not open document cache file: {e}")
             # We should try to restore the database
-            self.doc_cache = dict()
+            self.doc_cache = {}
 
 
     def _save_root_cache_to_disk(self) -> None:
@@ -208,7 +208,7 @@ class CacheSystem:
                 self._media_cache_dirty = False
             except Exception as e:
                 log.error(f"Error: Couln't save media cache to disk ({e})")
-        
+
         if self._doc_cache_dirty:
             try:
                 with self.doc_cache_path.open('w') as _f:
@@ -234,7 +234,7 @@ class CacheSystem:
         """
         if not media_path:
             return {}
-        
+
         fingerprint = calculate_fingerprint(media_path)
 
         if fingerprint in self.media_cache:
@@ -246,7 +246,7 @@ class CacheSystem:
             # self._save_root_cache_to_disk()
 
             return metadata
-        
+
         return {}
 
 
@@ -261,7 +261,7 @@ class CacheSystem:
 
         if fingerprint not in self.media_cache:
             self.media_cache[fingerprint] = {"file_size": media_path.stat().st_size}
-        
+
         self.media_cache[fingerprint].update(metadata)
 
         self._media_cache_dirty = True
@@ -269,7 +269,7 @@ class CacheSystem:
 
 
     def get_doc_metadata(self, file_path: Path) -> dict:
-        """ Get cached metadata for document file and update access time """
+        """Get cached metadata for document file and update access time."""
 
         file_path = file_path.absolute()
         if str(file_path) in self.doc_cache:
@@ -278,7 +278,7 @@ class CacheSystem:
             self._doc_cache_dirty = True
             self._save_root_cache_to_disk()
             return metadata
-        
+
         return {}
 
 
@@ -294,11 +294,11 @@ class CacheSystem:
     def get_media_transcription(self, file_path: Path) -> List[tuple] | None:
         fingerprint = calculate_fingerprint(file_path)
 
-        if fingerprint not in self.transcriptions_cache:        
+        if fingerprint not in self.transcriptions_cache:
             transcription = self._get_transcription_from_disk(fingerprint)
             if transcription is None:
                 return None
-            
+
             self.transcriptions_cache[fingerprint] = transcription
 
         return self.transcriptions_cache[fingerprint]
@@ -313,7 +313,7 @@ class CacheSystem:
         # if not os.path.exists(filepath):
         if not file_path.exists():
             return None
-        
+
         try:
             tokens = []
             with file_path.open('r') as _f:
@@ -328,11 +328,11 @@ class CacheSystem:
                     )
                     tokens.append(token)
             return tokens
-        
+
         except Exception as e:
             log.error(f"Error reading transcription file: {e}")
             return None
-    
+
 
     def set_media_transcription(self, media_path: Path, tokens: list):
         """
@@ -355,7 +355,7 @@ class CacheSystem:
 
         # Update modification time
         self.update_media_metadata(media_path)
- 
+
 
     def append_media_transcription(self, media_path: Path, tokens: list):
         log.debug(f"append_media_transcription({media_path=}, {tokens=})")
@@ -368,7 +368,7 @@ class CacheSystem:
             for tok in tokens:
                 tok = [ str(t) for t in tok ]
                 _fout.write('\t'.join(tok) + '\n')
-        
+
         self.update_media_metadata(media_path)
 
 
@@ -382,7 +382,7 @@ class CacheSystem:
         file_path = self._get_scenes_path(fingerprint)
         if not file_path.exists():
             return None
-        
+
         try:
             scenes = []
             with file_path.open('r') as _f:
@@ -390,7 +390,7 @@ class CacheSystem:
                     time_sec, r, g, b = line.strip().split('\t')
                     scenes.append((float(time_sec), int(r), int(g), int(b)))
             return scenes
-        
+
         except Exception as e:
             log.error(f"Error reading scenes file: {e}")
             return None
@@ -409,7 +409,7 @@ class CacheSystem:
             On each line, fields are separated by a tab (\t).
             Fields: onset time, red channel, green channel, blue channel
         """
-        
+
         # Write scenes to disk
         log.info("Writting scenes to disk")
         with self._get_scenes_path(fingerprint).open('w') as _fout:
@@ -417,7 +417,7 @@ class CacheSystem:
                 scene = [ str(f) for f in scene ]
                 _fout.write('\t'.join(scene) + '\n')
 
-    
+
     def get_waveform(self, media_path: Path) -> np.ndarray | None:
         log.info("Loading waveform from cache")
         fingerprint = calculate_fingerprint(media_path)
@@ -429,7 +429,7 @@ class CacheSystem:
             else:
                 log.info(f"File {waveform_path} doesn't exist.")
         return None
-    
+
 
     def set_waveform(self, media_path: Path, audio_samples: np.ndarray):
         fingerprint = calculate_fingerprint(media_path)
@@ -441,7 +441,7 @@ class CacheSystem:
 
         self.update_media_metadata(media_path, { "waveform_size": waveform_path.stat().st_size })
 
-    
+
     # def clear_transcription(self, audio_path: str) -> None:
     #     fp = calculate_fingerprint(audio_path)
     #     filepath = self._get_transcription_path(fp)

@@ -67,6 +67,7 @@ class Strings(QObject):
         # Error messages
         self.TR_ERROR_CANT_READ_FILE = self.tr("Could not read file")
         self.TR_CANT_SAVE_FILE = self.tr("Could not save file")
+        self.TR_WRONG_FILE_TYPE = self.tr("Wrong file type")
 
         # Units
         self.TR_UNIT_FRAMES = self.tr("frames")

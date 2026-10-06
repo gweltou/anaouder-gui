@@ -39,7 +39,8 @@ PUNCTUATION = r'.?!,‚;:«»“”"()[]{}<>/\…–—-_~^•'
 STOP_CHARS = PUNCTUATION + " \t\u2028"
 
 MEDIA_FORMATS = (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mkv", ".webm", ".mov")
-ALL_COMPATIBLE_FORMATS = MEDIA_FORMATS + (".ali", ".seg", ".split", ".srt")
+DOCUMENT_FORMATS = (".ali", ".seg", ".split", ".srt", ".eaf")
+ALL_COMPATIBLE_FORMATS = MEDIA_FORMATS + DOCUMENT_FORMATS
 SUBTITLES_FILE_FORMATS = (".srt",)
 
 

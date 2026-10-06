@@ -52,12 +52,9 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDial,
-    QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
-    QListWidget,
     QMainWindow,
     QMenu,
     QMenuBar,
@@ -78,15 +75,15 @@ from src.commands import (
     ReplaceTextCommand,
 )
 from src.document_controller import DocumentController
-from src.exports import segment_exporter
-from src.exports.textual_exporter import export_to_text_format
-from src.file_manager import FileManager, FileOperationError
+from src.file_io.dialogs import FilePrompts
+from src.file_io.file_manager import FileManager, FileOperationError
 from src.hunspell import HunspellLoader
 from src.interfaces import BlockType, Segment, SegmentId, TextEditorInterface
 from src.services.aligner import TextAligner
 from src.services.logger import logger
 from src.services.media_player_controller import MediaPlayerController
 from src.services.scene_detector import SceneDetectWorker
+from src.services.segment_exporter import segment_exporter
 from src.settings import (
     APP_NAME,
     AUTOSAVE_BACKUP_NUMBER,
@@ -112,7 +109,7 @@ from src.settings import (
     shortcuts,
 )
 from src.splitter import CustomSplitter
-from src.strings import Strings, app_strings
+from src.strings import app_strings
 from src.transcriber import TranscriptionService
 from src.ui.about_dialog import AboutDialog
 from src.ui.icons import IconWidget, icons, loadIcons
@@ -127,6 +124,7 @@ from src.ui.waveform.waveform_widget import WaveformWidget
 # from PySide6.QtMultimedia import QMediaDevices
 from src.utils import (
     ALL_COMPATIBLE_FORMATS,
+    DOCUMENT_FORMATS,
     LINE_BREAK,
     MEDIA_FORMATS,
     SUBTITLES_FILE_FORMATS,
@@ -182,12 +180,14 @@ class MainWindow(QMainWindow):
 
         self.changeLanguage(DEFAULT_LANGUAGE)
 
+
     def updateThemeColors(self) -> None:
         """Propagate the colorSchemeChanged signal to chilren widget components"""
         theme.updateTheme(QApplication.styleHints().colorScheme())
         self.text_widget.updateThemeColors()
         self.waveform.updateThemeColors()
         self.timecode_widget.updateThemeColors()
+
 
     def _initializeState(self) -> None:
         # Languages an models
@@ -204,11 +204,15 @@ class MainWindow(QMainWindow):
         self._text_cursor_utterance_id = -1
         self._last_play_press_time = 0.0
 
+
     def _initializeComponents(self) -> None:
         """Initialize primary components of the application"""
 
+        # File dialogs
+        self.file_prompts = FilePrompts(self)
+
         # File Manager
-        self.file_manager = FileManager()
+        self.file_manager = FileManager(self.file_prompts)
 
         # self.input_devices = QMediaDevices.audioInputs()
 
@@ -242,9 +246,6 @@ class MainWindow(QMainWindow):
         # Scenes
         self.scene_detector = None
 
-        # Audio segment extractor
-        # segment_exporter.initAudioSegmentExtractor(self)
-
         # Undo stack
         self.undo_stack = self.document_controller.undo_stack
         self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
@@ -252,7 +253,7 @@ class MainWindow(QMainWindow):
 
         # Autosave
         self._autosave_timer = QTimer()
-        self._autosave_timer.timeout.connect(self.autoSave)
+        self._autosave_timer.timeout.connect(self.auto_save)
         self._last_saved_index = 0
         self._last_saved_time = time.time()
 
@@ -946,13 +947,16 @@ class MainWindow(QMainWindow):
             if msg_box.clickedButton() == ok_btn:
                 self.showParametersDialog(tab_idx=1)
 
+
     def setStatusMessage(self, message: str, timeout=STATUS_BAR_TIMEOUT) -> None:
         """Sets a temporary status message"""
         self.statusBar().showMessage(message, timeout)
 
+
     def setErrorMessage(self, message: str, timeout=STATUS_BAR_TIMEOUT) -> None:
         """Sets a temporary error message"""
         self.statusBar().showMessage("⚠️ " + message, timeout)
+
 
     def updateWindowTitle(self) -> None:
         # title_parts.append(APP_NAME)
@@ -967,6 +971,7 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowTitle(APP_NAME)
 
+
     def changeLanguage(self, language: str) -> None:
         # This shouldn't be called when a recognizer worker is running
         lang.loadLanguage(language)
@@ -979,31 +984,22 @@ class MainWindow(QMainWindow):
         self.model_selection.clear()
         self.model_selection.addItems(self.available_models)
 
+
     def onSaveFile(self) -> bool:
         """
         Returns:
             True if save was successful, False otherwise
         """
         if self.file_path and self.file_path.suffix == ".ali":
+
             return self._saveFile(self.file_path) or self.onSaveFileAs(self.file_path)
         else:
             path = self.file_path.with_suffix(".ali") if self.file_path else Path.home()
             return self.onSaveFileAs(path)
 
-    def _get_default_save_location(self) -> tuple[str, str]:
-        """Returns (directory, basename) for save dialog."""
-        if self.file_path:
-            return str(self.file_path.parent), self.file_path.stem + ".ali"
-
-        if self.media_path:
-            return str(self.media_path.parent), self.media_path.stem + ".ali"
-
-        default_dir = app_settings.value("last_opened_folder", Path.home(), type=str)
-        return str(default_dir), "nevez.ali"
 
     def onSaveFileAs(self, file_path: Path | None = None) -> bool:
-        """
-        Opens a dialog to ask for the save destination
+        """Opens a dialog to ask for the save destination.
 
         Returns:
             True if save was successful, False otherwise
@@ -1024,26 +1020,48 @@ class MainWindow(QMainWindow):
 
         file_path = Path(file_path)
 
-        if self._saveFile(file_path):
-            self.file_path = file_path
-            self.addRecentFile(str(file_path))
-            return True
+        return self._saveFile(file_path)
 
-        return False
 
-    def _saveFile(self, file_path: Path) -> bool:
-        """
-        Opens a critical dialog window on error
+    def _get_default_save_location(self) -> tuple[str, str]:
+        """Returns (directory, basename) for save dialog."""
+        if self.file_path:
+            return str(self.file_path.parent), self.file_path.stem + ".ali"
+
+        if self.media_path:
+            return str(self.media_path.parent), self.media_path.stem + ".ali"
+
+        default_dir = app_settings.value("last_opened_folder", Path.home(), type=str)
+        return str(default_dir), "nevez.ali"
+
+
+    def _saveFile(
+        self, file_path: Path,
+        media_path: Path | None = None,
+        is_autosave = False
+    ) -> bool:
+        """Save document as an ALI file.
+        Parse the internal document and sends the data to the File Manager.
+        Opens a critical dialog window on error.
+
+        Args:
+            file_path (Path):
+                Path to save to
+            media_path (str):
+                Overwrite the media path linked to this file
+            is_autosave (bool):
+                Keep undo stack if True
 
         Returns:
             True if successful, False otherwise
         """
+        data = self.document_controller.getData()
+
+        if media_path is None:
+            media_path = self.document_controller.media_path
+
         try:
-            self._performSave(file_path)
-            self.undo_stack.setClean()
-            self.updateWindowTitle()
-            self.addRecentFile(str(file_path))
-            return True
+            self.file_manager.save_ali_file(file_path, data, media_path)
 
         except FileOperationError:
             msg_box = QMessageBox(
@@ -1057,29 +1075,20 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return False
 
-    def _performSave(self, file_path: Path, media_path: Path | None = None) -> None:
-        """
-        Save document as an ALI file.
-        Parse the internal document and sends the data to the File Manager.
-
-        Args:
-            file_path (Path): path to save to
-            media_path (str): overwrite the media path linked to this file
-
-        Raise:
-            FileOperationError
-        """
-        data = self.document_controller.getData()
-
-        if media_path is None:
-            media_path = self.document_controller.media_path
-
-        self.file_manager.save_ali_file(file_path, data, media_path)
-
+        # Auto-save state
         self._last_saved_index = self.undo_stack.index()
         self._last_saved_time = time.time()
 
-    def autoSave(self):
+        if not is_autosave:
+            self.file_path = file_path
+            self.undo_stack.setClean()
+            self.addRecentFile(file_path)
+            self.updateWindowTitle()
+
+        return True
+
+
+    def auto_save(self):
         current_index = self.undo_stack.index()
         if not self.file_path:
             return
@@ -1104,7 +1113,7 @@ class MainWindow(QMainWindow):
             autosave_folder.mkdir(
                 exist_ok=True
             )  # Create "autosave" folder, if necessary
-            self._performSave(autosave_path)
+            self._saveFile(autosave_path, None, is_autosave=True)
 
             # Remove old backups, if necessary
             old_backups = sorted(
@@ -1122,18 +1131,6 @@ class MainWindow(QMainWindow):
             message = self.tr("Autosave failed: {exception}").format(exception=str(e))
             logger.error(message)
 
-    def getOpenFileDialog(self, title: str, filter: str) -> str | None:
-        if self.file_path:
-            dir = str(self.file_path.parent)
-        else:
-            dir = app_settings.value("last_opened_folder", "", type=str)
-
-        file_path, _ = QFileDialog.getOpenFileName(self, title, dir, filter)
-        if not file_path:
-            return None
-
-        app_settings.setValue("last_opened_folder", os.path.split(file_path)[0])
-        return file_path
 
     def onOpenFile(self, file_path: Path | None = None, keep_media=False) -> None:
         """Hub function for opening files"""
@@ -1144,12 +1141,15 @@ class MainWindow(QMainWindow):
 
         if file_path is None:
             # Open a File dialog window
-            file_path = self.getOpenFileDialog(
-                self.tr("Open File"), ";;".join([supported_filter, media_filter])
+            file_path = self.file_prompts.openFileDialog(
+                title = self.tr("Open File"),
+                filter = ";;".join([supported_filter, media_filter]),
+                root_dir = None,
+                remember_dir = True
             )
+
             if file_path is None:
                 return
-            file_path = Path(file_path)
 
         self._last_saved_index = 0
         self._last_saved_time = 0.0
@@ -1162,129 +1162,38 @@ class MainWindow(QMainWindow):
 
         self.file_path = file_path
         self.document_controller.setDocumentPath(file_path)
+
         ext = file_path.suffix.lower()
 
         if ext in MEDIA_FORMATS:
-            # Selected file is an audio of video file
+            # Video or audio file only
             self.openMediaFile(file_path)
             self.updateWindowTitle()
             return
 
-        elif ext == ".ali":
-            self.loadAliFile(file_path)
+        file_data = self.file_manager.read_file(file_path)
 
-        elif ext in (".seg", ".split"):
-            data = self.file_manager.read_split_file(file_path)
-            self.document_controller.loadData(data["document"])
+        # Load textual data
+        if "document" in file_data:
+            self.document_controller.loadData(file_data["document"])
 
-            media_path = data.get("media-path", None)
-            if media_path and os.path.exists(media_path):
-                self.openMediaFile(Path(media_path))
+        # Load media file, if any
+        if "media-path" in file_data:
+            self.openMediaFile(file_data["media-path"])
 
-        elif ext == ".srt":
-            logger.debug("Opening an SRT file...")
-            data = self.file_manager.read_srt_file(str(file_path), find_media=True)
-            self.document_controller.loadData(data["document"])
-
-            media_path = data.get("media-path", None)
-            if media_path and os.path.exists(media_path):
-                self.openMediaFile(Path(media_path))
-        else:
-            logger.error(f"Wrong file type: {file_path}")
-
+        # Resume state if previously opened
         self._loadDocumentState(file_path)
+
+        self.addRecentFile(file_path)
 
         self.updateWindowTitle()
         self._last_saved_index = 0
 
-    def loadAliFile(self, file_path: Path) -> bool:
-        """
-        Load an ALI file (document and media file) or its more recent backup
-
-        Returns:
-            True if file loaded successfully, False otherwise
-        """
-
-        file_to_load = self._selectFileToLoad(file_path)
-        if not file_to_load:
-            return False
-        is_backup = file_to_load != file_path
-
-        try:
-            data = self.file_manager.read_ali_file(file_to_load)
-        except FileOperationError as e:
-            QMessageBox.critical(self, self.tr("Read Error"), str(e))
-            msg_box = QMessageBox(
-                QMessageBox.Icon.Critical,
-                self.tr("Read Error"),
-                self.tr("Couldn't read file '{filename}'").format(
-                    filename=file_path.name
-                ),
-            )
-            msg_box.addButton(app_strings.TR_OK, QMessageBox.ButtonRole.AcceptRole)
-            msg_box.exec()
-            return False
-
-        # Load textual data
-        self.document_controller.loadData(data["document"])
-
-        # Try to open media file
-        media_path = data.get("media-path", None)
-        if media_path:
-            media_path = Path(media_path)
-
-        if media_path and is_backup:
-            # Change the media filepath to point to the parent folder
-            media_path = media_path.parent.parent / media_path.name
-
-        if media_path and media_path.exists():
-            self.openMediaFile(media_path)
-        else:
-            # Can't find the media file !
-            # Open a File Dialog to re-link
-            msg_box = QMessageBox(
-                QMessageBox.Icon.Warning,
-                self.tr("No media file"),
-                self.tr("Couldn't find media file for '{filename}'").format(
-                    filename=file_path.name
-                ),
-            )
-            if media_path:
-                m = self.tr("'{filepath}' doesn't exist.").format(
-                    filepath=media_path.absolute()
-                )
-                msg_box.setInformativeText(m)
-
-            ok_btn = msg_box.addButton(
-                app_strings.TR_OPEN, QMessageBox.ButtonRole.AcceptRole
-            )
-            msg_box.addButton(app_strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole)
-
-            msg_box.exec()
-            if msg_box.clickedButton() == ok_btn:
-                media_filter = (
-                    app_strings.TR_MEDIA_FILES
-                    + f" ({' '.join(['*' + fmt for fmt in MEDIA_FORMATS])})"
-                )
-                media_filepath = self.getOpenFileDialog(
-                    app_strings.TR_OPEN_MEDIA_FILE, media_filter
-                )
-                if not media_filepath:
-                    return False
-                media_filepath = Path(media_filepath)
-                if media_filepath.exists():
-                    # Rewrite the file to disk
-                    self._performSave(file_path, media_filepath)
-                    # Re-open the updated file
-                    self.onOpenFile(file_path)
-
-        self.addRecentFile(str(file_path))
-
-        return True
 
     def _loadDocumentState(self, file_path: Path) -> None:
         doc_metadata = cache.get_doc_metadata(file_path)
         logger.debug(f"{doc_metadata=}")
+
         if "video_open" in doc_metadata:
             self.toggle_video_action.setChecked(doc_metadata["video_open"])
         if "cursor_pos" in doc_metadata:
@@ -1317,152 +1226,10 @@ class MainWindow(QMainWindow):
             elif color_mode == Highlighter.ColorMode.DENSITY:
                 self.action.display_density.trigger()
 
-    def _selectFileToLoad(self, file_path: Path) -> Path | None:
-        """Determine whether to load original file or backup"""
 
-        backup_list = self.file_manager.get_backup_list(file_path)
-        if not backup_list:
-            return file_path
-
-        last_backup = backup_list[-1]
-        if last_backup.stat().st_mtime > file_path.stat().st_mtime:
-            return self._promptLoadAutosaved(backup_list) or file_path
-
-        return file_path
-
-    def _promptLoadAutosaved(self, backup_files: list[Path]) -> Path | None:
-        """Prompt the user to select which backup file to open"""
-
-        if not backup_files:
-            return None
-
-        # If only one backup file, use simple yes/no dialog
-        if len(backup_files) == 1:
-            return self._promptSingleBackup(backup_files[0])
-
-        return self._promptMultipleBackups(backup_files)
-
-    def _promptSingleBackup(self, backup_file: Path) -> Path | None:
-        """Prompt user to load a single backup file"""
-
-        msg_box = QMessageBox(
-            QMessageBox.Icon.Question,
-            app_strings.TR_AUTOSAVE_BACKUPS,
-            f"{self.tr('The autosaved file has more recent changes.')}\n\n"
-            f"{self.tr('Load autosaved file?')}",
-            parent=self,
-        )
-
-        yes_button = msg_box.addButton(
-            app_strings.TR_YES, QMessageBox.ButtonRole.YesRole
-        )
-        msg_box.addButton(app_strings.TR_NO, QMessageBox.ButtonRole.NoRole)
-        msg_box.setDefaultButton(yes_button)
-
-        msg_box.exec()
-
-        return backup_file if msg_box.clickedButton() == yes_button else None
-
-    def _promptMultipleBackups(self, backup_files: list[Path]) -> Path | None:
-        # Multiple backup files - show selection dialog
-        from datetime import datetime
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle(app_strings.TR_AUTOSAVE_BACKUPS)
-        dialog.setMinimumWidth(400)
-
-        layout = QVBoxLayout(dialog)
-
-        message = (
-            f"{self.tr('Multiple autosaved files found.')}\n\n"
-            f"{self.tr('Select one to load:')}"
-        )
-        layout.addWidget(QLabel(message))
-
-        list_widget = QListWidget()
-        for backup_file in backup_files:
-            # Show filename and modification time
-            mod_time = datetime.fromtimestamp(backup_file.stat().st_mtime)
-            item_text = mod_time.strftime("%Y-%m-%d   -   %H:%M:%S")
-            list_widget.addItem(item_text)
-
-        list_widget.setCurrentRow(
-            len(backup_files) - 1
-        )  # Select most recent by default
-        list_widget.itemDoubleClicked.connect(dialog.accept)
-        layout.addWidget(list_widget)
-
-        button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        button_box.button(QDialogButtonBox.StandardButton.Ok).setText(app_strings.TR_OK)
-        button_box.button(QDialogButtonBox.StandardButton.Cancel).setText(
-            app_strings.TR_CANCEL
-        )
-        button_box.accepted.connect(dialog.accept)
-        button_box.rejected.connect(dialog.reject)
-        layout.addWidget(button_box)
-
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            selected_index = list_widget.currentRow()
-            return backup_files[selected_index] if selected_index >= 0 else None
-
-        return None
-
-    def onImportMedia(self):
-        media_filter = (
-            app_strings.TR_MEDIA_FILES
-            + f" ({' '.join(['*' + fmt for fmt in MEDIA_FORMATS])})"
-        )
-        media_filepath = self.getOpenFileDialog(
-            app_strings.TR_OPEN_MEDIA_FILE, media_filter
-        )
-        if media_filepath is None:
-            return
-
-        media_filepath = Path(media_filepath)
-        if media_filepath.exists():
-            self.openMediaFile(media_filepath)
-
-        # TODO: When saving, the folder and basename are not set
-
-    def onImportSubtitles(self):
-        subs_filter = f"Subtitles files ({' '.join(['*' + fmt for fmt in SUBTITLES_FILE_FORMATS])})"
-
-        file_path = self.getOpenFileDialog(self.tr("Open Subtitles File"), subs_filter)
-        if not file_path:
-            return
-
-        data = self.file_manager.read_srt_file(
-            file_path, find_media=not self.media_controller.hasMedia()
-        )
-        self.document_controller.loadData(data["document"])
-        self._last_saved_index = 0
-
-        # Load the media file if none is already loaded
-        if not self.media_controller.hasMedia():
-            media_filepath = data.get("media-path", None)
-            if media_filepath and os.path.exists(media_filepath):
-                # Use sibling media to the subtitles file
-                self.openMediaFile(Path(media_filepath))
-            else:
-                # Open a File Dialog to find the associated media file
-                media_filter = (
-                    app_strings.TR_MEDIA_FILES
-                    + f" ({' '.join(['*' + fmt for fmt in MEDIA_FORMATS])})"
-                )
-                media_filepath = self.getOpenFileDialog(
-                    app_strings.TR_OPEN_MEDIA_FILE, media_filter
-                )
-                if media_filepath is None:
-                    return
-
-                media_filepath = Path(media_filepath)
-                if media_filepath.exists():
-                    self.openMediaFile(media_filepath)
-
-    def addRecentFile(self, file_path: str):
+    def addRecentFile(self, file_path: Path) -> None:
         """Add a file to the recent files list"""
+        file_path = str(file_path)
         recent_files: list = app_settings.value("recent_files", [], type=list)
         if file_path in recent_files:
             recent_files.remove(file_path)
@@ -1473,6 +1240,7 @@ class MainWindow(QMainWindow):
 
         app_settings.setValue("recent_files", recent_files)
         self.updateRecentMenu()
+
 
     def updateRecentMenu(self):
         """Update the recent files submenu"""
@@ -1506,9 +1274,11 @@ class MainWindow(QMainWindow):
                 clear_action.triggered.connect(self.clearRecentFiles)
                 self.recent_menu.addAction(clear_action)
 
+
     def clearRecentFiles(self):
         app_settings.setValue("recent_files", [])
         self.updateRecentMenu()
+
 
     def openMediaFile(self, file_path: Path):
         """
@@ -1599,7 +1369,7 @@ class MainWindow(QMainWindow):
         self.status_media_duration_label.setText(duration_str)
         self.status_media_duration_label.setToolTip(self.tr("Media total duration"))
 
-        # ******** Update UI elements ********
+        # ---- Update UI elements
 
         if "fps" in media_metadata:
             # It is a video media file
@@ -1672,31 +1442,71 @@ class MainWindow(QMainWindow):
         self.transcription_led.setVisible(True)
         self.waveform.must_redraw = True
 
-    def onImportRTF(self):
-        from src.imports.rtf_importer import RTFImporter
 
-        RTFImporter(self, self.document_controller).importRTFDialog()
+    def onImportMedia(self) -> None:
+        media_filter = (
+            f"{app_strings.TR_MEDIA_FILES} ({' '.join(['*' + fmt for fmt in MEDIA_FORMATS])})"
+        )
+        media_filepath = self.file_prompts.openFileDialog(
+            app_strings.TR_OPEN_MEDIA_FILE, media_filter
+        )
+
+        if media_filepath and media_filepath.exists():
+            self.openMediaFile(media_filepath)
+
+        # TODO: When saving, the folder and basename are not set
+
+
+    def onImportSubtitles(self):
+        subs_filter = f"Subtitles files ({' '.join(['*' + fmt for fmt in SUBTITLES_FILE_FORMATS])})"
+
+        file_path = self.file_prompts.openFileDialog(
+            self.tr("Open Subtitles File"), subs_filter
+        )
+        if not file_path:
+            return
+
+        open_media = not self.media_controller.hasMedia()
+        file_data = self.file_manager.read_file(file_path, open_media, open_media)
+
+        self.document_controller.loadData(file_data["document"])
+        self._last_saved_index = 0
+
+        media_path = file_data["media-path"]
+        if media_path and media_path.exists():
+            self.openMediaFile(media_path)
+
+
+    def onImportRTF(self) -> None:
+        rtf_filter = "RTF files (*.rtf);;Text Files (*.txt);;All Files (*.*)"
+
+        file_path = self.file_prompts.openFileDialog(
+            self.tr("Select Input RTF File"), rtf_filter,
+        )
+        if not file_path:
+            return
+
+        file_data = self.file_manager.read_rtf_file(file_path)
+        logger.message(f"{len(file_data['document'])} lines imported")
+
+        self.document_controller.loadData(file_data["document"])
+
 
     def onExportSrt(self):
-        # exportSignals.message.connect(self.setStatusMessage)
-        export_to_text_format(
-            self, str(self.media_path), self.getUtterancesForExport(), "srt"
+        self.file_manager.export_to_text_format(
+            self.media_path, self.getUtterancesForExport(), "srt"
         )
-        # exportSignals.message.disconnect()
 
     def onExportEaf(self):
-        # exportSignals.message.connect(self.setStatusMessage)
-        export_to_text_format(
-            self, str(self.media_path), self.getUtterancesForExport(), "eaf"
+        self.file_manager.export_to_text_format(
+            self.media_path, self.getUtterancesForExport(), "eaf"
         )
-        # exportSignals.message.disconnect()
 
     def onExportTxt(self):
-        # exportSignals.message.connect(self.setStatusMessage)
-        export_to_text_format(
-            self, str(self.media_path), self.getUtterancesForExport(), "txt"
+        self.file_manager.export_to_text_format(
+            self.media_path, self.getUtterancesForExport(), "txt"
         )
-        # exportSignals.message.disconnect()
+
 
     def getUtterancesForExport(self) -> list[tuple[str, Segment]]:
         """Return all sentences and segments for export"""
@@ -1720,6 +1530,7 @@ class MainWindow(QMainWindow):
             block = block.next()
         return utterances
 
+
     def onExportAudioSegments(self):
         logger.debug("Export audio segments")
         if self.media_path is None:
@@ -1740,6 +1551,7 @@ class MainWindow(QMainWindow):
         segment_exporter.startAudioSegmentExtractor(
             self, self.media_path, selected_segments
         )
+
 
     def showParametersDialog(self, tab_idx: int = 0) -> None:
         """
@@ -1781,9 +1593,11 @@ class MainWindow(QMainWindow):
 
         self.changeLanguage(old_language)
 
+
     def showAboutDialog(self):
         about_dialog = AboutDialog(self)
         about_dialog.exec()
+
 
     def onTargetDensityChanged(self, cps: float) -> None:
         self.waveform.changeTargetDensity(cps)
@@ -2504,6 +2318,7 @@ class MainWindow(QMainWindow):
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:
+        logger.debug(f"dropEvent {event}")
         mime_data = event.mimeData()
 
         media_files: list[Path] = []
@@ -2513,7 +2328,7 @@ class MainWindow(QMainWindow):
             for url in mime_data.urls():
                 file_path = Path(url.toLocalFile())
                 ext = file_path.suffix.lower()
-                if ext == ".ali" or ext == ".srt":
+                if ext in DOCUMENT_FORMATS:
                     document_files.append(file_path)
                 elif ext in MEDIA_FORMATS:
                     media_files.append(file_path)
@@ -2522,7 +2337,7 @@ class MainWindow(QMainWindow):
 
             for file_path in document_files:
                 ext = file_path.suffix.lower()
-                if ext == ".ali":
+                if ext in (".ali", ".eaf"):
                     self.onOpenFile(file_path)
                     break  # Load only the first document file
                 elif ext == ".srt":

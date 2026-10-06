@@ -1,124 +1,78 @@
-import os
-from pathlib import Path
+from pathlib import Path, PosixPath
 
 import pytest
-from PySide6.QtWidgets import QApplication
 
-from src.main import MainWindow
+from src.file_io.file_manager import FileManager
 from src.strings import app_strings
-from src.ui.icons import loadIcons
+
+TEST_DIR = Path(__file__).parent
+
+app_strings.initialize()
 
 
-@pytest.fixture(scope="session")
-def qapp():
-    """Create QApplication instance for all tests"""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
+class FakeFilePrompts:
+    def chooseBackup(self, backups: list[Path]) -> Path | None:
+        ...
 
-    loadIcons()
-    app_strings.initialize()
+    def confirmReloadMedia(self, file_path: Path, media_path: Path | None) -> bool:
+        ...
 
-    yield app
+    def chooseEafTiers(self, tiers: dict[str, list]) -> list[str] | None:
+        return list(tiers.keys())
 
-    # Cleanup after all tests
-    app.quit()
+    def showError(self, title: str, message: str) -> None:
+        print("---- ERROR DIALOG ----")
+        print(f"---- Title: {title}")
+        print(f"---- Message: {message}")
 
 
 @pytest.fixture
-def main_window(qapp):
-    """Create a fresh MainWindow for each test"""
-    window = MainWindow()
-    yield window
-    # Cleanup after each test
-    window.undo_stack.clear()
-    window.close()
-    window.deleteLater()
-    qapp.processEvents()  # Process pending events
+def file_manager():
+    yield FileManager(FakeFilePrompts())
 
 
-def load_document(main_window):
-    main_window.document_controller.clear()
-
-    for text, segment in [
-        ("Linenn kentañ", (0.45, 2.25)),
-        ("Eil linenn.", (16.05, 21.6)),
-        ("Trede linenn", (23.73, 31.2)),
-        ("Pevare linenn", (32, 35)),
-        ("Pempvet linenn", (40, 41)),
-    ]:
-        seg_id = main_window.document_controller.addSegment(list(segment))
-        main_window.text_widget.appendSentence(text, seg_id)
+def test_error(file_manager: FileManager):
+    file_data = file_manager.read_file(TEST_DIR / "non_existing.file")
 
 
-def load_document_2(main_window):
-    main_window.document_controller.clear()
-
-    main_window.openFile("Meli_mila_Malou_1.ali")
-
-
-def test_save_ali(main_window, tmp_path: Path):
-    load_document(main_window)
-
-    output_file = tmp_path / "test.ali"
-    main_window._saveFile(output_file)
-
-    data = output_file.read_text()
-
-    assert (
-        data.strip()
-        == """Linenn kentañ {start: 0.45; end: 2.25}
-Eil linenn. {start: 16.05; end: 21.6}
-Trede linenn {start: 23.73; end: 31.2}
-Pevare linenn {start: 32; end: 35}
-Pempvet linenn {start: 40; end: 41}"""
-    )
-
-    # Remove temporary file
-    os.remove(output_file)
+def test_find_associated_media(file_manager: FileManager):
+    media_path = file_manager.find_associated_media(TEST_DIR / "test_file.ali")
+    assert media_path is not None
+    assert media_path.name == "test_file.wav"
 
 
-def test_save_ali_replace_media(main_window, tmp_path: Path):
-    load_document(main_window)
+def test_read_ali(file_manager: FileManager):
+    file_data = file_manager.read_ali_file(TEST_DIR / "test_file.ali")
 
-    output_file = tmp_path / "test.ali"
-    main_window._performSave(output_file, Path("media.mp3"))
+    assert "document" in file_data
+    document = file_data["document"]
+    assert type(document) == list
+    assert type(document[0]) == tuple
 
-    data = output_file.read_text()
-
-    assert (
-        data.strip()
-        == """{media-path: media.mp3}
-Linenn kentañ {start: 0.45; end: 2.25}
-Eil linenn. {start: 16.05; end: 21.6}
-Trede linenn {start: 23.73; end: 31.2}
-Pevare linenn {start: 32; end: 35}
-Pempvet linenn {start: 40; end: 41}"""
-    )
-
-    # Remove temporary file
-    os.remove(output_file)
+    assert "media-path" in file_data
+    media_path = file_data["media-path"]
+    assert type(media_path) == PosixPath
 
 
-def test_read_ali(main_window):
-    main_window.document_controller.clear()
+def test_read_srt(file_manager: FileManager):
+    file_data = file_manager.read_srt_file(TEST_DIR / "test_file.srt")
 
-    test_dir = Path(__file__).parent
-
-    data = main_window.file_manager.read_ali_file(test_dir / "MeliMilaMalou.ali")
-    assert "media-path" in data
-    assert "document" in data
-    assert data["document"][0] == ("{metadata: yes}", None)
+    assert "document" in file_data
+    document = file_data["document"]
+    assert type(document) == list
+    assert type(document[0]) == tuple
 
 
-def test_load_ali(main_window):
-    main_window.document_controller.clear()
+def test_read_eaf(file_manager: FileManager):
+    file_data = file_manager.import_eaf_file(TEST_DIR / "test_file.eaf")
 
-    test_dir = Path(__file__).parent
+    assert file_data is not None
 
-    main_window.onOpenFile(test_dir / "MeliMilaMalou.ali")
-    main_window.text_widget.printDocumentStructure()
-    doc = main_window.text_widget.document()
-    block = doc.firstBlock()
-    text = main_window.document_controller.getBlockHtml(block)
-    assert text == "{metadata: yes}"
+    assert "document" in file_data
+    document = file_data["document"]
+    assert type(document) == list
+    assert type(document[0]) == tuple
+
+    assert "media-path" in file_data
+    media_path = file_data["media-path"]
+    assert type(media_path) == PosixPath

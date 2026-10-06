@@ -72,7 +72,7 @@ def load_document(main_window):
 def load_document_2(main_window):
     main_window.document_controller.clear()
 
-    main_window.onOpenFile(Path("tests/MeliMilaMalou.ali"))
+    main_window.onOpenFile(Path("tests/test_file.ali"))
 
 
 def undo_redo_command(main_window, command: QUndoCommand, random_cursor=False):

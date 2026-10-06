@@ -56,7 +56,7 @@ class DocumentController(QObject):
 
         self.media_path: Path | None = None  # Path to media
         self.document_path: Path | None = None  # Path to text document file
-        self.segments: Dict[SegmentId, Segment] = dict()
+        self.segments: dict[SegmentId, Segment] = {}
         self._sorted_segments = []
 
         self.text_widget: TextEditorInterface | None = None
@@ -104,12 +104,13 @@ class DocumentController(QObject):
     def setMediaPath(self, media_path: Path | None) -> None:
         self.media_path = media_path
 
+
     def setDocumentPath(self, file_path: Path | None) -> None:
         self.document_path = file_path
 
-    def loadData(self, data: List[Tuple[str, Segment | None]]) -> None:
-        """
-        Load a document into the text widget and waveform widget.
+
+    def loadData(self, data: list[tuple[str, Segment | None]]) -> None:
+        """Load a document into the text widget and waveform widget.
 
         Args:
             data (list): List of document blocks (text, Segment)
@@ -130,7 +131,8 @@ class DocumentController(QObject):
         self.text_widget.updateLineNumberBarWidth()
         self.text_widget.updateLineNumberBar()
 
-    def getData(self) -> List[Tuple[str, Segment | None]]:
+
+    def getData(self) -> list[tuple[str, Segment | None]]:
         assert self.text_widget is not None
 
         data = []

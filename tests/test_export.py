@@ -1,13 +1,10 @@
+from pathlib import Path
+
 import pytest
 
-from exports.textual_exporter import (
-    clean_subtitle_text,
-    format_eaf,
-    format_srt,
-    format_txt,
-)
-
-# --- FIXTURES ---
+from src.file_io.eaf import format_eaf
+from src.file_io.file_manager import format_txt
+from src.file_io.srt import clean_subtitle_text, format_srt
 
 
 @pytest.fixture
@@ -70,7 +67,7 @@ def test_format_eaf(sample_utterances):
 
     # Let's patch the bug in the module dynamically or catch the error to prove logic flow
     try:
-        result = format_eaf(sample_utterances, "test.wav")
+        result = format_eaf(sample_utterances, Path("test.wav"))
     except AttributeError:
         pytest.fail(
             "Source code bug detected: 'tuple' object has no attribute 'append'. "

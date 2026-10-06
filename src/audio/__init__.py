@@ -13,7 +13,7 @@ def stream_audio_file(
     # Configure ffmpeg to output raw audio in the format we need
     ffmpeg_cmd = [
         'ffmpeg',
-        '-i', input_file,
+        '-i', str(input_file),
         '-ar', str(sample_rate),  # 16kHz sample rate
         '-ac', '1',      # Mono
         '-f', 's16le',   # 16-bit signed little-endian PCM

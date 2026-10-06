@@ -32,7 +32,7 @@ from src.services.logger import logger
 from src.services.media_player_controller import MediaPlayerController
 from src.services.task import TaskQueue, TaskWorker
 from src.transcriber import TranscriptionService, VoskFileTranscriptionWorker
-from src.ui.progess_dialog import ProgressDialog
+from src.ui.dialogs import ProgressDialog
 from src.utils import PUNCTUATION, filter_out_chars
 
 SPLIT_TOKEN = "|"

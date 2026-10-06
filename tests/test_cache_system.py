@@ -6,7 +6,7 @@ test_dir = Path(__file__).parent
 
 
 def test_cache_system():
-    media_path = test_dir / "MeliMilaMalou.wav"
+    media_path = test_dir / "test_file.wav"
     media_metadata = cache.get_media_metadata(media_path)
     print(media_metadata)
 
@@ -19,7 +19,7 @@ def test_cache_system():
     assert "last_access" in media_metadata
     assert "fingerprint" in media_metadata
 
-    doc_path = test_dir / "MeliMilaMalou.ali"
+    doc_path = test_dir / "test_file.ali"
     doc_metadata = cache.get_doc_metadata(doc_path)
     print(doc_metadata)
 
@@ -34,13 +34,13 @@ def test_cache_system():
 
 
 def test_cache_transcription():
-    media_path = test_dir / "MeliMilaMalou.wav"
+    media_path = test_dir / "test_file.wav"
     backup_transcription = cache.get_media_transcription(media_path)
     if backup_transcription is None:
         backup_transcription = []
     else:
         backup_transcription = backup_transcription.copy()
-    
+
     cache.set_media_transcription(media_path, [])
 
     transcription = cache.get_media_transcription(media_path)
@@ -51,5 +51,5 @@ def test_cache_transcription():
 
 
 def test_cache_waveform():
-    media_path = test_dir / "MeliMilaMalou.wav"
+    media_path = test_dir / "test_file.wav"
     waveform = cache.get_waveform(media_path)
