@@ -49,6 +49,7 @@ BUTTON_SPACING = 4  # in pixels
 BUTTON_MARGIN = 8  # in pixels
 BUTTON_LABEL_SIZE = 16  # in pixels
 DIAL_SIZE = 30  # in pixels
+DIALOG_CONTENT_MARGIN = 16
 USE_SCROLL_SMOOTHING = not is_darwin    # mac trackpads already have hardware smoothing
 
 # FFMPEG settings

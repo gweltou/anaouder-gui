@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from src.settings import DIALOG_CONTENT_MARGIN
+
 
 class ProgressDialog(QDialog):
     """Modal loading dialog with cancel button"""
@@ -26,27 +28,29 @@ class ProgressDialog(QDialog):
         self.setFixedSize(400, 120)
 
         # Setup UI
-        layout = QVBoxLayout()
+        main_layout = QVBoxLayout()
+        m = DIALOG_CONTENT_MARGIN
+        main_layout.setContentsMargins(m, m, m, m)
 
         # Message label
         self.label = QLabel()
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.label)
+        main_layout.addWidget(self.label)
 
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        layout.addWidget(self.progress_bar)
+        main_layout.addWidget(self.progress_bar)
 
         # Cancel button
         self.cancel_btn = QPushButton(self.tr("Cancel"))
         self.cancel_btn.setFixedWidth(100)
         self.cancel_btn.clicked.connect(self.onCancel)
-        layout.addWidget(self.cancel_btn)
+        main_layout.addWidget(self.cancel_btn)
 
-        layout.addStretch()
-        self.setLayout(layout)
+        main_layout.addStretch()
+        self.setLayout(main_layout)
 
 
     def setValue(self, value: int) -> None:

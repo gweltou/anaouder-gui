@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, Qt
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -17,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.interfaces import MainWindowInterface
-from src.settings import app_settings
+from src.settings import DIALOG_CONTENT_MARGIN, app_settings
 from src.strings import app_strings
 from src.ui.icons import icons
 from src.utils import (
@@ -35,38 +37,38 @@ class ImportDialogEAF(QDialog):
 
         self.setWindowTitle(self.tr("Choose EAF tiers to import"))
         self.setMinimumSize(500, 300)
-        self.initUI()
+        self._init_ui()
 
-    def initUI(self) -> None:
+
+    def _init_ui(self) -> None:
         main_layout = QVBoxLayout(self)
+        m = DIALOG_CONTENT_MARGIN
+        main_layout.setContentsMargins(m, m, m, m)
 
-        center_layout = QHBoxLayout()
-        main_layout.addLayout(center_layout)
-        # main_layout.setContentsMargins(8, 8, 8, 8)
+        tiers_group = QGroupBox(self.tr("Tiers"))
+        main_layout.addWidget(tiers_group, 1)
 
-        checkbox_group = QGroupBox(self.tr("Tiers"))
-        checkbox_layout = QVBoxLayout(checkbox_group)
-        checkbox_layout.setContentsMargins(15, 15, 15, 15)
+        inside_layout = QHBoxLayout(tiers_group)
+        inside_layout.setContentsMargins(0, 0, 0, 0)
+
+        checkbox_layout = QVBoxLayout()
+        checkbox_layout.setContentsMargins(12, 12, 12, 12)
 
         for name in sorted(self.tiers):
             checkbox = QCheckBox(name, self)
             checkbox.installEventFilter(self)    # receive its Enter/Leave events
             self.checkboxes.append(checkbox)
-            checkbox_layout.addWidget(checkbox)
+            checkbox_layout.addWidget(checkbox, 1)
 
         checkbox_layout.addStretch()
 
-        center_layout.addWidget(checkbox_group)
-
-        # text_group = QGroupBox(self.tr("Content"))
-        # text_layout = Q
+        inside_layout.addLayout(checkbox_layout)
 
         self.text_sample = QLabel()
         self.text_sample.setStyleSheet("""
             QLabel {
                 background-color: #cccccc;
-                margin-top: 16px;
-                padding: 4px;
+                padding: 6px;
             }
         """)
         self.text_sample.setWordWrap(True)
@@ -74,7 +76,7 @@ class ImportDialogEAF(QDialog):
         self.text_sample.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
         )
-        center_layout.addWidget(self.text_sample, 1)
+        inside_layout.addWidget(self.text_sample, 1)
 
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -123,6 +125,8 @@ class ExportDialog(QDialog):
 
     def _init_ui(self, default_path: Path | None):
         main_layout = QVBoxLayout(self)
+        m = DIALOG_CONTENT_MARGIN
+        main_layout.setContentsMargins(m, m, m, m)
 
         # File selection
         file_group = QGroupBox(self.tr("Output File"))
@@ -215,7 +219,7 @@ class FilePrompts:
             keep_dir (bool): If true, remember the current folder for next time
         """
         if root_dir is None:
-            root_dir = app_settings.value("last_opened_folder", "", type=str)
+            root_dir = Path(app_settings.value("last_opened_folder", "", type=str))
 
         file_path, _ = QFileDialog.getOpenFileName(
             self.main_window,
@@ -345,13 +349,15 @@ class FilePrompts:
         dialog.setWindowTitle(app_strings.TR_AUTOSAVE_BACKUPS)
         dialog.setMinimumWidth(400)
 
-        layout = QVBoxLayout(dialog)
+        main_layout = QVBoxLayout(dialog)
+        m = DIALOG_CONTENT_MARGIN
+        main_layout.setContentsMargins(m, m, m, m)
 
         message = (
             f"{self.main_window.tr('Multiple autosaved files found.')}\n\n"
             f"{self.main_window.tr('Select one to load:')}"
         )
-        layout.addWidget(QLabel(message))
+        main_layout.addWidget(QLabel(message))
 
         list_widget = QListWidget()
         for backup_file in backup_files:
@@ -361,7 +367,7 @@ class FilePrompts:
 
         list_widget.setCurrentRow(len(backup_files) - 1)  # most recent by default
         list_widget.itemDoubleClicked.connect(dialog.accept)
-        layout.addWidget(list_widget)
+        main_layout.addWidget(list_widget)
 
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -372,7 +378,7 @@ class FilePrompts:
         )
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
-        layout.addWidget(button_box)
+        main_layout.addWidget(button_box)
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_index = list_widget.currentRow()

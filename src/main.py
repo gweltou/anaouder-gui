@@ -1178,7 +1178,7 @@ class MainWindow(QMainWindow):
             self.document_controller.loadData(file_data["document"])
 
         # Load media file, if any
-        if "media-path" in file_data:
+        if "media-path" in file_data and file_data["media-path"] is not None:
             self.openMediaFile(file_data["media-path"])
 
         # Resume state if previously opened
