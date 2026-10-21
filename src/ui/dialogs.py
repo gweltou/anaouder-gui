@@ -1,14 +1,16 @@
-
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
 )
 
+from src.interfaces import MainWindowInterface
 from src.settings import DIALOG_CONTENT_MARGIN
+from src.strings import app_strings
 
 
 class ProgressDialog(QDialog):
@@ -65,3 +67,36 @@ class ProgressDialog(QDialog):
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.setText(self.tr("Cancelling") + '…')
         self.cancelled.emit()
+
+
+class Prompts:
+
+    def __init__(self, main_window: MainWindowInterface):
+        self.main_window = main_window
+
+
+    def askYesNoCancel(self, title: str, message: str) -> int:
+        dialog = QMessageBox(self.main_window)
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setWindowTitle(title)
+        dialog.setText(message)
+
+        yes_btn = dialog.addButton(
+            app_strings.TR_YES, QMessageBox.ButtonRole.YesRole
+        )
+        dialog.addButton(
+            app_strings.TR_NO, QMessageBox.ButtonRole.NoRole
+        )
+        dialog.addButton(
+            app_strings.TR_CANCEL, QMessageBox.ButtonRole.RejectRole
+        )
+        dialog.setDefaultButton(yes_btn)
+
+        return dialog.exec()
+
+        # if dialog.clickedButton() == yes_btn:
+        #     return QMessageBox.StandardButton.Yes
+        # elif dialog.clickedButton() == no_btn:
+        #     return
+        # elif dialog.clickedButton() == cancel_btn:
+        #     return

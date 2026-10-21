@@ -120,6 +120,7 @@ class MediaPlayerController(QObject):
         self.media_metadata = cache.get_media_metadata(file_path)
         return True
 
+
     def unloadMedia(self) -> None:
         """Unload current media and reset state"""
         logger.debug("Unloading media")
@@ -128,6 +129,7 @@ class MediaPlayerController(QObject):
         self.media_path = None
         self.media_duration = 0.0
         self.state.reset()
+
 
     def play(self) -> bool:
         """
@@ -214,8 +216,10 @@ class MediaPlayerController(QObject):
         self.state.playing_segment_id = -1
         return self.playSegment(selection)
 
+
     def deselectSegment(self) -> None:
         self.state.playing_segment_id = -1
+
 
     def seekTo(self, position_sec: float) -> None:
         """

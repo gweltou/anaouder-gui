@@ -56,6 +56,7 @@ class ActionManager(QObject):
     open_requested = Signal()
     save_requested = Signal()
     save_as_requested = Signal()
+    close_file_requested = Signal()
     close_application_requested = Signal()
 
     import_media_requested = Signal()
@@ -104,6 +105,7 @@ class ActionManager(QObject):
         super().__init__(parent)
         self._create_actions()
 
+
     def _create_actions(self):
         # File menu actions
         self.open_file = QAction(self.tr("&Open") + "...", self)
@@ -117,6 +119,10 @@ class ActionManager(QObject):
         self.save_as = QAction(self.tr("Save as") + "...", self)
         self.save_as.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.save_as.triggered.connect(self.save_as_requested.emit)
+
+        self.close_file = QAction(self.tr("Close file"))
+        self.close_file.setShortcut(QKeySequence.StandardKey.Close)
+        self.close_file.triggered.connect(self.close_file_requested)
 
         # Standard practice for macOS
         exit_text = (

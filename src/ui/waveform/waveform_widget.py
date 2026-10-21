@@ -17,15 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import numpy as np
-from PySide6.QtCore import (
-    QPoint,
-    QPointF,
-    QRect,
-    Qt,
-    QTimer,
-    Signal,
-    QEvent
-)
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
     QBrush,
@@ -35,13 +27,13 @@ from PySide6.QtGui import (
     QKeyEvent,
     QKeySequence,
     QMouseEvent,
+    QNativeGestureEvent,
     QPainter,
     QPaintEvent,
     QPixmap,
     QResizeEvent,
     QShortcut,
     QWheelEvent,
-    QNativeGestureEvent
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
@@ -49,7 +41,7 @@ from src.actions import ActionManager
 from src.commands import ResizeSegmentCommand
 from src.interfaces import DocumentInterface, Segment, SegmentId
 from src.services.logger import logger
-from src.settings import shortcuts, USE_SCROLL_SMOOTHING
+from src.settings import USE_SCROLL_SMOOTHING, shortcuts
 from src.ui.theme import theme
 from src.ui.waveform.data import (
     Handle,
@@ -70,7 +62,6 @@ from src.ui.waveform.rendering import (
     TimelineLayer,
     WaveformLayer,
 )
-
 
 ZOOM_MIN = 0.2  # In pixels per second
 ZOOM_MAX = 800  # In pixels per second
@@ -201,22 +192,27 @@ class WaveformWidget(QWidget):
 
         self.must_redraw = True
 
+
     def updateThemeColors(self):
         print("waveform_widget updateThemeColors")
         self._pens = PenSet.from_theme(theme)
         self.must_redraw = True
+
 
     def setSamples(self, samples: np.ndarray, sr: int) -> None:
         self._waveform_data.setSamples(samples, sr)
         self._waveform_data.ppsec = self.view.ppsec
         self.audio_len = len(samples) / sr
 
+
     def getSelection(self) -> Segment | None:
         return self._selection
+
 
     def newUtteranceFromSelection(self):
         if self.selection_is_active:
             self.new_utterance_from_selection.emit()
+
 
     def setActive(self, seg_ids: list[SegmentId] | None, is_playing=False) -> None:
         """Select the given segment(s) and adjust view in the waveform.
@@ -322,10 +318,12 @@ class WaveformWidget(QWidget):
         #     self.t_left = t
         self.must_redraw = True
 
+
     def setRecognizerProgress(self, time_s: float) -> None:
         self.recognizer_progress = time_s
         if time_s > self.view.t_left and time_s < self.getTimeRight():
             self.must_redraw = True
+
 
     def removeSelection(self) -> None:
         logger.debug("removeSelection()")
@@ -333,9 +331,11 @@ class WaveformWidget(QWidget):
         self._selection = None
         self.must_redraw = True
 
+
     def getTimeRight(self) -> float:
         """Return the timecode at the right border of the window"""
         return self.view.t_left + self.width() / self.view.ppsec
+
 
     def _update(self) -> None:
         # Zooming
@@ -349,6 +349,7 @@ class WaveformWidget(QWidget):
         if self.must_redraw:
             self.draw()
             self.must_redraw = False
+
 
     def _updateScroll(self):
         if self.view.scroll_goal >= 0.0:
@@ -374,9 +375,9 @@ class WaveformWidget(QWidget):
         else:
             self.must_redraw = True
 
-    def _check_for_out_of_view(self) -> None:
-        """Prevent waveform view to be out of bounds."""
 
+    def _check_for_out_of_view(self) -> None:
+        """Prevent waveform view to be out of bounds"""
         if self.getTimeRight() >= self.audio_len:
             self.view.t_left = self.audio_len - self.width() / self.view.ppsec
             self.view.scroll_vel = 0.0
@@ -387,6 +388,7 @@ class WaveformWidget(QWidget):
             self.view.scroll_vel = 0.0
             self.must_redraw = True
 
+
     def paintEvent(self, event: QPaintEvent) -> None:
         """
         Override method from QWidget.
@@ -394,6 +396,7 @@ class WaveformWidget(QWidget):
         """
         p = QPainter(self)
         p.drawPixmap(0, 0, self._pixmap)
+
 
     def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
@@ -408,15 +411,18 @@ class WaveformWidget(QWidget):
         # Redraw immediatly
         self.draw()
 
+
     def enterEvent(self, event: QEnterEvent):
         self.setFocus()
         super().enterEvent(event)
+
 
     def _dev_getSelectedId(self) -> SegmentId | None:
         """Return the currently selected segment, or None"""
         if self.active_segment_id >= 0:
             return self.active_segment_id
         return None
+
 
     def getSegmentAtPixelPosition(
         self, position: QPointF, vertical=True
