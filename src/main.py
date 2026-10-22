@@ -83,8 +83,6 @@ from src.services.aligner import TextAligner
 from src.services.logger import logger
 from src.services.media_player_controller import MediaPlayerController
 from src.services.scene_detector import SceneDetectWorker
-if FUTURE:
-    from src.services.segment_exporter import segment_exporter
 from src.settings import (
     APP_NAME,
     AUTOSAVE_BACKUP_NUMBER,
@@ -109,6 +107,8 @@ from src.settings import (
     app_settings,
     shortcuts,
 )
+if FUTURE:
+    from src.services.segment_exporter import segment_exporter
 from src.splitter import CustomSplitter
 from src.strings import app_strings
 from src.transcriber import TranscriptionService
