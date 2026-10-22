@@ -69,6 +69,7 @@ class DocumentController(QObject):
         self.memoized_segment = None  # Memoized transcription for one segment
         self.memoized_transcription_tokens = []
 
+
     def clear(self) -> None:
         """Clears the document"""
         # self.media_path = None
@@ -88,6 +89,7 @@ class DocumentController(QObject):
 
         self.undo_stack.clear()
 
+
     def setTextWidget(self, text_widget: TextEditorInterface) -> None:
         self.text_widget = text_widget
         self.text_widget.join_utterances.connect(self.joinUtterances)
@@ -95,11 +97,13 @@ class DocumentController(QObject):
         self.text_widget.split_utterance.connect(self.splitUtteranceAtCharPos)
         # self.text_widget.request_auto_align.connect(self.autoAlignSelectedBlocks)
 
+
     def setWaveformWidget(self, waveform_widget: WaveformWidget) -> None:
         self.waveform_widget = waveform_widget
         self.waveform_widget.join_utterances.connect(self.joinUtterances)
         self.waveform_widget.delete_utterances.connect(self.deleteUtterances)
         self.waveform_widget.delete_segments.connect(self.deleteSegments)
+
 
     def setMediaPath(self, media_path: Path | None) -> None:
         self.media_path = media_path

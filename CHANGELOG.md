@@ -6,7 +6,7 @@
 * Better waveform (looks and optimization)
 * Progress bar in block number's column (left of text)
 * Progress dialog with sequential tasks (as in transcribe -+> auto align)
-* Application terminal logger
+* "Close file" command
 * Fixed and optimized auto-segment algorithm
 * Fixed auto-align command on Windows
 * Set "preferences" shortcut to standard "ctrl+,"
@@ -15,6 +15,7 @@
 * Length of longest line in segment displayed in status bar
 * Fixed text formatting at wrong character offset
 * File manager refactoring
+* Global terminal logger
 
 ## [1.1] 2026-05-01
 

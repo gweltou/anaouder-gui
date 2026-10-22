@@ -21,7 +21,6 @@ import platform
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QKeySequence
 
-
 is_darwin = platform.system() == "Darwin"
 
 

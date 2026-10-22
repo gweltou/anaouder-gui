@@ -107,6 +107,7 @@ class ImportDialogEAF(QDialog):
 
 
 class ExportDialog(QDialog):
+
     def __init__(
         self,
         parent: QWidget | None,

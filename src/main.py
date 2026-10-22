@@ -83,7 +83,8 @@ from src.services.aligner import TextAligner
 from src.services.logger import logger
 from src.services.media_player_controller import MediaPlayerController
 from src.services.scene_detector import SceneDetectWorker
-from src.services.segment_exporter import segment_exporter
+if FUTURE:
+    from src.services.segment_exporter import segment_exporter
 from src.settings import (
     APP_NAME,
     AUTOSAVE_BACKUP_NUMBER,
@@ -348,7 +349,8 @@ class MainWindow(QMainWindow):
         self.action.export_srt_requested.connect(self.onExportSrt)
         self.action.export_txt_requested.connect(self.onExportTxt)
         self.action.export_eaf_requested.connect(self.onExportEaf)
-        self.action.export_audio_segments_resquested.connect(self.onExportAudioSegments)
+        if FUTURE:
+            self.action.export_audio_segments_resquested.connect(self.onExportAudioSegments)
         self.action.close_application_requested.connect(self.close)
 
         # Display menu
@@ -1196,7 +1198,7 @@ class MainWindow(QMainWindow):
             self.openMediaFile(file_data["media-path"])
 
         # Resume state if previously opened
-        self._loadDocumentState(file_path)
+        self._load_document_state(file_path)
 
         self.addRecentFile(file_path)
 
@@ -1205,7 +1207,8 @@ class MainWindow(QMainWindow):
 
 
     def askCloseFile(self) -> bool:
-        """
+        """Ask the user if the file should be saved before closing it.
+
         Returns:
             False if the action was canceled by the user
         """
@@ -1230,19 +1233,7 @@ class MainWindow(QMainWindow):
 
         # Save document state to cache
         if self.file_path and self.file_path.suffix == ".ali":
-            doc_metadata = {
-                "cursor_pos": self.text_widget.textCursor().position(),
-                "playhead_pos": self.media_controller.getCurrentPosition(),
-                "waveform_pos": self.waveform.view.t_left,
-                "waveform_pps": self.waveform.view.ppsec,
-                "show_scenes": self.scene_detect_action.isChecked(),
-                "show_margin": self.toggle_margin_action.isChecked(),
-                "video_open": self.toggle_video_action.isChecked(),
-                "show_misspelling": self.toggle_misspelling_action.isChecked(),
-                "coloring_mode": self.text_widget.highlighter.getMode().value,
-            }
-            print(f"{doc_metadata=}")
-            cache.update_doc_metadata(self.file_path, doc_metadata)
+            self._save_document_state(self.file_path)
 
         # Save media cache
         if self.media_path:
@@ -1260,7 +1251,24 @@ class MainWindow(QMainWindow):
         return True
 
 
-    def _loadDocumentState(self, file_path: Path) -> None:
+    def _save_document_state(self, file_path: Path):
+        """Save document state/metadata to cache."""
+        doc_metadata = {
+            "cursor_pos": self.text_widget.textCursor().position(),
+            "playhead_pos": self.media_controller.getCurrentPosition(),
+            "waveform_pos": self.waveform.view.t_left,
+            "waveform_pps": self.waveform.view.ppsec,
+            "show_scenes": self.scene_detect_action.isChecked(),
+            "show_margin": self.toggle_margin_action.isChecked(),
+            "video_open": self.toggle_video_action.isChecked(),
+            "show_misspelling": self.toggle_misspelling_action.isChecked(),
+            "coloring_mode": self.text_widget.highlighter.getMode().value,
+        }
+        print(f"{doc_metadata=}")
+        cache.update_doc_metadata(file_path, doc_metadata)
+
+
+    def _load_document_state(self, file_path: Path) -> None:
         doc_metadata = cache.get_doc_metadata(file_path)
         logger.debug(f"{doc_metadata=}")
 
