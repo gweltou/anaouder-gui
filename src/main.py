@@ -1,3 +1,4 @@
+#! /usr/bin/python3
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
 Copyright (C) 2025-2026 Gweltaz Duval-Guennoc (gwel@ik.me)
@@ -140,6 +141,12 @@ def getActionTooltip(action: QAction) -> str:
     return f"{action.text()} <{action.shortcut().toString()}>"
 
 
+def crash_exception():
+    logger.warning("Simulated crash")
+    import os
+    os._exit(1)
+
+
 ###############################################################################
 ####                                                                       ####
 ####                             MAIN WINDOW                               ####
@@ -169,18 +176,37 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.document_controller.selectAll)
 
+        shortcut = QShortcut(QKeySequence("Ctrl+Shift+F12"), self)
+        shortcut.activated.connect(crash_exception)
+
+        # Load model list for given language
+        self.changeLanguage(DEFAULT_LANGUAGE)
+
+        # Should we try to rescue the last opened file ?
+        safely_closed = app_settings.value("safely_closed", True, bool)
+        app_settings.setValue("safely_closed", False) # Reset state
+
+        if not safely_closed:
+            logger.warning("The application was not safely closed.")
+
+            last_file = app_settings.value("last_opened_file", "", str)
+            if last_file:
+                print(f"trying to rescue {last_file}")
+                # Open a dialog to ask if we should rescue the last opened file
+                if True:
+                    self.onOpenFile(Path(last_file))
+                    return
+
         if args is not None:
             if args.filename is not None:
                 self.onOpenFile(args.filename)
             elif args.last:
                 # Load last opened file
-                recent_files: list = app_settings.value("recent_files", [], type=list)
-                if recent_files:
-                    self.onOpenFile(Path(recent_files[0]))
+                last_file = app_settings.value("last_opened_file", "", str)
+                if last_file:
+                    self.onOpenFile(Path(last_file))
                 else:
                     logger.error("No recent file to load...")
-
-        self.changeLanguage(DEFAULT_LANGUAGE)
 
 
     def updateThemeColors(self) -> None:
@@ -448,6 +474,7 @@ class MainWindow(QMainWindow):
         logger.message_requested.connect(self.setStatusMessage)
         logger.error_message_requested.connect(self.setErrorMessage)
 
+
     def _restore_settings(self) -> None:
         # Restore window geometry and state
         geometry = app_settings.value("main_window/geometry")
@@ -510,6 +537,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.action.open_file)
         ## Recent files
         self.recent_menu = file_menu.addMenu(self.tr("Open &recent"))
+        ## Close file
         file_menu.addAction(self.action.close_file)
         file_menu.addSeparator()
         # -------------------------
@@ -1105,11 +1133,13 @@ class MainWindow(QMainWindow):
 
 
     def auto_save(self):
-        current_index = self.undo_stack.index()
         if self.file_path is None:
             return
+
+        current_index = self.undo_stack.index()
         if current_index == self._last_saved_index:
             return
+
         if self.media_controller.isPlaying():  # Don't save during playback
             return
 
@@ -1166,6 +1196,7 @@ class MainWindow(QMainWindow):
 
             if file_path is None:
                 return
+        file_path = Path(file_path)
 
         self._last_saved_index = 0
         self._last_saved_time = 0.0
@@ -1177,20 +1208,22 @@ class MainWindow(QMainWindow):
             self.timecode_widget.setFps(100)
 
         self.file_path = file_path
-        self.document_controller.setDocumentPath(file_path)
+        app_settings.setValue("last_opened_file", str(file_path))
 
         ext = file_path.suffix.lower()
 
         if ext in MEDIA_FORMATS:
-            # Video or audio file only
+            # The file is a video or an audio
             self.openMediaFile(file_path)
             self.updateWindowTitle()
             return
 
+        # The file is a document
         file_data = self.file_manager.read_file(file_path)
 
         # Load textual data
         if "document" in file_data:
+            self.document_controller.setDocumentPath(file_path)
             self.document_controller.loadData(file_data["document"])
 
         # Load media file, if any
@@ -1223,6 +1256,7 @@ class MainWindow(QMainWindow):
             if ret == 2:
                 # Save current file
                 if not self.onSaveFile():
+                    # Action cancelled by user
                     return False
             elif ret == 3:
                 # No
@@ -1544,12 +1578,13 @@ class MainWindow(QMainWindow):
         if not file_path:
             return
 
-        open_media = not self.media_controller.hasMedia()
-        file_data = self.file_manager.read_file(file_path, open_media, open_media)
+        should_open_media = not self.media_controller.hasMedia()
+        file_data = self.file_manager.read_file(file_path, should_open_media, should_open_media)
 
         self.document_controller.loadData(file_data["document"])
         self._last_saved_index = 0
 
+        # Optionaly opens media file
         media_path = file_data["media-path"]
         if media_path and media_path.exists():
             self.openMediaFile(media_path)
@@ -1568,6 +1603,7 @@ class MainWindow(QMainWindow):
         logger.message(f"{len(file_data['document'])} lines imported")
 
         self.document_controller.loadData(file_data["document"])
+        self._last_saved_index = 0
 
 
     def onExportSrt(self):
@@ -2473,10 +2509,6 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            # Save window geometry and state
-            app_settings.setValue("main_window/geometry", self.saveGeometry())
-            app_settings.setValue("main_window/window_state", self.saveState())
-
             # Stop and destroy the recognizer
             self.recognizer.stop()
             self.recognizer.cleanup()
@@ -2490,6 +2522,13 @@ class MainWindow(QMainWindow):
                 self.scene_detector.deleteLater()
 
             self.media_controller.cleanup()
+
+            # Save window geometry and state
+            app_settings.setValue("main_window/geometry", self.saveGeometry())
+            app_settings.setValue("main_window/window_state", self.saveState())
+
+            # Everything went well, it won't trigger a file rescue on next start
+            app_settings.setValue("safely_closed", True)
 
         except Exception as e:
             print(f"Error during closeEvent cleanup: {e}")
@@ -2690,13 +2729,23 @@ class TranslatedApp(QApplication):
 def main(argv: list):
     parser = argparse.ArgumentParser()
     parser.add_argument("filename", nargs="?", default=None, help="File to open", type=Path)
-    parser.add_argument("--last", action="store_true", help="Load last opened file")
+    parser.add_argument("-d", "--debug", action="store_true", help="Print debug informations to terminal")
+    parser.add_argument("-l", "--last", action="store_true", help="Load last opened file")
     args = parser.parse_args(argv[1:])
     print(args)
 
     app = TranslatedApp(argv)
     app.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
     app.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus, False)
+
+    # Display application global settings in debug mode
+    debug_lines = [
+        f"APPLICATION SETTINGS for {app_settings.applicationName()}",
+        f"Stored in {app_settings.fileName()}"
+    ]
+    for setting_key in app_settings.allKeys():
+        debug_lines.append(f"  - {setting_key}")
+    logger.debug('\n'.join(debug_lines))
 
     # Internationalization
     if locale := app_settings.value("ui_language", DEFAULT_LANGUAGE, type=str):

@@ -6,7 +6,7 @@
 * Better waveform (looks and optimization)
 * Progress bar in block number's column (left of text)
 * Progress dialog with sequential tasks (as in transcribe -+> auto align)
-* "Close file" command
+* "Close file" command in file menu
 * Fixed and optimized auto-segment algorithm
 * Fixed auto-align command on Windows
 * Set "preferences" shortcut to standard "ctrl+,"

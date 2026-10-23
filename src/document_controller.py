@@ -117,7 +117,8 @@ class DocumentController(QObject):
         """Load a document into the text widget and waveform widget.
 
         Args:
-            data (list): List of document blocks (text, Segment)
+            data (list):
+                List of document blocks (text, Segment)
         """
         # TODO: This function seems quite slow
 
@@ -398,9 +399,8 @@ class DocumentController(QObject):
 
     def getSegmentsAtTime(
         self, position_sec: float, onset=0.0, offset=0.0
-    ) -> List[SegmentId]:
+    ) -> list[SegmentId]:
         """Return the list of IDs of all segment at a given positiont"""
-        logger.debug(f"getSegmentAtTime({position_sec=})")
         segment_ids = []
         for segment_id, (start, end) in self.getSortedSegments():
             # Give precedence to the segment that starts at this timecode
@@ -412,8 +412,8 @@ class DocumentController(QObject):
         return segment_ids
 
     def getSegmentsAtTimeOffsets(
-        self, position_sec: float, offsets: Dict[SegmentId, Tuple]
-    ) -> List[SegmentId]:
+        self, position_sec: float, offsets: dict[SegmentId, tuple]
+    ) -> list[SegmentId]:
         """Return the list of IDs of all segment at a given position"""
         logger.debug(f"getSegmentAtTimeOffsets({position_sec=})")
         segment_ids = []

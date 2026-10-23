@@ -17,11 +17,11 @@ if hasattr(sys, '_MEIPASS'):
     if system_name == "Linux":
         ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "linux", "ffmpeg")
         ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "linux", "ffprobe")
-        
+
     elif system_name == "Windows":
         ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "win32", "ffmpeg.exe")
         ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "win32", "ffprobe.exe")
-        
+
     elif system_name == "Darwin":
         ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "darwin", "ffmpeg")
         ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "darwin", "ffprobe")
@@ -52,10 +52,8 @@ from src.main import main
 
 if __name__ == "__main__":
     argv = sys.argv
-    if "--debug" in argv:
+    if "--debug" in argv or "-d" in argv:
         logging.getLogger().setLevel(logging.DEBUG)
-        i = argv.index("--debug")
-        argv.pop(i)
 
     profiling = False
     if "--profile" in argv:
@@ -66,14 +64,14 @@ if __name__ == "__main__":
     if profiling:
         profiler = cProfile.Profile()
         profiler.enable()
-    
+
     ret = main(argv)
-    
+
     if profiling:
         profiler.disable()
 
         stats = pstats.Stats(profiler)
         stats.sort_stats(SortKey.CUMULATIVE)
         stats.print_stats(50)
-    
+
     sys.exit(ret)
