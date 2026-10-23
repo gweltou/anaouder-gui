@@ -16,6 +16,7 @@
 * Fixed text formatting at wrong character offset
 * File manager refactoring
 * Global terminal logger
+* Document auto-rescue
 
 ## [1.1] 2026-05-01
 
