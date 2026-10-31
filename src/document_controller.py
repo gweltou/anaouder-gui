@@ -16,9 +16,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from collections.abc import Iterator
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QTextBlock, QTextCursor, QUndoStack
@@ -59,6 +59,9 @@ class DocumentController(QObject):
         self.segments: dict[SegmentId, Segment] = {}
         self._sorted_segments = []
 
+        self.selected_segments: list = []
+        self.active_segment_id: SegmentId | None = None
+
         self.text_widget: TextEditorInterface | None = None
         self.waveform_widget: WaveformWidget | None = None
 
@@ -78,6 +81,9 @@ class DocumentController(QObject):
         self.id_counter = 0
         self.must_sort = True
 
+        self.selected_segments = []
+        self.active_segment_id = None
+
         if self.waveform_widget:
             self.waveform_widget.must_redraw = True
 
@@ -95,11 +101,13 @@ class DocumentController(QObject):
         self.text_widget.join_utterances.connect(self.joinUtterances)
         self.text_widget.delete_utterances.connect(self.deleteUtterances)
         self.text_widget.split_utterance.connect(self.splitUtteranceAtCharPos)
+        self.text_widget.cursor_changed_signal.connect(self.on_text_cursor_changed)
         # self.text_widget.request_auto_align.connect(self.autoAlignSelectedBlocks)
 
 
     def setWaveformWidget(self, waveform_widget: WaveformWidget) -> None:
         self.waveform_widget = waveform_widget
+        self.waveform_widget.select_segments.connect(self.select_from_waveform)
         self.waveform_widget.join_utterances.connect(self.joinUtterances)
         self.waveform_widget.delete_utterances.connect(self.deleteUtterances)
         self.waveform_widget.delete_segments.connect(self.deleteSegments)
@@ -111,6 +119,17 @@ class DocumentController(QObject):
 
     def setDocumentPath(self, file_path: Path | None) -> None:
         self.document_path = file_path
+
+
+    def iterBlocks(self) -> Iterator[QTextBlock]:
+        """Yields every valid block in the document, in order."""
+        if self.text_widget is None:
+            return
+
+        block = self.text_widget.document().firstBlock()
+        while block.isValid():
+            yield block
+            block = block.next()
 
 
     def loadData(self, data: list[tuple[str, Segment | None]]) -> None:
@@ -142,8 +161,7 @@ class DocumentController(QObject):
 
         data = []
 
-        block = self.text_widget.document().firstBlock()
-        while block.isValid():
+        for block in self.iterBlocks():
             text = self.getBlockHtml(block)
             utt_id = self.getBlockId(block)
 
@@ -152,35 +170,37 @@ class DocumentController(QObject):
                 segment = self.getSegment(utt_id)
 
             data.append((text, segment))
-            block = block.next()
 
         return data
 
+
     def getDocumentState(self) -> dict:
-        state = dict()
+        state = {}
         cursor = self.text_widget.textCursor()
         state["cursor_position"] = cursor.position()
         state["cursor_anchor"] = cursor.anchor()
         # state["n_blocks"] = main_window.text_edit.document().blockCount()
         state["blocks"] = []
-        block = self.text_widget.document().firstBlock()
-        while block.isValid():
+
+        for block in self.iterBlocks():
             text = block.text()[:]
             data = deepcopy(block.userData().data) if block.userData() else {}
             data.pop("density", None)
             state["blocks"].append((text, data))
-            block = block.next()
+
         state["segments"] = deepcopy(self.segments)
         return state
 
-    def getBlockByNumber(self, block_number: int) -> Optional[QTextBlock]:
+
+    def getBlockByNumber(self, block_number: int) -> QTextBlock | None:
         if self.text_widget is None:
             return None
 
         block = self.text_widget.document().findBlockByNumber(block_number)
         return block
 
-    def setBlockId(self, block: QTextBlock, segment_id: Optional[SegmentId]) -> None:
+
+    def setBlockId(self, block: QTextBlock, segment_id: SegmentId | None) -> None:
         """
         Set the segment id of a given block
 
@@ -199,29 +219,30 @@ class DocumentController(QObject):
 
         self.text_widget.highlighter.rehighlightBlock(block)
 
+
     def getBlockId(self, block: QTextBlock) -> SegmentId:
         """Return utterance id associated to block or -1"""
-        if not block.userData():
+        data = block.userData()
+        if not data:
             return -1
 
-        user_data = block.userData().data
+        user_data = data.data
         if "seg_id" in user_data:
             return user_data["seg_id"]
 
         return -1
 
-    def getBlockById(self, segment_id: SegmentId) -> Optional[QTextBlock]:
-        if self.text_widget is None:
-            return None
 
-        document = self.text_widget.document()
-        block = document.firstBlock()
-        while block.isValid():
-            if block.userData():
-                if block.userData().data["seg_id"] == segment_id:
-                    return block
-            block = block.next()
+    def getBlockById(self, segment_id: SegmentId) -> QTextBlock | None:
+        """Iterates over all blocks to find the first one
+        that has the given segment_id.
+        """
+        for block in self.iterBlocks():
+            data = block.userData()
+            if data and data.data["seg_id"] == segment_id:
+                return block
         return None
+
 
     def getBlockType(self, block: QTextBlock) -> BlockType:
         text = block.text()
@@ -251,17 +272,22 @@ class DocumentController(QObject):
 
         return BlockType.NOT_ALIGNED
 
-    def getBlockHtml(self, block: QTextBlock) -> str | None:
+
+    def getBlockHtml(self, block: QTextBlock | None) -> str | None:
         if self.text_widget is None:
             return None
+        if block is None:
+            return None
 
-        return self.text_widget.getBlockHtmlMask(block)[0]
+        return self.text_widget.getBlockHtmlAndMask(block)[0]
 
-    def getBlockMetadata(self, block: QTextBlock) -> Dict:
+
+    def getBlockMetadata(self, block: QTextBlock) -> dict:
         metadata: MyTextBlockUserData = block.userData()
         if metadata:
             return metadata.data
-        return dict()
+        return {}
+
 
     def setBlockMetadata(self, block: QTextBlock, metadata: dict | None) -> None:
         if metadata:
@@ -269,11 +295,13 @@ class DocumentController(QObject):
         else:
             block.setUserData(None)
 
+
     def updateBlockMetadata(self, block: QTextBlock, metadata: dict) -> None:
         block_metadata = self.getBlockMetadata(block)
         block_metadata.update(metadata)
         block.setUserData(MyTextBlockUserData(block_metadata))
         self.text_widget.highlighter.rehighlightBlock(block)
+
 
     def getNewSegmentId(self) -> SegmentId:
         """Returns the next available segment ID"""
@@ -281,8 +309,9 @@ class DocumentController(QObject):
         self.id_counter += 1
         return seg_id
 
+
     def addSegment(
-        self, segment: Segment, segment_id: Optional[SegmentId] = None
+        self, segment: Segment, segment_id: SegmentId | None = None
     ) -> SegmentId:
         logger.debug(f"addSegment({segment=}, {segment_id=})")
         if segment_id is None:
@@ -293,10 +322,12 @@ class DocumentController(QObject):
         self.waveform_widget.must_redraw = True
         return segment_id
 
-    def getSegment(self, segment_id: SegmentId) -> Optional[Segment]:
+
+    def getSegment(self, segment_id: SegmentId) -> Segment | None:
         if segment_id in self.segments:
             return self.segments[segment_id]
         return None
+
 
     def updateSegment(self, segment_id: SegmentId, segment: Segment) -> None:
         """Updates a segment already present in document"""
@@ -308,18 +339,21 @@ class DocumentController(QObject):
         self.waveform_widget.must_redraw = True
         self.refresh_segment_info.emit(segment_id)
 
+
     def removeSegment(self, segment_id: SegmentId) -> None:
         assert segment_id in self.segments
         del self.segments[segment_id]
         self.must_sort = True
         self.waveform_widget.must_redraw = True
 
-    def getSortedSegments(self) -> List[Tuple[SegmentId, Segment]]:
+
+    def getSortedSegments(self) -> list[tuple[SegmentId, Segment]]:
         """Return the list of (SegmentId, Segment), sorted by start time"""
         if self.must_sort:
             self._sorted_segments = sorted(self.segments.items(), key=lambda x: x[1])
             self.must_sort = False
         return self._sorted_segments
+
 
     def getPrevSegmentId(self, segment_id: SegmentId) -> SegmentId:
         """
@@ -349,6 +383,7 @@ class DocumentController(QObject):
                     return -1
         return -1
 
+
     def getNextSegmentId(self, segment_id: SegmentId | None = None) -> SegmentId:
         """
         Returns the ID of the segment after the currently selected one, or -1.
@@ -377,6 +412,7 @@ class DocumentController(QObject):
                     return -1
         return -1
 
+
     def getNextAlignedBlock(self, block: QTextBlock) -> QTextBlock | None:
         while True:
             block = block.next()
@@ -387,6 +423,7 @@ class DocumentController(QObject):
             if self.getBlockType(block) == BlockType.ALIGNED:
                 return block
 
+
     def getPrevAlignedBlock(self, block: QTextBlock) -> QTextBlock | None:
         while True:
             block = block.previous()
@@ -396,6 +433,7 @@ class DocumentController(QObject):
 
             if self.getBlockType(block) == BlockType.ALIGNED:
                 return block
+
 
     def getSegmentsAtTime(
         self, position_sec: float, onset=0.0, offset=0.0
@@ -410,6 +448,7 @@ class DocumentController(QObject):
             elif start - onset > position_sec:
                 return segment_ids
         return segment_ids
+
 
     def getSegmentsAtTimeOffsets(
         self, position_sec: float, offsets: dict[SegmentId, tuple]
@@ -427,17 +466,13 @@ class DocumentController(QObject):
                 return segment_ids
         return segment_ids
 
+
     def getTextById(self, segment_id: SegmentId) -> str | None:
         block = self.getBlockById(segment_id)
         if block is None:
             return None
         return block.text()
 
-    def getAllBlocks(self) -> Iterator[QTextBlock]:
-        block = self.text_widget.document().firstBlock()
-        while block.isValid():
-            yield block
-            block = block.next()
 
     def getUtteranceDensity(self, segment_id: SegmentId) -> float:
         """Get the density (chars/s) field of an utterance"""
@@ -494,7 +529,7 @@ class DocumentController(QObject):
         sentence_splits = extract_sentence_regions(block.text())
         return sum([e - s for s, e in sentence_splits], 0)
 
-    def getSubtitleAtPosition(self, position_sec: float) -> Tuple[SegmentId, str]:
+    def getSubtitleAtPosition(self, position_sec: float) -> tuple[SegmentId, str]:
         """
         Return (seg_id, sentence, tokens) or None
         if there is any utterance at that time position
@@ -521,7 +556,7 @@ class DocumentController(QObject):
         if block is None:
             return (-1, "")
 
-        html, _ = self.text_widget.getBlockHtmlMask(block)
+        html, _ = self.text_widget.getBlockHtmlAndMask(block)
         return (seg_id, html)
 
     def getTranscriptionFor(self, segment_id: SegmentId) -> list:
@@ -563,16 +598,16 @@ class DocumentController(QObject):
             return tokens_range
         return []
 
-    def getUtterancesForExport(self) -> list[Tuple[str, Segment]]:
+
+    def getUtterancesForExport(self) -> list[tuple[str, Segment]]:
         """Return all sentences and segments for export"""
         if self.text_widget is None:
             return []
 
         utterances = []
-        block = self.text_widget.document().firstBlock()
-        while block.isValid():
+        for block in self.iterBlocks():
             if self.getBlockType(block) == BlockType.ALIGNED:
-                text = self.text_widget.getBlockHtmlMask(block)[0]
+                text = self.text_widget.getBlockHtmlAndMask(block)[0]
 
                 # Remove extra spaces
                 lines = [" ".join(l.split()) for l in text.split(LINE_BREAK)]
@@ -582,8 +617,6 @@ class DocumentController(QObject):
                 segment = self.getSegment(block_id)
                 if segment:
                     utterances.append((text, segment))
-
-            block = block.next()
 
         return utterances
 
@@ -702,10 +735,12 @@ class DocumentController(QObject):
 
         self._split_utterance(segment_id, left_text, right_text, left_seg, right_seg)
 
+
     def splitUtteranceAtPlayhead(self) -> None:
         active_segment_id = self.waveform_widget.active_segment_id
         playhead_pos = self.waveform_widget.playhead
         self.splitUtteranceAtTimePos(active_segment_id, playhead_pos)
+
 
     def _split_utterance(
         self,
@@ -762,8 +797,9 @@ class DocumentController(QObject):
         self.undo_stack.endMacro()
 
         # self.text_edit.setTextCursor(cursor)
-        self.text_widget.highlightUtterance(right_id)
+        self.text_widget.highlightUtterances([right_id])
         self.waveform_widget.must_redraw = True
+
 
     def joinUtterances(self, segment_ids) -> None:
         """
@@ -778,6 +814,52 @@ class DocumentController(QObject):
                 self, self.text_widget, self.waveform_widget, segment_ids
             )
         )
+
+
+    def select_utterances(
+        self,
+        seg_ids: list[SegmentId],
+        active_block_id: SegmentId | None = None,
+        with_cursor = False
+    ) -> None:
+        """Highlight the given utterances on the waveform
+        and in the text editor. Optionally move the cursor as well.
+
+        Args:
+            seg_ids (list of SegmentId):
+                IDs of utterances to highlight
+
+            with_cursor (bool):
+                Move the cursor if True
+        """
+        logger.debug(f"DocumentController.select_utterances({seg_ids=})")
+
+        if self.waveform_widget is None or self.text_widget is None:
+            return
+
+        self.selected_segments = seg_ids
+        self.active_segment_id = active_block_id
+
+        # Highlight the selected ids on the waveform
+        self.waveform_widget.setActive(seg_ids or None)
+
+        self.text_widget.highlightUtterances(seg_ids or None)
+
+        # Sets the text cursor position to the first block in list
+        if with_cursor:
+            assert active_block_id is not None
+
+            active_block = self.getBlockById(active_block_id)
+            if active_block is not None:
+                cursor = self.text_widget.textCursor()
+                cursor.setPosition(active_block.position())
+                self.text_widget.setTextCursor(cursor)
+                self.text_widget.cursorPositionChanged.emit()  # We need to force it if the block is already selected
+
+
+    def get_active_utterance_id(self) -> SegmentId | None:
+        return self.active_segment_id
+
 
     def moveHead(self) -> None:
         logger.debug("moveHead")
@@ -836,7 +918,7 @@ class DocumentController(QObject):
 
         # Find the range of non-aligned blocks to align
         # Stop at first aligned block, if there is any in the cursor selection
-        to_align: List[QTextBlock] = []
+        to_align: list[QTextBlock] = []
 
         if cursor.hasSelection():
             block = self.text_widget.findBlock(cursor.selectionStart())
@@ -888,6 +970,7 @@ class DocumentController(QObject):
 
         return (to_align, time_range)
 
+
     def deleteUtterances(self, segment_ids: list[SegmentId]) -> None:
         """Delete both segments and sentences"""
         if (self.text_widget is None) or (self.waveform_widget is None):
@@ -904,6 +987,7 @@ class DocumentController(QObject):
         else:
             logger.message(self.tr("Select one or more utterances first"))
 
+
     def deleteSegments(self, segments_id: list[SegmentId]) -> None:
         """Delete segments but keep sentences"""
         self.undo_stack.push(
@@ -912,8 +996,41 @@ class DocumentController(QObject):
             )
         )
 
+
     def selectAll(self) -> None:
-        selection = [id for id, _ in self.getSortedSegments()]
-        self.waveform_widget.active_segments = selection
-        self.waveform_widget.active_segment_id = selection[-1] if selection else -1
+        self.selected_segments = [id for id, _ in self.getSortedSegments()]
+        self.waveform_widget.active_segments = self.selected_segments
+        self.waveform_widget.active_segment_id = self.active_segment_id
         self.waveform_widget.must_redraw = True
+
+
+    def on_text_cursor_changed(
+        self,
+        seg_ids: list[SegmentId],
+        active_utterance: int
+    ) -> None:
+        logger.debug(f"DocumentController.on_text_cursor_changed({seg_ids=}, {active_utterance=})")
+        self.select_utterances(
+            seg_ids,
+            active_utterance if active_utterance >= 0 else None
+        )
+
+
+    def select_from_waveform(
+        self,
+        seg_ids: list[SegmentId],
+        active_segment: SegmentId
+    ) -> None:
+        """Called when the user clicks on the waveform area.
+        Scroll the text widget to display the sentence.
+
+        Args:
+            seg_ids (list): ID of selected segments or None
+        """
+        logger.debug(f"DocumentController.select_from_waveform({seg_ids=}, {active_segment=})")
+
+        self.select_utterances(
+            seg_ids,
+            active_segment,
+            with_cursor = True
+        )

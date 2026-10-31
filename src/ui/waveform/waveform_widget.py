@@ -69,6 +69,8 @@ ZOOM_MAX = 800  # In pixels per second
 
 
 class WaveformWidget(QWidget):
+    # Signals
+    select_segments = Signal(list, int)
     join_utterances = Signal(list)
     delete_utterances = Signal(list)
     delete_segments = Signal(list)
@@ -79,7 +81,6 @@ class WaveformWidget(QWidget):
     playhead_moved = Signal(float)
     refresh_segment_info = Signal(int)
     refresh_segment_info_resizing = Signal(int, list, float)
-    select_segments = Signal(list)
     stop_follow = Signal()
     play_pause = Signal()
 
@@ -90,9 +91,9 @@ class WaveformWidget(QWidget):
     ):
         super().__init__(parent)
         self.main_window = parent
-        self._document_controller = document_controller
+        self.document_controller = document_controller
         self._action = action
-        self._undo_stack = self._document_controller.undo_stack
+        self._undo_stack = self.document_controller.undo_stack
 
         self._waveform_data = WaveformData()
         self._layout: LayoutMetrics
@@ -116,7 +117,7 @@ class WaveformWidget(QWidget):
             ProgressLayer(),
             WaveformLayer(self._waveform_data),
             TimelineLayer(),
-            SegmentsLayer(self._document_controller, self._subs_rules),
+            SegmentsLayer(self.document_controller, self._subs_rules),
             SceneChangeLayer(),
             PlayheadLayer(),
             # FocusOverlayLayer(),
@@ -232,12 +233,12 @@ class WaveformWidget(QWidget):
 
         self.active_segments = seg_ids
         self.active_segment_id = seg_ids[-1]
-        if self.active_segment_id not in self._document_controller.segments:
+        if self.active_segment_id not in self.document_controller.segments:
             self.active_segment_id = -1
             self.must_redraw = True
             self.refresh_segment_info.emit(-1)
             return
-        start, end = self._document_controller.segments[self.active_segment_id]
+        start, end = self.document_controller.segments[self.active_segment_id]
 
         if not (is_playing and self.follow_playhead):
             # Center on segment, if necessary
@@ -449,7 +450,7 @@ class WaveformWidget(QWidget):
             return None
 
         t = self.view.t_left + position.x() / self.view.ppsec
-        for id, (start, end) in self._document_controller.segments.items():
+        for id, (start, end) in self.document_controller.segments.items():
             if start <= t <= end:
                 return (
                     id,
@@ -457,12 +458,14 @@ class WaveformWidget(QWidget):
                 )
         return None
 
+
     def isSelectionAtPosition(self, position: QPointF) -> bool:
         t = self.view.t_left + position.x() / self.view.ppsec
         if self._selection is not None:
             start, end = self._selection
             return start < t < end
         return False
+
 
     def setSelecting(self, checked: bool) -> None:
         self.is_selecting = checked
@@ -474,9 +477,11 @@ class WaveformWidget(QWidget):
         else:
             self.unsetCursor()  # Change mouse cursor shape to default
 
+
     def setTimeOffset(self, offset_s: float) -> None:
         """Sets document absolute time for the first sample"""
         self.view.time_offset = offset_s
+
 
     def zoomIn(self, factor=1.333, position=0.5) -> None:
         prev_ppsec = self.view.ppsec
@@ -490,6 +495,7 @@ class WaveformWidget(QWidget):
         self.view.ppsec_goal = self.view.ppsec
         self._waveform_data.ppsec = self.view.ppsec
         self.must_redraw = True
+
 
     def zoomOut(self, factor=1.333, position=0.5) -> None:
         prev_ppsec = self.view.ppsec
@@ -505,6 +511,7 @@ class WaveformWidget(QWidget):
         self.view.ppsec_goal = self.view.ppsec
         self._waveform_data.ppsec = self.view.ppsec
         self.must_redraw = True
+
 
     def _scroll_view(self, delta_x: float, fast: bool = False) -> None:
         if self.mouse_prev_pos is None or delta_x == 0.0:
@@ -533,6 +540,7 @@ class WaveformWidget(QWidget):
         if self.follow_playhead:
             self.stop_follow.emit()
 
+
     def _commit_resize_segment(self):
         """Applies only to actual segments (not the selection)."""
         if self.active_segment_id < 0 or self.resizing_state.segment is None:
@@ -540,12 +548,13 @@ class WaveformWidget(QWidget):
 
         self._undo_stack.push(
             ResizeSegmentCommand(
-                self._document_controller,
+                self.document_controller,
                 self.active_segment_id,
                 self.resizing_state.segment[0],
                 self.resizing_state.segment[1],
             )
         )
+
 
     def resizeActiveSegment(self, time_position, handle):
         """Resize the representation of the segment on the waveform.
@@ -559,12 +568,12 @@ class WaveformWidget(QWidget):
         if self.resizing_state.segment is None:
             return
 
-        current_segment = self._document_controller.segments[self.active_segment_id]
+        current_segment = self.document_controller.segments[self.active_segment_id]
 
         left_boundary = 0.0
         right_boundary = self.audio_len
 
-        sorted_segments = self._document_controller.getSortedSegments()
+        sorted_segments = self.document_controller.getSortedSegments()
         for _, (start, end) in sorted_segments:
             if end <= current_segment[0]:
                 left_boundary = end
@@ -609,6 +618,7 @@ class WaveformWidget(QWidget):
             self.resizing_state.segment,
             self.resizing_state.density,
         )
+
 
     def resizeSelection(self, time_position, handle):
         if self._selection is None:
@@ -657,6 +667,7 @@ class WaveformWidget(QWidget):
 
         self.must_redraw = True
 
+
     ###################################
     ##   KEYBOARD AND MOUSE EVENTS   ##
     ###################################
@@ -667,14 +678,17 @@ class WaveformWidget(QWidget):
             return True
         return super().event(event)
 
+
     def focusInEvent(self, event) -> None:
         """When mouse is above the waveform widget"""
         self.must_redraw = True  # For focus highlight
         return super().focusInEvent(event)
 
+
     def focusOutEvent(self, event: QFocusEvent) -> None:
         self.must_redraw = True  # For focus highlight
         return super().focusOutEvent(event)
+
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.isAutoRepeat():
@@ -694,7 +708,7 @@ class WaveformWidget(QWidget):
         elif event.key() == Qt.Key.Key_J and len(self.active_segments) > 1:
             # Join multiple segments
             segments_id = sorted(
-                self.active_segments, key=lambda x: self._document_controller.segments[x][0]
+                self.active_segments, key=lambda x: self.document_controller.segments[x][0]
             )
             self.join_utterances.emit(segments_id)
 
@@ -708,11 +722,13 @@ class WaveformWidget(QWidget):
 
         return super().keyPressEvent(event)
 
+
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
         if event.key() == Qt.Key.Key_Shift:
             self.shift_pressed = False
 
         return super().keyReleaseEvent(event)
+
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self.click_pos = event.position()
@@ -792,13 +808,14 @@ class WaveformWidget(QWidget):
                 self.resizing_state.handle = Handle.RIGHT
 
             if self.active_segment_id >= 0:
-                segment = self._document_controller.getSegment(self.active_segment_id)
+                segment = self.document_controller.getSegment(self.active_segment_id)
                 self.resizing_state.segment = segment[:]
-                block = self._document_controller.getBlockById(self.active_segment_id)
-                self.resizing_state.textlen = self._document_controller.getSentenceLength(block)
+                block = self.document_controller.getBlockById(self.active_segment_id)
+                self.resizing_state.textlen = self.document_controller.getSentenceLength(block)
                 self.must_redraw = True
         else:
             self.resizing_state.handle = None
+
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if self.double_click:
@@ -833,9 +850,9 @@ class WaveformWidget(QWidget):
                     clicked_id, side = clicked_id_and_side
                     # Set the side so the waveform can center on the relevant part for the user
                     self.clicked_side = side
-                    self.select_segments.emit([clicked_id])
+                    self.select_segments.emit([clicked_id], clicked_id)
                 else:
-                    self.select_segments.emit(None)
+                    self.select_segments.emit([], -1)
                     # Check is the selection was clicked
                     self.selection_is_active = self.isSelectionAtPosition(
                         event.position()
@@ -844,13 +861,14 @@ class WaveformWidget(QWidget):
         self.must_redraw = True
         return super().mouseReleaseEvent(event)
 
+
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
         """Adjust the zoom level to the selected segment"""
-        active_id = self._dev_getSelectedId()
+        active_id = self.document_controller.get_active_utterance_id()
         if active_id is None:
             return super().mouseDoubleClickEvent(event)
 
-        segment = self._document_controller.getSegment(active_id)
+        segment = self.document_controller.getSegment(active_id)
         if segment is None:
             return super().mouseDoubleClickEvent(event)
 
@@ -884,7 +902,7 @@ class WaveformWidget(QWidget):
                 if self.selection_is_active and self._selection:
                     start, end = self._selection
                 else:
-                    start, end = self._document_controller.segments[self.active_segment_id]
+                    start, end = self.document_controller.segments[self.active_segment_id]
                 if (
                     event.y() >= self._layout.inactive_top
                     and event.y()
@@ -1010,18 +1028,18 @@ class WaveformWidget(QWidget):
         value = event.value()
 
         if gesture_type == Qt.NativeGestureType.ZoomNativeGesture:
-            print(f"Pincement (zoom) {value=}")
+            logger.debug(f"Pinch (zoom) {value=}")
             zoom_pos = event.position().x() / self.width()
             if value < 0.0:
                 self.zoomOut(1.0 - value, zoom_pos)
             else:
                 self.zoomIn(1.0 + value, zoom_pos)
         elif gesture_type == Qt.NativeGestureType.SmartZoomNativeGesture:
-            print("Smart zoom (double-tap à deux doigts)")
+            logger.debug("Smart zoom (double-tap with two fingers)")
         elif gesture_type == Qt.NativeGestureType.RotateNativeGesture:
-            pass
+            logger.debug("Rotate")
         elif gesture_type == Qt.NativeGestureType.SwipeNativeGesture:
-            print("Swipe")
+            logger.debug("Swipe")
 
     def showContextMenu(self, pos: QPoint):
         """Show the context menu at the given global position."""

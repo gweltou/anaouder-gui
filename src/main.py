@@ -79,7 +79,7 @@ from src.document_controller import DocumentController
 from src.file_io.dialogs import FilePrompts
 from src.file_io.file_manager import FileManager, FileOperationError
 from src.hunspell import HunspellLoader
-from src.interfaces import BlockType, Segment, SegmentId, TextEditorInterface
+from src.interfaces import BlockType, Segment, SegmentId
 from src.services.aligner import TextAligner
 from src.services.logger import logger
 from src.services.media_player_controller import MediaPlayerController
@@ -108,6 +108,7 @@ from src.settings import (
     app_settings,
     shortcuts,
 )
+
 if FUTURE:
     from src.services.segment_exporter import segment_exporter
 from src.splitter import CustomSplitter
@@ -229,7 +230,6 @@ class MainWindow(QMainWindow):
 
         self.loading_dialog = None
 
-        self._text_cursor_utterance_id = -1
         self._last_play_press_time = 0.0
 
 
@@ -250,7 +250,7 @@ class MainWindow(QMainWindow):
 
         # TODO: reverse dependencies of document_controller and text/waveform widgets
         self.document_controller = DocumentController(self)
-        self.text_widget: TextEditorInterface = TextEditWidget(
+        self.text_widget = TextEditWidget(
             self, self.document_controller, self.action
         )
         self.waveform = WaveformWidget(self, self.document_controller, self.action)
@@ -464,7 +464,7 @@ class MainWindow(QMainWindow):
         self.waveform.refresh_segment_info_resizing.connect(
             self.updateSegmentInfoResizing
         )
-        self.waveform.select_segments.connect(self.selectFromWaveform)
+        self.waveform.select_segments.connect(self.select_from_waveform)
         self.waveform.stop_follow.connect(self.toggleFollowPlayhead)
         self.action.split_at_playhead_requested.connect(self.document_controller.splitUtteranceAtPlayhead)
         self.action.move_segment_head_requested.connect(self.document_controller.moveHead)
@@ -1631,7 +1631,7 @@ class MainWindow(QMainWindow):
                 BlockType.ALIGNED,
                 BlockType.METADATA_ONLY,
             ):
-                text = self.text_widget.getBlockHtmlMask(block)[0]
+                text = self.text_widget.getBlockHtmlAndMask(block)[0]
 
                 # Remove extra spaces
                 lines = [" ".join(line.split()) for line in text.split(LINE_BREAK)]
@@ -1755,7 +1755,7 @@ class MainWindow(QMainWindow):
         if block is None:
             return (-1, "")
 
-        html, _ = self.text_widget.getBlockHtmlMask(block)
+        html, _ = self.text_widget.getBlockHtmlAndMask(block)
         # html = extract_metadata(html)[0] if block else ""
 
         return (seg_id, html)
@@ -1787,21 +1787,21 @@ class MainWindow(QMainWindow):
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
 
         # Check if end of current selected segments is reached
-        selected_segment_id = self.waveform._dev_getSelectedId()
-        if selected_segment_id is not None:
-            segment = self.document_controller.getSegment(selected_segment_id)
+        active_segment_id = self.document_controller.get_active_utterance_id()
+        if active_segment_id is not None:
+            segment = self.document_controller.getSegment(active_segment_id)
             if segment:
                 start, end = segment
                 # Add a tolerance because of rounding errors from the media player
                 if (position_sec + 0.001) <= start or position_sec >= end:
                     if self.media_controller.isLooping():
                         if (
-                            selected_segment_id
+                            active_segment_id
                             != self.media_controller.getPlayingSegmentId()
                         ):
                             # A different segment has been selected on the waveform
                             self.media_controller.playSegment(
-                                segment, selected_segment_id
+                                segment, active_segment_id
                             )
                         else:
                             self.media_controller.seekTo(start)
@@ -1829,17 +1829,14 @@ class MainWindow(QMainWindow):
                     return
 
         # Highlight text sentence at this time position
-        if (
-            seg_ids := self.document_controller.getSegmentsAtTime(
-                self.waveform.playhead
-            )
-        ) != -1:
-            if seg_ids and (seg_ids[0] != self.text_widget.highlighted_sentence_id):
-                self.text_widget.highlightUtterance(seg_ids[0], scroll_text=False)
-        else:
-            self.text_widget.deactivateSentence()
+        # seg_ids = self.document_controller.getSegmentsAtTime(self.waveform.playhead)
+        # if seg_ids and (seg_ids[0] != self.text_widget.highlighted_sentence_id):
+        #         self.text_widget.highlightUtterance(seg_ids[0], scroll_text=False)
+        # else:
+        #     self.text_widget.deactivateSentence()
 
         self.updateSubtitle(position_sec)
+
 
     def onPlayPauseAction(self) -> None:
         if not self.media_controller.hasMedia():
@@ -1857,6 +1854,11 @@ class MainWindow(QMainWindow):
 
 
     def onPlaySegmentAction(self) -> None:
+        """
+        If a segment is curently selected, play it.
+        If no segment is selected, starts or pauses from/at the playhead.
+        Called when the user presses (or double-presses) the "play" button or shortcut.
+        """
         if not self.media_controller.hasMedia():
             return
 
@@ -1867,28 +1869,42 @@ class MainWindow(QMainWindow):
             double_press = True
         self._last_play_press_time = current_time
 
-        playing_segment_id = self.media_controller.getPlayingSegmentId()
-        selected_segment_id = self.waveform._dev_getSelectedId()
+        if self.waveform.selection_is_active and (selection := self.waveform.getSelection()):
+            self.media_controller.playSelection(selection)
+            self.play_button.setIcon(icons["pause"])
+            return
 
-        if double_press and (playing_segment_id != -1):
+        active_segment_id = self.document_controller.get_active_utterance_id()
+
+        if active_segment_id is None:
+            if self.media_controller.isPlaying():
+                # Stop playback
+                self.media_controller.pause()
+                self.play_button.setIcon(icons["play"])
+            else:
+                # Start playback from playhead position
+                self.media_controller.play()
+                self.play_button.setIcon(icons["pause"])
+            return
+
+        playing_segment_id = self.media_controller.getPlayingSegmentId()
+
+        if (
+            double_press
+            and (playing_segment_id != -1)
+        ):
             # On double press, restart the currently playing segment
-            selected_segment_id = self.waveform._dev_getSelectedId()
-            if selected_segment_id is not None:
-                segment = self.document_controller.getSegment(selected_segment_id)
+                segment = self.document_controller.getSegment(active_segment_id)
                 if segment:
-                    self.media_controller.playSegment(segment, selected_segment_id)
+                    self.media_controller.playSegment(segment, active_segment_id)
                     return
 
         if self.media_controller.isPlaying():
-            play_next = self._text_cursor_utterance_id
+            play_next = active_segment_id
             if (play_next != -1) and (playing_segment_id != play_next):
-                segment = self.document_controller.getSegment(
-                    self._text_cursor_utterance_id
-                )
+                segment = self.document_controller.getSegment(active_segment_id)
                 if segment:
-                    self.media_controller.playSegment(
-                        segment, self._text_cursor_utterance_id
-                    )
+                    self.media_controller.playSegment(segment, active_segment_id)
                 return
 
             # Stop playback
@@ -1897,18 +1913,12 @@ class MainWindow(QMainWindow):
             return
 
         # Start playback
-        selected_segment_id = self.waveform._dev_getSelectedId()
-        if selected_segment_id is not None:
-            segment = self.document_controller.getSegment(selected_segment_id)
-            if segment:
-                if segment[0] < self.media_controller.getCurrentPosition() < segment[1]:
-                    self.media_controller.play()
-                else:
-                    self.media_controller.playSegment(segment, selected_segment_id)
-            else:
+        segment = self.document_controller.getSegment(active_segment_id)
+        if segment:
+            if segment[0] < self.media_controller.getCurrentPosition() < segment[1]:
                 self.media_controller.play()
-        elif self.waveform.selection_is_active:
-            self.media_controller.playSelection(self.waveform.getSelection())
+            else:
+                self.media_controller.playSegment(segment, active_segment_id)
         else:
             self.media_controller.play()
         self.play_button.setIcon(icons["pause"])
@@ -1929,93 +1939,87 @@ class MainWindow(QMainWindow):
 
 
     def playNextSegment(self) -> None:
-        segment_id = self.waveform._dev_getSelectedId()
-        if segment_id is None:
+        active_segment_id = self.document_controller.get_active_utterance_id()
+        if active_segment_id is None:
             return
 
-        next_segment_id = self.document_controller.getNextSegmentId(segment_id)
+        next_segment_id = self.document_controller.getNextSegmentId(active_segment_id)
 
         if next_segment_id != -1:
-            self.selectUtterance(next_segment_id)
             if next_segment := self.document_controller.getSegment(next_segment_id):
+                self.document_controller.select_utterances(
+                    [next_segment_id],
+                    next_segment_id,
+                    with_cursor=True
+                )
                 self.playSegment(next_segment, next_segment_id)
         else:
-            self.deselectUtterance()
+            self.deselectUtterances()
             self.media_controller.stop()
             self.media_controller.seekTo(0.0)
 
 
     def playPreviousSegment(self) -> None:
-        segment_id = self.waveform._dev_getSelectedId()
-        if segment_id is None:
+        active_segment_id = self.document_controller.get_active_utterance_id()
+        if active_segment_id is None:
             return
 
-        prev_segment_id = self.document_controller.getPrevSegmentId(segment_id)
+        prev_segment_id = self.document_controller.getPrevSegmentId(active_segment_id)
 
         if prev_segment_id != -1:
-            self.selectUtterance(prev_segment_id)
             if prev_segment := self.document_controller.getSegment(prev_segment_id):
+                self.document_controller.select_utterances(
+                    [prev_segment_id],
+                    prev_segment_id,
+                    with_cursor=True
+                )
                 self.playSegment(prev_segment, prev_segment_id)
         else:
-            self.deselectUtterance()
+            self.deselectUtterances()
             self.media_controller.seekTo(0.0)
 
 
     def backAction(self) -> None:
-        """Get back to the first segment or to the beginning of the recording"""
-        segment_id = self.waveform._dev_getSelectedId()
-        if segment_id is None:
-            self.deselectUtterance()
+        """Get back to the first segment or to the beginning of the recording."""
+        active_segment_id = self.document_controller.get_active_utterance_id()
+        if active_segment_id is None:
+            # Go to the beginning of the media
+            self.deselectUtterances()
             self.media_controller.seekTo(0.0)
-            # self.timecode_widget.setTime(0.0)
-            return
-
-        if (segment := self.document_controller.getSegment(segment_id)) is not None:
-            first_segment_id = self.document_controller.getSortedSegments()[0][0]
-            self.selectUtterance(first_segment_id)
-            self.media_controller.playSegment(segment, segment_id)
-
-
-    def selectUtterance(self, seg_id: SegmentId) -> None:
-        """
-        Source of the cascade of events to select an utterance:
-        The cursor change fires onTextCursorChanged
-        onTextCursorChanged sets the segment active on the waveform
-        """
-        logger.debug(f"selectUtterance({seg_id=})")
-
-        block = self.document_controller.getBlockById(seg_id)
-        if block:
-            cursor = self.text_widget.textCursor()
-            cursor.setPosition(block.position())
-            self.text_widget.setTextCursor(cursor)
-            self.text_widget.cursorPositionChanged.emit()  # We need to force it if the block is already selected
+        else:
+            first_segment_id, segment = self.document_controller.getSortedSegments()[0]
+            self.document_controller.select_utterances(
+                [first_segment_id],
+                first_segment_id,
+                with_cursor=True
+            )
+            self.media_controller.playSegment(segment, first_segment_id)
 
 
-    def deselectUtterance(self) -> None:
+    def deselectUtterances(self) -> None:
         self.media_controller.deselectSegment()
         self.waveform.setActive(None)
-        self.text_widget.deactivateSentence()
+        self.text_widget.highlightUtterances(None)
         self.status_label.clear()
-        self._text_cursor_utterance_id = -1
 
 
-    def selectFromWaveform(self, seg_ids: list[SegmentId] | None) -> None:
-        """
-        Called when the user clicks on the waveform area
-        Scroll the text widget to display the sentence
+    def select_from_waveform(
+        self,
+        seg_ids: list[SegmentId],
+        active_segment: SegmentId
+    ) -> None:
+        """Called when the user clicks on the waveform area.
+        Scroll the text widget to display the sentence.
 
         Args:
             seg_ids (list): ID of selected segments or None
         """
-        logger.debug(f"selectFromWaveform({seg_ids=})")
-        seg_ids = seg_ids if seg_ids else None
+        logger.debug(f"MainWindow.selectFromWaveform({seg_ids=}, {active_segment=})")
 
-        if seg_ids is None:
-            self.deselectUtterance()
+        if not seg_ids:
+            self.deselectUtterances()
             return
 
-        self.selectUtterance(seg_ids[0])
 
     def onWaveformPlayheadManualyMoved(self, position_sec: float) -> None:
         logger.debug(f"onWaveformPlayheadManualyMoved({position_sec=})")
@@ -2033,9 +2037,10 @@ class MainWindow(QMainWindow):
                 start, end = segment
                 if (position_sec < start) or (position_sec > end):
                     # Deactivate segment
-                    self.deselectUtterance()
+                    self.deselectUtterances()
 
         self.media_controller.seekTo(position_sec)
+
 
     def onTimecodeDisplayChanged(self, position_sec: float) -> None:
         # Block player signals so the timecode display is not updated back
@@ -2043,6 +2048,7 @@ class MainWindow(QMainWindow):
         self.media_controller.seekTo(position_sec)
         self.waveform.updatePlayHead(position_sec, self.media_controller.isPlaying())
         self.media_controller.blockSignals(False)
+
 
     def toggleVideo(self, checked) -> None:
         logger.debug(f"toggle video {checked=}")
@@ -2090,10 +2096,12 @@ class MainWindow(QMainWindow):
             self.waveform.display_scene_change = False
             self.waveform.must_redraw = True
 
+
     @Slot(float, tuple)
     def onNewSceneChange(self, time: float, color: tuple) -> None:
         self.waveform.scenes.append((time, color[0], color[1], color[2]))
         self.waveform.must_redraw = True
+
 
     @Slot(bool)
     def onSceneChangeFinished(self, success: bool) -> None:
@@ -2111,6 +2119,7 @@ class MainWindow(QMainWindow):
         self.scene_detector.deleteLater()
         self.scene_detector = None
 
+
     def onUndoStackIndexChanged(self, index: int) -> None:
         if index == 0:
             self.undo_button.setEnabled(False)
@@ -2121,6 +2130,7 @@ class MainWindow(QMainWindow):
             self.redo_button.setEnabled(True)
         else:
             self.redo_button.setEnabled(False)
+
 
     def onAutoSegment(self) -> None:
         if self.audio_samples is None:
@@ -2153,6 +2163,7 @@ class MainWindow(QMainWindow):
             )
         self.undo_stack.endMacro()
 
+
     def adaptToSubtitle(self) -> None:
         from services.adapt_subtitles import AdaptUtterancesDialog
 
@@ -2164,9 +2175,9 @@ class MainWindow(QMainWindow):
             self.undo_stack,
         ).exec()
 
+
     @Slot()
     def onTextChanged(self) -> None:
-        # print("onTextChanged")
         # Update the utterance density field
         with QSignalBlocker(self.text_widget.document()):
             cursor = self.text_widget.textCursor()
@@ -2184,28 +2195,19 @@ class MainWindow(QMainWindow):
                     if start <= self.waveform.playhead <= end:
                         self.updateSubtitle(self.waveform.playhead)
 
-    def onTextCursorChanged(self, seg_ids: list[SegmentId] | None) -> None:
-        """
-        Sets the corresponding segment active on the waveform
-        Called only on aligned text blocks or with None
-        """
-        logger.debug(
-            f"onTextCursorChanged({seg_ids=}) cursor_pos={self.text_widget.textCursor().position()}"
-        )
 
-        seg_ids = seg_ids or None
+    def onTextCursorChanged(
+        self,
+        seg_ids: list[SegmentId],
+        active_segment: SegmentId
+    ) -> None:
+        logger.debug(f"MainWindow.onTextCursorChanged({seg_ids=}, {active_segment=})")
 
         # Highlight the selected ids on the waveform
-        self.waveform.setActive(seg_ids, self.media_controller.isPlaying())
+        # self.waveform.setActive(seg_ids, self.media_controller.isPlaying())
 
-        if seg_ids is None:
-            self.text_widget.deactivateSentence()
-            self.status_label.clear()
-            self._text_cursor_utterance_id = -1
-            return
-
-        seg_id = seg_ids[0]
-        self._text_cursor_utterance_id = seg_id  # Set the segment that should be played
+        if not seg_ids:
+            self.deselectUtterances()
 
 
     def toggleCreateSelection(self, checked: bool) -> None:

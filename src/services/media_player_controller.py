@@ -53,17 +53,9 @@ class PlaybackState:
         self.current_position = 0.0
 
 
-class MediaPlayerController(QObject):
-    """
-    Handles all media playback operations.
 
-    Signals:
-        position_changed: Emitted when playback position changes (position_sec: float)
-        playback_started: Emitted when playback starts
-        playback_stopped: Emitted when playback stops
-        segment_ended: Emitted when a segment finishes playing (segment_id: int)
-        subtitle_changed: Emitted when subtitle needs updating (time: float)
-    """
+class MediaPlayerController(QObject):
+    """Handles all media playback operations."""
 
     # Signals
     position_changed = Signal(float)  # position in seconds
@@ -72,6 +64,7 @@ class MediaPlayerController(QObject):
     segment_ended = Signal(int)  # segment_id
     # subtitle_changed = Signal(float)  # time in seconds
     media_duration_changed = Signal(float)  # duration in seconds
+
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -95,9 +88,9 @@ class MediaPlayerController(QObject):
 
         logger.debug("MediaPlayerController initialized")
 
+
     def loadMedia(self, file_path: Path) -> bool:
-        """
-        Load a media file for playback.
+        """Load a media file for playback.
 
         Args:
             filepath: Path to the media file
@@ -146,21 +139,23 @@ class MediaPlayerController(QObject):
         logger.debug(f"Playback started at {self.state.current_position:.3f}s")
         return True
 
+
     def pause(self) -> None:
-        """Pause playback"""
+        """Pause playback."""
         if self.isPlaying():
             self.player.pause()
             logger.debug(f"Playback paused at {self.state.current_position:.3f}s")
 
+
     def stop(self) -> None:
-        """Stop playback and reset to beginning"""
+        """Stop playback and reset to beginning."""
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.stop()
             logger.debug("Playback stopped")
 
+
     def togglePlayPause(self) -> bool:
-        """
-        Toggle between play and pause.
+        """Toggle between play and pause.
 
         Returns:
             True if now playing, False if now paused
@@ -173,8 +168,7 @@ class MediaPlayerController(QObject):
             return True
 
     def playSegment(self, segment: Segment, segment_id: SegmentId = -1) -> bool:
-        """
-        Play a specific segment. Leave segment_id to -1 to play the selection.
+        """Play a specific segment. Leave segment_id to -1 to play the selection.
 
         Args:
             segment: Tuple of (start, end) in seconds
@@ -202,6 +196,7 @@ class MediaPlayerController(QObject):
         self.seekTo(start)
         self.play()
         return True
+
 
     def playSelection(self, selection: Segment) -> bool:
         """
@@ -237,9 +232,9 @@ class MediaPlayerController(QObject):
         self.state.current_position = position_sec
         logger.debug(f"Seeked to {position_sec:.3f}s")
 
+
     def seekRelative(self, delta_sec: float) -> None:
-        """
-        Seek relative to current position.
+        """Seek relative to current position.
 
         Args:
             delta_sec: Number of seconds to skip (positive or negative)
@@ -247,13 +242,14 @@ class MediaPlayerController(QObject):
         new_position = self.state.current_position + delta_sec
         self.seekTo(new_position)
 
+
     def getCurrentPosition(self) -> float:
         """Get current playback position in seconds"""
         return self.state.current_position
 
+
     def setVolume(self, volume: float) -> None:
-        """
-        Set audio volume.
+        """Set audio volume.
 
         Args:
             volume: Volume level from 0.0 to 1.0
@@ -261,13 +257,14 @@ class MediaPlayerController(QObject):
         volume = max(0.0, min(1.0, volume))
         self.audio_output.setVolume(volume)
 
+
     def getVolume(self) -> float:
         """Get current volume level (0.0 to 1.0)"""
         return self.audio_output.volume()
 
+
     def setPlaybackRate(self, rate: float) -> None:
-        """
-        Set playback speed.
+        """Set playback speed.
 
         Args:
             rate: Playback rate (1.0 = normal, 0.5 = half speed, 2.0 = double speed)
@@ -276,13 +273,14 @@ class MediaPlayerController(QObject):
         self.player.setPlaybackRate(rate)
         logger.debug(f"Playback rate set to {rate:.2f}x")
 
+
     def getPlaybackRate(self) -> float:
         """Get current playback rate"""
         return self.player.playbackRate()
 
+
     def setLooping(self, enabled: bool) -> None:
-        """
-        Enable or disable looping.
+        """ Enable or disable looping.
 
         Args:
             enabled: True to enable looping, False to disable
@@ -290,13 +288,14 @@ class MediaPlayerController(QObject):
         self.state.looping = enabled
         logger.debug(f"Looping {'enabled' if enabled else 'disabled'}")
 
+
     def isLooping(self) -> bool:
         """Check if looping is enabled"""
         return self.state.looping
 
+
     def toggleLooping(self) -> bool:
-        """
-        Toggle looping state.
+        """Toggle looping state.
 
         Returns:
             New looping state
@@ -304,38 +303,43 @@ class MediaPlayerController(QObject):
         self.state.looping = not self.state.looping
         return self.state.looping
 
+
     def isPlaying(self) -> bool:
-        """Check if media is currently playing"""
+        """Check if media is currently playing."""
         return self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
 
+
     def isPaused(self) -> bool:
-        """Check if media is paused"""
+        """Check if media is paused."""
         return self.player.playbackState() == QMediaPlayer.PlaybackState.PausedState
 
+
     def isStopped(self) -> bool:
-        """Check if media is stopped"""
+        """Check if media is stopped."""
         return self.player.playbackState() == QMediaPlayer.PlaybackState.StoppedState
 
+
     def hasMedia(self) -> bool:
-        """Check if media is loaded"""
+        """Check if media is loaded."""
         return self.media_path is not None and not self.player.source().isEmpty()
 
+
     def getPlayingSegmentId(self) -> int:
-        """
-        Get the ID of the currently playing segment.
+        """Get the ID of the currently playing segment.
 
         Returns:
             Segment ID, or -1 if not playing a segment
         """
         return self.state.playing_segment_id
 
+
     def getDuration(self) -> float:
-        """Get total media duration in seconds"""
+        """Get total media duration in seconds."""
         return self.media_duration
 
+
     def connectVideoWidget(self, video_widget: VideoWidget) -> None:
-        """
-        Connect a video widget to the media player.
+        """Connect a video widget to the media player.
 
         Args:
             video_widget: Video widget instance
@@ -346,17 +350,19 @@ class MediaPlayerController(QObject):
         except Exception as e:
             logger.error(f"Failed to connect video widget: {e}")
 
+
     @Slot(int)
     def _onPositionChanged(self, position_ms: int) -> None:
-        """Handle position changes from the media player"""
+        """Handle position changes from the media player."""
         position_sec = position_ms / 1000.0
         self.state.current_position = position_sec
 
         # Emit position update
         self.position_changed.emit(position_sec)
 
+
     def _onPlaybackStateChanged(self, state: QMediaPlayer.PlaybackState) -> None:
-        """Handle playback state changes"""
+        """Handle playback state changes."""
         if state == QMediaPlayer.PlaybackState.PlayingState:
             self.state.is_playing = True
             self.playback_started.emit()
@@ -367,14 +373,16 @@ class MediaPlayerController(QObject):
             self.state.is_playing = False
             self.playback_stopped.emit()
 
+
     def _onDurationChanged(self, duration_ms: int) -> None:
-        """Handle media duration changes"""
+        """Handle media duration changes."""
         self.media_duration = duration_ms / 1000.0
         logger.debug(f"Media duration: {self.media_duration:.2f}s")
         self.media_duration_changed.emit(self.media_duration)
 
+
     def cleanup(self) -> None:
-        """Clean up resources before destruction"""
+        """Clean up resources before destruction."""
         logger.debug("Cleaning up MediaPlayerController")
         self.stop()
         self.unloadMedia()

@@ -1,6 +1,6 @@
 """
 Anaouder - Automatic transcription and subtitling for the Breton language
-Copyright (C) 2025  Gweltaz Duval-Guennoc (gweltou@hotmail.com)
+Copyright (C) 2025-2026  Gweltaz Duval-Guennoc (gwel@ik.me)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -42,11 +42,13 @@ log = logging.getLogger(__name__)
 
 
 class Highlighter(QSyntaxHighlighter):
+
     class ColorMode(Enum):
         ALIGNMENT = 0
         DENSITY = 1
 
     utt_block_margin = 8
+
 
     def __init__(self, parent, text_edit, document_controller):
         super().__init__(parent)
@@ -101,6 +103,7 @@ class Highlighter(QSyntaxHighlighter):
         self.active_red_block_format.setTopMargin(self.utt_block_margin)
         self.active_red_block_format.setBottomMargin(self.utt_block_margin)
 
+
     def setMode(self, mode: ColorMode):
         log.info(f"Set highlighter to {mode}")
         self.mode = mode
@@ -113,12 +116,14 @@ class Highlighter(QSyntaxHighlighter):
     def getMode(self) -> ColorMode:
         return self.mode
 
+
     def updateThemeColors(self):
         print("Hightligher updateTheme", theme.mode)
         self.green_block_format.setBackground(theme.colors.green)
         self.red_block_format.setBackground(theme.colors.red)
         self.active_green_block_format.setBackground(theme.colors.active_green)
         self.active_red_block_format.setBackground(theme.colors.active_red)
+
 
     def isSubsentence(self, segments: list, start: int, end: int) -> bool:
         """This is sentences' segments, NOT audio segments !"""
@@ -130,6 +135,7 @@ class Highlighter(QSyntaxHighlighter):
                 return False
         return False
 
+
     def highlightAlignment(self, sentence_splits):
         block = self.currentBlock()
         block_id = self.document_controller.getBlockId(block)
@@ -137,7 +143,7 @@ class Highlighter(QSyntaxHighlighter):
 
         if self.currentBlockUserData():
             if self.text_edit.isAligned(block):
-                if self.text_edit.highlighted_sentence_id == block_id:
+                if block_id in self.text_edit.selected_utterances:
                     cursor.setBlockFormat(self.active_green_block_format)
                 else:
                     cursor.setBlockFormat(self.green_block_format)
@@ -145,6 +151,7 @@ class Highlighter(QSyntaxHighlighter):
                 cursor.setBlockFormat(QTextBlockFormat())
         else:
             cursor.setBlockFormat(QTextBlockFormat())
+
 
     def highlightDensity(self):
         block = self.currentBlock()
@@ -159,12 +166,12 @@ class Highlighter(QSyntaxHighlighter):
                     "subtitles/cps", SUBTITLES_CPS, type=float
                 )
                 if density < target_density + 0.05:  # Slight tolerance
-                    if self.text_edit.highlighted_sentence_id == block_id:
+                    if block_id in self.text_edit.selected_utterances:
                         cursor.setBlockFormat(self.active_green_block_format)
                     else:
                         cursor.setBlockFormat(self.green_block_format)
                 else:
-                    if self.text_edit.highlighted_sentence_id == block_id:
+                    if block_id in self.text_edit.selected_utterances:
                         cursor.setBlockFormat(self.active_red_block_format)
                     else:
                         cursor.setBlockFormat(self.red_block_format)
@@ -172,6 +179,7 @@ class Highlighter(QSyntaxHighlighter):
                 cursor.setBlockFormat(self.aligned_block_format)
         else:
             cursor.setBlockFormat(QTextBlockFormat())
+
 
     def highlightBlock(self, text):
         doc_was_blocked = self.text_edit.document().blockSignals(True)
@@ -246,6 +254,7 @@ class Highlighter(QSyntaxHighlighter):
 
         self.text_edit.document().blockSignals(doc_was_blocked)
         self.text_edit.blockSignals(was_blocked)
+
 
     def setHunspellDictionary(self, hunspell) -> None:
         self.hunspell = hunspell

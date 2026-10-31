@@ -56,7 +56,7 @@ class CreateNewEmptyUtteranceCommand(QUndoCommand):
         text_widget: TextEditorInterface,
         waveform_widget: WaveformInterface,
         segment: Segment,
-        segment_id: Optional[SegmentId] = None,
+        segment_id: SegmentId | None = None,
     ):
         logger.debug(
             f"CreateNewUtteranceCommand.__init__(parent, {segment=}, {segment_id=})"
@@ -82,8 +82,8 @@ class CreateNewEmptyUtteranceCommand(QUndoCommand):
 
     def redo(self):
         self.document_controller.addSegment(self.segment, self.segment_id)
-        self.text_widget.insertSentenceWithId("*", self.segment_id)
-        self.text_widget.highlightUtterance(self.segment_id)
+        self.text_widget.insertSentenceWithId("*", self.segment_id, with_cursor=True)
+        self.text_widget.highlightUtterances([self.segment_id])
 
 
 class JoinUtterancesCommand(QUndoCommand):
@@ -92,7 +92,7 @@ class JoinUtterancesCommand(QUndoCommand):
         document_controller: DocumentInterface,
         text_widget: TextEditorInterface,
         waveform: WaveformInterface,
-        seg_ids: List[SegmentId],
+        seg_ids: list[SegmentId],
     ):
         super().__init__()
         self.document_controller = document_controller
@@ -123,22 +123,23 @@ class JoinUtterancesCommand(QUndoCommand):
             user_data = {"seg_id": seg_id}
             self.document_controller.setBlockMetadata(cursor.block(), user_data)
             self.document_controller.segments[seg_id] = self.segments[i + 1]
-            self.text_widget.deactivateSentence(seg_id)
 
-        self.text_widget.setCursorState(self.prev_cursor)
+        self.document_controller.select_utterances(self.seg_ids)
         self.document_controller.must_sort = True
+        self.text_widget.setCursorState(self.prev_cursor)
         self.waveform.must_redraw = True
         # self.waveform.refreshSegmentInfo()
 
     def redo(self):
-        print(f"JoinUtterancesCommand {self.seg_ids=}")
+        logger.debug(f"JoinUtterancesCommand {self.seg_ids=}")
         # TODO: fix bug when joining (sometimes)
         self.segments = [
             self.document_controller.segments[seg_id] for seg_id in self.seg_ids
         ]
         self.segments_text = [
-            self.document_controller.getBlockById(seg_id).text()
-            for seg_id in self.seg_ids
+            self.document_controller.getBlockHtml(
+                self.document_controller.getBlockById(seg_id)
+            ) for seg_id in self.seg_ids
         ]
         # Remove all sentences except the first one
         for seg_id in self.seg_ids[1:]:
@@ -192,7 +193,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.block: QTextBlock = block
         self.old_block_data = document_controller.getBlockMetadata(block).copy()
         s = self.waveform.getSelection()
-        self.selection: Optional[Segment] = s.copy() if s is not None else None
+        self.selection: Segment | None = s.copy() if s is not None else None
         self.segment_id = document_controller.getNewSegmentId()
 
     def undo(self):
@@ -312,7 +313,7 @@ class DeleteUtterancesCommand(QUndoCommand):
 
 
 class InsertTextCommand(QUndoCommand):
-    """Add characters at a given position in the document"""
+    """Add characters at a given position in the document."""
 
     def __init__(self, text_edit, text, position):
         logger.debug(f"InsertTextCommand.__init__(text_edit, {text=}, {position=})")
@@ -335,6 +336,7 @@ class InsertTextCommand(QUndoCommand):
         )
         cursor.removeSelectedText()
         self.text_edit.setCursorState(self.prev_cursor)
+        self.text_edit.highlighter.rehighlightBlock(cursor.block())
 
     def redo(self):
         logger.debug(f"InsertTextCommand.REDO")
@@ -342,6 +344,7 @@ class InsertTextCommand(QUndoCommand):
         cursor.setPosition(self.position)
         cursor.insertText(self.text)
         self.text_edit.setTextCursor(cursor)
+        self.text_edit.highlighter.rehighlightBlock(cursor.block())
 
     def id(self):
         return 0
@@ -587,7 +590,7 @@ class ReplaceTextCommand(QUndoCommand):
         self.text_edit = text_edit
         self.block = block
         self.block_number = text_edit.getBlockNumber(block.position())
-        self.old_text = text_edit.getBlockHtmlMask(block)[0]
+        self.old_text = text_edit.getBlockHtmlAndMask(block)[0]
         self.new_text = new_text
         self.prev_cursor = self.text_edit.getCursorState()
         print(f"{self.prev_cursor=}")
