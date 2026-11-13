@@ -526,7 +526,10 @@ class FileManager(QObject):
                 try:
                     data = format_eaf(utterances, media_path or default_path)
                 except Exception as e:
-                    logger.error(f"Something went wrong: {e}")
+                    logger.error(
+                        self.tr("Couldn't export file: {error}").format(error=e)
+                    )
+                    return
             case _:
                 return
         logger.debug(data)

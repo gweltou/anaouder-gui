@@ -204,3 +204,22 @@ def restore_autosave_settings():
         app_settings.setValue(key, old_value)
     else:
         app_settings.remove(key)
+
+
+def test_export_eaf_error_does_not_raise(tmp_path: Path, monkeypatch):
+    """#55: a failing EAF formatter must not leave `data` unbound."""
+    import anaouder.file_io.file_manager as fm_module
+
+    out = tmp_path / "out.eaf"
+
+    class Prompts(FakeFilePrompts):
+        def chooseExportPath(self, default_path: Path, file_type: str) -> Path:
+            return out
+
+    def boom(*args, **kwargs):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(fm_module, "format_eaf", boom)
+    manager = FileManager(Prompts())
+    manager.export_to_text_format(None, [("text", (0.0, 1.0))], "eaf")
+    assert not out.exists()
