@@ -2,16 +2,16 @@
 
 Single list of pending work for Anaouder: packaging chores, features, bugs and `TODO`/`XXX` comments found in the code.
 It merges `docs/TODO.txt` (old, French, partly outdated) and the comments in `anaouder/`.
-Last audit: 2026-11-13 (re-checked against a full read of the largest source files; see #49-#58, #67-#69; #71-#80 come from the old `PLAN.md` review; the Done section was restored after 66a4184 dropped it by mistake).
+Last audit: 2026-11-13 (re-checked against a full read of the largest source files; see #49-#58, #67-#69; #71-#80 come from the old `PLAN.md` review).
 
 ## How to use this file
 
-- Every task has a **stable number** (`#12`). Refer to it in commits, issues and chat ("fix #12"). Never renumber; new tasks get the next free number.
-- **Status marker**: `[ ]` not done · `[~]` doing · `[x]` done.
-  Change it when you start or finish a task. Don't delete finished tasks; move them to "Done / stale" at the bottom.
+- Every task has a **stable number** (`#12`). Refer to it in commits, issues and chat ("fix #12"). Never renumber or reuse a number; new tasks get the next free number. **Highest number used so far: #93** (bump it when you add a task).
+- **Status marker**: `[ ]` not done · `[~]` doing.
+  Mark `[~]` when you start a task. When it is finished (or turns out stale), delete its entry; the commit that fixes it should reference the number, so git history keeps the record.
 - **Severity**: `S1` crash / data loss · `S2` broken feature or wrong result · `S3` annoyance or missing small feature · `S4` cleanup / nice to have.
 - **Validity** (result of the audit against the current code):
-  `valid` confirmed in code · `unverified` plausible but needs a repro before work starts · `stale` no longer applies (kept for history).
+  `valid` confirmed in code · `unverified` plausible but needs a repro before work starts · `stale` no longer applies (delete the entry).
 - `Where` gives a file (and line at audit time; lines drift, search for the quoted text).
 - When you resolve a `TODO` comment in the code, remove the comment and tick the task here.
 - Agents: read this file before starting non-trivial work, pick tasks from it, and update the markers.
@@ -91,21 +91,3 @@ Bugs from `docs/TODO.txt` have not been re-reproduced unless stated; `unverified
 - [ ] **#79 · S4 · valid — Test coverage gaps.** No tests for `services/caption_renderer.py`, `services/task.py` (`TaskQueue` chaining/cancel), `services/model_manager.py`, `services/segment_exporter/`, or the `txt` / `rtf` formats in `file_io/`.
 - [ ] **#80 · S4 · valid — One convention for UI strings.** Translatable strings are spread across `strings.py`, `lang/` and `self.tr()` / `QCoreApplication.translate` calls in ~18 modules, with `.ts` files in `translations/`. Pick one (probably `tr()` + `strings.py` for shared strings) and document it in `docs/internationalization.txt`.
 
----
-
-## Done / stale
-
-- [x] **#1 · done — Renamed the `src` package to `anaouder`.** `git mv src anaouder`, imports and mock patches updated, `anaouder.spec` `hiddenimports` → `anaouder.lang.*`, `[tool.setuptools.packages.find] include = ["anaouder*"]` in `pyproject.toml`, `.gitignore` (`*.egg-info/`, `.coverage`), `CLAUDE.md`, `.ts` source locations and `docs/internationalization.txt` updated. Tests, app launch and a Linux PyInstaller build (bundles `anaouder.lang.*`, binary starts) OK. Commits b1979d9, 99af3d6.
-- [x] **#2 · done — Removed `icons/anaouder_splash_ver.png`.** The spec writes the version splash to PyInstaller's `workpath`; the file was deleted in 7e88aec.
-- [x] **#90 · stale — Paste from an external text crashed with `'TextEditWidget' has no attribute 'cursor_pos'`.** `TextEditWidget.paste` now uses `self.textCursor()` (old path `anaouder/text_widget.py` no longer exists). Reopen as a new task if pasting still fails.
-- [x] **#93 · done — Packaging fixes (spec, version via `tomllib`, `copy_metadata`, CI workflows).**
-- [x] **#33 · done — "Adapt to subtitles" removed formatting (italics) from segments split by the subtitle rules.** `apply_subtitle_rules` used `block.text()`; it now slices the block's formatted fragments around the split and rebuilds HTML with `fragments_to_html`. Also fixed `fragments_to_html` crashing (`TextFormat` not orderable) on text that is both bold and italic. Test: `tests/test_document_controller.py::test_subtitle_rules_keep_formatting`.
-- [x] **#49 · done — `TextAligner.autoAlign` leaked signal connections on the shared recognizer.** The `finished` → `start_alignment` and `progress` connections are now tracked (`_connect_recognizer`) and removed (`_disconnect_recognizer`) when the alignment starts, when the hidden transcription is cancelled (`finished` is not emitted on stop) and at the start of every `autoAlign`. Test: `tests/test_aligner.py::test_text_aligner_disconnects_recognizer`.
-- [x] **#50 · done — Auto-align could attach segments to the wrong blocks.** Grouping by `||` moved to `segments_from_alignment`, which returns exactly one entry per sentence (`None` for sentences with no aligned word, including empty ones). The worker fails, and `on_alignment_complete` aborts, if the counts still differ; the worker's `failed` signal now also closes the progress dialog. Tests: `tests/test_aligner.py::test_segments_from_alignment_keeps_one_entry_per_sentence`, `test_aligner_worker_with_empty_sentence`.
-- [x] **#51 · done — "Clear current file cache → Scenes" deleted the transcription.** `CachePanel.clearCurrentCache` now unlinks `cache._get_scenes_path(...)`.
-- [x] **#36 · done — Waveform could be scrolled by wheel beyond its bounds.** The non-smoothed fast scroll in `_scroll_view` now calls `_check_for_out_of_view()`, the single clamp for `view.t_left` (also used by zoom and follow-playhead). Test: `tests/test_waveform_widget.py::test_fast_scroll_without_smoothing_stays_in_bounds`.
-- [x] **#37 · done — Following the playhead could move the view beyond the waveform bounds.** `updatePlayHead` and `toggleFollowPlayHead` now clamp with `_check_for_out_of_view()`. Tests: `tests/test_waveform_widget.py::test_follow_playhead_*`, `test_short_audio_sticks_to_left`.
-- [x] **#53 · done — `WaveformWidget.zoomOut` raised `ZeroDivisionError` with no media loaded.** `zoomIn` / `zoomOut` return early when `audio_len <= 0` and clamp through `_check_for_out_of_view()`. Tests: `tests/test_waveform_widget.py::test_zoom_*`.
-- [x] **#55 · done — `FileManager.export_to_text_format` raised `UnboundLocalError` when `format_eaf` failed.** It now logs the error and returns. Test: `tests/test_file_manager.py::test_export_eaf_error_does_not_raise`.
-- [x] **#81 · S2 · done — Undoing an alignment left the sentence highlighted as aligned.** Undo of `AlignWithSelectionCommand` / `AlignBlockWithSegmentCommand` restored the block metadata with `setBlockMetadata`, which didn't rehighlight, and before the segment was removed. `setBlockMetadata` now rehighlights the block and both undos remove the segment first. Tests in `tests/test_commands.py`.
-- [x] **#82 · S3 · done — Zoom ignored "follow playhead".** `WaveformWidget.zoomIn` / `zoomOut` pivoted on the mouse position even when following the playhead; they now center the view on the playhead in that mode (`_set_zoom`). Tests in `tests/test_waveform_widget.py`.

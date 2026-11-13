@@ -40,7 +40,7 @@ Entry: `main.py` (ffmpeg setup, logging) → `anaouder/main.py` (`main()`, `Tran
 
 ## Task tracking
 
-`TODO.md` (repo root) is the single list of pending tasks, bugs and code `TODO`s, each with a number, a status marker (`[ ]` / `[~]` / `[x]`), a severity (S1–S4) and a validity check. Read it before non-trivial work, reference tasks by number (e.g. "fix #30"), update the marker when you start or finish one, and remove the matching `TODO` comment in the code when you resolve it. Finished tasks move to the "Done / stale" section at the bottom; never delete entries (when adding tasks, check the diff doesn't drop that section). The application package is `anaouder` (renamed from `src` in task #1); import as `anaouder.<module>`.
+`TODO.md` (repo root) is the single list of pending tasks, bugs and code `TODO`s, each with a number, a status marker (`[ ]` / `[~]`), a severity (S1–S4) and a validity check. Read it before non-trivial work, reference tasks by number (e.g. "fix #30"), mark it `[~]` when you start, and when it is finished delete its entry (reference the number in the commit message) and remove the matching `TODO` comment in the code. Never reuse a task number: new tasks take the next number after the "highest number used" noted in the file, which you then bump. The application package is `anaouder` (renamed from `src` in task #1); import as `anaouder.<module>`.
 
 ## Gotchas
 
