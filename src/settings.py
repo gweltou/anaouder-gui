@@ -67,7 +67,7 @@ SUBTITLES_DEFAULT_COLOR = QColor(255, 255, 255)
 SUBTITLES_BLOCK_DEFAULT_COLOR = QColor(0, 0, 0, 100)
 
 # Autosave settings
-AUTOSAVE_DEFAULT_INTERVAL = 0.2  # 1 minute
+AUTOSAVE_DEFAULT_INTERVAL = 1.0  # minutes
 AUTOSAVE_BACKUP_NUMBER = 3  # Number of files to keep at most
 
 

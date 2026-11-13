@@ -21,6 +21,7 @@ File operations manager for Anaouder.
 Handles loading and saving of ALI, SRT, and media files.
 """
 
+import glob
 import os.path
 import re
 import time
@@ -68,26 +69,47 @@ class FileManager(QObject):
         self.file_prompts = file_prompts
 
         # Auto save state
-        self._last_saved_index = 0
-        self._last_autosave_time = 0.0
-        self._last_manual_save_time = 0.0
+        self._last_autosaved_index: int | None = None
+        self._last_autosave_time = time.time()
 
 
-    def read_file(self, file_path: Path, find_media = True, ask_media = True) -> dict:
+    def reset_autosave_state(self) -> None:
+        """Forget autosave bookkeeping. Call when a document is opened/closed."""
+        self._last_autosaved_index = None
+        self._last_autosave_time = time.time()
+
+
+    def read_file(
+        self,
+        file_path: Path,
+        find_media = True,
+        ask_media = True,
+        recover_latest_backup = False
+    ) -> dict:
+        """Read a file and return its data.
+
+        Args:
+            recover_latest_backup (bool):
+                For ALI files, load the most recent autosave if it is newer
+                than the file, without asking the user which one to use.
+                The returned dict has "is_backup" set to True in that case.
+        """
+        self.reset_autosave_state()
         ext = file_path.suffix.lower()
         file_data = {}
 
         try:
             if ext == ".ali":
                 # Check if we should open a backup file instead
-                file_to_load = self._select_file_to_load(file_path)
-                if file_to_load is None:
-                    raise FileOperationError("")
+                file_to_load = self._select_file_to_load(
+                    file_path, recover_latest_backup
+                )
 
                 file_data = self.read_ali_file(file_to_load)
 
                 media_path = file_data.get("media-path")
                 is_backup = file_to_load != file_path
+                file_data["is_backup"] = is_backup
                 if media_path and is_backup:
                     # Change the media filepath for backup files
                     # to point to the parent folder
@@ -132,26 +154,23 @@ class FileManager(QObject):
             new_media_path = self.file_prompts.askReloadMedia(file_path, media_path)
             file_data["media-path"] = new_media_path
 
-        self._last_saved_index = 0
-
         return file_data
 
 
-    def _select_file_to_load(self, file_path: Path) -> Path:
+    def _select_file_to_load(
+        self, file_path: Path, recover_latest_backup = False
+    ) -> Path:
         """Determine whether to load original file or backup"""
 
-        backup_list = self.get_backup_list(file_path)
+        backup_list = self.get_unsaved_backups(file_path)
         if not backup_list:
             return file_path
 
-        backup_modification_time = backup_list[-1][1]
+        if recover_latest_backup:
+            return backup_list[-1][0]
 
-        # Compare modification time
-        if backup_modification_time > file_path.stat().st_mtime:
-            # Return the default file_path if the user cancelled the backup selection
-            return self.file_prompts.chooseBackup(backup_list) or file_path
-
-        return file_path
+        # Return the default file_path if the user cancelled the backup selection
+        return self.file_prompts.chooseBackup(backup_list) or file_path
 
 
     @staticmethod
@@ -409,7 +428,8 @@ class FileManager(QObject):
             if is_autosave:
                 self._last_autosave_time = time.time()
             else:
-                self._last_manual_save_time = time.time()
+                # Everything is saved, the next change must trigger a new autosave
+                self._last_autosaved_index = None
 
 
     def auto_save(
@@ -418,8 +438,16 @@ class FileManager(QObject):
         data: list[tuple[str, Segment | None]],
         media_path: Path | None,
         undo_stack_index: int
-    ):
-        if undo_stack_index == self._last_saved_index: # Nothing new to save
+    ) -> None:
+        """Write an autosave of an ALI document, if needed.
+
+        Does nothing if the file isn't an ALI file, if nothing changed since
+        the last autosave or if the autosave interval hasn't elapsed.
+        """
+        if file_path.suffix.lower() != ".ali":
+            return
+
+        if undo_stack_index == self._last_autosaved_index: # Nothing new to save
             return
 
         autosave_interval_second = 60.0 * app_settings.value(
@@ -438,11 +466,11 @@ class FileManager(QObject):
             # Create "autosave" folder, if necessary
             autosave_folder.mkdir(exist_ok=True)
 
-            self.save_ali_file(autosave_path, data, media_path)
+            self.save_ali_file(autosave_path, data, media_path, is_autosave=True)
 
             # Remove old backups, if necessary
             old_backups = sorted(
-                autosave_folder.glob(str(file_path.stem) + "@*.ali")
+                autosave_folder.glob(glob.escape(file_path.stem) + "@*.ali")
             )
             max_backups = int(
                 app_settings.value(
@@ -458,7 +486,7 @@ class FileManager(QObject):
             logger.error(message)
 
         else:
-            self._last_saved_index = undo_stack_index
+            self._last_autosaved_index = undo_stack_index
 
 
     def export_to_text_format(
@@ -520,16 +548,59 @@ class FileManager(QObject):
 
 
     def get_backup_list(self, file_path: Path) -> list[tuple[Path, float]]:
-        """Get the list of backup files and timestamps for the given ALI file."""
+        """Get the list of backup files and timestamps for the given ALI file,
+        oldest first."""
         autosave_folder = file_path.parent / AUTOSAVE_FOLDER_NAME
         if not autosave_folder.exists():
             return []
 
         backup_list = []
-        for filename in autosave_folder.glob(str(file_path.stem) + "@*.ali"):
-            backup_list.append( (filename, filename.stat().st_mtime) )
+        for filename in autosave_folder.glob(glob.escape(file_path.stem) + "@*.ali"):
+            try:
+                backup_list.append( (filename, filename.stat().st_mtime) )
+            except OSError:
+                continue  # File vanished
 
         return sorted(backup_list, key=lambda x: x[1])
+
+
+    def get_unsaved_backups(self, file_path: Path) -> list[tuple[Path, float]]:
+        """Backups holding changes that were never manually saved,
+        i.e. those more recent than the file itself (oldest first)."""
+        backups = self.get_backup_list(file_path)
+        if not file_path.exists():
+            return backups
+        saved_time = file_path.stat().st_mtime
+        return [b for b in backups if b[1] > saved_time]
+
+
+    def has_unsaved_backup(self, file_path: Path) -> bool:
+        """True if an ALI file has autosaves newer than its last manual save."""
+        return file_path.suffix.lower() == ".ali" and bool(
+            self.get_unsaved_backups(file_path)
+        )
+
+
+    def clear_unsaved_backups(self, file_path: Path) -> None:
+        """Delete autosaves newer than the last manual save of the file.
+
+        Older autosaves are kept, they are the history of previous manual saves.
+        """
+        if file_path.suffix.lower() != ".ali":
+            return
+
+        for backup_path, _ in self.get_unsaved_backups(file_path):
+            try:
+                backup_path.unlink()
+                logger.debug(f"Removed autosave {backup_path}")
+            except OSError as e:
+                logger.warning(f"Couldn't remove autosave {backup_path}: {e}")
+
+        # Remove the autosave folder if it is empty
+        try:
+            (file_path.parent / AUTOSAVE_FOLDER_NAME).rmdir()
+        except OSError:
+            pass  # Not empty or doesn't exist
 
 
     # Recent files functions

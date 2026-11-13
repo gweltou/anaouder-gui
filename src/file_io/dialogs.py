@@ -307,6 +307,27 @@ class FilePrompts:
         return self._prompt_multiple_backups(backups)
 
 
+    def askRecoverAfterCrash(self, file_path: Path) -> bool:
+        """Ask whether the document open during a crash should be recovered."""
+        question = self.main_window.tr(
+            "Recover the last autosave of '{filename}'?"
+        ).format(filename=file_path.name)
+        msg_box = QMessageBox(
+            QMessageBox.Icon.Question,
+            app_strings.TR_AUTOSAVE_BACKUPS,
+            self.main_window.tr("The application did not close properly.")
+            + "\n\n" + question,
+            parent=self.main_window,
+        )
+        yes_button = msg_box.addButton(
+            app_strings.TR_YES, QMessageBox.ButtonRole.YesRole
+        )
+        msg_box.addButton(app_strings.TR_NO, QMessageBox.ButtonRole.NoRole)
+        msg_box.setDefaultButton(yes_button)
+        msg_box.exec()
+        return msg_box.clickedButton() == yes_button
+
+
     def chooseEafTiers(self, tiers: dict[str, list]) -> list[str] | None:
         """Return the selected tier names, or None if cancelled."""
         dialog = ImportDialogEAF(self.main_window, tiers)
@@ -383,6 +404,6 @@ class FilePrompts:
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_index = list_widget.currentRow()
-            return backup_files[selected_index] if selected_index >= 0 else None
+            return backup_files[selected_index][0] if selected_index >= 0 else None
 
         return None

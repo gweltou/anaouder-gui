@@ -174,30 +174,25 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.SelectAll), self)
         shortcut.activated.connect(self.document_controller.selectAll)
 
-        shortcut = QShortcut(QKeySequence("Ctrl+Shift+F12"), self)
-        shortcut.activated.connect(crash_exception)
+        if args is not None and args.debug:
+            # Simulate a crash, to test the document recovery
+            shortcut = QShortcut(QKeySequence("Ctrl+Shift+F12"), self)
+            shortcut.activated.connect(crash_exception)
 
         # Load model list for given language
         self.changeLanguage(DEFAULT_LANGUAGE)
 
-        # Should we try to rescue the last opened file ?
+        # Was the application closed properly last time ?
         safely_closed = app_settings.value("safely_closed", True, bool)
         app_settings.setValue("safely_closed", False) # Reset state
-
-        if not safely_closed:
-            logger.warning("The application was not safely closed.")
-
-            last_file = app_settings.value("last_opened_file", "", str)
-            if last_file:
-                print(f"trying to rescue {last_file}")
-                # Open a dialog to ask if we should rescue the last opened file
-                if True:
-                    self.onOpenFile(Path(last_file))
-                    return
+        app_settings.sync()  # Must reach the disk, in case of crash
 
         if args is not None:
+            # Files explicitly requested on the command line have priority
+            # over the crash recovery
             if args.filename is not None:
                 self.onOpenFile(args.filename)
+                return
             elif args.last:
                 # Load last opened file
                 last_file = app_settings.value("last_opened_file", "", str)
@@ -205,6 +200,26 @@ class MainWindow(QMainWindow):
                     self.onOpenFile(Path(last_file))
                 else:
                     logger.error("No recent file to load...")
+                return
+
+        if not safely_closed:
+            logger.warning("The application was not safely closed.")
+            self._recover_after_crash()
+
+
+    def _recover_after_crash(self) -> None:
+        """Offer to reopen the last opened document with its latest autosave."""
+        last_file = app_settings.value("last_opened_file", "", str)
+        if not last_file:
+            return
+
+        last_file = Path(last_file)
+        if not self.file_manager.has_unsaved_backup(last_file):
+            logger.debug(f"No autosave to recover for {last_file}")
+            return
+
+        if self.file_prompts.askRecoverAfterCrash(last_file):
+            self.onOpenFile(last_file, recover_backup=True)
 
 
     def updateThemeColors(self) -> None:
@@ -1130,7 +1145,10 @@ class MainWindow(QMainWindow):
 
 
     def auto_save(self):
-        if self.file_path is None:
+        if self.file_path is None or self.file_path.suffix.lower() != ".ali":
+            return
+
+        if self.undo_stack.isClean():  # Nothing to save
             return
 
         if self.media_controller.isPlaying():  # Don't save during playback
@@ -1144,8 +1162,19 @@ class MainWindow(QMainWindow):
         )
 
 
-    def onOpenFile(self, file_path: Path | None = None, keep_media=False) -> None:
-        """Hub function for opening files"""
+    def onOpenFile(
+        self,
+        file_path: Path | None = None,
+        keep_media=False,
+        recover_backup=False
+    ) -> None:
+        """Hub function for opening files
+
+        Args:
+            keep_media (bool): Keep the current media loaded
+            recover_backup (bool):
+                Load the latest autosave without asking, if there is one
+        """
         logger.debug(f"onOpenFile({file_path!s})")
 
         supported_filter = f"Supported files ({' '.join(['*' + fmt for fmt in ALL_COMPATIBLE_FORMATS])})"
@@ -1164,6 +1193,11 @@ class MainWindow(QMainWindow):
                 return
         file_path = Path(file_path)
 
+        # Close the current document first (ask to save, clear autosaves...)
+        if self.file_path is not None or not self.undo_stack.isClean():
+            if not self.askCloseFile(keep_media=keep_media):
+                return  # Canceled by the user
+
         self.document_controller.clear()
         if not keep_media:
             self.waveform.clear()
@@ -1171,18 +1205,27 @@ class MainWindow(QMainWindow):
             self.timecode_widget.setFps(100)
 
         self.file_path = file_path
-        app_settings.setValue("last_opened_file", str(file_path))
 
         ext = file_path.suffix.lower()
 
         if ext in MEDIA_FORMATS:
             # The file is a video or an audio
+            app_settings.setValue("last_opened_file", str(file_path))
             self.openMediaFile(file_path)
             self.updateWindowTitle()
             return
 
         # The file is a document
-        file_data = self.file_manager.read_file(file_path)
+        file_data = self.file_manager.read_file(
+            file_path, recover_latest_backup=recover_backup
+        )
+        if not file_data:
+            # Read error or cancelled
+            self.file_path = None
+            self.updateWindowTitle()
+            return
+
+        app_settings.setValue("last_opened_file", str(file_path))
 
         # Load textual data
         if "document" in file_data:
@@ -1195,35 +1238,51 @@ class MainWindow(QMainWindow):
 
         # Resume state if previously opened
         self._load_document_state(file_path)
+
+        if file_data.get("is_backup"):
+            # The content comes from an autosave: it differs from the file on disk
+            self.undo_stack.resetClean()
+
         self.file_manager.add_recent_file(file_path)
         self.updateWindowTitle()
 
 
-    def askCloseFile(self) -> bool:
+    def askCloseFile(self, keep_media=False) -> bool:
         """Ask the user if the file should be saved before closing it.
+
+        Autosaves newer than the last manual save are removed.
+
+        Args:
+            keep_media (bool): Don't unload the current media
 
         Return:
             False if the action was canceled by the user
         """
         logger.debug("askCloseFile")
 
+        # The file may be saved under another name by the user
+        original_path = self.file_path
+
         if not self.undo_stack.isClean():
             ret = self.prompts.askYesNoCancel(
                 self.tr("Unsaved work"),
                 self.tr("Do you want to save your changes?")
             )
-            print(f"{ret=}")
             if ret == 2:
                 # Save current file
                 if not self.onSaveFile():
                     # Action cancelled by user
                     return False
-            elif ret == 3:
-                # No
-                pass
             elif ret == 4:
                 # Canceled
                 return False
+            # ret == 3: No, changes are discarded
+
+        # Remove autosaves newer than the last manual save
+        for path in {original_path, self.file_path}:
+            if path is not None:
+                self.file_manager.clear_unsaved_backups(path)
+        self.file_manager.reset_autosave_state()
 
         # Save document state to cache
         if self.file_path and self.file_path.suffix == ".ali":
@@ -1235,15 +1294,13 @@ class MainWindow(QMainWindow):
 
         self.file_path = None
         self.document_controller.clear()
-        self.document_controller.setMediaPath(None)
-        self.media_controller.unloadMedia()
         self.status_label.clear()
         self.undo_stack.clear()
-        self.waveform.clear()
-        QTimer.singleShot(0, self.waveform.update) # Force the waveform to clear
-
-        # Remove autosaves newer than the last manual save
-
+        if not keep_media:
+            self.document_controller.setMediaPath(None)
+            self.media_controller.unloadMedia()
+            self.waveform.clear()
+            QTimer.singleShot(0, self.waveform.update) # Force the waveform to clear
 
         return True
 
