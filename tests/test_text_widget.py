@@ -4,9 +4,9 @@ import pytest
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QApplication
 
-from src.main import MainWindow
-from src.strings import app_strings
-from src.ui.icons import loadIcons
+from anaouder.main import MainWindow
+from anaouder.strings import app_strings
+from anaouder.ui.icons import loadIcons
 
 
 @pytest.fixture(scope="session")

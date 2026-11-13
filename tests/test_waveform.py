@@ -3,8 +3,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.audio import get_samples
-from src.ui.waveform.data import WaveformData
+from anaouder.audio import get_samples
+from anaouder.ui.waveform.data import WaveformData
 
 SR = 44100  # sample rate used across tests
 

@@ -1,5 +1,5 @@
-import src.lang as lang
-from src.services.aligner import smart_split_text
+import anaouder.lang as lang
+from anaouder.services.aligner import smart_split_text
 
 
 def test_aligner_word_boundary():

@@ -1,0 +1,15 @@
+.claude
+.venv/
+__pycache__/
+build/
+builds/
+building/Linux/Anaouder.AppDir/
+translations/*.qm
+dist/
+docs/
+icons/bck
+examples/
+.DS_Store
+anaouder_app.log
+*.egg-info/
+.coverage

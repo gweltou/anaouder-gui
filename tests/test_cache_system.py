@@ -1,5 +1,5 @@
 from pathlib import Path
-from src.cache_system import cache
+from anaouder.cache_system import cache
 
 
 test_dir = Path(__file__).parent

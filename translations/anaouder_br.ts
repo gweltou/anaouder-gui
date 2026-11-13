@@ -11,162 +11,162 @@
 <context>
     <name>ActionManager</name>
     <message>
-        <location filename="../src/actions.py" line="83"/>
+        <location filename="../anaouder/actions.py" line="83"/>
         <source>&amp;Open</source>
         <translation>&amp;Digeriñ</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="87"/>
+        <location filename="../anaouder/actions.py" line="87"/>
         <source>&amp;Save</source>
         <translation>&amp;Enrollañ</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="91"/>
+        <location filename="../anaouder/actions.py" line="91"/>
         <source>Save as</source>
         <translation>Enrollañ evel</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="96"/>
+        <location filename="../anaouder/actions.py" line="96"/>
         <source>E&amp;xit</source>
         <translation>&amp;Kuitaat</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="96"/>
+        <location filename="../anaouder/actions.py" line="96"/>
         <source>Quit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="103"/>
+        <location filename="../anaouder/actions.py" line="103"/>
         <source>Import a media file (audio or video)</source>
         <translation>Enporzhiañ ur media aodio pe video</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="107"/>
+        <location filename="../anaouder/actions.py" line="107"/>
         <source>Import a subtitles file, keep current media</source>
         <translation>Enporzhiañ ur restr istitloù, o virout ar media</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="110"/>
+        <location filename="../anaouder/actions.py" line="110"/>
         <source>Import a RTF file</source>
         <translation>Enporzhiañ ur restr RTF</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="111"/>
+        <location filename="../anaouder/actions.py" line="111"/>
         <source>Import a RTF movie script file (DIZALE)</source>
         <translation>Enporzhiañ ur skript film e stumm RTF (DIZALE)</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="115"/>
+        <location filename="../anaouder/actions.py" line="115"/>
         <source>&amp;SubRip (.srt)</source>
         <translation>Istitloù &amp;SubRip (.srt)</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="116"/>
+        <location filename="../anaouder/actions.py" line="116"/>
         <source>Export as SubRip subtitle file</source>
         <translation>Ezporzhiañ evel istitloù SubRip</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="119"/>
+        <location filename="../anaouder/actions.py" line="119"/>
         <source>Raw &amp;text (.txt)</source>
         <translation>&amp;Testenn griz (.txt)</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="120"/>
+        <location filename="../anaouder/actions.py" line="120"/>
         <source>Export as simple text document</source>
         <translation>Ezporzhiañ evel un destenn krai</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="124"/>
+        <location filename="../anaouder/actions.py" line="124"/>
         <source>Export as ELAN annotation file</source>
         <translation>Ezporzhiañ evel ur restr ELAN</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="127"/>
+        <location filename="../anaouder/actions.py" line="127"/>
         <source>&amp;Audio segments</source>
         <translation>Rannoù &amp;aodio</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="128"/>
+        <location filename="../anaouder/actions.py" line="128"/>
         <source>Export audio segments as individual audio files</source>
         <translation>Ezporzhiañ ar rannoù aodio e restroù hiniennel</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="132"/>
+        <location filename="../anaouder/actions.py" line="132"/>
         <source>&amp;Parameters</source>
         <translation>&amp;Arventennoù</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="137"/>
+        <location filename="../anaouder/actions.py" line="137"/>
         <source>Unaligned sentences</source>
         <translation>Frazennoù anlinennet</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="142"/>
+        <location filename="../anaouder/actions.py" line="142"/>
         <source>Speech density</source>
         <translation>Stankter ar gomz</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="152"/>
+        <location filename="../anaouder/actions.py" line="152"/>
         <source>&amp;About</source>
         <translation>A-&amp;zivout</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="156"/>
+        <location filename="../anaouder/actions.py" line="156"/>
         <source>Undo</source>
         <translation>Dizober</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="163"/>
+        <location filename="../anaouder/actions.py" line="163"/>
         <source>Redo</source>
         <translation>Adober</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="171"/>
+        <location filename="../anaouder/actions.py" line="171"/>
         <source>Play/Pause</source>
         <translation>Lenn/Ehanañ</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="177"/>
+        <location filename="../anaouder/actions.py" line="177"/>
         <source>Replay segment</source>
         <translation>Adlenn ar rann</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="182"/>
+        <location filename="../anaouder/actions.py" line="182"/>
         <source>Follow playhead</source>
         <translation>Heuliañ penn al lenner</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="191"/>
+        <location filename="../anaouder/actions.py" line="191"/>
         <source>Transcribe</source>
         <translation>Treuzskrivañ</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="200"/>
+        <location filename="../anaouder/actions.py" line="200"/>
         <source>&amp;Hidden transcription</source>
         <translation>Treuzskrivadur kuzh</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="201"/>
+        <location filename="../anaouder/actions.py" line="201"/>
         <source>Allow for smart splitting and auto-alignment operations</source>
         <translation>Evit aotreañ ar perzhioù rannañ poellek ha linennañ emgefreek</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="206"/>
+        <location filename="../anaouder/actions.py" line="206"/>
         <source>&amp;Auto align</source>
         <translation>&amp;Linennañ emgefreek</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="213"/>
+        <location filename="../anaouder/actions.py" line="213"/>
         <source>Delete utterance</source>
         <translation>Skarzhañ ar rann</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="217"/>
+        <location filename="../anaouder/actions.py" line="217"/>
         <source>Insert new line</source>
         <translation>Lammat ul linenn</translation>
     </message>
     <message>
-        <location filename="../src/actions.py" line="224"/>
+        <location filename="../anaouder/actions.py" line="224"/>
         <source>Insert em dashes</source>
         <translation>Lakaat tiredoù diviz</translation>
     </message>
@@ -248,7 +248,7 @@
 <context>
     <name>DocumentController</name>
     <message>
-        <location filename="../src/document_controller.py" line="912"/>
+        <location filename="../anaouder/document_controller.py" line="912"/>
         <source>Select one or more utterances first</source>
         <translation>Diuzit ur rann pe rannoù da gentañ</translation>
     </message>
@@ -345,7 +345,7 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/main.py" line="451"/>
+        <location filename="../anaouder/main.py" line="451"/>
         <source>&amp;File</source>
         <translation>&amp;Restr</translation>
     </message>
@@ -374,17 +374,17 @@
         <translation>&amp;Kuitaat</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="487"/>
+        <location filename="../anaouder/main.py" line="487"/>
         <source>&amp;Operations</source>
         <translation>&amp;Oberatadennoù</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="525"/>
+        <location filename="../anaouder/main.py" line="525"/>
         <source>&amp;Display</source>
         <translation>S&amp;krammañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="541"/>
+        <location filename="../anaouder/main.py" line="541"/>
         <source>Subtitle margin</source>
         <translation>Marz istitloù</translation>
     </message>
@@ -397,7 +397,7 @@
         <translation>Stankter ar gomz</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="434"/>
+        <location filename="../anaouder/main.py" line="434"/>
         <source>&amp;Help</source>
         <translation>&amp;Sikour</translation>
     </message>
@@ -410,17 +410,17 @@
         <translation>Treuzskrivañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="614"/>
+        <location filename="../anaouder/main.py" line="614"/>
         <source>Speech-to-text model</source>
         <translation>Patrom digejañ ar vouezh</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="547"/>
+        <location filename="../anaouder/main.py" line="547"/>
         <source>Scenes transitions</source>
         <translation>Cheñch senennoù</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="622"/>
+        <location filename="../anaouder/main.py" line="622"/>
         <source>Normalize numbers</source>
         <translation>Skoueriekaat an niveroù</translation>
     </message>
@@ -429,7 +429,7 @@
         <translation>Dizober</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="456"/>
+        <location filename="../anaouder/main.py" line="456"/>
         <source>Open &amp;recent</source>
         <translation>Digeriñ &amp;nevesañ</translation>
     </message>
@@ -438,12 +438,12 @@
         <translation>Adober</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="744"/>
+        <location filename="../anaouder/main.py" line="744"/>
         <source>Go to first utterance</source>
         <translation>Distreiñ d&apos;ar rann gentañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="753"/>
+        <location filename="../anaouder/main.py" line="753"/>
         <source>Previous utterance</source>
         <translation>Rann a-raok</translation>
     </message>
@@ -452,52 +452,52 @@
         <translation>Selaou ar rann-mañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="767"/>
+        <location filename="../anaouder/main.py" line="767"/>
         <source>Next utterance</source>
         <translation>Rann da-heul</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="776"/>
+        <location filename="../anaouder/main.py" line="776"/>
         <source>Loop</source>
         <translation>Rodellañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="795"/>
+        <location filename="../anaouder/main.py" line="795"/>
         <source>Audio volume</source>
         <translation>Ampled son</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="811"/>
+        <location filename="../anaouder/main.py" line="811"/>
         <source>Audio speed</source>
         <translation>Tizh son</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="859"/>
+        <location filename="../anaouder/main.py" line="859"/>
         <source>Welcome</source>
         <translation>Donemat</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="860"/>
+        <location filename="../anaouder/main.py" line="860"/>
         <source>A Speech-To-Text model is needed for automatic transcription.</source>
         <translation>Deus ur patrom digejañ ar vouezh a zo ezhomm gant an treuzskrivañ emgefreek.</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="861"/>
+        <location filename="../anaouder/main.py" line="861"/>
         <source>Would you like to download one?</source>
         <translation>Fellout a ra deoc&apos;h pellgargañ unan ?</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1183"/>
+        <location filename="../anaouder/main.py" line="1183"/>
         <source>No media file</source>
         <translation>Restr media ebet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1184"/>
+        <location filename="../anaouder/main.py" line="1184"/>
         <source>Couldn&apos;t find media file for &apos;{filename}&apos;</source>
         <translation>N&apos;eo ket bet kavet a restr media evit &apos;{filename}&apos;</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1187"/>
+        <location filename="../anaouder/main.py" line="1187"/>
         <source>&apos;{filepath}&apos; doesn&apos;t exist.</source>
         <translation>&apos;{filepath}&apos; n&apos;eus ket anezhi.</translation>
     </message>
@@ -518,27 +518,27 @@
         <translation>Dibabit unan :</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1399"/>
+        <location filename="../anaouder/main.py" line="1399"/>
         <source>No recent files</source>
         <translation>Teul nevez ebet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1417"/>
+        <location filename="../anaouder/main.py" line="1417"/>
         <source>Clear Recent Files</source>
         <translation>Skarzhañ roll an teulioù nevesañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2103"/>
+        <location filename="../anaouder/main.py" line="2103"/>
         <source>{n} segments found</source>
         <translation>{n} rann kavet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2191"/>
+        <location filename="../anaouder/main.py" line="2191"/>
         <source>Can&apos;t create a segment over another segment</source>
         <translation>Dibosupl eo krouiñ ur rann a-us d&apos;unan all</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2205"/>
+        <location filename="../anaouder/main.py" line="2205"/>
         <source>Select part of the waveform first</source>
         <translation>Diuzit ul lodenn war ar wagenn son da gentañ</translation>
     </message>
@@ -559,7 +559,7 @@
         <translation>Enporzhiañ ur restr istitloù, o virout ar media</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="469"/>
+        <location filename="../anaouder/main.py" line="469"/>
         <source>&amp;Export as</source>
         <translation>E&amp;zporzhiañ e stumm</translation>
     </message>
@@ -576,12 +576,12 @@
         <translation>Un teul skrid simpl, hep framm</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="498"/>
+        <location filename="../anaouder/main.py" line="498"/>
         <source>Auto &amp;Segment</source>
         <translation>&amp;Didroc&apos;hañ emgefreek</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="499"/>
+        <location filename="../anaouder/main.py" line="499"/>
         <source>Find segments based on sound activity</source>
         <translation>Kavout ar rannoù son hervez an ehanoù</translation>
     </message>
@@ -590,173 +590,173 @@
         <translation>&amp;Azasaat d&apos;an istitloù</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="508"/>
+        <location filename="../anaouder/main.py" line="508"/>
         <source>Apply subtitles rules to the segments</source>
         <translation>Kemmañ ar rannoù hag and destenn hervez reolennoù an istitlañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="514"/>
+        <location filename="../anaouder/main.py" line="514"/>
         <source>&amp;Render frames</source>
         <translation>&amp;Krouiñ ar skeudennoù</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="528"/>
+        <location filename="../anaouder/main.py" line="528"/>
         <source>&amp;Video</source>
         <translation>&amp;Video</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="535"/>
+        <location filename="../anaouder/main.py" line="535"/>
         <source>&amp;Misspelling</source>
         <translation>&amp;Gwiriañ ar reizhskrivañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="553"/>
+        <location filename="../anaouder/main.py" line="553"/>
         <source>Coloring</source>
         <translation>Livadur</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="638"/>
+        <location filename="../anaouder/main.py" line="638"/>
         <source>Italic</source>
         <translation>Stouet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="646"/>
+        <location filename="../anaouder/main.py" line="646"/>
         <source>Bold</source>
         <translation>Tev</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="703"/>
+        <location filename="../anaouder/main.py" line="703"/>
         <source>Create a selection</source>
         <translation>Tresañ un diuz</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="711"/>
+        <location filename="../anaouder/main.py" line="711"/>
         <source>Create segment from selection</source>
         <translation>Krouiñ ur rann diwar un diuz</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="719"/>
+        <location filename="../anaouder/main.py" line="719"/>
         <source>Delete segment</source>
         <translation>Dilemel ur rann</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="729"/>
+        <location filename="../anaouder/main.py" line="729"/>
         <source>Snap to video frames</source>
         <translation>Steudañ d&apos;ar skeudennoù video</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="975"/>
+        <location filename="../anaouder/main.py" line="975"/>
         <source>Save Error</source>
         <translation>Fazi Enrollañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="976"/>
+        <location filename="../anaouder/main.py" line="976"/>
         <source>Couldn&apos;t save file to &apos;{filename}&apos;</source>
         <translation>Dibosubl da saveteiñ ar restr &apos;{filename}&apos;</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1051"/>
+        <location filename="../anaouder/main.py" line="1051"/>
         <source>Autosave failed: {exception}</source>
         <translation>Kudenn emenrollañ: {exception}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1126"/>
+        <location filename="../anaouder/main.py" line="1126"/>
         <source>Bad file type: {file_path}</source>
         <translation>Ur stumm fall a zo gant a restr: {file_path}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1158"/>
+        <location filename="../anaouder/main.py" line="1158"/>
         <source>Couldn&apos;t read file &apos;{filename}&apos;</source>
         <translation>Dibosubl lenn ar restr &apos;{filename}&apos;</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1505"/>
+        <location filename="../anaouder/main.py" line="1505"/>
         <source>Media total duration</source>
         <translation>Padelezh hollek</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1519"/>
+        <location filename="../anaouder/main.py" line="1519"/>
         <source>Video framerate</source>
         <translation>Lusk skeudennoù ar media</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1530"/>
+        <location filename="../anaouder/main.py" line="1530"/>
         <source>No image</source>
         <translation>Skeudenn ebet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2621"/>
+        <location filename="../anaouder/main.py" line="2621"/>
         <source>Transcribed</source>
         <translation>Treuzskrivet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1082"/>
+        <location filename="../anaouder/main.py" line="1082"/>
         <source>Open File</source>
         <translation>Digeriñ ar restr</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1152"/>
-        <location filename="../src/main.py" line="1157"/>
+        <location filename="../anaouder/main.py" line="1152"/>
+        <location filename="../anaouder/main.py" line="1157"/>
         <source>Read Error</source>
         <translation>Fazi Lenn</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="1351"/>
+        <location filename="../anaouder/main.py" line="1351"/>
         <source>Open Subtitles File</source>
         <translation>Digeriñ ur restr istitloù</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2608"/>
+        <location filename="../anaouder/main.py" line="2608"/>
         <source>Switching language</source>
         <translation>Cheñch yezh</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2609"/>
+        <location filename="../anaouder/main.py" line="2609"/>
         <source>You need to restart the application to update the UI language.</source>
         <translation>Ret eo deoc&apos;h adloc&apos;hañ ar meziant evit ma vefe cheñchet ar yezh.</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2397"/>
+        <location filename="../anaouder/main.py" line="2397"/>
         <source>Drop to open: {}</source>
         <translation>Laoskit evit digeriñ: {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="464"/>
+        <location filename="../anaouder/main.py" line="464"/>
         <source>&amp;Import</source>
         <translation>E&amp;nporzhiañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="507"/>
+        <location filename="../anaouder/main.py" line="507"/>
         <source>Adapt to &amp;subtitles</source>
         <translation>Azasaat d&apos;an &amp;istitloù</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2400"/>
+        <location filename="../anaouder/main.py" line="2400"/>
         <source>Cannot open this file type</source>
         <translation>Ne vez ket lennet ar stumm restr-mañ</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2454"/>
+        <location filename="../anaouder/main.py" line="2454"/>
         <source>Unsaved work</source>
         <translation>Labour dienrollet</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2455"/>
+        <location filename="../anaouder/main.py" line="2455"/>
         <source>Do you want to save your changes?</source>
         <translation>C&apos;hoant hoc&apos;h eus da enrollañ ho labour ?</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2573"/>
+        <location filename="../anaouder/main.py" line="2573"/>
         <source>start: {}</source>
         <translation>krog: {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2574"/>
+        <location filename="../anaouder/main.py" line="2574"/>
         <source>end: {}</source>
         <translation>fin: {}</translation>
     </message>
     <message>
-        <location filename="../src/main.py" line="2578"/>
+        <location filename="../anaouder/main.py" line="2578"/>
         <source>dur: {}s</source>
         <translation>pad: {}e</translation>
     </message>
@@ -841,12 +841,12 @@
         <translation>Titl ebet</translation>
     </message>
     <message>
-        <location filename="../src/hunspell.py" line="54"/>
+        <location filename="../anaouder/hunspell.py" line="54"/>
         <source>Loading hunspell dictionary</source>
         <translation>O kargañ geriadur Hunspell</translation>
     </message>
     <message>
-        <location filename="../src/hunspell.py" line="58"/>
+        <location filename="../anaouder/hunspell.py" line="58"/>
         <source>Hunspell dictionary loaded</source>
         <translation>Geriadur Hunspell karget</translation>
     </message>
@@ -854,17 +854,17 @@
 <context>
     <name>RecognizerWorker</name>
     <message>
-        <location filename="../src/transcriber.py" line="150"/>
+        <location filename="../anaouder/transcriber.py" line="150"/>
         <source>Transcribing whole file</source>
         <translation>Treuzskrivañ ar restr a-bezh</translation>
     </message>
     <message>
-        <location filename="../src/transcriber.py" line="234"/>
+        <location filename="../anaouder/transcriber.py" line="234"/>
         <source>Error during transcription: {error}</source>
         <translation>Ur gudenn zo bet o treuzskrivañ: {error}</translation>
     </message>
     <message>
-        <location filename="../src/transcriber.py" line="265"/>
+        <location filename="../anaouder/transcriber.py" line="265"/>
         <source>Transcribing</source>
         <translation>O treuzskrivañ</translation>
     </message>
@@ -872,232 +872,232 @@
 <context>
     <name>Strings</name>
     <message>
-        <location filename="../src/strings.py" line="44"/>
+        <location filename="../anaouder/strings.py" line="44"/>
         <source>OK</source>
         <translation>Mat eo</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="31"/>
+        <location filename="../anaouder/strings.py" line="31"/>
         <source>Import media</source>
         <translation>Enporzhiañ ur media</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="32"/>
+        <location filename="../anaouder/strings.py" line="32"/>
         <source>Import subtitles</source>
         <translation>Enporzhiañ istitloù</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="35"/>
+        <location filename="../anaouder/strings.py" line="35"/>
         <source>Could not smart split</source>
         <translation>Troc&apos;hadur poellek ebet</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="36"/>
+        <location filename="../anaouder/strings.py" line="36"/>
         <source>Transcription completed</source>
         <translation>Echu treuzskrivañ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="37"/>
+        <location filename="../anaouder/strings.py" line="37"/>
         <source>Transcribing...</source>
         <translation>O treuzskrivañ...</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="38"/>
+        <location filename="../anaouder/strings.py" line="38"/>
         <source>No transcription</source>
         <translation>Treuzskrivadur ebet</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="39"/>
+        <location filename="../anaouder/strings.py" line="39"/>
         <source>This media file has not been transcribed yet.</source>
         <translation>N&apos;eo ket bet treuzskrivet ar media-mañ c&apos;hoazh.</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="40"/>
+        <location filename="../anaouder/strings.py" line="40"/>
         <source>Click on the &apos;Transcribe&apos; button, with no segments selected, to start automatic transcription</source>
         <translation>Klikit war an afell &apos;Treuzskrivañ&apos;, hep rann ebet diuzet, evit loc&apos;hañ an treuzskrivañ emgefre</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="41"/>
+        <location filename="../anaouder/strings.py" line="41"/>
         <source>Click on the &apos;Transcribe&apos; button, with no segments selected, to continue automatic transcription</source>
         <translation>Klikit war an afell &apos;Treuzskrivañ&apos;, hep rann ebet diuzet, evit kenderc&apos;hel gant an treuzskrivañ emgefre</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="45"/>
+        <location filename="../anaouder/strings.py" line="45"/>
         <source>&amp;Open</source>
         <translation>&amp;Digeriñ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="46"/>
+        <location filename="../anaouder/strings.py" line="46"/>
         <source>&amp;Cancel</source>
         <translation>&amp;Nullañ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="47"/>
+        <location filename="../anaouder/strings.py" line="47"/>
         <source>Close</source>
         <translation>Serriñ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="48"/>
+        <location filename="../anaouder/strings.py" line="48"/>
         <source>Delete</source>
         <translation>Skarzhañ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="49"/>
+        <location filename="../anaouder/strings.py" line="49"/>
         <source>Clear</source>
         <translation>Skarzhañ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="50"/>
+        <location filename="../anaouder/strings.py" line="50"/>
         <source>Zoom in</source>
         <translation>Zoum brasaat</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="51"/>
+        <location filename="../anaouder/strings.py" line="51"/>
         <source>Zoom out</source>
         <translation>Zoum bihanaat</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="52"/>
+        <location filename="../anaouder/strings.py" line="52"/>
         <source>Yes</source>
         <translation>Ya</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="53"/>
+        <location filename="../anaouder/strings.py" line="53"/>
         <source>No</source>
         <translation>Ket</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="56"/>
+        <location filename="../anaouder/strings.py" line="56"/>
         <source>Open Media File</source>
         <translation>Digeriñ ur media</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="57"/>
+        <location filename="../anaouder/strings.py" line="57"/>
         <source>Media files</source>
         <translation>Restroù media</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="58"/>
+        <location filename="../anaouder/strings.py" line="58"/>
         <source>Save File</source>
         <translation>Enrollañ ar restr</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="59"/>
+        <location filename="../anaouder/strings.py" line="59"/>
         <source>ALI files</source>
         <translation>Restroù ALI</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="60"/>
+        <location filename="../anaouder/strings.py" line="60"/>
         <source>Save Error</source>
         <translation>Fazi Enrollañ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="61"/>
+        <location filename="../anaouder/strings.py" line="61"/>
         <source>Could not save file</source>
         <translation>Ur gudenn oc&apos;h enrollañ ar restr</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="62"/>
+        <location filename="../anaouder/strings.py" line="62"/>
         <source>Autosave Backup(s)</source>
         <translation>Teul emenrollet</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="65"/>
+        <location filename="../anaouder/strings.py" line="65"/>
         <source>frames</source>
         <translation>skeudenn</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="66"/>
+        <location filename="../anaouder/strings.py" line="66"/>
         <source>c/s</source>
         <translation>a/e</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="67"/>
+        <location filename="../anaouder/strings.py" line="67"/>
         <source>s</source>
         <translation>e</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="68"/>
+        <location filename="../anaouder/strings.py" line="68"/>
         <source>mn</source>
         <translation>mn</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="69"/>
+        <location filename="../anaouder/strings.py" line="69"/>
         <source>h</source>
         <translation>e</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="70"/>
+        <location filename="../anaouder/strings.py" line="70"/>
         <source>fps</source>
         <translation>sde</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="71"/>
+        <location filename="../anaouder/strings.py" line="71"/>
         <source>o</source>
         <translation>o</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="72"/>
+        <location filename="../anaouder/strings.py" line="72"/>
         <source>Ko</source>
         <translation>Ko</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="73"/>
+        <location filename="../anaouder/strings.py" line="73"/>
         <source>Mo</source>
         <translation>Mo</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="74"/>
+        <location filename="../anaouder/strings.py" line="74"/>
         <source>file(s)</source>
         <translation>restr</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="75"/>
+        <location filename="../anaouder/strings.py" line="75"/>
         <source>Minimum</source>
         <translation>D&apos;an nebeutañ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="76"/>
+        <location filename="../anaouder/strings.py" line="76"/>
         <source>Maximum</source>
         <translation>D&apos;ar muiañ</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="77"/>
+        <location filename="../anaouder/strings.py" line="77"/>
         <source>min</source>
         <translation>min</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="78"/>
+        <location filename="../anaouder/strings.py" line="78"/>
         <source>max</source>
         <translation>max</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="80"/>
+        <location filename="../anaouder/strings.py" line="80"/>
         <source>Select Color</source>
         <translation>Dibab al liv</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="83"/>
+        <location filename="../anaouder/strings.py" line="83"/>
         <source>Waveform</source>
         <translation>Stumm ar wagenn</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="84"/>
+        <location filename="../anaouder/strings.py" line="84"/>
         <source>Waveforms</source>
         <translation>Gwagennoù son</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="85"/>
+        <location filename="../anaouder/strings.py" line="85"/>
         <source>Transcription</source>
         <translation>Treuzskrivadur</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="86"/>
+        <location filename="../anaouder/strings.py" line="86"/>
         <source>Transcriptions</source>
         <translation>Treuzskrivadurioù</translation>
     </message>
     <message>
-        <location filename="../src/strings.py" line="87"/>
+        <location filename="../anaouder/strings.py" line="87"/>
         <source>Scenes</source>
         <translation>Senennoù</translation>
     </message>
@@ -1152,17 +1152,17 @@
 <context>
     <name>TextAligner</name>
     <message>
-        <location filename="../src/aligner.py" line="401"/>
+        <location filename="../anaouder/aligner.py" line="401"/>
         <source>No media file loaded</source>
         <translation>Media ebet a zo karget</translation>
     </message>
     <message>
-        <location filename="../src/aligner.py" line="425"/>
+        <location filename="../anaouder/aligner.py" line="425"/>
         <source>Aligning text with speech...</source>
         <translation>O linennañ ar skrid gant ar gomz...</translation>
     </message>
     <message>
-        <location filename="../src/aligner.py" line="463"/>
+        <location filename="../anaouder/aligner.py" line="463"/>
         <source>Hidden transcription...</source>
         <translation>Treuzskrivañ kuzh...</translation>
     </message>
@@ -1170,7 +1170,7 @@
 <context>
     <name>WaveformWidget</name>
     <message>
-        <location filename="../src/waveform_widget.py" line="244"/>
+        <location filename="../anaouder/waveform_widget.py" line="244"/>
         <source>Add utterance</source>
         <translation>Ouzhpennañ ur rann</translation>
     </message>
@@ -1179,47 +1179,47 @@
         <translation>Treuzskrivañ emgefreek</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="254"/>
+        <location filename="../anaouder/waveform_widget.py" line="254"/>
         <source>Crop head</source>
         <translation>Adlec&apos;hiañ penn ar rann</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="259"/>
+        <location filename="../anaouder/waveform_widget.py" line="259"/>
         <source>Crop tail</source>
         <translation>Adlec&apos;hiañ lost ar rann</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="264"/>
+        <location filename="../anaouder/waveform_widget.py" line="264"/>
         <source>Split here</source>
         <translation>Didroc&apos;hañ amañ</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="1130"/>
+        <location filename="../anaouder/waveform_widget.py" line="1130"/>
         <source>Join segments</source>
         <translation>Unaniñ ar rannoù</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="1135"/>
+        <location filename="../anaouder/waveform_widget.py" line="1135"/>
         <source>Delete utterances</source>
         <translation>Skarzhañ ar rannoù</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="1135"/>
+        <location filename="../anaouder/waveform_widget.py" line="1135"/>
         <source>Delete utterance</source>
         <translation>Skarzhañ ar rann</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="1136"/>
+        <location filename="../anaouder/waveform_widget.py" line="1136"/>
         <source>Delete audio segments</source>
         <translation>Skarzhañ ar rannoù aodio</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="1136"/>
+        <location filename="../anaouder/waveform_widget.py" line="1136"/>
         <source>Delete audio segment</source>
         <translation>Skarzhañ ar rann aodio</translation>
     </message>
     <message>
-        <location filename="../src/waveform_widget.py" line="1371"/>
+        <location filename="../anaouder/waveform_widget.py" line="1371"/>
         <source>next</source>
         <translation>d.h.</translation>
     </message>

@@ -3,14 +3,14 @@ import logging
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from src.main import MainWindow
-from src.services.adapt_subtitles import (
+from anaouder.main import MainWindow
+from anaouder.services.adapt_subtitles import (
     convert_apostrophes,
     convert_quotation_marks,
     remove_fillers,
 )
-from src.strings import app_strings
-from src.ui.icons import loadIcons
+from anaouder.strings import app_strings
+from anaouder.ui.icons import loadIcons
 
 logging.basicConfig(
     level=logging.DEBUG,

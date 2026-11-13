@@ -2,8 +2,8 @@ from pathlib import Path, PosixPath
 
 import pytest
 
-from src.file_io.file_manager import FileManager
-from src.strings import app_strings
+from anaouder.file_io.file_manager import FileManager
+from anaouder.strings import app_strings
 
 TEST_DIR = Path(__file__).parent
 
@@ -86,7 +86,7 @@ def test_read_eaf(file_manager: FileManager):
 import os
 import time
 
-from src.settings import AUTOSAVE_FOLDER_NAME, app_settings
+from anaouder.settings import AUTOSAVE_FOLDER_NAME, app_settings
 
 DATA = [("Hello", (0.0, 1.0)), ("World", None)]
 

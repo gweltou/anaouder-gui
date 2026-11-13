@@ -52,7 +52,7 @@ logging.basicConfig(
 )
 
 
-from src.main import main
+from anaouder.main import main
 
 if __name__ == "__main__":
     argv = sys.argv

@@ -5,7 +5,7 @@ import pytest
 from PySide6.QtGui import QTextCursor, QUndoCommand
 from PySide6.QtWidgets import QApplication
 
-from src.commands import (
+from anaouder.commands import (
     AddSegmentCommand,
     DeleteSegmentsCommand,
     DeleteTextCommand,
@@ -15,14 +15,14 @@ from src.commands import (
     JoinUtterancesCommand,
     ReplaceTextCommand,
 )
-from src.main import (
+from anaouder.main import (
     AlignWithSelectionCommand,
     CreateNewEmptyUtteranceCommand,
     MainWindow,
 )
-from src.strings import app_strings
-from src.ui.icons import loadIcons
-from src.ui.waveform.waveform_widget import (
+from anaouder.strings import app_strings
+from anaouder.ui.icons import loadIcons
+from anaouder.ui.waveform.waveform_widget import (
     ResizeSegmentCommand,
 )
 

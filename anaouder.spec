@@ -21,7 +21,7 @@ ROOT = os.path.abspath(os.getcwd())
 with open(os.path.join(ROOT, "pyproject.toml"), "rb") as f:
     __version__ = tomllib.load(f)["project"]["version"]
 
-# The app reads its version at runtime from the bundled package metadata (see src/version.py),
+# The app reads its version at runtime from the bundled package metadata (see anaouder/version.py),
 # which comes from the installed package, not from pyproject.toml
 if installed_version("anaouder-gui") != __version__:
     print(
@@ -126,11 +126,11 @@ a = Analysis(
 
     ]
     + collect_data_files("ostilhou")  # Breton language data files (dictionaries, lexicons, hunspell...)
-    + copy_metadata("anaouder-gui"),  # Needed by importlib.metadata in src/version.py
+    + copy_metadata("anaouder-gui"),  # Needed by importlib.metadata in anaouder/version.py
     hiddenimports=[
-        'src.lang.br',
-        'src.lang.cy',
-        'src.lang.fr',
+        'anaouder.lang.br',
+        'anaouder.lang.cy',
+        'anaouder.lang.fr',
     ],
     hookspath=[],
     hooksconfig={},

@@ -1,4 +1,4 @@
-from src.utils import extract_metadata
+from anaouder.utils import extract_metadata
 
 
 def test_extract_metadata():

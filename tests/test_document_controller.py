@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from src.main import MainWindow
-from src.strings import app_strings
-from src.ui.icons import loadIcons
+from anaouder.main import MainWindow
+from anaouder.strings import app_strings
+from anaouder.ui.icons import loadIcons
 
 
 @pytest.fixture(scope="session")
@@ -81,8 +81,8 @@ def test_density(main_window):
 
 def test_subtitle_rules_keep_formatting(main_window):
     """Splitting a block with the subtitle rules must keep text formatting (#33)"""
-    from src.services.adapt_subtitles import apply_subtitle_rules
-    from src.utils import EM_DASH, LINE_BREAK
+    from anaouder.services.adapt_subtitles import apply_subtitle_rules
+    from anaouder.utils import EM_DASH, LINE_BREAK
 
     load_document(main_window)
     text_widget = main_window.text_widget

@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from src.file_io.eaf import format_eaf
-from src.file_io.file_manager import format_txt
-from src.file_io.srt import clean_subtitle_text, format_srt
+from anaouder.file_io.eaf import format_eaf
+from anaouder.file_io.file_manager import format_txt
+from anaouder.file_io.srt import clean_subtitle_text, format_srt
 
 
 @pytest.fixture

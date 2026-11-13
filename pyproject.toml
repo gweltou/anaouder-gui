@@ -28,3 +28,6 @@ dependencies = [
 build = [
     "pyinstaller>=6.12",
 ]
+
+[tool.setuptools.packages.find]
+include = ["anaouder*"]
