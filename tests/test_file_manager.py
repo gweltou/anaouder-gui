@@ -84,7 +84,6 @@ def test_read_eaf(file_manager: FileManager):
 # Autosave and recovery
 
 import os
-import time
 
 from anaouder.settings import AUTOSAVE_FOLDER_NAME, app_settings
 

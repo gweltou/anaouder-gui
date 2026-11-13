@@ -160,7 +160,7 @@ class FileManager(QObject):
     def _select_file_to_load(
         self, file_path: Path, recover_latest_backup = False
     ) -> Path:
-        """Determine whether to load original file or backup"""
+        """Determine whether to load original file or backup."""
 
         backup_list = self.get_unsaved_backups(file_path)
         if not backup_list:
