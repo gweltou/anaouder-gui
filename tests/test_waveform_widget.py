@@ -120,3 +120,29 @@ def test_short_audio_sticks_to_left(waveform):
     waveform.follow_playhead = True
     waveform.updatePlayHead(0.9, is_playing=True)
     assert waveform.view.t_left == 0.0
+
+
+# --- Zoom centered on playhead when following it ------------------------------
+
+@pytest.mark.parametrize("zoom", ["zoomIn", "zoomOut"])
+@pytest.mark.parametrize("position", [0.0, 0.2, 1.0])
+def test_zoom_centers_on_playhead_when_following(waveform, zoom, position):
+    load_audio(waveform, ppsec=50.0)
+    waveform.follow_playhead = True
+    waveform.updatePlayHead(AUDIO_LEN / 2, is_playing=False)
+    getattr(waveform, zoom)(1.5, position)
+    half_view = WIDTH * 0.5 / waveform.view.ppsec
+    assert waveform.view.t_left == pytest.approx(AUDIO_LEN / 2 - half_view)
+    assert_in_bounds(waveform)
+
+
+def test_zoom_uses_pivot_when_not_following(waveform):
+    load_audio(waveform, ppsec=50.0)
+    waveform.follow_playhead = False
+    waveform.playhead = AUDIO_LEN / 2
+    waveform.view.t_left = 10.0
+    pivot_t = 10.0 + 0.25 * WIDTH / waveform.view.ppsec
+    waveform.zoomIn(1.5, 0.25)
+    assert waveform.view.t_left + 0.25 * WIDTH / waveform.view.ppsec == pytest.approx(
+        pivot_t
+    )

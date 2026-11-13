@@ -297,6 +297,7 @@ class DocumentController(QObject):
             block.setUserData(MyTextBlockUserData(metadata))
         else:
             block.setUserData(None)
+        self.text_widget.highlighter.rehighlightBlock(block)
 
 
     def updateBlockMetadata(self, block: QTextBlock, metadata: dict) -> None:

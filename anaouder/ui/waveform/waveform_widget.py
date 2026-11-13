@@ -491,27 +491,36 @@ class WaveformWidget(QWidget):
     def zoomIn(self, factor=1.333, position=0.5) -> None:
         if self.audio_len <= 0:
             return  # No media loaded
-        prev_ppsec = self.view.ppsec
-        self.view.ppsec = min(self.view.ppsec * factor, ZOOM_MAX)
-
-        delta_s = (self.width() / self.view.ppsec) - (self.width() / prev_ppsec)
-        self.view.t_left -= delta_s * position
-        self._check_for_out_of_view()
-        self.view.ppsec_goal = self.view.ppsec
-        self._waveform_data.ppsec = self.view.ppsec
-        self.must_redraw = True
+        self._set_zoom(min(self.view.ppsec * factor, ZOOM_MAX), position)
 
 
     def zoomOut(self, factor=1.333, position=0.5) -> None:
         if self.audio_len <= 0:
             return  # No media loaded
-        prev_ppsec = self.view.ppsec
         new_ppsec = self.view.ppsec / factor
         min_ppsec = self.width() / self.audio_len
-        self.view.ppsec = max(new_ppsec, min_ppsec, ZOOM_MIN)
+        self._set_zoom(max(new_ppsec, min_ppsec, ZOOM_MIN), position)
 
-        delta_s = (self.width() / self.view.ppsec) - (self.width() / prev_ppsec)
-        self.view.t_left -= delta_s * position
+
+    def _set_zoom(self, ppsec: float, position: float) -> None:
+        """Apply a new zoom level.
+
+        Args:
+            ppsec: new pixels-per-second value
+            position: relative x position (0.0-1.0) of the zoom pivot.
+                Ignored when following the playhead: the view is then
+                centered on the playhead.
+        """
+        prev_ppsec = self.view.ppsec
+        self.view.ppsec = ppsec
+
+        if self.follow_playhead:
+            self.view.t_left = self.playhead - self.width() * 0.5 / self.view.ppsec
+            self.view.scroll_goal = -1
+            self.view.scroll_vel = 0.0
+        else:
+            delta_s = (self.width() / self.view.ppsec) - (self.width() / prev_ppsec)
+            self.view.t_left -= delta_s * position
         self._check_for_out_of_view()
         self.view.ppsec_goal = self.view.ppsec
         self._waveform_data.ppsec = self.view.ppsec

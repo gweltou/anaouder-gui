@@ -106,3 +106,6 @@ Bugs from `docs/TODO.txt` have not been re-reproduced unless stated; `unverified
 ---
 
 ## Done / stale
+
+- [x] **#81 · S2 · done — Undoing an alignment left the sentence highlighted as aligned.** Undo of `AlignWithSelectionCommand` / `AlignBlockWithSegmentCommand` restored the block metadata with `setBlockMetadata`, which didn't rehighlight, and before the segment was removed. `setBlockMetadata` now rehighlights the block and both undos remove the segment first. Tests in `tests/test_commands.py`.
+- [x] **#82 · S3 · done — Zoom ignored "follow playhead".** `WaveformWidget.zoomIn` / `zoomOut` pivoted on the mouse position even when following the playhead; they now center the view on the playhead in that mode (`_set_zoom`). Tests in `tests/test_waveform_widget.py`.

@@ -348,3 +348,70 @@ def test_join_with_next_nonaligned(main_window):
             QTextCursor.MoveOperation.Right,
         ),
     )
+
+
+def _has_background(block) -> bool:
+    from PySide6.QtCore import Qt
+
+    return block.blockFormat().background().style() != Qt.BrushStyle.NoBrush
+
+
+def _unalign_block(main_window, block_number):
+    """Delete the segment of a block and return (block, removed segment)"""
+    block = main_window.text_widget.document().findBlockByNumber(block_number)
+    block_id = main_window.document_controller.getBlockId(block)
+    segment = main_window.document_controller.getSegment(block_id)
+    assert segment is not None
+    main_window.undo_stack.push(
+        DeleteSegmentsCommand(
+            main_window.document_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            [block_id],
+        )
+    )
+    assert not main_window.text_widget.isAligned(block)
+    return block, segment[:]
+
+
+def test_align_with_selection_undo_removes_highlight(main_window):
+    load_document(main_window)
+    block, segment = _unalign_block(main_window, 3)
+    assert not _has_background(block)
+
+    main_window.waveform._selection = segment
+    main_window.undo_stack.push(
+        AlignWithSelectionCommand(
+            main_window, main_window.document_controller, main_window.waveform, block
+        )
+    )
+    assert main_window.text_widget.isAligned(block)
+    assert _has_background(block)
+
+    main_window.undo_stack.undo()
+    assert not main_window.text_widget.isAligned(block)
+    assert not _has_background(block)
+
+    main_window.undo_stack.redo()
+    assert _has_background(block)
+
+
+def test_align_block_with_segment_undo_removes_highlight(main_window):
+    from anaouder.commands import AlignBlockWithSegmentCommand
+
+    load_document(main_window)
+    block, segment = _unalign_block(main_window, 2)
+    assert not _has_background(block)
+
+    main_window.undo_stack.push(
+        AlignBlockWithSegmentCommand(main_window.document_controller, block, segment)
+    )
+    assert main_window.text_widget.isAligned(block)
+    assert _has_background(block)
+
+    main_window.undo_stack.undo()
+    assert not main_window.text_widget.isAligned(block)
+    assert not _has_background(block)
+
+    main_window.undo_stack.redo()
+    assert _has_background(block)

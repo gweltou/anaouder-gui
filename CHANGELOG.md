@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Fixed sentence still highlighted as aligned after undoing an alignment
+* Zooming the waveform is centered on the playhead when following it
 * Trackpad drag and zoom on waveform
 * Better waveform (looks and optimization)
 * Progress bar in block number's column (left of text)

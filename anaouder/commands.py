@@ -197,12 +197,13 @@ class AlignWithSelectionCommand(QUndoCommand):
         self.segment_id = document_controller.getNewSegmentId()
 
     def undo(self):
-        if self.old_block_data:
-            self.document_controller.setBlockMetadata(self.block, self.old_block_data)
-        else:
-            self.document_controller.setBlockMetadata(self.block, None)
-        self.waveform._selection = self.selection
+        # Remove the segment first: the block highlighting (triggered by
+        # `setBlockMetadata`) checks whether the block's segment still exists
         self.document_controller.removeSegment(self.segment_id)
+        self.document_controller.setBlockMetadata(
+            self.block, self.old_block_data or None
+        )
+        self.waveform._selection = self.selection
         self.parent.statusBar().clearMessage()
 
     def redo(self):
@@ -236,9 +237,11 @@ class AlignBlockWithSegmentCommand(QUndoCommand):
         block = self.document_controller.getBlockByNumber(self.block_number)
         assert block is not None and block.isValid()
 
-        # Reset segment_id in block metadata
-        self.document_controller.setBlockMetadata(block, self.old_block_data)
+        # Remove the segment first: the block highlighting (triggered by
+        # `setBlockMetadata`) checks whether the block's segment still exists
         self.document_controller.removeSegment(self.segment_id)
+        # Reset segment_id in block metadata
+        self.document_controller.setBlockMetadata(block, self.old_block_data or None)
 
     def redo(self):
         block = self.document_controller.getBlockByNumber(self.block_number)
