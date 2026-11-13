@@ -22,6 +22,9 @@
 * Fixed auto-align giving timings to the wrong sentences when a sentence has no words (only punctuation or metadata)
 * Fixed auto-align running again by itself after a later transcription
 * "Clear cache → Scenes" no longer deletes the transcription instead of the scenes
+* Fixed a crash when zooming the waveform before a media file is loaded
+* The waveform view no longer scrolls past the start or end of the media (wheel scrolling, following the playhead)
+* Fixed an error when the EAF export fails
 
 ## [1.1] 2026-05-01
 

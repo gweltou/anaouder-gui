@@ -311,6 +311,7 @@ class WaveformWidget(QWidget):
             self.view.t_left = position_sec - self.width() * 0.5 / self.view.ppsec
             self.view.scroll_vel = 0.0
             self.view.scroll_goal = -1
+            self._check_for_out_of_view()
         # elif (
         #         not self.active_segments
         #         and (t < self.t_left or t > self.getTimeRight())
@@ -378,7 +379,11 @@ class WaveformWidget(QWidget):
 
 
     def _check_for_out_of_view(self) -> None:
-        """Prevent waveform view to be out of bounds"""
+        """Prevent waveform view to be out of bounds.
+
+        Single clamp for `view.t_left`: call it after any code that moves it.
+        When the audio is shorter than the view, the view sticks to the left.
+        """
         if self.getTimeRight() >= self.audio_len:
             self.view.t_left = self.audio_len - self.width() / self.view.ppsec
             self.view.scroll_vel = 0.0
@@ -484,20 +489,22 @@ class WaveformWidget(QWidget):
 
 
     def zoomIn(self, factor=1.333, position=0.5) -> None:
+        if self.audio_len <= 0:
+            return  # No media loaded
         prev_ppsec = self.view.ppsec
         self.view.ppsec = min(self.view.ppsec * factor, ZOOM_MAX)
 
         delta_s = (self.width() / self.view.ppsec) - (self.width() / prev_ppsec)
         self.view.t_left -= delta_s * position
-        self.view.t_left = min(
-            max(self.view.t_left, 0), self.audio_len - self.width() / self.view.ppsec
-        )
+        self._check_for_out_of_view()
         self.view.ppsec_goal = self.view.ppsec
         self._waveform_data.ppsec = self.view.ppsec
         self.must_redraw = True
 
 
     def zoomOut(self, factor=1.333, position=0.5) -> None:
+        if self.audio_len <= 0:
+            return  # No media loaded
         prev_ppsec = self.view.ppsec
         new_ppsec = self.view.ppsec / factor
         min_ppsec = self.width() / self.audio_len
@@ -505,9 +512,7 @@ class WaveformWidget(QWidget):
 
         delta_s = (self.width() / self.view.ppsec) - (self.width() / prev_ppsec)
         self.view.t_left -= delta_s * position
-        self.view.t_left = min(
-            max(self.view.t_left, 0), self.audio_len - self.width() / self.view.ppsec
-        )
+        self._check_for_out_of_view()
         self.view.ppsec_goal = self.view.ppsec
         self._waveform_data.ppsec = self.view.ppsec
         self.must_redraw = True
@@ -529,6 +534,7 @@ class WaveformWidget(QWidget):
                 self.view.scroll_vel += -1.5 * delta_x / self.view.ppsec
             else:
                 self.view.t_left += -1 * delta_x / self.view.ppsec
+                self._check_for_out_of_view()
                 self.must_redraw = True
         else:
             self.view.t_left += -1 * delta_x / self.view.ppsec
@@ -1095,11 +1101,10 @@ class WaveformWidget(QWidget):
         logger.debug(f"Toggle follow playhead: {checked=}")
         self.follow_playhead = checked
         if checked:
-            self.view.t_left = max(
-                0.0, self.playhead - self.width() * 0.5 / self.view.ppsec
-            )
+            self.view.t_left = self.playhead - self.width() * 0.5 / self.view.ppsec
             self.view.scroll_goal = -1
             self.view.scroll_vel = 0.0
+            self._check_for_out_of_view()
             self.must_redraw = True
 
     def changeTargetDensity(self, cps: float):
