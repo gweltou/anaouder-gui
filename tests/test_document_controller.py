@@ -77,3 +77,40 @@ def test_density(main_window):
     # The joined utterance keeps the same seg_id as the first of the two joined sentences
     second_density = main_window.document_controller.getUtteranceDensity(1)
     assert second_density < first_density
+
+
+def test_subtitle_rules_keep_formatting(main_window):
+    """Splitting a block with the subtitle rules must keep text formatting (#33)"""
+    from src.services.adapt_subtitles import apply_subtitle_rules
+    from src.utils import EM_DASH, LINE_BREAK
+
+    load_document(main_window)
+    text_widget = main_window.text_widget
+    controller = main_window.document_controller
+    ITALIC = text_widget.TextFormat.ITALIC
+    BOLD = text_widget.TextFormat.BOLD
+
+    block = text_widget.document().findBlockByNumber(1)
+    original = [
+        (f"{EM_DASH} Demat ", set()),
+        ("Yann", {ITALIC}),
+        (f". {EM_DASH} ", set()),
+        ("Mat ar jeu", {ITALIC, BOLD}),
+        (" ?", set()),
+    ]
+    text_widget.setBlockFragments(block, original)
+    original_html = text_widget.getBlockHtmlAndMask(block)[0]
+
+    apply_subtitle_rules(controller, block, block, main_window.undo_stack, 0.0)
+
+    block = text_widget.document().findBlockByNumber(1)
+    assert block.text() == f"{EM_DASH} Demat Yann.{LINE_BREAK}{EM_DASH} Mat ar jeu ?"
+    fragments = [(t, f) for t, f in text_widget.getBlockFragments(block) if t]
+    assert ("Yann", {ITALIC}) in fragments
+    assert ("Mat ar jeu", {ITALIC, BOLD}) in fragments
+    # Other blocks are untouched
+    assert text_widget.document().findBlockByNumber(0).text() == "Linenn gentañ"
+
+    main_window.undo_stack.undo()
+    block = text_widget.document().findBlockByNumber(1)
+    assert text_widget.getBlockHtmlAndMask(block)[0] == original_html

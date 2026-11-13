@@ -18,6 +18,7 @@
 * Global terminal logger
 * Document auto-rescue after a crash
 * Autosaves newer than the last manual save are removed when closing a document
+* "Adapt to subtitles" keeps italics and bold when splitting a segment into two lines
 
 ## [1.1] 2026-05-01
 

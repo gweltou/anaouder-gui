@@ -289,12 +289,39 @@ def apply_subtitle_rules(
             text = block.text()
             splits = splitForSubtitle(text, line_max_size)
             if len(splits) > 1:
-                text = LINE_BREAK.join([ s.strip() for s in splits ])
-                undo_stack.push(ReplaceTextCommand(text_widget, block, text))
+                # Rebuild the block from its formatted fragments so that
+                # text formatting (bold, italic) is preserved
+                fragments = text_widget.getBlockFragments(block)
+                new_fragments = []
+                pos = 0
+                for i, split in enumerate(splits):
+                    start = pos + len(split) - len(split.lstrip())
+                    end = pos + len(split.rstrip())
+                    pos += len(split)
+                    if i > 0:
+                        new_fragments.append((LINE_BREAK, set()))
+                    new_fragments.extend(_slice_fragments(fragments, start, end))
+                html, _ = text_widget.fragments_to_html(new_fragments)
+                undo_stack.push(ReplaceTextCommand(text_widget, block, html))
 
         if block == end_block:
             break
         block = block.next()
+
+
+def _slice_fragments(
+        fragments: list[tuple[str, set]], start: int, end: int
+    ) -> list[tuple[str, set]]:
+    """Return the formatted fragments covering text[start:end] of a block"""
+    sliced = []
+    pos = 0
+    for text, formats in fragments:
+        frag_start, frag_end = pos, pos + len(text)
+        pos = frag_end
+        lo, hi = max(start, frag_start), min(end, frag_end)
+        if lo < hi:
+            sliced.append((text[lo - frag_start:hi - frag_start], formats))
+    return sliced
 
 
 def remove_fillers(

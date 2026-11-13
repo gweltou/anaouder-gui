@@ -438,13 +438,13 @@ class TextEditWidget(QTextEdit):
         """
 
         def add_opening_elements(formats: set, html_text: list[str], mask: list[bool]):
-            for f in sorted(formats):
+            for f in sorted(formats, key=lambda f: f.value):
                 format_element = f"<{f.value}>"
                 html_text.append(format_element)
                 mask.extend([False] * len(format_element))
 
         def add_closing_elements(formats: set, html_text: list[str], mask: list[bool]):
-            for f in sorted(formats, reverse=True):
+            for f in sorted(formats, key=lambda f: f.value, reverse=True):
                 format_element = f"</{f.value}>"
                 html_text.append(format_element)
                 mask.extend([False] * len(format_element))
