@@ -296,13 +296,13 @@ class FilePrompts:
         msg_box.exec()
 
 
-    def chooseBackup(self, backups: list[Path]) -> Path | None:
+    def chooseBackup(self, backups: list[tuple[Path, float]]) -> Path | None:
         """Ask the user which backup file to load, if any."""
         if not backups:
             return None
 
         if len(backups) == 1:
-            return self._prompt_single_backup(backups[0])
+            return self._prompt_single_backup(backups[0][0])
 
         return self._prompt_multiple_backups(backups)
 
@@ -344,7 +344,7 @@ class FilePrompts:
         return backup_file if msg_box.clickedButton() == yes_button else None
 
 
-    def _prompt_multiple_backups(self, backup_files: list[Path]) -> Path | None:
+    def _prompt_multiple_backups(self, backup_files: list[tuple[Path, float]]) -> Path | None:
         """Prompt user to pick one of several backup files"""
         dialog = QDialog(self.main_window)
         dialog.setWindowTitle(app_strings.TR_AUTOSAVE_BACKUPS)
@@ -361,8 +361,8 @@ class FilePrompts:
         main_layout.addWidget(QLabel(message))
 
         list_widget = QListWidget()
-        for backup_file in backup_files:
-            mod_time = datetime.fromtimestamp(backup_file.stat().st_mtime)
+        for backup_file, timestamp in backup_files:
+            mod_time = datetime.fromtimestamp(timestamp)
             item_text = mod_time.strftime("%Y-%m-%d   -   %H:%M:%S")
             list_widget.addItem(item_text)
 

@@ -21,7 +21,9 @@ File operations manager for Anaouder.
 Handles loading and saving of ALI, SRT, and media files.
 """
 
+import os.path
 import re
+import time
 from pathlib import Path
 
 import srt
@@ -35,7 +37,13 @@ from src.file_io.srt import format_srt, read_srt_file
 from src.file_io.txt import format_txt
 from src.interfaces import FilePromptsInterface, Segment
 from src.services.logger import logger
-from src.settings import AUTOSAVE_FOLDER_NAME
+from src.settings import (
+    AUTOSAVE_BACKUP_NUMBER,
+    AUTOSAVE_DEFAULT_INTERVAL,
+    AUTOSAVE_FOLDER_NAME,
+    RECENT_FILES_LIMIT,
+    app_settings,
+)
 from src.strings import app_strings
 from src.utils import LINE_BREAK, MEDIA_FORMATS, extract_metadata
 
@@ -51,11 +59,18 @@ class OperationCancelled(FileOperationError):
 
 
 class FileManager(QObject):
-    open_media_requested = Signal(Path)
+    # open_media_requested = Signal(Path)
+    recent_files_updated = Signal()
+
 
     def __init__(self, file_prompts: FilePromptsInterface):
         super().__init__()
         self.file_prompts = file_prompts
+
+        # Auto save state
+        self._last_saved_index = 0
+        self._last_autosave_time = 0.0
+        self._last_manual_save_time = 0.0
 
 
     def read_file(self, file_path: Path, find_media = True, ask_media = True) -> dict:
@@ -93,6 +108,7 @@ class FileManager(QObject):
 
         except OperationCancelled:
             return {}
+
         except FileOperationError as e:
             self.file_prompts.showError(
                 self.tr("Read Error"),
@@ -116,28 +132,31 @@ class FileManager(QObject):
             new_media_path = self.file_prompts.askReloadMedia(file_path, media_path)
             file_data["media-path"] = new_media_path
 
+        self._last_saved_index = 0
+
         return file_data
 
 
-    def _select_file_to_load(self, file_path: Path) -> Path | None:
+    def _select_file_to_load(self, file_path: Path) -> Path:
         """Determine whether to load original file or backup"""
 
         backup_list = self.get_backup_list(file_path)
         if not backup_list:
             return file_path
 
-        last_backup = backup_list[-1]
+        backup_modification_time = backup_list[-1][1]
 
         # Compare modification time
-        if last_backup.stat().st_mtime > file_path.stat().st_mtime:
-            return self.file_prompts.chooseBackup(backup_list)
+        if backup_modification_time > file_path.stat().st_mtime:
+            # Return the default file_path if the user cancelled the backup selection
+            return self.file_prompts.chooseBackup(backup_list) or file_path
+
         return file_path
 
 
     @staticmethod
     def read_ali_file(file_path: Path) -> dict:
-        """
-        Read an ALI file and find associated media.
+        """Read an ALI file and find associated media.
 
         Args:
             filepath (Path): Full path to the ALI file
@@ -150,7 +169,7 @@ class FileManager(QObject):
         """
         logger.message(f"Opening ALI file... {file_path}")
 
-        if file_path.suffix.lower() != '.ali':
+        if file_path.suffix.lower() != ".ali":
             raise FileOperationError(app_strings.TR_WRONG_FILE_TYPE)
 
         parsed_data = []
@@ -250,7 +269,7 @@ class FileManager(QObject):
             raise FileOperationError(e)
 
 
-    def import_eaf_file(self, file_path: Path | None = None) -> dict | None:
+    def import_eaf_file(self, file_path: Path | None = None) -> dict:
         if file_path is None:
             eaf_filter = "Elan Files (*.eaf)"
             file_path = self.file_prompts.openFileDialog(
@@ -260,7 +279,7 @@ class FileManager(QObject):
         elif file_path.suffix.lower() != '.eaf':
             raise FileOperationError(app_strings.TR_WRONG_FILE_TYPE)
         if not file_path:
-            return None
+            return {}
 
         logger.message(f"Opening .eaf (Elan) file '{file_path}'...")
         file_data = read_eaf_file(file_path)
@@ -328,11 +347,12 @@ class FileManager(QObject):
         return None
 
 
-    @staticmethod
     def save_ali_file(
+        self,
         file_path: Path,
         data: list[tuple[str, Segment | None]],
         media_path: Path | None = None,
+        is_autosave = False
     ) -> None:
         """Save ALI file to disk.
 
@@ -340,9 +360,11 @@ class FileManager(QObject):
             file_path (str):
                 File path to write to
             data (list):
-                text block data (list of (text, segment) tuples)
+                Text block data (list of (text, segment) tuples)
             media_path (str):
-                overwrite the audio_path if provided
+                Overwrite the audio_path if provided
+            is_autosave (bool):
+                Must be set to True if it is an autosave
 
         Raise:
             FileOperationError
@@ -382,6 +404,61 @@ class FileManager(QObject):
             error_msg = f"Unexpected error saving file: {e}"
             logger.error(error_msg)
             raise FileOperationError(error_msg)
+
+        else:
+            if is_autosave:
+                self._last_autosave_time = time.time()
+            else:
+                self._last_manual_save_time = time.time()
+
+
+    def auto_save(
+        self,
+        file_path: Path,
+        data: list[tuple[str, Segment | None]],
+        media_path: Path | None,
+        undo_stack_index: int
+    ):
+        if undo_stack_index == self._last_saved_index: # Nothing new to save
+            return
+
+        autosave_interval_second = 60.0 * app_settings.value(
+            "autosave/interval_minute", AUTOSAVE_DEFAULT_INTERVAL, type=float
+        )
+        if (time.time() - self._last_autosave_time) < autosave_interval_second:
+            return
+
+        time_tag = time.strftime("%Y%m%d_%H%M%S")
+        autosave_folder = file_path.parent / AUTOSAVE_FOLDER_NAME
+        autosave_path = autosave_folder / f"{file_path.stem}@{time_tag}.ali"
+
+        try:
+            logger.message("Autosaving...", timeout=1000)  # Display for 1 second
+
+            # Create "autosave" folder, if necessary
+            autosave_folder.mkdir(exist_ok=True)
+
+            self.save_ali_file(autosave_path, data, media_path)
+
+            # Remove old backups, if necessary
+            old_backups = sorted(
+                autosave_folder.glob(str(file_path.stem) + "@*.ali")
+            )
+            max_backups = int(
+                app_settings.value(
+                    "autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int
+                )
+            )
+            if len(old_backups) > max_backups:
+                for i in range(len(old_backups) - max_backups):
+                    old_backups[i].unlink()
+
+        except Exception as e:
+            message = self.tr("Autosave failed: {exception}").format(exception=str(e))
+            logger.error(message)
+
+        else:
+            self._last_saved_index = undo_stack_index
 
 
     def export_to_text_format(
@@ -442,21 +519,42 @@ class FileManager(QObject):
             logger.error(error_msg)
 
 
-    # def get_last_backup(self, file_path: Path) -> Path | None:
-    #     """Get the most recent backup of the given ALI file, if any."""
-    #     backup_list = self.get_backup_list(file_path)
-    #     if backup_list:
-    #         return backup_list[-1]
-    #     return None
-
-
-    def get_backup_list(self, file_path: Path) -> list[Path] | None:
-        """Get the most recent backup of the given ALI file, if any."""
+    def get_backup_list(self, file_path: Path) -> list[tuple[Path, float]]:
+        """Get the list of backup files and timestamps for the given ALI file."""
         autosave_folder = file_path.parent / AUTOSAVE_FOLDER_NAME
         if not autosave_folder.exists():
-            return None
+            return []
 
-        return sorted(autosave_folder.glob(str(file_path.stem) + "@*.ali"))
+        backup_list = []
+        for filename in autosave_folder.glob(str(file_path.stem) + "@*.ali"):
+            backup_list.append( (filename, filename.stat().st_mtime) )
+
+        return sorted(backup_list, key=lambda x: x[1])
+
+
+    # Recent files functions
+
+    def add_recent_file(self, file_path: Path) -> None:
+        """Add a file to the recent files list."""
+        logger.debug(f"FileManager.add_recent_file({file_path=})")
+        str_file_path = str(file_path)
+
+        recent_files: list = app_settings.value("recent_files", [], type=list)
+
+        if str_file_path in recent_files:
+            recent_files.remove(str_file_path)
+
+        recent_files.insert(0, str_file_path)
+        recent_files = [f for f in recent_files if os.path.exists(f)]
+        recent_files = recent_files[:RECENT_FILES_LIMIT]
+
+        app_settings.setValue("recent_files", recent_files)
+        self.recent_files_updated.emit()
+
+
+    def clear_recent_files(self):
+        app_settings.setValue("recent_files", [])
+        self.recent_files_updated.emit()
 
 
 #     def get_backup_parent(self, file_path: Path) -> Path | None:

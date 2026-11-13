@@ -18,26 +18,27 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
 import os
-from typing import List, Optional
 import subprocess
-import logging
-
 from pathlib import Path
+
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import (
-    QWidget, QDialog, QFileDialog,
-    QVBoxLayout, QHBoxLayout, QGroupBox,
-    QLineEdit, QPushButton,
-    QCheckBox, QButtonGroup, QDialogButtonBox, QRadioButton,
-    QLabel, QComboBox
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QRadioButton,
+    QVBoxLayout,
 )
 
-from src.interfaces import Segment, MainWindowInterface
-from src.settings import app_settings
+from src.interfaces import MainWindowInterface, Segment
 from src.services.logger import logger
+from src.settings import app_settings
 from src.ui.icons import icons
-
-
 
 
 class ExportSegmentDialog(QDialog):
@@ -45,10 +46,10 @@ class ExportSegmentDialog(QDialog):
     def __init__(
             self,
             parent,
-            default_path: Optional[Path] = None,
+            default_path: Path | None = None,
         ):
         super().__init__(parent)
-        
+
         self.output_dir = default_path or Path.home()
         self.export_format = 0
 
@@ -67,38 +68,107 @@ class ExportSegmentDialog(QDialog):
         # main_layout.setSpacing(16)
         # main_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Scope ("Apply to")
+        # ---- Scope
+        main_layout.addWidget(self._build_scode_group())
+
+        # ---- Output folder
+        main_layout.addWidget(self._build_folder_group())
+
+        # ---- Output filename
+        main_layout.addWidget(self._build_filename_group())
+
+        # ---- Output format
+        main_layout.addWidget(self._build_format_group())
+
+        # ---- Buttons
+        button_layout = QHBoxLayout()
+        cancel_button = QPushButton(self.tr("&Cancel"))
+        cancel_button.clicked.connect(self.reject)
+
+        export_button = QPushButton(self.tr("&Export"))
+        export_button.clicked.connect(self.on_export)
+        export_button.setDefault(True)
+
+        button_layout.addStretch()
+        button_layout.addWidget(cancel_button)
+        button_layout.addWidget(export_button)
+
+        main_layout.addStretch()
+        main_layout.addLayout(button_layout)
+
+
+    def _build_scode_group(self) -> QGroupBox:
         apply_to_group = QGroupBox(self.tr("Apply to"))
         apply_to_layout = QHBoxLayout(apply_to_group)
         apply_to_layout.setContentsMargins(15, 15, 15, 15)
 
         self.selected_radio_button = QRadioButton(self.tr("Selected segments"))
         self.selected_radio_button.setChecked(True)
-        self.all_radio_button = QRadioButton(self.tr("All segments"))
-        
         apply_to_layout.addWidget(self.selected_radio_button)
+
+        self.all_radio_button = QRadioButton(self.tr("All segments"))
         apply_to_layout.addWidget(self.all_radio_button)
-        
-        # File selection
-        file_group = QGroupBox(self.tr("Output File(s)"))
-        file_layout = QHBoxLayout(file_group)
-        file_layout.setContentsMargins(15, 15, 15, 15)
-        
-        self.file_path_input = QLineEdit()
-        self.file_path_input.setPlaceholderText(self.tr("Select a file") + "...")
-        
+
+        return apply_to_group
+
+
+    def _build_filename_group(self) -> QGroupBox:
+        filename_group = QGroupBox(self.tr("Output File(s)"))
+        filename_layout = QVBoxLayout(filename_group)
+
+        # File name pattern editor
+        self.file_name_pattern_input = QLineEdit()
+        # self.file_name_pattern_input.setPlaceholderText(self.tr("Select a file") + "...")
+        self.file_name_pattern_input.setText("segment_%00ni_%ti_%te")
+        filename_layout.addWidget(self.file_name_pattern_input)
+
+        """
+        %[N]x
+        Possible x values:
+            ni  segment index (0 indexed)
+            ts  segment start (seconds)
+            te  segment end (seconds)
+            s   text (first 32 chars by default)
+        N values:
+            0   0 padding for number values
+            n   number of characters for string values
+
+        Example: SEGMENT_%0ni_%ts-%te_%8s
+        """
+        doc_lines = [
+            "%ni\tsegment index",
+            "%ti\tstart time of segment (in seconds)",
+            "%te\tend time of segment (in seconds)",
+        ]
+        documentation_label = QLabel('\n'.join(doc_lines))
+        filename_layout.addWidget(documentation_label)
+
+        return filename_group
+
+
+    def _build_folder_group(self) -> QGroupBox:
+        folder_group = QGroupBox(self.tr("Output Folder"))
+        folder_layout = QHBoxLayout()
+        folder_layout.setContentsMargins(15, 15, 15, 15)
+
+        self.output_dir_label = QLineEdit()
+        self.output_dir_label.setReadOnly(True)
+        self.output_dir_label.setText(str(self.output_dir))
+        folder_layout.addWidget(self.output_dir_label)
+
         browse_button = QPushButton()
         if "folder" in icons:
             browse_button.setIcon(icons["folder"])
         else:
             browse_button.setText("...") # Fallback if icon missing
-            
-        browse_button.clicked.connect(self._browse_file)
-        
-        file_layout.addWidget(self.file_path_input)
-        file_layout.addWidget(browse_button)
-        # file_group.setLayout(file_layout)
 
+        browse_button.clicked.connect(self._browse_file)
+        folder_layout.addWidget(browse_button)
+
+        return folder_group
+
+
+    def _build_format_group(self) -> QGroupBox:
         format_group = QGroupBox(self.tr("Output Format"))
         format_layout = QHBoxLayout(format_group)
         format_layout.setContentsMargins(15, 15, 15, 15)
@@ -107,25 +177,7 @@ class ExportSegmentDialog(QDialog):
         self.format_combobox.currentIndexChanged.connect(self._on_format_index_changed)
 
         format_layout.addWidget(self.format_combobox)
-        
-        # Buttons
-        button_layout = QHBoxLayout()
-        cancel_button = QPushButton(self.tr("&Cancel"))
-        cancel_button.clicked.connect(self.reject)
-        
-        export_button = QPushButton(self.tr("&Export"))
-        export_button.clicked.connect(self.on_export)
-        export_button.setDefault(True)
-        
-        button_layout.addStretch()
-        button_layout.addWidget(cancel_button)
-        button_layout.addWidget(export_button)
-        
-        main_layout.addWidget(apply_to_group)
-        main_layout.addWidget(file_group)
-        main_layout.addWidget(format_group)
-        main_layout.addStretch()
-        main_layout.addLayout(button_layout)
+        return format_group
 
 
     def _browse_file(self):
@@ -136,32 +188,32 @@ class ExportSegmentDialog(QDialog):
             str(self.output_dir),
             options=QFileDialog.Option.ShowDirsOnly
         )
-        
+
         if dir_path:
             dir_path = os.path.abspath(dir_path)
-            print(dir_path)
-            # self.accept()
-    
+            self.output_dir_label.setText(dir_path)
+            self.output_dir = Path(dir_path)
+
 
     def _on_format_index_changed(self, format_idx):
         self.export_format = format_idx
 
 
     def get_file_path(self) -> str:
-        return self.file_path_input.text()
-    
+        return self.output_dir_label.text()
+
 
     def get_parameters(self) -> dict:
         return {
             "apply_to_all": self.all_radio_button.isChecked(),
             "output_format": self.format_combobox.currentIndex(),
         }
-    
+
 
     def set_parameters(self, params: dict):
         self.all_radio_button.setChecked(params.get("apply_to_all", False))
         self.format_combobox.setCurrentIndex(params.get("output_format", 0))
-    
+
 
     def on_export(self):
         # Save parameters
@@ -174,8 +226,7 @@ class ExportSegmentDialog(QDialog):
 
 class _FFMPEGWorker(QObject):
     """
-    Internal Worker class. The Main Window never sees this.
-    It handles the actual FFmpeg subprocess calls.
+    Worker class calling FFMPEG.
     """
     # Internal signals to communicate with the Controller
     progress_update = Signal(int, int, str)
@@ -185,7 +236,7 @@ class _FFMPEGWorker(QObject):
     def __init__(
             self,
             media_path: Path,
-            segments: List[Segment],
+            segments: list[Segment],
             output_dir: Path,
             export_format: int
         ):
@@ -204,7 +255,7 @@ class _FFMPEGWorker(QObject):
                 break
 
             start, end = segment
-            
+
             # Create folder if missing
             if self.output_dir and not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)
@@ -216,22 +267,23 @@ class _FFMPEGWorker(QObject):
                 case 0:
                     cmd = [
                         'ffmpeg', '-y',
-                        '-ss', str(start),
-                        '-i', self.media_path,
-                        '-t', str(end - start),
-                        # '-to', str(end),
-                        '-map', '0:v', 
+                        '-i', str(self.media_path),
+                        '-ss', str(start), '-to', str(end),
+                        '-map', '0:v?',
                         '-map', '0:a',
                         '-c', 'copy',
-                        output_path
+                        str(output_path)
                     ]
                 case 1:
                     cmd = [
                         'ffmpeg', '-y',
-                        '-i', self.media_path,
+                        '-i', str(self.media_path),
                         '-ss', str(start), '-to', str(end),
-                        output_path.with_suffix(".mp3")
+                        str(output_path.with_suffix(".mp3"))
                     ]
+
+                case _:
+                    cmd = []
 
             try:
                 # Windows users might see a popup CMD window without startupinfo
@@ -243,8 +295,7 @@ class _FFMPEGWorker(QObject):
 
                 result = subprocess.run(
                     cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     text=True,
                     startupinfo=startupinfo
                 )
@@ -252,12 +303,15 @@ class _FFMPEGWorker(QObject):
                 if result.returncode != 0:
                     self.error_occurred.emit()
                     logger.error(f"FFmpeg Error on {os.path.basename(output_path)}")
+                    logger.error(' '.join(cmd))
+                    logger.error(result.stderr)
                 else:
                     self.progress_update.emit(i + 1, total, os.path.basename(output_path))
                     logger.message(f"Segment exported to '{output_path}'")
 
             except Exception as e:
                 self.error_occurred.emit()
+                logger.error(' '.join(cmd))
                 logger.error(str(e))
                 break
 
@@ -288,7 +342,7 @@ class SegmentExporterController(QObject):
     def start_job(
             self,
             media_path: Path,
-            segments: List[Segment],
+            segments: list[Segment],
             output_dir: Path,
             export_format: int
         ):
@@ -307,7 +361,7 @@ class SegmentExporterController(QObject):
         self._worker.finished.connect(self._thread.quit)
         self._worker.finished.connect(self._worker.deleteLater)
         self._thread.finished.connect(self._thread.deleteLater)
-        
+
         # Signal Forwarding (Proxying)
         # Worker -> Controller -> UI
         self._worker.progress_update.connect(self.on_progress)
@@ -315,7 +369,7 @@ class SegmentExporterController(QObject):
         self._worker.finished.connect(self.on_finished)
 
         self._thread.finished.connect(self._reset_state)
-        
+
         self._thread.start()
 
 
@@ -335,7 +389,7 @@ class SegmentExporterController(QObject):
         """Ensure previous threads are dead before starting new ones"""
         if self._thread is not None:
             self.stop_job()
-    
+
 
     @Slot()
     def _reset_state(self):
@@ -347,7 +401,7 @@ class SegmentExporterController(QObject):
 audio_extractor: SegmentExporterController | None = None
 
 
-def startAudioSegmentExtractor(parent: MainWindowInterface, media_path: Path, segments: List[Segment]):
+def startAudioSegmentExtractor(parent: MainWindowInterface, media_path: Path, segments: list[Segment]):
     global audio_extractor
     if audio_extractor is None:
         audio_extractor = SegmentExporterController()
@@ -355,7 +409,7 @@ def startAudioSegmentExtractor(parent: MainWindowInterface, media_path: Path, se
         # audio_extractor.on_progress.connect(parent.update_ui)
         # audio_extractor.on_finished.connect(process_finished)
         # audio_extractor.on_error.connect(parent.setErrorMessage)
-    
+
     dialog = ExportSegmentDialog(parent, media_path.parent)
     if dialog.exec() == QDialog.DialogCode.Accepted:
         output_dir = dialog.output_dir

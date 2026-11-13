@@ -150,7 +150,7 @@ class CaptionRenderer:
         self.empty_frame = Image.new("RGBA", self.frame_size, self.background_color)
 
         # Read and store properties for every text block in document
-        for block in document_controller.getAllBlocks():
+        for block in document_controller.iterBlocks():
             data, _ = self.metadata_parser.parse_sentence(block.text())
 
             segment_id = document_controller.getBlockId(block)

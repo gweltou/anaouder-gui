@@ -304,7 +304,7 @@ def remove_fillers(
     ) -> None:
     block = start_block
     while block.isValid() and block != end_block.next():
-        html_text, map = text_widget.getBlockHtmlMask(block)
+        html_text, map = text_widget.getBlockHtmlAndMask(block)
 
         # Isolate and preserve HTML elements
         new_text_parts = []
@@ -346,7 +346,7 @@ def convert_quotation_marks(
 
     block = start_block
     while block.isValid() and block != end_block.next():
-        html_text, _ = text_widget.getBlockHtmlMask(block)
+        html_text, _ = text_widget.getBlockHtmlAndMask(block)
         if '"' in html_text:
             new_text = ""
             idx = 0
@@ -382,7 +382,7 @@ def convert_apostrophes(
 
     block = start_block
     while block.isValid() and block != end_block.next():
-        html_text, _ = text_widget.getBlockHtmlMask(block)
+        html_text, _ = text_widget.getBlockHtmlAndMask(block)
         if to_replace in html_text:
             # We asume that there is no apostrophe in the formatting HTML elements
             html_text = html_text.replace(to_replace, replacement)

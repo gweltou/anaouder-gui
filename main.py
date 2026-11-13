@@ -1,12 +1,17 @@
 #! /usr/bin/env python3
 
-import sys
+import cProfile
+import faulthandler
+import logging
 import os
 import platform
-import logging
-import cProfile
 import pstats
+import signal
+import sys
 from pstats import SortKey
+
+# faulthandler.register(signal.SIGTERM, all_threads=True, chain=True)
+faulthandler.enable(all_threads=True)
 
 
 if hasattr(sys, '_MEIPASS'):
@@ -48,7 +53,6 @@ logging.basicConfig(
 
 
 from src.main import main
-
 
 if __name__ == "__main__":
     argv = sys.argv

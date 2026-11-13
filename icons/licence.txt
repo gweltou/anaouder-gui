@@ -11,7 +11,6 @@ replay.png	<a href="https://www.flaticon.com/free-icons/replay" title="replay ic
 waveform.png	<a href="https://www.flaticon.com/free-icons/radio" title="radio icons">Radio icons created by Freepik - Flaticon</a>
 font.png	<a href="https://www.flaticon.com/free-icons/font" title="font icons">Font icons created by Smashicons - Flaticon</a>
 transporter-5.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
-quill-pen-story.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
 pen-field.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
 volume.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
 123-numbers.png	<a href="https://www.flaticon.com/free-icons/count" title="count icons">Count icons created by Freepik - Flaticon</a>
@@ -20,3 +19,5 @@ redo.png	Uicons by <a href="https://www.flaticon.com/uicons">Flaticon</a>
 folder.png	<a href="https://www.flaticon.com/free-icons/folder" title="folder icons">Folder icons created by cahiwak - Flaticon</a>
 	<a href="https://www.flaticon.com/free-icons/dots" title="dots icons">Dots icons created by kemal-gokbas - Flaticon</a>
 	<a href="https://www.flaticon.com/free-icons/break" title="break icons">Break icons created by Fajrul Fitrianto - Flaticon</a>
+export.png	<a href="https://www.flaticon.com/free-icons/export" title="export icons">Export icons created by Mie Nakae - Flaticon</a>
+file.png	<a href="https://www.flaticon.com/free-icons/file-download" title="file download icons">File download icons created by Royyan Wijaya - Flaticon</a>

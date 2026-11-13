@@ -1,51 +1,73 @@
-# -*- mode: python; coding: utf-8 -*-
-
 """
 macOs packaging:
   Comment out lines
 """
 
-import platform
+import importlib.util
 import os
-from PIL import Image, ImageFont, ImageDraw
+import platform
+import tomllib
+from importlib.metadata import version as installed_version
 
-from version import __version__
-
+from PIL import Image, ImageDraw, ImageFont
+from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
 ARCH = os.getenv("ARCH") or 'x86_64' # Set to 'x86_64', or 'arm64' or 'universal2' for macOS
-DEBUG = True if os.getenv("DEBUG") == 'True' else False
+DEBUG = os.getenv("DEBUG") == 'True'
+USE_UPX = False
 ROOT = os.path.abspath(os.getcwd())
+
+# Read the version from pyproject.toml so it doesn't depend on installed package metadata
+with open(os.path.join(ROOT, "pyproject.toml"), "rb") as f:
+    __version__ = tomllib.load(f)["project"]["version"]
+
+# The app reads its version at runtime from the bundled package metadata (see src/version.py),
+# which comes from the installed package, not from pyproject.toml
+if installed_version("anaouder-gui") != __version__:
+    print(
+        f"WARNING: installed anaouder-gui metadata is {installed_version('anaouder-gui')}, "
+        f"pyproject.toml says {__version__}. Run `pip install -e .` before building."
+    )
 
 print("Architecture set to", ARCH)
 print(f"{DEBUG=}")
 
 
-def get_lib_path(path):
-    if platform.system() in ("Linux", "Darwin"):
-        python_version = f"python{platform.python_version_tuple()[0]}.{platform.python_version_tuple()[1]}"
-        return os.path.join(f"./.venv/lib/{python_version}/site-packages", path)
-    elif platform.system() == "Windows":
-        return os.path.join("./.venv/Lib/site-packages", path)
+def get_package_dir(package: str) -> str:
+    """Locate an installed package, whatever the Python environment (venv, conda, system...)"""
+    spec = importlib.util.find_spec(package)
+    if spec is None or not spec.submodule_search_locations:
+        raise SystemExit(f"ERROR: package '{package}' is not installed in this environment")
+    return spec.submodule_search_locations[0]
 
 
 def get_binaries():
-    binaries = []
-    if platform.system() == "Linux":
-        binaries = [
-            (get_lib_path("vosk/libvosk.so"), "vosk"),
-            (get_lib_path("static_ffmpeg/bin/linux/*"), "static_ffmpeg/bin/linux"),
-        ]
-    elif platform.system() == "Darwin":
-        binaries = [
-            (get_lib_path("vosk/libvosk.dyld"), "vosk"),
-            (get_lib_path("static_ffmpeg/bin/darwin/*"), "static_ffmpeg/bin/darwin"),
-        ]
-    elif platform.system() == "Windows":
-        binaries = [
-            (get_lib_path("vosk/libvosk.dll"), "vosk"),
-            (get_lib_path("static_ffmpeg/bin/win32/*"), "static_ffmpeg/bin/win32"),
-        ]
-    return binaries
+    # libvosk is listed explicitly: on macOS the vosk wheel names it 'libvosk.dyld',
+    # which PyInstaller's collect_dynamic_libs() would not pick up
+    libvosk = {
+        "Linux": "libvosk.so",
+        "Darwin": "libvosk.dyld",
+        "Windows": "libvosk.dll",
+    }[platform.system()]
+    ffmpeg_platform = {
+        "Linux": "linux",
+        "Darwin": "darwin",
+        "Windows": "win32",
+    }[platform.system()]
+
+    # static_ffmpeg downloads its binaries on first use only:
+    # run `python -c "import static_ffmpeg; static_ffmpeg.add_paths()"` once before building
+    ffmpeg_dir = os.path.join(get_package_dir("static_ffmpeg"), "bin", ffmpeg_platform)
+    if not os.path.isdir(ffmpeg_dir):
+        raise SystemExit(
+            f"ERROR: {ffmpeg_dir} not found. Run "
+            "`python -c \"import static_ffmpeg; static_ffmpeg.add_paths()\"` first."
+        )
+
+    return [
+        (os.path.join(get_package_dir("vosk"), libvosk), "vosk"),
+        (os.path.join(ffmpeg_dir, "*"), f"static_ffmpeg/bin/{ffmpeg_platform}"),
+    ]
 
 
 a = Analysis(
@@ -101,15 +123,10 @@ a = Analysis(
         # Translation files
         ("./translations/anaouder_br.qm", "translations/"),
         ("./translations/anaouder_fr.qm", "translations/"),
-        
-        # Breton language specific files
-        (get_lib_path("ostilhou/asr/*.tsv"), "ostilhou/asr"),
-        (get_lib_path("ostilhou/dicts/*.tsv"), "ostilhou/dicts"),
-        (get_lib_path("ostilhou/hspell/*.txt"), "ostilhou/hspell"),
-        (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.dic"), "ostilhou/hspell/hunspell-dictionary/"),
-        (get_lib_path("ostilhou/hspell/hunspell-dictionary/br_FR.aff"), "ostilhou/hspell/hunspell-dictionary/"),
-        (get_lib_path("ostilhou/text/moses_br.txt"), "ostilhou/text"),
-    ],
+
+    ]
+    + collect_data_files("ostilhou")  # Breton language data files (dictionaries, lexicons, hunspell...)
+    + copy_metadata("anaouder-gui"),  # Needed by importlib.metadata in src/version.py
     hiddenimports=[
         'src.lang.br',
         'src.lang.cy',
@@ -128,7 +145,7 @@ pyz = PYZ(a.pure)
 if platform.system() == "Darwin":
     # MAC OS BUILD
     # Without splash screen
-    
+
     exe = EXE(
         pyz,
         a.scripts,
@@ -137,7 +154,7 @@ if platform.system() == "Darwin":
         debug=DEBUG,
         bootloader_ignore_signals=False,
         strip=False,
-        upx=False,	# Some kind of compression, lighter but slower
+        upx=USE_UPX,	# Some kind of compression, lighter but slower
         upx_exclude=[],
         runtime_tmpdir=None,
         console=DEBUG,
@@ -145,17 +162,17 @@ if platform.system() == "Darwin":
         argv_emulation=True, # Needed by macOS, apparently
         target_arch=ARCH,
     )
-    
+
     coll = COLLECT(
         exe,
         a.binaries,
         a.datas,
         strip=False,
-        upx=True,
+        upx=USE_UPX,
         upx_exclude=[],
         name='Anaouder',
     )
-    
+
     app = BUNDLE(
         coll,
         name='Anaouder.app',
@@ -172,8 +189,8 @@ if platform.system() == "Darwin":
     	    'CFBundleDisplayName': 'Anaouder',
             'CFBundleName': 'Anaouder',
             'CFBundleIdentifier': 'com.OTilde.Anaouder',
-            'CFBundleShortVersionString': '1.0.0',
-            'CFBundleVersion': '1.0.0',
+            'CFBundleShortVersionString': __version__,
+            'CFBundleVersion': __version__,
             'LSApplicationCategoryType': 'public.app-category.utilities',
         }
     )
@@ -187,63 +204,45 @@ else:
     draw.text(
         (splash_image.width - 32, 2),
         f"v{__version__}",
-        font = ImageFont.load_default(14), 
+        font = ImageFont.load_default(14),
         fill = "#000000",
     )
-    splash_image.save("icons/anaouder_splash_ver.png")
+    # Saved in PyInstaller's work directory (build/anaouder/), never in the source tree.
+    # `workpath` is provided by PyInstaller in the spec namespace.
+    os.makedirs(workpath, exist_ok=True)
+    splash_path = os.path.join(workpath, "anaouder_splash_ver.png")
+    splash_image.save(splash_path)
 
-    splash = None
-    if platform.system() in ("Windows", "Linux"):
-        splash = Splash(
-            "icons/anaouder_splash_ver.png",
-            binaries=a.binaries,
-            datas=a.datas,
-            text_pos=(516, 134),
-            text_size=12,
-            text_color='black',
-            text_default='O kargañ...',
-        )
+    splash = Splash(
+        splash_path,
+        binaries=a.binaries,
+        datas=a.datas,
+        text_pos=(516, 134),
+        text_size=12,
+        text_color='black',
+        text_default='O kargañ...',
+    )
 
-    if platform.system() == "Windows":
-        exe = EXE(
-            pyz,
-            a.scripts,
-            splash,
-            splash.binaries,
-            exclude_binaries=True,
-            name='Anaouder',
-            debug=DEBUG,
-            icon='icons/anaouder.ico',
-            bootloader_ignore_signals=False,
-            strip=False,
-            upx=False,	# Some kind of compression, lighter but slower
-            upx_exclude=[],
-            runtime_tmpdir=None,
-            console=DEBUG,
-            disable_windowed_traceback=False,
-            argv_emulation=True, # Needed by macOS, apparently
-            target_arch=ARCH,
-        )
-    else:
-        exe = EXE(
-            pyz,
-            a.scripts,
-            splash,
-            splash.binaries,
-            exclude_binaries=True,
-            name='Anaouder',
-            debug=DEBUG,
-            bootloader_ignore_signals=False,
-            strip=False,
-            upx=False,	# Some kind of compression, lighter but slower
-            upx_exclude=[],
-            runtime_tmpdir=None,
-            console=DEBUG,
-            disable_windowed_traceback=False,
-            argv_emulation=True, # Needed by macOS, apparently
-            target_arch=ARCH,
-        )
-    
+    exe = EXE(
+        pyz,
+        a.scripts,
+        splash,
+        splash.binaries,
+        exclude_binaries=True,
+        name='Anaouder',
+        debug=DEBUG,
+        icon='icons/anaouder.ico' if platform.system() == "Windows" else None,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=USE_UPX,	# Some kind of compression, lighter but slower
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        console=DEBUG,
+        disable_windowed_traceback=False,
+        argv_emulation=True, # Needed by macOS, apparently
+        target_arch=ARCH,
+    )
+
     coll = COLLECT(
         exe,
         a.binaries,

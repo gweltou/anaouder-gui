@@ -116,6 +116,9 @@ class DocumentController(QObject):
     def setMediaPath(self, media_path: Path | None) -> None:
         self.media_path = media_path
 
+    def get_media_path(self) -> Path | None:
+        return self.media_path
+
 
     def setDocumentPath(self, file_path: Path | None) -> None:
         self.document_path = file_path
@@ -499,6 +502,7 @@ class DocumentController(QObject):
 
         return block_metadata.get("density", 0.0)
 
+
     def updateUtteranceDensity(self, segment_id: SegmentId) -> None:
         """Update the density (chars/s) field of an utterance"""
         logger.debug(f"updateUtteranceDensity({segment_id=})")
@@ -522,12 +526,14 @@ class DocumentController(QObject):
             # current_density = block.userData().data.get("density", -1.0)
             block.userData().data["density"] = new_density
 
+
     def getSentenceLength(self, block: QTextBlock) -> int:
         """Returns length of sentence, stripped of metadata and comments"""
         if not block:
             return 0.0
         sentence_splits = extract_sentence_regions(block.text())
         return sum([e - s for s, e in sentence_splits], 0)
+
 
     def getSubtitleAtPosition(self, position_sec: float) -> tuple[SegmentId, str]:
         """
@@ -559,6 +565,7 @@ class DocumentController(QObject):
         html, _ = self.text_widget.getBlockHtmlAndMask(block)
         return (seg_id, html)
 
+
     def getTranscriptionFor(self, segment_id: SegmentId) -> list:
         """Return a list of transcription tokens"""
 
@@ -573,6 +580,7 @@ class DocumentController(QObject):
         self.memoized_segment = segment_id
         self.memoized_transcription_tokens = tokens
         return tokens
+
 
     def getTranscriptionForSegment(
         self, segment_start: float, segment_end: float
@@ -619,6 +627,7 @@ class DocumentController(QObject):
                     utterances.append((text, segment))
 
         return utterances
+
 
     def splitUtteranceAtCharPos(self, segment_id: SegmentId, position: int) -> None:
         """
@@ -678,6 +687,7 @@ class DocumentController(QObject):
             logger.debug("Ratio splitting")
 
         self._split_utterance(segment_id, left_text, right_text, left_seg, right_seg)
+
 
     def splitUtteranceAtTimePos(self, segment_id: SegmentId, timepos: float) -> None:
         logger.debug(f"splitFromWaveform({segment_id=}, {timepos=})")
@@ -832,7 +842,7 @@ class DocumentController(QObject):
             with_cursor (bool):
                 Move the cursor if True
         """
-        logger.debug(f"DocumentController.select_utterances({seg_ids=})")
+        logger.debug(f"DocumentController.select_utterances({seg_ids=}, {active_block_id=}, {with_cursor=})")
 
         if self.waveform_widget is None or self.text_widget is None:
             return
@@ -1019,7 +1029,7 @@ class DocumentController(QObject):
     def select_from_waveform(
         self,
         seg_ids: list[SegmentId],
-        active_segment: SegmentId
+        active_segment_id: SegmentId
     ) -> None:
         """Called when the user clicks on the waveform area.
         Scroll the text widget to display the sentence.
@@ -1027,10 +1037,12 @@ class DocumentController(QObject):
         Args:
             seg_ids (list): ID of selected segments or None
         """
-        logger.debug(f"DocumentController.select_from_waveform({seg_ids=}, {active_segment=})")
+        logger.debug(f"DocumentController.select_from_waveform({seg_ids=}, {active_segment_id=})")
+
+        active_block_id = active_segment_id if active_segment_id >= 0 else None
 
         self.select_utterances(
             seg_ids,
-            active_segment,
-            with_cursor = True
+            active_block_id,
+            with_cursor = not active_block_id is None
         )

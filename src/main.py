@@ -86,9 +86,6 @@ from src.services.media_player_controller import MediaPlayerController
 from src.services.scene_detector import SceneDetectWorker
 from src.settings import (
     APP_NAME,
-    AUTOSAVE_BACKUP_NUMBER,
-    AUTOSAVE_DEFAULT_INTERVAL,
-    AUTOSAVE_FOLDER_NAME,
     BUTTON_LABEL_SIZE,
     BUTTON_MARGIN,
     BUTTON_MEDIA_SIZE,
@@ -98,7 +95,7 @@ from src.settings import (
     DIAL_SIZE,
     FFMPEG_SCENE_DETECTOR_THRESHOLD,
     FUTURE,
-    RECENT_FILES_LIMIT,
+    # RECENT_FILES_LIMIT,
     STATUS_BAR_TIMEOUT,
     SUBTITLES_CPS,
     SUBTITLES_MARGIN_SIZE,
@@ -280,11 +277,9 @@ class MainWindow(QMainWindow):
         self.undo_stack.cleanChanged.connect(self.updateWindowTitle)
         self.undo_stack.indexChanged.connect(self.onUndoStackIndexChanged)
 
-        # Autosave
+        # Autosave timer
         self._autosave_timer = QTimer()
         self._autosave_timer.timeout.connect(self.auto_save)
-        self._last_saved_index = 0
-        self._last_saved_time = time.time()
 
 
     def _configure_window(self) -> None:
@@ -413,8 +408,8 @@ class MainWindow(QMainWindow):
             )
         )
 
-        # Timecode display
-        self.timecode_widget.timeChanged.connect(self.onTimecodeDisplayChanged)
+        # File Manager
+        self.file_manager.recent_files_updated.connect(self.updateRecentFiles)
 
         # Media controller
         self.media_controller.position_changed.connect(self.onPlayerPositionChanged)
@@ -470,6 +465,9 @@ class MainWindow(QMainWindow):
         self.action.move_segment_head_requested.connect(self.document_controller.moveHead)
         self.action.move_segment_tail_requested.connect(self.document_controller.moveTail)
 
+        # Timecode display
+        self.timecode_widget.timeChanged.connect(self.onTimecodeDisplayChanged)
+
         # Logger
         logger.message_requested.connect(self.setStatusMessage)
         logger.error_message_requested.connect(self.setErrorMessage)
@@ -486,7 +484,7 @@ class MainWindow(QMainWindow):
             self.restoreState(state)
 
         # Recent menu
-        self.updateRecentMenu()
+        self.updateRecentFiles()
 
         # Subtitling rules
         self._target_density = app_settings.value(
@@ -1053,17 +1051,16 @@ class MainWindow(QMainWindow):
 
         path = file_path or Path(directory) / default_name
 
-        file_path, _ = QFileDialog.getSaveFileName(
+        user_file_path, _ = QFileDialog.getSaveFileName(
             self,
             app_strings.TR_SAVE_FILE,
             str(path),
             app_strings.TR_ALI_FILES + " (*.ali)",
         )
-
-        if not file_path:
+        if not user_file_path:
             return False
 
-        return self._saveFile(Path(file_path))
+        return self._saveFile(Path(user_file_path))
 
 
     def _get_default_save_location(self) -> tuple[str, str]:
@@ -1079,9 +1076,10 @@ class MainWindow(QMainWindow):
 
 
     def _saveFile(
-        self, file_path: Path,
+        self,
+        file_path: Path,
         media_path: Path | None = None,
-        is_autosave = False
+        # is_autosave = False
     ) -> bool:
         """Save document as an ALI file.
         Parse the internal document and sends the data to the File Manager.
@@ -1090,7 +1088,7 @@ class MainWindow(QMainWindow):
         Args:
             file_path (Path):
                 Path to save to
-            media_path (str):
+            media_path (str | None):
                 Overwrite the media path linked to this file
             is_autosave (bool):
                 Keep undo stack if True
@@ -1098,14 +1096,18 @@ class MainWindow(QMainWindow):
         Returns:
             True if successful, False otherwise
         """
-        logger.debug(f"MainWindow._saveFile({file_path=}, {media_path=}, {is_autosave=})")
+        logger.debug(f"MainWindow._saveFile({file_path=}, {media_path=})")
         data = self.document_controller.getData()
 
-        if media_path is None:
-            media_path = self.document_controller.media_path
+        # if media_path is None:
+        #     media_path = self.document_controller.media_path
 
         try:
-            self.file_manager.save_ali_file(file_path, data, media_path)
+            self.file_manager.save_ali_file(
+                file_path,
+                data,
+                media_path
+            )
 
         except FileOperationError:
             msg_box = QMessageBox(
@@ -1119,15 +1121,10 @@ class MainWindow(QMainWindow):
             msg_box.exec()
             return False
 
-        # Auto-save state
-        self._last_saved_index = self.undo_stack.index()
-        self._last_saved_time = time.time()
-
-        if not is_autosave:
-            self.file_path = file_path
-            self.undo_stack.setClean()
-            self.addRecentFile(file_path)
-            self.updateWindowTitle()
+        self.file_path = file_path
+        self.undo_stack.setClean()
+        self.file_manager.add_recent_file(file_path)
+        self.updateWindowTitle()
 
         return True
 
@@ -1136,46 +1133,15 @@ class MainWindow(QMainWindow):
         if self.file_path is None:
             return
 
-        current_index = self.undo_stack.index()
-        if current_index == self._last_saved_index:
-            return
-
         if self.media_controller.isPlaying():  # Don't save during playback
             return
 
-        autosave_interval_second = 60.0 * app_settings.value(
-            "autosave/interval_minute", AUTOSAVE_DEFAULT_INTERVAL, type=float
+        self.file_manager.auto_save(
+            self.file_path,
+            self.document_controller.getData(),
+            self.document_controller.get_media_path(),
+            self.undo_stack.index()
         )
-        if (time.time() - self._last_saved_time) < autosave_interval_second:
-            return
-
-        # Autosave
-        time_tag = time.strftime("%Y%m%d_%H%M%S")
-        autosave_folder = self.file_path.parent / AUTOSAVE_FOLDER_NAME
-        autosave_path = autosave_folder / f"{self.file_path.stem}@{time_tag}.ali"
-        try:
-            logger.message("Autosaving...", timeout=1000)  # Display for 1 second
-
-            autosave_folder.mkdir(
-                exist_ok=True
-            )  # Create "autosave" folder, if necessary
-            self._saveFile(autosave_path, None, is_autosave=True)
-
-            # Remove old backups, if necessary
-            old_backups = sorted(
-                autosave_folder.glob(str(self.file_path.stem) + "@*.ali")
-            )
-            max_backups = int(
-                app_settings.value(
-                    "autosave/backup_number", AUTOSAVE_BACKUP_NUMBER, type=int
-                )
-            )
-            if len(old_backups) > max_backups:
-                for i in range(len(old_backups) - max_backups):
-                    old_backups[i].unlink()
-        except Exception as e:
-            message = self.tr("Autosave failed: {exception}").format(exception=str(e))
-            logger.error(message)
 
 
     def onOpenFile(self, file_path: Path | None = None, keep_media=False) -> None:
@@ -1197,9 +1163,6 @@ class MainWindow(QMainWindow):
             if file_path is None:
                 return
         file_path = Path(file_path)
-
-        self._last_saved_index = 0
-        self._last_saved_time = 0.0
 
         self.document_controller.clear()
         if not keep_media:
@@ -1232,17 +1195,14 @@ class MainWindow(QMainWindow):
 
         # Resume state if previously opened
         self._load_document_state(file_path)
-
-        self.addRecentFile(file_path)
-
+        self.file_manager.add_recent_file(file_path)
         self.updateWindowTitle()
-        self._last_saved_index = 0
 
 
     def askCloseFile(self) -> bool:
         """Ask the user if the file should be saved before closing it.
 
-        Returns:
+        Return:
             False if the action was canceled by the user
         """
         logger.debug("askCloseFile")
@@ -1281,6 +1241,9 @@ class MainWindow(QMainWindow):
         self.undo_stack.clear()
         self.waveform.clear()
         QTimer.singleShot(0, self.waveform.update) # Force the waveform to clear
+
+        # Remove autosaves newer than the last manual save
+
 
         return True
 
@@ -1339,22 +1302,7 @@ class MainWindow(QMainWindow):
                 self.action.display_density.trigger()
 
 
-    def addRecentFile(self, file_path: Path) -> None:
-        """Add a file to the recent files list"""
-        file_path = str(file_path)
-        recent_files: list = app_settings.value("recent_files", [], type=list)
-        if file_path in recent_files:
-            recent_files.remove(file_path)
-
-        recent_files.insert(0, file_path)
-        recent_files = [f for f in recent_files if os.path.exists(f)]
-        recent_files = recent_files[:RECENT_FILES_LIMIT]
-
-        app_settings.setValue("recent_files", recent_files)
-        self.updateRecentMenu()
-
-
-    def updateRecentMenu(self):
+    def updateRecentFiles(self):
         """Update the recent files submenu"""
         self.recent_menu.clear()
 
@@ -1383,16 +1331,11 @@ class MainWindow(QMainWindow):
             if recent_files:
                 self.recent_menu.addSeparator()
                 clear_action = QAction(self.tr("Clear Recent Files"), self)
-                clear_action.triggered.connect(self.clearRecentFiles)
+                clear_action.triggered.connect(self.file_manager.clear_recent_files)
                 self.recent_menu.addAction(clear_action)
 
 
-    def clearRecentFiles(self):
-        app_settings.setValue("recent_files", [])
-        self.updateRecentMenu()
-
-
-    def openMediaFile(self, file_path: Path):
+    def openMediaFile(self, media_path: Path):
         """
         Load a Media File and update the Media Player and Waveform Widget.
         Should be called after loading the document (to open the Video Widget)
@@ -1407,36 +1350,36 @@ class MainWindow(QMainWindow):
         if self.transcribe_button.isChecked():
             self.transcribe_button.setChecked(False)
 
-        if self.media_controller.loadMedia(file_path):
-            self.media_path = file_path
+        if self.media_controller.loadMedia(media_path):
+            self.media_path = media_path
 
         if self.file_path is None:
-            self.file_path = file_path
+            self.file_path = media_path
 
         # Load waveform
-        cached_waveform = cache.get_waveform(file_path)
+        cached_waveform = cache.get_waveform(media_path)
         if cached_waveform is not None:
             logger.debug("Using cached waveform")
             self.audio_samples = cached_waveform
         else:
             logger.debug("Rendering waveform...")
-            self.audio_samples = get_samples(str(file_path), WAVEFORM_SAMPLERATE)
-            cache.set_waveform(file_path, self.audio_samples)
+            self.audio_samples = get_samples(str(media_path), WAVEFORM_SAMPLERATE)
+            cache.set_waveform(media_path, self.audio_samples)
 
         logger.debug(f"Loaded {len(self.audio_samples)} audio samples")
         self.waveform.setSamples(self.audio_samples, WAVEFORM_SAMPLERATE)
 
-        self.document_controller.setMediaPath(file_path)
+        self.document_controller.setMediaPath(media_path)
 
         # Parse media metadata
-        media_metadata = cache.get_media_metadata(file_path)
+        media_metadata = cache.get_media_metadata(media_path)
         print(media_metadata)
 
         try:
-            audiofile_info = get_audiofile_info(str(file_path))
+            audiofile_info = get_audiofile_info(str(media_path))
             print(f"{audiofile_info=}")
         except Exception as e:
-            logger.error(f"{app_strings.TR_ERROR_CANT_READ_FILE} '{file_path}'")
+            logger.error(f"{app_strings.TR_ERROR_CANT_READ_FILE} '{media_path}'")
             logger.debug(str(e))
             audiofile_info = {}
 
@@ -1448,7 +1391,7 @@ class MainWindow(QMainWindow):
                     if int(match[1]) > 0:
                         fps = int(match[1]) / int(match[2])
                         media_metadata["fps"] = fps
-                        cache.update_media_metadata(file_path, {"fps": fps})
+                        cache.update_media_metadata(media_path, {"fps": fps})
                     else:
                         logger.debug(
                             f"Unrecognized FPS: {audiofile_info['r_frame_rate']}"
@@ -1468,7 +1411,7 @@ class MainWindow(QMainWindow):
                 h, m, s = audiofile_info["tags"]["DURATION"].split(":")
                 media_duration_s = float(h) * 3600 + float(m) * 60 + float(s)
             media_metadata["duration"] = media_duration_s
-            cache.update_media_metadata(file_path, {"duration": media_duration_s})
+            cache.update_media_metadata(media_path, {"duration": media_duration_s})
 
         duration_str = sec2hms(
             media_metadata["duration"],
@@ -1545,7 +1488,7 @@ class MainWindow(QMainWindow):
             self._setStatusNoTranscription()
 
         # Scene/picture changes (ffmpeg)
-        scenes = cache.get_media_scenes(file_path)
+        scenes = cache.get_media_scenes(media_path)
         if scenes:
             self.waveform.scenes = scenes
 
@@ -1580,9 +1523,7 @@ class MainWindow(QMainWindow):
 
         should_open_media = not self.media_controller.hasMedia()
         file_data = self.file_manager.read_file(file_path, should_open_media, should_open_media)
-
         self.document_controller.loadData(file_data["document"])
-        self._last_saved_index = 0
 
         # Optionaly opens media file
         media_path = file_data["media-path"]
@@ -1603,7 +1544,6 @@ class MainWindow(QMainWindow):
         logger.message(f"{len(file_data['document'])} lines imported")
 
         self.document_controller.loadData(file_data["document"])
-        self._last_saved_index = 0
 
 
     def onExportSrt(self):
@@ -1828,13 +1768,6 @@ class MainWindow(QMainWindow):
                     self.play_button.setIcon(icons["play"])
                     return
 
-        # Highlight text sentence at this time position
-        # seg_ids = self.document_controller.getSegmentsAtTime(self.waveform.playhead)
-        # if seg_ids and (seg_ids[0] != self.text_widget.highlighted_sentence_id):
-        #         self.text_widget.highlightUtterance(seg_ids[0], scroll_text=False)
-        # else:
-        #     self.text_widget.deactivateSentence()
-
         self.updateSubtitle(position_sec)
 
 
@@ -1982,6 +1915,7 @@ class MainWindow(QMainWindow):
     def backAction(self) -> None:
         """Get back to the first segment or to the beginning of the recording."""
         active_segment_id = self.document_controller.get_active_utterance_id()
+        print("backaction", active_segment_id)
         if active_segment_id is None:
             # Go to the beginning of the media
             self.deselectUtterances()
@@ -2165,7 +2099,7 @@ class MainWindow(QMainWindow):
 
 
     def adaptToSubtitle(self) -> None:
-        from services.adapt_subtitles import AdaptUtterancesDialog
+        from src.services.adapt_subtitles import AdaptUtterancesDialog
 
         AdaptUtterancesDialog(
             self,
@@ -2508,6 +2442,7 @@ class MainWindow(QMainWindow):
         # Close document after saving it, if necessary
         if not self.askCloseFile():
             # Canceled by the user
+            event.ignore()
             return
 
         try:
