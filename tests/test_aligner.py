@@ -90,3 +90,88 @@ def test_aligner_in_word():
         print(left, right)
         assert not left or left[0] < left[1]
         assert not right or right[0] < right[1]
+
+
+def test_segments_from_alignment_keeps_one_entry_per_sentence():
+    """#50: a sentence with no words must still yield an entry (None)"""
+    from anaouder.services.aligner import segments_from_alignment
+
+    alignment = [
+        ("||", None),
+        ("demat", ("demat", 1.0, 1.5)),
+        ("dit", ("dit", 1.5, 2.0)),
+        ("||", None),
+        # Second sentence normalizes to no words (e.g. "...")
+        ("||", None),
+        (None, ("euh", 2.0, 2.2)),  # Inserted token, ignored
+        ("kenavo", None),
+        ("deoc'h", ("deoc'h", 3.0, 3.4)),
+        ("||", None),
+        ("unaligned", None),
+        ("||", None),
+    ]
+    assert segments_from_alignment(alignment) == [
+        [1.0, 2.0],
+        None,
+        [3.0, 3.4],
+        None,
+    ]
+
+
+def test_aligner_worker_with_empty_sentence():
+    """#50: end-to-end alignment with a punctuation-only sentence"""
+    from anaouder.services.aligner import (
+        SENTENCE_SEPARATOR,
+        align_text_with_vosk_tokens,
+        segments_from_alignment,
+    )
+
+    lang.loadLanguage("br")
+    tokens = [
+        (0.0, 0.5, "demat", 1.0, "br"),
+        (0.5, 1.0, "dit", 1.0, "br"),
+        (2.0, 2.5, "kenavo", 1.0, "br"),
+    ]
+    sentences = ["Demat dit !", "...", "Kenavo."]
+    sep = SENTENCE_SEPARATOR
+    text = f"{sep} " + f" {sep} ".join(sentences) + f" {sep} "
+    segments = segments_from_alignment(align_text_with_vosk_tokens(text, tokens))
+    assert segments == [[0.0, 1.0], None, [2.0, 2.5]]
+
+
+def test_text_aligner_disconnects_recognizer():
+    """#49: connections made on the shared recognizer must not outlive autoAlign"""
+    from PySide6.QtCore import QObject, Signal
+    from PySide6.QtWidgets import QApplication
+    from anaouder.services.aligner import TextAligner
+
+    app = QApplication.instance() or QApplication([])
+
+    class FakeRecognizer(QObject):
+        progress = Signal(float)
+        finished = Signal()
+
+    class FakeDocument:
+        undo_stack = None
+
+    recognizer = FakeRecognizer()
+    aligner = TextAligner(None, FakeDocument(), None, recognizer)
+    calls = []
+
+    def start_alignment():
+        aligner._disconnect_recognizer()
+        calls.append(1)
+
+    aligner._connect_recognizer(recognizer.progress, aligner._on_hidden_transcription_progress)
+    aligner._connect_recognizer(recognizer.finished, start_alignment)
+
+    recognizer.finished.emit()
+    recognizer.finished.emit()  # A later, unrelated transcription
+    assert calls == [1]
+    assert aligner._recognizer_connections == []
+
+    # Cancel path: disconnect without `finished` being emitted
+    aligner._connect_recognizer(recognizer.finished, start_alignment)
+    aligner._disconnect_recognizer()
+    recognizer.finished.emit()
+    assert calls == [1]

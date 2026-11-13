@@ -266,6 +266,46 @@ def align_text_with_vosk_tokens(
     return list(reversed(alignment))
 
 
+SENTENCE_SEPARATOR = "||"
+
+
+def _group_to_segment(group: list) -> list | None:
+    """
+    Return the [start, end] time span of a sentence, given its aligned words,
+    or None if none of its words could be aligned to a token.
+    """
+    tokens = [hyp for _, hyp in group if hyp is not None]
+    if not tokens:
+        return None
+    return [tokens[0][1], tokens[-1][2]]
+
+
+def segments_from_alignment(alignment: list) -> list:
+    """
+    Split the result of `align_text_with_vosk_tokens` into sentences.
+
+    The aligned text must be of the form "|| s1 || s2 || ... || sN ||".
+    Returns exactly one entry per sentence: a [start, end] list,
+    or None when the sentence couldn't be aligned (including sentences
+    that normalize to no words at all), so that indices stay in sync
+    with the list of sentences.
+    """
+    segments = []
+    group = None  # None until the first separator is met
+    for gt_word, hyp in alignment:
+        if gt_word is None:
+            # Inserted token, not part of any sentence
+            continue
+        if gt_word == SENTENCE_SEPARATOR:
+            if group is not None:
+                segments.append(_group_to_segment(group))
+            group = []
+            continue
+        if group is not None:
+            group.append((gt_word, hyp))
+    return segments
+
+
 class TextAlignerWorker(TaskWorker):
     segments_found = Signal(list)
 
@@ -282,7 +322,8 @@ class TextAlignerWorker(TaskWorker):
         QThread.currentThread().setPriority(QThread.Priority.HighPriority)
 
         try:
-            text = "|| " + " || ".join(self.sentences) + " || "
+            sep = SENTENCE_SEPARATOR
+            text = f"{sep} " + f" {sep} ".join(self.sentences) + f" {sep} "
             alignment = align_text_with_vosk_tokens(
                 text, self.tokens, cancel_check=lambda: self._must_stop
             )
@@ -291,46 +332,14 @@ class TextAlignerWorker(TaskWorker):
                 self.stopped.emit()
                 return
 
-            # Separating into segments
-            segments = []
-            segment_tokens = []
-            for al in alignment:
-                if al[0] is None:
-                    continue
-                if al[0] == "||":
-                    if segment_tokens:
-                        first_idx = 0
-                        last_idx = len(segment_tokens) - 1
-                        first_token = segment_tokens[first_idx][1]
-                        last_token = segment_tokens[last_idx][1]
-                        # Skip first tokens if they align to None
-                        while (first_token is None) and (first_idx < last_idx):
-                            first_idx += 1
-                            first_token = segment_tokens[first_idx][1]
-                        # Skip last tokens if they align to None
-                        while (last_token is None) and (first_idx < last_idx):
-                            last_idx -= 1
-                            last_token = segment_tokens[last_idx][1]
-
-                        if not (first_token or last_token):
-                            segments.append(None)
-                            segment_tokens.clear()
-                            continue
-
-                        if first_token:
-                            segment_start = first_token[1]
-                        else:
-                            segment_start = last_token[1]
-
-                        if last_token:
-                            segment_end = last_token[2]
-                        else:
-                            segment_end = first_token[2]
-
-                        segments.append([segment_start, segment_end])
-                        segment_tokens.clear()
-                    continue
-                segment_tokens.append(al)
+            segments = segments_from_alignment(alignment)
+            if len(segments) != len(self.sentences):
+                logger.error(
+                    f"Alignment returned {len(segments)} segments "
+                    f"for {len(self.sentences)} sentences"
+                )
+                self.failed.emit()
+                return
 
             self.segments = segments
             self.segments_found.emit(segments)
@@ -359,6 +368,28 @@ class TextAligner(QObject):
         self.alignment_thread = None
         self.progress_dialog: ProgressDialog | None = None
         self.progress_bar = None
+        # (signal, slot) pairs connected on the shared recognizer
+        self._recognizer_connections: list = []
+
+    def _connect_recognizer(self, signal, slot) -> None:
+        signal.connect(slot)
+        self._recognizer_connections.append((signal, slot))
+
+    def _disconnect_recognizer(self) -> None:
+        """Remove every connection made on the recognizer by `autoAlign`"""
+        for signal, slot in self._recognizer_connections:
+            try:
+                signal.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
+        self._recognizer_connections.clear()
+
+    def _on_hidden_transcription_progress(self, time_s: float) -> None:
+        if self.progress_dialog is None:
+            return
+        duration = self.media_controller.getDuration()
+        if duration:
+            self.progress_dialog.progress_bar.setValue(round(100 * time_s / duration))
 
     def _on_operation_stopped(self) -> None:
         print("_on_operation_stopped")
@@ -373,6 +404,7 @@ class TextAligner(QObject):
             document_controller
         """
         logger.debug("autoAlign()")
+        self._disconnect_recognizer()
 
         media_path = self.document_controller.media_path
 
@@ -407,6 +439,9 @@ class TextAligner(QObject):
         # self._queue = TaskQueue(tasks, parent=self)
 
         def start_alignment():
+            # One-shot: never re-run on a later, unrelated transcription
+            self._disconnect_recognizer()
+
             # Set the progress bar in indeterminate mode
             self.progress_dialog.progress_bar.setRange(0, 0)
             self.progress_dialog.setValue(0)
@@ -420,6 +455,7 @@ class TextAligner(QObject):
             self.alignment_thread = TextAlignerWorker(self, blocks, tokens)
             self.alignment_thread.segments_found.connect(on_alignment_complete)
             self.alignment_thread.stopped.connect(self._on_operation_stopped)
+            self.alignment_thread.failed.connect(self._on_operation_stopped)
             self.alignment_thread.start()
 
         def on_alignment_canceled():
@@ -427,12 +463,18 @@ class TextAligner(QObject):
                 self.alignment_thread.stop()
 
         def on_alignment_complete(segments):
+            if len(segments) != len(blocks):
+                logger.error(
+                    f"Got {len(segments)} segments for {len(blocks)} blocks, "
+                    "aborting alignment"
+                )
+                segments = []
             self.undo_stack.beginMacro("Auto alignment")
-            for i, segment in enumerate(segments):
+            for block, segment in zip(blocks, segments):
                 if segment is None:
                     continue
                 self.undo_stack.push(
-                    AlignBlockWithSegment(self.document_controller, blocks[i], segment)
+                    AlignBlockWithSegment(self.document_controller, block, segment)
                 )
             self.undo_stack.endMacro()
 
@@ -450,15 +492,18 @@ class TextAligner(QObject):
             # Start with hidden transcription first
             self.progress_dialog.progress_bar.setRange(0, 100)
             self.progress_dialog.cancelled.connect(self.recognizer.stop)
+            self.progress_dialog.cancelled.connect(self._disconnect_recognizer)
             self.progress_dialog.cancelled.connect(self._on_operation_stopped)
             self.progress_dialog.setMessage(self.tr("Hidden transcription..."))
 
-            self.recognizer.progress.connect(
-                lambda time_s: self.progress_dialog.progress_bar.setValue(
-                    round(100 * time_s / self.media_controller.getDuration())
-                )
+            # The recognizer is shared with the rest of the app: keep track of
+            # these connections so they can be removed once the hidden
+            # transcription is over (or cancelled, in which case
+            # `finished` is never emitted)
+            self._connect_recognizer(
+                self.recognizer.progress, self._on_hidden_transcription_progress
             )
-            self.recognizer.finished.connect(start_alignment)
+            self._connect_recognizer(self.recognizer.finished, start_alignment)
 
             start_time = media_metadata.get("transcription_progress", 0.0)
             self.recognizer.transcribeFile(str(media_path), start_time, is_hidden=True)

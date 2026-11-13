@@ -1118,8 +1118,8 @@ class CachePanel(QWidget):
             self.parent_dialog.signals.cache_transcription_cleared.emit()
 
         if self.current_scenes.isChecked():
-            transcription_path = cache._get_transcription_path(fingerprint)
-            transcription_path.unlink(missing_ok=True)
+            scenes_path = cache._get_scenes_path(fingerprint)
+            scenes_path.unlink(missing_ok=True)
             self.media_metadata.pop("scenes", None)
             self.parent_dialog.signals.cache_scenes_cleared.emit()
 

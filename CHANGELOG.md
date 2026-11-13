@@ -19,6 +19,9 @@
 * Document auto-rescue after a crash
 * Autosaves newer than the last manual save are removed when closing a document
 * "Adapt to subtitles" keeps italics and bold when splitting a segment into two lines
+* Fixed auto-align giving timings to the wrong sentences when a sentence has no words (only punctuation or metadata)
+* Fixed auto-align running again by itself after a later transcription
+* "Clear cache → Scenes" no longer deletes the transcription instead of the scenes
 
 ## [1.1] 2026-05-01
 
