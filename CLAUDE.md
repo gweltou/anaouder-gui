@@ -34,17 +34,17 @@ Entry: `main.py` (ffmpeg setup, logging) → `anaouder/main.py` (`main()`, `Tran
 
 **File I/O.** `anaouder/file_io/` has format modules (`srt`, `eaf`, `txt`, `rtf`) plus `file_manager.py` (open/save/autosave "document auto-rescue"/backups) and `dialogs.py` (implements `FilePromptsInterface`). Native format is `.ali` (text with embedded timing metadata). Segment export lives in `anaouder/exports/` and `anaouder/services/segment_exporter/`.
 
-**Languages.** `anaouder/lang/` (`br`, `fr`, `cy`) define per-language `Language` objects (text post-processing, alignment normalization, filler removal, model lists). Switched with `lang.loadLanguage()`. Vosk model management: `services/model_manager.py`; the Breton model list comes from the `ostilhou` package (`anaouder/lang/br.py`), not from `docs/model_list.json`. Spellcheck: `anaouder/hunspell.py` (spylls, loaded asynchronously).
+**Languages.** `anaouder/lang/` (`br`, `fr`, `cy`) define per-language `Language` objects (text post-processing, alignment normalization, filler removal, model lists). Switched with `lang.loadLanguage()`. Vosk model management (lists, cache paths, download URLs, deletion) is in `anaouder/lang/__init__.py`, with the download/delete UI in `ui/parameters_dialog.py` (`ModelsPanel`, `DownloadProgressDialog`); `services/model_manager.py` is an untracked, unused draft (see TODO #21, #72). The Breton model list comes from the `ostilhou` package (`anaouder/lang/br.py`), not from `docs/model_list.json`. Spellcheck: `anaouder/hunspell.py` (spylls, loaded asynchronously).
 
 **Other.** `cache_system.py` stores per-media-file (fingerprint-based) transcription/waveform data in the user cache dir; `settings.py` persists preferences; `strings.py` holds shared UI strings; `ui/` contains widgets (waveform, text highlighter, timecode display, theme, dialogs).
 
 ## Task tracking
 
-`TODO.md` (repo root) is the single list of pending tasks, bugs and code `TODO`s, each with a number, a status marker (`[ ]` / `[~]` / `[x]`), a severity (S1–S4) and a validity check. Read it before non-trivial work, reference tasks by number (e.g. "fix #30"), update the marker when you start or finish one, and remove the matching `TODO` comment in the code when you resolve it. The application package is `anaouder` (renamed from `src` in task #1); import as `anaouder.<module>`.
+`TODO.md` (repo root) is the single list of pending tasks, bugs and code `TODO`s, each with a number, a status marker (`[ ]` / `[~]` / `[x]`), a severity (S1–S4) and a validity check. Read it before non-trivial work, reference tasks by number (e.g. "fix #30"), update the marker when you start or finish one, and remove the matching `TODO` comment in the code when you resolve it. Finished tasks move to the "Done / stale" section at the bottom; never delete entries (when adding tasks, check the diff doesn't drop that section). The application package is `anaouder` (renamed from `src` in task #1); import as `anaouder.<module>`.
 
 ## Gotchas
 
-- `tests/test_adapt_subtitles.py::test_remove_fillers` currently fails (a non-breaking space before `?` in the output); other tests pass.
+- `tests/test_adapt_subtitles.py::test_remove_fillers` currently fails (a non-breaking space before `?` in the output, TODO #5); other tests pass.
 
 ## Application structure
 
@@ -121,7 +121,7 @@ Largest files in `anaouder/` (~19k lines of Python total), each read in full. Li
 - Settings are written straight to `app_settings` (QSettings) as widgets change.
 
 ### Smaller modules worth knowing
-`anaouder/services/task.py` (`TaskWorker`, `TaskQueue`), `services/media_player_controller.py`, `services/model_manager.py`, `services/scene_detector.py` (`SceneDetectWorker`), `services/adapt_subtitles.py` (`AdaptUtterancesDialog`), `actions.py` (`ActionManager`: all `QAction`s and `*_requested` signals), `ui/theme.py`, `ui/text_highlighter.py`, `ui/video_widget.py`, `ui/dialogs.py`.
+`anaouder/services/task.py` (`TaskWorker`, `TaskQueue`), `services/media_player_controller.py`, `services/scene_detector.py` (`SceneDetectWorker`), `services/adapt_subtitles.py` (`AdaptUtterancesDialog`), `actions.py` (`ActionManager`: all `QAction`s and `*_requested` signals), `ui/theme.py`, `ui/text_highlighter.py`, `ui/video_widget.py`, `ui/dialogs.py`.
 
 ### Data flow in short
 User edits in `TextEditWidget` or `WaveformWidget` → `DocumentController` methods or direct `undo_stack.push(...)` → `QUndoCommand`s mutate the `QTextDocument` and `DocumentController.segments` together (and set `must_redraw`) → the waveform repaints from `segments`, and `MainWindow` slots refresh the status bar and subtitle overlay. Long-running work (transcription, alignment, rendering, scene detection) runs on worker threads and reports back through signals that `MainWindow` connects.

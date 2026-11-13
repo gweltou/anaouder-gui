@@ -2,7 +2,7 @@
 
 Single list of pending work for Anaouder: packaging chores, features, bugs and `TODO`/`XXX` comments found in the code.
 It merges `docs/TODO.txt` (old, French, partly outdated) and the comments in `anaouder/`.
-Last audit: 2026-11-13 (re-checked against a full read of the largest source files; see #49-#58, #67-#69; #71-#80 come from the old `PLAN.md` review).
+Last audit: 2026-11-13 (re-checked against a full read of the largest source files; see #49-#58, #67-#69; #71-#80 come from the old `PLAN.md` review; the Done section was restored after 66a4184 dropped it by mistake).
 
 ## How to use this file
 
@@ -20,25 +20,13 @@ Last audit: 2026-11-13 (re-checked against a full read of the largest source fil
 
 ## 1. Packaging / repo structure
 
-- [x] **#1 · S2 · done — Rename the `src` package to `anaouder`.**
-  Done: steps 1–6, `.gitignore` (`*.egg-info/`, `.coverage`), `CLAUDE.md`, `.ts` source locations, local `docs/internationalization.txt`; tests, app launch and a Linux PyInstaller build (bundles `anaouder.lang.*`, binary starts) OK.
-  Why: with no `[tool.setuptools]` config, `pip install .` installs the contents of `src/` as top-level modules (`utils`, `main`, `settings`, `ui`, `lang`…), which can clash with other packages, and stale `build/lib` files leak into wheels. A package literally called `src` is also fragile.
-  Plan:
-  1. `git mv src anaouder`; replace `from src.` / `import src.` with `anaouder.` in `main.py`, `anaouder/`, `tests/` (and any `"src.…"` string, e.g. mock patches).
-  2. `anaouder.spec`: `hiddenimports` (`src.lang.*` → `anaouder.lang.*`).
-  3. `pyproject.toml`: add `[tool.setuptools.packages.find]` with `include = ["anaouder*"]`, and package data if needed.
-  4. Delete `build/lib`, `src/anaouder_gui.egg-info/`, reinstall with `pip install -e .`; make sure `build/`, `*.egg-info/` are git-ignored.
-  5. Update `CLAUDE.md` (all `src/…` paths and the "Tests import `src.*`" note), `docs/`, `build_macos-x86.sh`, workflows.
-  6. Check `main.py` (root) still works, run the tests, run a PyInstaller build.
-  Interim option if the rename is postponed: only step 3 with `include = ["src*"]`.
-- [ ] **#2 · S4 · valid — `git rm icons/anaouder_splash_ver.png`.** The spec now writes the version splash to PyInstaller's `workpath`; the tracked file is unused (already staged as deleted).
 - [ ] **#3 · S4 · valid — Declare missing dependencies in `pyproject.toml`.** `jiwer` (used by `services/aligner.py`) and `numpy` are imported but not declared. Also add a `test` optional-dependency group (`pytest`, plus `pytest-qt` if adopted, see #78). Verify with a clean venv.
 - [ ] **#4 · S4 · valid — Spec small cleanups** (`anaouder.spec`): `argv_emulation=True` on all platforms, `COLLECT upx=True` vs `EXE upx=USE_UPX`, stale module docstring, manual `hiddenimports`.
 - [ ] **#5 · S3 · valid — `test_remove_fillers` fails.** `tests/test_adapt_subtitles.py::test_remove_fillers` gets `\xa0` before `?` instead of a plain space. Decide whether the code or the test is wrong.
 - [ ] **#6 · S4 · valid — `building/Windows/anaouder_installer.iss` hardcodes `MyAppVersion "1.1.1"`** (CI overrides it, local builds don't). Keep in sync or drop the default.
 - [ ] **#70 · S4 · valid — Create a CI workflow for macOS with Apple Silicon.**
 - [ ] **#71 · S4 · valid — Remove the duplicate segment exporter.** `anaouder/exports/segment_exporter.py` (417 lines, dialog + exporter in one file) is an older copy of `anaouder/services/segment_exporter/` (`dialog.py` + `segment_exporter.py`). Only the `services` version is imported (`anaouder/main.py:~110`). `git rm -r anaouder/exports/` after checking nothing in `tests/` relies on it, and update the "Segment export" line in `CLAUDE.md`.
-- [ ] **#72 · S4 · valid — Tidy untracked root files.** `header.txt`, `header2.txt`, `list_files.sh`, `README_old.md`, `tutorial.ali`, `res/mod_implij.{rtf,txt}` are untracked at the root. Commit what is useful (e.g. `tutorial.ali` as an example document, `build_macos-x86.sh` into `building/macOS/`), delete the rest.
+- [ ] **#72 · S4 · valid — Tidy untracked root files.** `header.txt`, `header2.txt`, `list_files.sh`, `README_old.md`, `tutorial.ali`, `res/mod_implij.{rtf,txt}` are untracked at the root. `anaouder/services/model_manager.py` is also untracked and imported nowhere (an unfinished model-library draft, see #21): commit it with #21 or delete it. Commit what is useful (e.g. `tutorial.ali` as an example document, `build_macos-x86.sh` into `building/macOS/`), delete the rest.
 - [ ] **#73 · S4 · valid — Keep release binaries out of the tree.** `building/Linux/Anaouder-1.1_linux_x86_64.AppImage` and `building/Linux/appimagetool-x86_64.AppImage` are untracked but not ignored (`building/` is 182 MB, `dist/` 111 MB). Ignore `*.AppImage`, publish releases on GitHub Releases, and have `build_linux_appimage.sh` download `appimagetool` instead of expecting it in the tree.
 - [ ] **#74 · S4 · valid — `.gitignore` ignores all of `docs/` and `examples/`.** `docs/internationalization.txt` is referenced by `CLAUDE.md` but can't be committed. Un-ignore `docs/` (or at least that file) and `examples/` if they hold anything worth sharing. (`docs/model_list.json` is no longer read at runtime: the Breton model list comes from `ostilhou`.)
 - [ ] **#75 · S4 · valid — Consolidate packaging scripts.** `install_{linux.sh,macOS.command,win.bat}` and `start_{linux.sh,macOS.command,win.bat}` sit at the root, `build_macos-x86.sh` (untracked) at the root, the rest in `building/{Linux,macOS,Windows}`. Move everything into `building/<platform>/` (or `packaging/`), keeping at the root only the entry points users really run, and update `README*`/CI. There is also no Linux CI workflow (only `package_macos_intel.yml` and `package_win64.yml`; see #70).
@@ -107,5 +95,17 @@ Bugs from `docs/TODO.txt` have not been re-reproduced unless stated; `unverified
 
 ## Done / stale
 
+- [x] **#1 · done — Renamed the `src` package to `anaouder`.** `git mv src anaouder`, imports and mock patches updated, `anaouder.spec` `hiddenimports` → `anaouder.lang.*`, `[tool.setuptools.packages.find] include = ["anaouder*"]` in `pyproject.toml`, `.gitignore` (`*.egg-info/`, `.coverage`), `CLAUDE.md`, `.ts` source locations and `docs/internationalization.txt` updated. Tests, app launch and a Linux PyInstaller build (bundles `anaouder.lang.*`, binary starts) OK. Commits b1979d9, 99af3d6.
+- [x] **#2 · done — Removed `icons/anaouder_splash_ver.png`.** The spec writes the version splash to PyInstaller's `workpath`; the file was deleted in 7e88aec.
+- [x] **#90 · stale — Paste from an external text crashed with `'TextEditWidget' has no attribute 'cursor_pos'`.** `TextEditWidget.paste` now uses `self.textCursor()` (old path `anaouder/text_widget.py` no longer exists). Reopen as a new task if pasting still fails.
+- [x] **#93 · done — Packaging fixes (spec, version via `tomllib`, `copy_metadata`, CI workflows).**
+- [x] **#33 · done — "Adapt to subtitles" removed formatting (italics) from segments split by the subtitle rules.** `apply_subtitle_rules` used `block.text()`; it now slices the block's formatted fragments around the split and rebuilds HTML with `fragments_to_html`. Also fixed `fragments_to_html` crashing (`TextFormat` not orderable) on text that is both bold and italic. Test: `tests/test_document_controller.py::test_subtitle_rules_keep_formatting`.
+- [x] **#49 · done — `TextAligner.autoAlign` leaked signal connections on the shared recognizer.** The `finished` → `start_alignment` and `progress` connections are now tracked (`_connect_recognizer`) and removed (`_disconnect_recognizer`) when the alignment starts, when the hidden transcription is cancelled (`finished` is not emitted on stop) and at the start of every `autoAlign`. Test: `tests/test_aligner.py::test_text_aligner_disconnects_recognizer`.
+- [x] **#50 · done — Auto-align could attach segments to the wrong blocks.** Grouping by `||` moved to `segments_from_alignment`, which returns exactly one entry per sentence (`None` for sentences with no aligned word, including empty ones). The worker fails, and `on_alignment_complete` aborts, if the counts still differ; the worker's `failed` signal now also closes the progress dialog. Tests: `tests/test_aligner.py::test_segments_from_alignment_keeps_one_entry_per_sentence`, `test_aligner_worker_with_empty_sentence`.
+- [x] **#51 · done — "Clear current file cache → Scenes" deleted the transcription.** `CachePanel.clearCurrentCache` now unlinks `cache._get_scenes_path(...)`.
+- [x] **#36 · done — Waveform could be scrolled by wheel beyond its bounds.** The non-smoothed fast scroll in `_scroll_view` now calls `_check_for_out_of_view()`, the single clamp for `view.t_left` (also used by zoom and follow-playhead). Test: `tests/test_waveform_widget.py::test_fast_scroll_without_smoothing_stays_in_bounds`.
+- [x] **#37 · done — Following the playhead could move the view beyond the waveform bounds.** `updatePlayHead` and `toggleFollowPlayHead` now clamp with `_check_for_out_of_view()`. Tests: `tests/test_waveform_widget.py::test_follow_playhead_*`, `test_short_audio_sticks_to_left`.
+- [x] **#53 · done — `WaveformWidget.zoomOut` raised `ZeroDivisionError` with no media loaded.** `zoomIn` / `zoomOut` return early when `audio_len <= 0` and clamp through `_check_for_out_of_view()`. Tests: `tests/test_waveform_widget.py::test_zoom_*`.
+- [x] **#55 · done — `FileManager.export_to_text_format` raised `UnboundLocalError` when `format_eaf` failed.** It now logs the error and returns. Test: `tests/test_file_manager.py::test_export_eaf_error_does_not_raise`.
 - [x] **#81 · S2 · done — Undoing an alignment left the sentence highlighted as aligned.** Undo of `AlignWithSelectionCommand` / `AlignBlockWithSegmentCommand` restored the block metadata with `setBlockMetadata`, which didn't rehighlight, and before the segment was removed. `setBlockMetadata` now rehighlights the block and both undos remove the segment first. Tests in `tests/test_commands.py`.
 - [x] **#82 · S3 · done — Zoom ignored "follow playhead".** `WaveformWidget.zoomIn` / `zoomOut` pivoted on the mouse position even when following the playhead; they now center the view on the playhead in that mode (`_set_zoom`). Tests in `tests/test_waveform_widget.py`.
