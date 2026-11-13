@@ -25,12 +25,12 @@ from PySide6.QtCore import (
     Qt,
 )
 from PySide6.QtGui import (
+    QColor,
     QPainter,
     QPolygon,
 )
 from PySide6.QtWidgets import QWidget
 
-from settings import QColor
 from src.interfaces import DocumentInterface, TextEditorInterface
 from src.ui.theme import theme
 from src.utils import map_number

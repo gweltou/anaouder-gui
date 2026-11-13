@@ -1,14 +1,12 @@
-from typing import List, Callable
-from dataclasses import dataclass
 import os
-from importlib import import_module
 import shutil
-import hashlib
+from collections.abc import Callable
+from dataclasses import dataclass
+from importlib import import_module
 
 from ostilhou.asr.models import _is_valid_vosk_model
 
-from utils import get_cache_directory
-
+from src.utils import get_cache_directory
 
 LANG_MODULES = ['br', 'cy', 'fr']
 
@@ -18,7 +16,7 @@ LANG_MODULES = ['br', 'cy', 'fr']
 class Language:
     name:                   str
     short_name:             str
-    get_model_dict:         Callable[[], List[dict]]
+    get_model_dict:         Callable[[], list[dict]]
     post_process_text:      Callable[[str, bool], str] | None = None
     pre_process_density:    Callable[[str], str] | None = None
     pre_process_alignment:  Callable[[str], str] | None = None
@@ -30,25 +28,25 @@ class Language:
 
     def load(self):
         pass
-    
+
     def postProcessText(self, text: str, normalize: bool) -> str:
         return self.post_process_text(text, normalize)
 
     def preProcessDensity(self, text: str) -> str:
         return self.pre_process_density(text)
-    
+
     def processTextForAlignment(self, text: str) -> str:
         return self.pre_process_alignment(text)
-    
+
     def removeVerbalFillers(self, text: str) -> str:
         return self.remove_fillers(text)
 
-    def getCachedModelList(self) -> List[str]:
+    def getCachedModelList(self) -> list[str]:
         """Return a list of cached models"""
         model_dirs = [subdir.name for subdir in self.model_dir.iterdir() if _is_valid_vosk_model(subdir)]
         return sorted(model_dirs, reverse=True)
 
-    def getDownloadableModelList(self) -> List[str]:
+    def getDownloadableModelList(self) -> list[str]:
         """
         Return a list of models available for download
         without the models already downloaded
@@ -57,7 +55,7 @@ class Language:
         online_models = set(all_models).difference(set(getCachedModelList()))
         return sorted(online_models, reverse=True)
 
-    def getModelList(self) -> List[str]:
+    def getModelList(self) -> list[str]:
         return sorted(self.get_model_dict().keys(), reverse=True)
 
     def deleteModel(self, model_name):
@@ -92,11 +90,13 @@ def getModelPath(model_name: str) -> str:
     """Return the path to a cached model"""
     if model_name in _current_language.getCachedModelList():
         return os.path.join(_current_language.model_dir, model_name)
+    return ""
 
 
 def getModelUrl(model_name: str) -> str:
     if model_name in _current_language.model_dict:
         return _current_language.model_dict[model_name]["url"]
+    return ""
 
 
 def postProcessText(text: str, normalize: bool) -> str:
@@ -111,7 +111,7 @@ def removeVerbalFillers(text: str) -> str:
     return _current_language.removeVerbalFillers(text)
 
 
-def getLanguages(long_name=False) -> List[str]:
+def getLanguages(long_name=False) -> list[str]:
     if long_name:
         return sorted([l.name.capitalize() for l in _languages.values()])
     return sorted(_languages.keys())
@@ -139,7 +139,7 @@ def loadLanguage(lang: str) -> None:
 
     if lang in _languages:
         _current_language = _languages[lang]
-    
+
     print("Language switched to", lang)
 
 

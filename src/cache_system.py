@@ -17,19 +17,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-from typing import List, Dict
-from functools import lru_cache
+import copy
+import hashlib
+import json
 import logging
 import os
-import hashlib
-import copy
-import json
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
+
 import numpy as np
 
-from utils import get_cache_directory
-
+from src.utils import get_cache_directory
 
 type Fingerprint = str
 
@@ -109,11 +108,11 @@ class CacheSystem:
 
     def __init__(self) -> None:
         # Copy in memory of cache loaded from disk
-        self.media_cache: Dict[Fingerprint, Dict] = dict()
-        self.doc_cache: Dict[str, Dict] = dict()
+        self.media_cache: dict[Fingerprint, dict] = {}
+        self.doc_cache: dict[str, dict] = {}
 
         # Volatile cache for transcriptions
-        self.transcriptions_cache: Dict[Fingerprint, List[tuple]] = dict()
+        self.transcriptions_cache: dict[Fingerprint, list[tuple]] = {}
 
         self._media_cache_dirty = False # True when the db has unsaved changes
         self._doc_cache_dirty = False
@@ -291,7 +290,7 @@ class CacheSystem:
         self._save_root_cache_to_disk()
 
 
-    def get_media_transcription(self, file_path: Path) -> List[tuple] | None:
+    def get_media_transcription(self, file_path: Path) -> list[tuple] | None:
         fingerprint = calculate_fingerprint(file_path)
 
         if fingerprint not in self.transcriptions_cache:
@@ -304,7 +303,7 @@ class CacheSystem:
         return self.transcriptions_cache[fingerprint]
 
 
-    def _get_transcription_from_disk(self, fingerprint: Fingerprint) -> List[tuple] | None:
+    def _get_transcription_from_disk(self, fingerprint: Fingerprint) -> list[tuple] | None:
         """
         Return the cached transcription for this media file.
         Return None if no transcription exists on disk
@@ -372,12 +371,12 @@ class CacheSystem:
         self.update_media_metadata(media_path)
 
 
-    def get_media_scenes(self, media_path: Path) -> List[tuple] | None:
+    def get_media_scenes(self, media_path: Path) -> list[tuple] | None:
         fingerprint = calculate_fingerprint(media_path)
         return self._get_scenes_from_disk(fingerprint)
 
 
-    def _get_scenes_from_disk(self, fingerprint: Fingerprint) -> List[tuple] | None:
+    def _get_scenes_from_disk(self, fingerprint: Fingerprint) -> list[tuple] | None:
         """Return the cached scenes transitions for this media file"""
         file_path = self._get_scenes_path(fingerprint)
         if not file_path.exists():
@@ -396,13 +395,13 @@ class CacheSystem:
             return None
 
 
-    def set_media_scenes(self, media_path: Path, scenes: List[tuple]) -> None:
+    def set_media_scenes(self, media_path: Path, scenes: list[tuple]) -> None:
         fingerprint = calculate_fingerprint(media_path)
         self._save_scenes_to_disk(fingerprint, scenes)
         self._media_cache_dirty = True
 
 
-    def _save_scenes_to_disk(self, fingerprint: Fingerprint, scenes: List[tuple]) -> None:
+    def _save_scenes_to_disk(self, fingerprint: Fingerprint, scenes: list[tuple]) -> None:
         """
         Scenes format:
             Each scene is on a different line.

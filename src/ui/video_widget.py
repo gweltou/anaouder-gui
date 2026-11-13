@@ -17,35 +17,24 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 from ostilhou.asr.dataset import MetadataParser
-from PySide6.QtCore import QMargins, QPointF, QRectF, QSize, Qt, QTimer
+from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import (
-    QBrush,
     QColor,
-    QFont,
     QPainter,
-    QPainterPath,
-    QPen,
     QResizeEvent,
-    QTextOption,
 )
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtMultimediaWidgets import QGraphicsVideoItem, QVideoWidget
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsItem,
-    QGraphicsItemGroup,
     QGraphicsRectItem,
     QGraphicsScene,
-    QGraphicsSimpleTextItem,
     QGraphicsTextItem,
     QGraphicsView,
-    QMainWindow,
-    QStyleOptionGraphicsItem,
-    QWidget,
 )
 
-from settings import app_settings
 from src.services.logger import logger
+from src.settings import app_settings
 
 
 class CenteredTextItem(QGraphicsTextItem):
