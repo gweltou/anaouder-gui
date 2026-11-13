@@ -16,10 +16,8 @@
 * Fixed text formatting at wrong character offset
 * File manager refactoring
 * Global terminal logger
-* Document auto-rescue
-* Offer to recover the last autosave after a crash
+* Document auto-rescue after a crash
 * Autosaves newer than the last manual save are removed when closing a document
-* Opening a file now asks to save the current one first
 
 ## [1.1] 2026-05-01
 
