@@ -26,7 +26,7 @@ is_darwin = platform.system() == "Darwin"
 
 APP_NAME = "Anaouder"
 DEFAULT_LANGUAGE = "br"
-FUTURE = True
+FUTURE = False
 
 AUTOSAVE_FOLDER_NAME = "_anaouder_autosave"
 
@@ -66,9 +66,9 @@ SUBTITLES_CPS = 16.0  # Speech density (chars per second)
 SUBTITLES_DEFAULT_COLOR = QColor(255, 255, 255)
 SUBTITLES_BLOCK_DEFAULT_COLOR = QColor(0, 0, 0, 100)
 
-# Autosave settings
+# Autosave default settings
 AUTOSAVE_DEFAULT_INTERVAL = 1.0  # minutes
-AUTOSAVE_BACKUP_NUMBER = 3  # Number of files to keep at most
+AUTOSAVE_BACKUP_NUMBER = 5  # Number of files to keep at most
 
 
 

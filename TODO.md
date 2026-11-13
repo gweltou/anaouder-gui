@@ -35,6 +35,7 @@ Last audit: 2026-11-13 (re-checked against a full read of the largest source fil
 - [ ] **#4 · S4 · valid — Spec small cleanups** (`anaouder.spec`): `argv_emulation=True` on all platforms, `COLLECT upx=True` vs `EXE upx=USE_UPX`, stale module docstring, manual `hiddenimports`.
 - [ ] **#5 · S3 · valid — `test_remove_fillers` fails.** `tests/test_adapt_subtitles.py::test_remove_fillers` gets `\xa0` before `?` instead of a plain space. Decide whether the code or the test is wrong.
 - [ ] **#6 · S4 · valid — `building/Windows/anaouder_installer.iss` hardcodes `MyAppVersion "1.1.1"`** (CI overrides it, local builds don't). Keep in sync or drop the default.
+- [ ] **#70 · S4 · valid — Create a CI workflow for macOS with Apple Silicon
 
 ## 2. Features
 
@@ -103,7 +104,5 @@ Bugs from `docs/TODO.txt` have not been re-reproduced unless stated; `unverified
 ## Done / stale
 
 - [x] **#90 · stale — Paste from an external text crashed with `'TextEditWidget' has no attribute 'cursor_pos'`.** `TextEditWidget.paste` now uses `self.textCursor()` (old path `src/text_widget.py` no longer exists). Reopen as a new task if pasting still fails.
-- [x] **#91 · stale — Asynchronous loading of hunspell.** Done: `src/hunspell.py` loads spylls asynchronously.
-- [x] **#92 · stale — Export of individual segments.** Done: `src/exports/` and `src/services/segment_exporter/`.
 - [x] **#93 · done — Packaging fixes (spec, version via `tomllib`, `copy_metadata`, CI workflows).**
 - [x] **#33 · done — "Adapt to subtitles" removed formatting (italics) from segments split by the subtitle rules.** `apply_subtitle_rules` used `block.text()`; it now slices the block's formatted fragments around the split and rebuilds HTML with `fragments_to_html`. Also fixed `fragments_to_html` crashing (`TextFormat` not orderable) on text that is both bold and italic. Test: `tests/test_document_controller.py::test_subtitle_rules_keep_formatting`.
