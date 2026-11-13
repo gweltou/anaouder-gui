@@ -914,8 +914,8 @@ class DocumentController(QObject):
             self.waveform_widget.resizeSelection(playhead, Handle.RIGHT)
 
 
-    def getSelectedBlocksAndTimeRange(self) -> tuple[list[QTextBlock], list] | None:
-        """Returns the selected text blocks and the corresponding time range"""
+    def get_selected_blocks_and_time_range(self) -> tuple[list[QTextBlock], list] | None:
+        """Returns the selected text blocks and the corresponding time range."""
         logger.debug("autoAlignSelectedBlocks()")
 
         if self.text_widget is None or self.waveform_widget is None:

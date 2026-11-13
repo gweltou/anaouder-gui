@@ -217,7 +217,7 @@ class AlignWithSelectionCommand(QUndoCommand):
         print("redo", self.document_controller.getBlockMetadata(self.block))
 
 
-class AlignBlockWithSegment(QUndoCommand):
+class AlignBlockWithSegmentCommand(QUndoCommand):
     def __init__(
         self,
         document: DocumentInterface,

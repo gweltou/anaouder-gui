@@ -18,14 +18,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import re
 from math import inf
-from typing import List
 
 import jiwer
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtGui import QTextBlock
 
 from anaouder.cache_system import cache
-from anaouder.commands import AlignBlockWithSegment
+from anaouder.commands import AlignBlockWithSegmentCommand
 from anaouder.interfaces import DocumentInterface
 from anaouder.lang import prepTextForAlignment
 from anaouder.services.logger import logger
@@ -69,7 +68,7 @@ def smart_split_text(text: str, position: int, vosk_tokens: list) -> tuple:
     right_text = text[position:].lstrip()
 
     result = align_text_with_vosk_tokens(
-        " ".join([left_text, SPLIT_TOKEN, right_text]), vosk_tokens
+        f"{left_text} {SPLIT_TOKEN} {right_text}", vosk_tokens
     )
 
     # Find index of split token
@@ -306,10 +305,11 @@ def segments_from_alignment(alignment: list) -> list:
     return segments
 
 
+
 class TextAlignerWorker(TaskWorker):
     segments_found = Signal(list)
 
-    def __init__(self, parent, blocks: List[QTextBlock], tokens: list):
+    def __init__(self, parent, blocks: list[QTextBlock], tokens: list):
         super().__init__(parent)
         self.sentences = [block.text() for block in blocks]
         self.tokens = tokens[:]  # Make a copy to be thread safe
@@ -318,12 +318,13 @@ class TextAlignerWorker(TaskWorker):
         assert self.sentences
         assert self.tokens
 
+
     def run(self):
         QThread.currentThread().setPriority(QThread.Priority.HighPriority)
 
         try:
-            sep = SENTENCE_SEPARATOR
-            text = f"{sep} " + f" {sep} ".join(self.sentences) + f" {sep} "
+            text = f" {SENTENCE_SEPARATOR} ".join(self.sentences)
+            text = f"{SENTENCE_SEPARATOR} {text} {SENTENCE_SEPARATOR}"
             alignment = align_text_with_vosk_tokens(
                 text, self.tokens, cancel_check=lambda: self._must_stop
             )
@@ -350,6 +351,7 @@ class TextAlignerWorker(TaskWorker):
             self.failed.emit()
 
 
+
 class TextAligner(QObject):
     def __init__(
         self,
@@ -371,9 +373,11 @@ class TextAligner(QObject):
         # (signal, slot) pairs connected on the shared recognizer
         self._recognizer_connections: list = []
 
+
     def _connect_recognizer(self, signal, slot) -> None:
         signal.connect(slot)
         self._recognizer_connections.append((signal, slot))
+
 
     def _disconnect_recognizer(self) -> None:
         """Remove every connection made on the recognizer by `autoAlign`"""
@@ -384,6 +388,7 @@ class TextAligner(QObject):
                 pass
         self._recognizer_connections.clear()
 
+
     def _on_hidden_transcription_progress(self, time_s: float) -> None:
         if self.progress_dialog is None:
             return
@@ -391,10 +396,11 @@ class TextAligner(QObject):
         if duration:
             self.progress_dialog.progress_bar.setValue(round(100 * time_s / duration))
 
+
     def _on_operation_stopped(self) -> None:
-        print("_on_operation_stopped")
         if self.progress_dialog:
             self.progress_dialog.close()
+
 
     def autoAlign(self) -> None:
         """
@@ -403,7 +409,7 @@ class TextAligner(QObject):
             progress_bar
             document_controller
         """
-        logger.debug("autoAlign()")
+        logger.debug("TextAligner.autoAlign()")
         self._disconnect_recognizer()
 
         media_path = self.document_controller.media_path
@@ -419,7 +425,7 @@ class TextAligner(QObject):
             "transcription_completed", False
         )
 
-        alignment_args = self.document_controller.getSelectedBlocksAndTimeRange()
+        alignment_args = self.document_controller.get_selected_blocks_and_time_range()
 
         if alignment_args is None:
             return
@@ -474,7 +480,7 @@ class TextAligner(QObject):
                 if segment is None:
                     continue
                 self.undo_stack.push(
-                    AlignBlockWithSegment(self.document_controller, block, segment)
+                    AlignBlockWithSegmentCommand(self.document_controller, block, segment)
                 )
             self.undo_stack.endMacro()
 
@@ -521,7 +527,7 @@ def _print_matrix(matrix):
         print(f"[{' '.join(r)}]")
 
 
-def print_alignment(alignment: List) -> None:
+def print_alignment(alignment: list) -> None:
     top_line = []
     bottom_line = []
     for gt_word, hyp in alignment:
