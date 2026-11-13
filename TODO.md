@@ -20,8 +20,8 @@ Last audit: 2026-11-13 (re-checked against a full read of the largest source fil
 
 ## 1. Packaging / repo structure
 
-- [~] **#1 · S2 · mostly done — Rename the `src` package to `anaouder`.**
-  Done: steps 1–3, `.gitignore` (`*.egg-info/`, `.coverage`), `CLAUDE.md`, `.ts` source locations; tests and app launch OK. Left: run a PyInstaller build; update the local (git-ignored) `docs/internationalization.txt` if it mentions `src/`.
+- [x] **#1 · S2 · done — Rename the `src` package to `anaouder`.**
+  Done: steps 1–6, `.gitignore` (`*.egg-info/`, `.coverage`), `CLAUDE.md`, `.ts` source locations, local `docs/internationalization.txt`; tests, app launch and a Linux PyInstaller build (bundles `anaouder.lang.*`, binary starts) OK.
   Why: with no `[tool.setuptools]` config, `pip install .` installs the contents of `src/` as top-level modules (`utils`, `main`, `settings`, `ui`, `lang`…), which can clash with other packages, and stale `build/lib` files leak into wheels. A package literally called `src` is also fragile.
   Plan:
   1. `git mv src anaouder`; replace `from src.` / `import src.` with `anaouder.` in `main.py`, `anaouder/`, `tests/` (and any `"src.…"` string, e.g. mock patches).
