@@ -110,7 +110,7 @@ class LayoutMetrics:
     wf_mid_y: int  # vertical center of waveform
 
     @classmethod
-    def compute(cls, widget_width: int, widget_height: int) -> "LayoutMetrics":
+    def compute(cls, widget_height: int) -> "LayoutMetrics":
         timecode_margin = 20  # Margin above waveform zone
         wf_h = widget_height - timecode_margin
 
@@ -196,6 +196,7 @@ class ProgressLayer(RenderLayer):
         painter.drawRect(QRect(0, 0, int(w), ctx.height))
 
 
+
 class WaveformLayer(RenderLayer):
     SCALE_Y = 2.0
 
@@ -207,10 +208,13 @@ class WaveformLayer(RenderLayer):
         self._cache_ppsec: float = -1.0
         self._cache_t_left: float = 0.0
         self._cache_width: int = 0
+        self._cache_height: int = 0
+
 
     def invalidate(self) -> None:
         """Call when audio data or zoom changes."""
         self._cache = None
+
 
     def draw(self, painter: QPainter, ctx: RenderContext) -> None:
         pix_per_sample = ctx.ppsec / self._waveform.sr
@@ -229,10 +233,14 @@ class WaveformLayer(RenderLayer):
         src_x = round((ctx.t_left - self._cache_t_left) * ctx.ppsec)
         painter.drawPixmap(0, 0, self._cache, src_x, 0, ctx.width, ctx.height)
 
+
     def _cache_needs_rebuild(self, ctx: RenderContext) -> bool:
         if self._cache is None:
             return True
         if ctx.ppsec != self._cache_ppsec:
+            return True
+        # Rebuild if the view was resized
+        if ctx.height != self._cache_height:
             return True
         # Rebuild if the view has scrolled outside the cached region
         cache_t_right = self._cache_t_left + self._cache_width / ctx.ppsec
@@ -243,6 +251,7 @@ class WaveformLayer(RenderLayer):
             return True
         return False
 
+
     def _rebuild_cache(self, ctx: RenderContext) -> None:
         """
         Render a pixmap 3x the viewport width, centered on the current view.
@@ -251,6 +260,7 @@ class WaveformLayer(RenderLayer):
         margin = ctx.width / ctx.ppsec  # 1 viewport in seconds
         cache_t_left = ctx.t_left - margin
         cache_width = ctx.width * 3
+        print("rebuild cache", cache_width)
 
         chart = self._waveform.get(cache_t_left, cache_width)
 
@@ -274,6 +284,8 @@ class WaveformLayer(RenderLayer):
         self._cache_ppsec = ctx.ppsec
         self._cache_t_left = cache_t_left
         self._cache_width = cache_width
+        self._cache_height = ctx.height
+
 
     def _draw_direct(self, painter: QPainter, ctx: RenderContext) -> None:
         """Used when zoomed in far enough that individual samples are visible."""
@@ -288,6 +300,7 @@ class WaveformLayer(RenderLayer):
                 lyt.timecode_margin + wf_h * (0.5 + self.SCALE_Y * chart[x + ctx.width])
             )
             painter.drawLine(x, ymin, x, ymax)
+
 
 
 class SegmentsLayer(RenderLayer):

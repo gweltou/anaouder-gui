@@ -131,9 +131,7 @@ class WaveformWidget(QWidget):
 
         # Accept focus for keyboard events
         # self.setFocusPolicy(Qt.StrongFocus)
-        self.setMouseTracking(
-            True
-        )  # get mouse move events even if no buttons are held down
+        self.setMouseTracking(True)  # get mouse move events even if no buttons are held down
         self.is_selecting = False
         self.shift_pressed = False
         self.handle_state = [False, False, False]  # Left, Middle, Right
@@ -172,6 +170,7 @@ class WaveformWidget(QWidget):
         zoom_out_shortcut.activated.connect(self.zoomOut)
 
         self.clear()
+
 
     def clear(self):
         """Reset Waveform"""
@@ -412,7 +411,7 @@ class WaveformWidget(QWidget):
             self.view.ppsec_goal = self.view.ppsec
             self._waveform_data.ppsec = self.view.ppsec
 
-        self._layout = LayoutMetrics.compute(self.width(), self.height())
+        self._layout = LayoutMetrics.compute(self.height())
 
         # Redraw immediatly
         self.draw()
