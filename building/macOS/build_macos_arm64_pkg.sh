@@ -1,50 +1,60 @@
 #!/bin/bash
+# Build Anaouder.app for Apple Silicon (arm64) and wrap it in a .pkg installer.
+# Run it on an arm64 Mac, from any directory, inside the Python environment used for the build.
 
+set -euo pipefail
+
+ARCH="arm64"
 APP_NAME="Anaouder"
 DIST_DIR="dist"
 BUILD_DIR="build"
-VERSION="1.1"
 
-pip install .
+# Work from the repository root, wherever the script is called from
+cd "$(dirname "$0")/../.."
+
+# Single source of truth for the version number
+VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+PKG_NAME="${APP_NAME}-${VERSION}_macOS-${ARCH}_Installer.pkg"
+echo "== BUILDING ${APP_NAME} ${VERSION} (${ARCH}) =="
+
+# Install the package so its metadata (read at runtime by anaouder/version.py) matches pyproject.toml
+pip install -e ".[build]"
+# static_ffmpeg downloads its binaries on first use only; the spec file bundles them
+python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
 
 # 1. Clean and Build
-rm -rf $BUILD_DIR $DIST_DIR
-pyside6-lrelease translations/anaouder_fr.ts -qm translations/anaouder_fr.qm && pyside6-lrelease translations/anaouder_br.ts -qm translations/anaouder_br.qm
-ARCH="arm64" pyinstaller anaouder.spec
+rm -rf "$BUILD_DIR" "$DIST_DIR"
+pyside6-lrelease translations/anaouder_fr.ts -qm translations/anaouder_fr.qm
+pyside6-lrelease translations/anaouder_br.ts -qm translations/anaouder_br.qm
+ARCH="$ARCH" pyinstaller anaouder.spec
 
 echo "== AD-HOC SIGNING APP =="
-# We sign the app with ad-hoc signature so it runs on ARM64
+# arm64 Macs refuse to run unsigned code: an ad-hoc signature is the minimum
 codesign --force --deep --sign - "$DIST_DIR/$APP_NAME.app"
 
 echo "== PREPARING INSTALLER SCRIPTS =="
-# Create a temporary folder for installer scripts
-mkdir -p scripts
+# Temporary folder for the installer scripts, removed on exit
+SCRIPTS_DIR=$(mktemp -d)
+trap 'rm -rf "$SCRIPTS_DIR"' EXIT
 
-# Create the 'postinstall' script
-# This script runs automatically after installation to fix the "Damaged" error
-cat <<EOF > scripts/postinstall
+# The 'postinstall' script runs after installation to fix the "Damaged" error
+cat <<EOF > "$SCRIPTS_DIR/postinstall"
 #!/bin/bash
 # Remove the quarantine flag from the installed app
 xattr -cr "/Applications/$APP_NAME.app"
 exit 0
 EOF
-
-# Make the script executable
-chmod +x scripts/postinstall
+chmod +x "$SCRIPTS_DIR/postinstall"
 
 echo "== BUILDING PACKAGE (.pkg) =="
-# Create the installer package
-# --root: The folder containing your App
-# --install-location: Where to put it on the user's Mac
-# --scripts: The folder containing the fix script
-
+# --root: the folder containing the app
+# --install-location: where to put it on the user's Mac
+# --scripts: the folder containing the fix script
 pkgbuild --root "$DIST_DIR/$APP_NAME.app" \
          --install-location "/Applications/$APP_NAME.app" \
-         --scripts scripts \
+         --scripts "$SCRIPTS_DIR" \
          --identifier "com.anaouder.installer" \
-         --version $VERSION \
-         "$DIST_DIR/${APP_NAME}-${VERSION}_macOS-arm64_Installer.pkg"
+         --version "$VERSION" \
+         "$DIST_DIR/$PKG_NAME"
 
-echo "Done! Share 'dist/${APP_NAME}-${VERSION}_macOS-arm64_Installer.pkg'"
-# Clean up temporary scripts
-rm -rf scripts
+echo "Done! Share '$DIST_DIR/$PKG_NAME'"
