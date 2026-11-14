@@ -30,6 +30,8 @@ def loadIcons():
     icons["zoom_in"] = QIcon(get_resource_path("icons/zoom_in.png"))
     icons["zoom_out"] = QIcon(get_resource_path("icons/zoom_out.png"))
 
+    icons["save"] = QIcon(get_resource_path("icons/diskette.png"))
+
     icons["undo"] = QIcon(get_resource_path("icons/undo.png"))
     icons["redo"] = QIcon(get_resource_path("icons/redo.png"))
 

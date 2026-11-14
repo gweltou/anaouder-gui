@@ -665,6 +665,24 @@ class MainWindow(QMainWindow):
         top_bar_layout.setSpacing(BUTTON_SPACING)
         top_bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
+        # Open/Save file buttons
+        file_buttons_layout = QHBoxLayout()
+        file_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
+        file_buttons_layout.setSpacing(BUTTON_SPACING)
+        file_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.open_file_button = QToolButton()
+        self.open_file_button.setFixedWidth(BUTTON_SIZE)
+        self.open_file_button.setDefaultAction(self.action.open_file)
+        file_buttons_layout.addWidget(self.open_file_button)
+
+        self.save_file_button = QToolButton()
+        self.save_file_button.setFixedWidth(BUTTON_SIZE)
+        self.save_file_button.setDefaultAction(self.action.save)
+        file_buttons_layout.addWidget(self.save_file_button)
+
+        top_bar_layout.addLayout(file_buttons_layout)
+
         # Undo/Redo actions and buttons
         undo_redo_layout = QHBoxLayout()
         undo_redo_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)

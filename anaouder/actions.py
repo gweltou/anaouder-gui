@@ -31,7 +31,8 @@ from anaouder.ui.icons import icons
 
 
 def getActionTooltip(action: QAction) -> str:
-    return f"{action.text()} <{action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)}>"
+    text = action.text().replace("&", "").removesuffix("...")
+    return f"{text} <{action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)}>"
 
 
 
@@ -110,10 +111,14 @@ class ActionManager(QObject):
         # File menu actions
         self.open_file = QAction(self.tr("&Open") + "...", self)
         self.open_file.setShortcut(QKeySequence.StandardKey.Open)
+        self.open_file.setIcon(icons["folder"])
+        self.open_file.setToolTip(getActionTooltip(self.open_file))
         self.open_file.triggered.connect(self.open_requested.emit)
 
         self.save = QAction(self.tr("&Save"), self)
         self.save.setShortcut(QKeySequence.StandardKey.Save)
+        self.save.setIcon(icons["save"])
+        self.save.setToolTip(getActionTooltip(self.save))
         self.save.triggered.connect(self.save_requested.emit)
 
         self.save_as = QAction(self.tr("Save as") + "...", self)
