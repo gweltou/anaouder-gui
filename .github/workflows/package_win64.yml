@@ -87,7 +87,7 @@ jobs:
         
         Write-Host "Building Installer for version: $version"
 
-        # /DMyAppVersion overrides the #define in the script
+        # The .iss has no default version: /DMyAppVersion is required
         & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version "building/Windows/anaouder_installer.iss"
       shell: pwsh
 

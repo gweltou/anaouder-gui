@@ -9,8 +9,12 @@
 #define MyAppURL "https://github.com/gweltou/anaouder-gui"
 #define MyAppExeName "Anaouder.exe"
 
-; Pull version from pyproject.toml
-#define MyAppVersion "1.1.1"
+; The version must be passed on the command line, e.g.
+;   ISCC.exe /DMyAppVersion=1.2.3 anaouder_installer.iss
+; (the CI workflow reads it from pyproject.toml or the git tag)
+#ifndef MyAppVersion
+  #error "MyAppVersion is not defined: pass /DMyAppVersion=x.y.z to ISCC"
+#endif
 
 #define MyAppAssocName MyAppName + " File"
 #define MyAppAssocExt ".ali"
