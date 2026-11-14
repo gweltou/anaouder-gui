@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+* "Open file" and "Save file" buttons in the top toolbar
 * Fixed sentence still highlighted as aligned after undoing an alignment
 * Zooming the waveform is centered on the playhead when following it
 * Trackpad drag and zoom on waveform
