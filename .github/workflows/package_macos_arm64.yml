@@ -1,12 +1,17 @@
 name: Package macOS version on Apple Silicon (arm64)
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
   package:
     # macos-15 runners are arm64 (Apple Silicon)
     runs-on: macos-15
+    permissions:
+      contents: write  # Needed to create the GitHub release on tags
     steps:
       - uses: actions/checkout@v4
 
@@ -14,6 +19,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Check that the tag matches the pyproject.toml version
+        # File names use the pyproject.toml version, so a mismatched tag would publish wrong names
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match pyproject.toml version $VERSION"
+            exit 1
+          fi
 
       - name: Set up a virtual environment
         run: |
@@ -47,3 +62,15 @@ jobs:
           path: |
             dist/*.zip
             dist/*.pkg
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*.pkg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
