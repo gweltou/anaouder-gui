@@ -1,0 +1,49 @@
+name: Package macOS version on Apple Silicon (arm64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    # macos-15 runners are arm64 (Apple Silicon)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up a virtual environment
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV
+          echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+
+      - name: Upgrade pip
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Build app and .pkg installer
+        # The script installs the dependencies, downloads ffmpeg, compiles the translations,
+        # runs PyInstaller (ARCH=arm64), ad-hoc signs the app and builds the .pkg
+        env:
+          DEBUG: 'False'
+        run: |
+          bash building/macOS/build_macos_arm64_pkg.sh
+
+      - name: Zip the app bundle
+        # upload-artifact doesn't preserve the symlinks and permissions of a .app bundle,
+        # so it is zipped with ditto first
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          ditto -c -k --keepParent dist/Anaouder.app "dist/Anaouder-${VERSION}_macOS-arm64.zip"
+
+      - name: Upload built application
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-app
+          path: |
+            dist/*.zip
+            dist/*.pkg
