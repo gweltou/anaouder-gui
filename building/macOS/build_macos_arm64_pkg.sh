@@ -53,7 +53,7 @@ echo "== BUILDING PACKAGE (.pkg) =="
 pkgbuild --root "$DIST_DIR/$APP_NAME.app" \
          --install-location "/Applications/$APP_NAME.app" \
          --scripts "$SCRIPTS_DIR" \
-         --identifier "com.anaouder.installer" \
+         --identifier "com.OTilde.Anaouder" \
          --version "$VERSION" \
          "$DIST_DIR/$PKG_NAME"
 
