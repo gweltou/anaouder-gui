@@ -60,7 +60,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QMenuBar,
     QMessageBox,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -88,6 +87,7 @@ from anaouder.settings import (
     APP_NAME,
     BUTTON_LABEL_SIZE,
     BUTTON_MARGIN,
+    BUTTON_MEDIA_ICON_SIZE,
     BUTTON_MEDIA_SIZE,
     BUTTON_SIZE,
     BUTTON_SPACING,
@@ -114,6 +114,7 @@ from anaouder.transcriber import TranscriptionService
 from anaouder.ui.about_dialog import AboutDialog
 from anaouder.ui.dialogs import Prompts
 from anaouder.ui.icons import IconWidget, icons, loadIcons
+from anaouder.ui.toolbar_button import ToolbarButton
 from anaouder.ui.parameters_dialog import ParametersDialog
 from anaouder.ui.text_highlighter import Highlighter
 from anaouder.ui.text_widget import TextEditWidget
@@ -671,13 +672,11 @@ class MainWindow(QMainWindow):
         file_buttons_layout.setSpacing(BUTTON_SPACING)
         file_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.open_file_button = QToolButton()
-        self.open_file_button.setFixedWidth(BUTTON_SIZE)
+        self.open_file_button = ToolbarButton()
         self.open_file_button.setDefaultAction(self.action.open_file)
         file_buttons_layout.addWidget(self.open_file_button)
 
-        self.save_file_button = QToolButton()
-        self.save_file_button.setFixedWidth(BUTTON_SIZE)
+        self.save_file_button = ToolbarButton()
         self.save_file_button.setDefaultAction(self.action.save)
         file_buttons_layout.addWidget(self.save_file_button)
 
@@ -689,14 +688,12 @@ class MainWindow(QMainWindow):
         undo_redo_layout.setSpacing(BUTTON_SPACING)
         undo_redo_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.undo_button = QToolButton()
-        self.undo_button.setFixedWidth(BUTTON_SIZE)
+        self.undo_button = ToolbarButton()
         self.undo_button.setDefaultAction(self.action.undo)
         self.undo_button.setEnabled(False)
         undo_redo_layout.addWidget(self.undo_button)
 
-        self.redo_button = QToolButton()
-        self.redo_button.setFixedWidth(BUTTON_SIZE)
+        self.redo_button = ToolbarButton()
         self.redo_button.setDefaultAction(self.action.redo)
         self.redo_button.setEnabled(False)
         undo_redo_layout.addWidget(self.redo_button)
@@ -712,8 +709,7 @@ class MainWindow(QMainWindow):
         transcription_buttons_layout.setSpacing(BUTTON_SPACING)
         transcription_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.transcribe_button = QToolButton()
-        self.transcribe_button.setFixedWidth(BUTTON_SIZE)
+        self.transcribe_button = ToolbarButton()
         self.transcribe_button.setDefaultAction(self.action.transcribe)
 
         transcription_buttons_layout.addSpacing(4)
@@ -763,23 +759,19 @@ class MainWindow(QMainWindow):
         format_buttons_layout.setSpacing(BUTTON_SPACING)
         format_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        italic_button = QToolButton()
-        italic_button.setFixedWidth(BUTTON_SIZE)
+        italic_button = ToolbarButton()
         italic_button.setDefaultAction(self.action.italic)
         format_buttons_layout.addWidget(italic_button)
 
-        bold_button = QToolButton()
-        bold_button.setFixedWidth(BUTTON_SIZE)
+        bold_button = ToolbarButton()
         bold_button.setDefaultAction(self.action.bold)
         format_buttons_layout.addWidget(bold_button)
 
-        newline_button = QToolButton()
-        newline_button.setFixedWidth(BUTTON_SIZE)
+        newline_button = ToolbarButton()
         newline_button.setDefaultAction(self.action.insert_newline)
         format_buttons_layout.addWidget(newline_button)
 
-        dash_button = QToolButton()
-        dash_button.setFixedWidth(BUTTON_SIZE)
+        dash_button = ToolbarButton()
         dash_button.setDefaultAction(self.action.insert_em_dash)
         format_buttons_layout.addWidget(dash_button)
 
@@ -793,17 +785,15 @@ class MainWindow(QMainWindow):
         view_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         view_buttons_layout.addWidget(IconWidget(icons["font"], BUTTON_LABEL_SIZE))
-        text_zoom_out_button = QToolButton()
+        text_zoom_out_button = ToolbarButton()
         text_zoom_out_button.setIcon(icons["zoom_out"])
-        text_zoom_out_button.setFixedWidth(BUTTON_SIZE)
         text_zoom_out_button.setToolTip(app_strings.TR_ZOOM_OUT)
         text_zoom_out_button.clicked.connect(lambda: self.text_widget.zoomOut(1))
         view_buttons_layout.addWidget(text_zoom_out_button)
 
-        text_zoom_in_button = QToolButton()
+        text_zoom_in_button = ToolbarButton()
         text_zoom_in_button.setIcon(icons["zoom_in"])
-        text_zoom_in_button.setFixedWidth(BUTTON_SIZE)
-        text_zoom_out_button.setToolTip(app_strings.TR_ZOOM_IN)
+        text_zoom_in_button.setToolTip(app_strings.TR_ZOOM_IN)
         text_zoom_in_button.clicked.connect(lambda: self.text_widget.zoomIn(1))
         view_buttons_layout.addWidget(text_zoom_in_button)
 
@@ -814,7 +804,7 @@ class MainWindow(QMainWindow):
     def _create_media_toolbar_layout(self):
         media_toolbar_layout = QHBoxLayout()
         media_toolbar_layout.setContentsMargins(0, 2, 0, 0)
-        media_toolbar_layout.setSpacing(BUTTON_SPACING * 4)
+        media_toolbar_layout.setSpacing(BUTTON_SPACING * 8)
         media_toolbar_layout.addStretch(1)
 
         # Segment action buttons
@@ -822,9 +812,8 @@ class MainWindow(QMainWindow):
         # segment_buttons_layout.setContentsMargins(BUTTON_MARGIN, 0, BUTTON_MARGIN, 0)
         segment_buttons_layout.setSpacing(BUTTON_SPACING)
 
-        self.selection_button = QToolButton()
+        self.selection_button = ToolbarButton(size=BUTTON_MEDIA_SIZE, icon_size=BUTTON_MEDIA_ICON_SIZE)
         self.selection_button.setIcon(icons["select"])
-        self.selection_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.selection_button.setToolTip(
             self.tr("Create a selection") + f" &lt;{shortcuts['select'].toString()}&gt;"
         )
@@ -832,18 +821,16 @@ class MainWindow(QMainWindow):
         self.selection_button.toggled.connect(self.toggleCreateSelection)
         segment_buttons_layout.addWidget(self.selection_button)
 
-        self.add_segment_button = QToolButton()
+        self.add_segment_button = ToolbarButton(size=BUTTON_MEDIA_SIZE, icon_size=BUTTON_MEDIA_ICON_SIZE)
         self.add_segment_button.setIcon(icons["add_segment"])
-        self.add_segment_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.add_segment_button.setToolTip(
             self.tr("Create segment from selection") + " &lt;A&gt;"
         )
         self.add_segment_button.clicked.connect(self.newUtteranceFromSelection)
         segment_buttons_layout.addWidget(self.add_segment_button)
 
-        self.del_segment_button = QToolButton()
+        self.del_segment_button = ToolbarButton(size=BUTTON_MEDIA_SIZE, icon_size=BUTTON_MEDIA_ICON_SIZE)
         self.del_segment_button.setIcon(icons["trash"])
-        self.del_segment_button.setFixedWidth(BUTTON_MEDIA_SIZE)
         self.del_segment_button.setToolTip(
             self.tr("Delete segment")
             + f" &lt;{QKeySequence(Qt.Key.Key_Delete).toString()}&gt;/&lt;{QKeySequence(Qt.Key.Key_Backspace).toString()}&gt;"
@@ -873,17 +860,15 @@ class MainWindow(QMainWindow):
         play_buttons_layout.setSpacing(BUTTON_SPACING)
         play_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        back_button = QToolButton()
+        back_button = ToolbarButton(size=BUTTON_MEDIA_SIZE, icon_size=BUTTON_MEDIA_ICON_SIZE)
         back_button.setIcon(icons["back"])
-        back_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         back_button.setToolTip(self.tr("Go to first utterance"))
         back_button.clicked.connect(self.backAction)
         play_buttons_layout.addWidget(back_button)
 
         # buttonsLayout.addSpacerItem(QSpacerItem())
-        prev_button = QToolButton()
+        prev_button = ToolbarButton(size=BUTTON_MEDIA_SIZE, icon_size=BUTTON_MEDIA_ICON_SIZE)
         prev_button.setIcon(icons["previous"])
-        prev_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         shortcut_tooltip_str = shortcuts["play_prev"].toString().replace("Up", "⬆️")
         prev_button.setToolTip(
             self.tr("Previous utterance") + f" &lt;{shortcut_tooltip_str}&gt;"
@@ -892,14 +877,12 @@ class MainWindow(QMainWindow):
         prev_button.clicked.connect(self.playPreviousSegment)
         play_buttons_layout.addWidget(prev_button)
 
-        self.play_button = QToolButton()
+        self.play_button = ToolbarButton(size=BUTTON_MEDIA_SIZE, icon_size=BUTTON_MEDIA_ICON_SIZE)
         self.play_button.setDefaultAction(self.action.play_pause)
-        self.play_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         play_buttons_layout.addWidget(self.play_button)
 
-        next_button = QToolButton()
+        next_button = ToolbarButton(size=BUTTON_MEDIA_SIZE, icon_size=BUTTON_MEDIA_ICON_SIZE)
         next_button.setIcon(icons["next"])
-        next_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         shortcut_tooltip_str = shortcuts["play_next"].toString().replace("Down", "⬇️")
         next_button.setToolTip(
             self.tr("Next utterance") + f" &lt;{shortcut_tooltip_str}&gt;"
@@ -908,10 +891,9 @@ class MainWindow(QMainWindow):
         next_button.clicked.connect(self.playNextSegment)
         play_buttons_layout.addWidget(next_button)
 
-        self.looping_button = QToolButton()
+        self.looping_button = ToolbarButton(size=BUTTON_MEDIA_SIZE, icon_size=BUTTON_MEDIA_ICON_SIZE)
         self.looping_button.setCheckable(True)
         self.looping_button.setIcon(icons["loop"])
-        self.looping_button.setFixedWidth(round(BUTTON_MEDIA_SIZE * 1.2))
         self.looping_button.setToolTip(
             self.tr("Loop") + f" &lt;{shortcuts['loop'].toString()}&gt;"
         )
@@ -967,17 +949,15 @@ class MainWindow(QMainWindow):
 
         ## Follow playhead button
         self.addAction(self.action.follow_playhead)
-        self.follow_playhead_button = QToolButton()
-        self.follow_playhead_button.setFixedWidth(BUTTON_SIZE)
+        self.follow_playhead_button = ToolbarButton()
         self.follow_playhead_button.setDefaultAction(self.action.follow_playhead)
         view_buttons_layout.addWidget(self.follow_playhead_button)
         view_buttons_layout.addSpacing(BUTTON_SPACING)
 
         ## Zoom out
         view_buttons_layout.addWidget(IconWidget(icons["waveform"], BUTTON_LABEL_SIZE))
-        wave_zoom_out_button = QToolButton()
+        wave_zoom_out_button = ToolbarButton()
         wave_zoom_out_button.setIcon(icons["zoom_out"])
-        wave_zoom_out_button.setFixedWidth(BUTTON_SIZE)
         wave_zoom_out_button.setToolTip(
             app_strings.TR_ZOOM_OUT
             + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomOut).toString()}&gt;"
@@ -986,9 +966,8 @@ class MainWindow(QMainWindow):
         view_buttons_layout.addWidget(wave_zoom_out_button)
 
         ## Zoom in
-        wave_zoom_in_button = QToolButton()
+        wave_zoom_in_button = ToolbarButton()
         wave_zoom_in_button.setIcon(icons["zoom_in"])
-        wave_zoom_in_button.setFixedWidth(BUTTON_SIZE)
         wave_zoom_in_button.setToolTip(
             app_strings.TR_ZOOM_IN
             + f" &lt;{QKeySequence(QKeySequence.StandardKey.ZoomIn).toString()}&gt;"

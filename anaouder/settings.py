@@ -42,11 +42,13 @@ RECENT_FILES_LIMIT = 10  # Number of files kept in "Recent files" menu
 
 
 # UI settings
-BUTTON_SIZE = 30  # in pixels
-BUTTON_MEDIA_SIZE = 30  # in pixels
-BUTTON_SPACING = 4  # in pixels
+BUTTON_SIZE = 32  # in pixels
+BUTTON_ICON_SIZE = 20  # in pixels
+BUTTON_MEDIA_SIZE = 34  # in pixels
+BUTTON_MEDIA_ICON_SIZE = 22  # in pixels
+BUTTON_SPACING = 2  # in pixels
 BUTTON_MARGIN = 8  # in pixels
-BUTTON_LABEL_SIZE = 16  # in pixels
+BUTTON_LABEL_SIZE = 18  # in pixels
 DIAL_SIZE = 30  # in pixels
 DIALOG_CONTENT_MARGIN = 16
 USE_SCROLL_SMOOTHING = not is_darwin    # mac trackpads already have hardware smoothing

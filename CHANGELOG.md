@@ -20,6 +20,7 @@
 * Global terminal logger
 * Document auto-rescue after a crash
 * Autosaves newer than the last manual save are removed when closing a document
+* Modern toolbar buttons: flat, bigger, highlighted on mouse hover, with icons of uniform size
 
 ## [1.1] 2026-05-01
 
