@@ -21,3 +21,4 @@ folder.png	<a href="https://www.flaticon.com/free-icons/folder" title="folder ic
 	<a href="https://www.flaticon.com/free-icons/break" title="break icons">Break icons created by Fajrul Fitrianto - Flaticon</a>
 export.png	<a href="https://www.flaticon.com/free-icons/export" title="export icons">Export icons created by Mie Nakae - Flaticon</a>
 file.png	<a href="https://www.flaticon.com/free-icons/file-download" title="file download icons">File download icons created by Royyan Wijaya - Flaticon</a>
+diskette.png	<a href="https://www.flaticon.com/free-icons/diskette" title="diskette icons">Diskette icons created by Hilmy Abiyyu A. - Flaticon</a>s

@@ -3,31 +3,23 @@
 ## [Unreleased]
 
 * "Open file" and "Save file" buttons in the top toolbar
-* Fixed sentence still highlighted as aligned after undoing an alignment
-* Zooming the waveform is centered on the playhead when following it
+* "Close file" command in file menu
 * Trackpad drag and zoom on waveform
 * Better waveform (looks and optimization)
+* Zooming the waveform is centered on the playhead when following it
 * Progress bar in block number's column (left of text)
-* Progress dialog with sequential tasks (as in transcribe -+> auto align)
-* "Close file" command in file menu
-* Fixed and optimized auto-segment algorithm
-* Fixed auto-align command on Windows
+* Length of longest line in segment displayed in status bar
 * Set "preferences" shortcut to standard "ctrl+,"
 * Sets 'media-path' metadata automatically
+* Progress dialog with sequential tasks (as in transcribe -+> auto align)
+* Fixed and optimized auto-segment algorithm
+* Fixed auto-align command on Windows
 * Fixed shortcut hints in menus on macOS
-* Length of longest line in segment displayed in status bar
 * Fixed text formatting at wrong character offset
 * File manager refactoring
 * Global terminal logger
 * Document auto-rescue after a crash
 * Autosaves newer than the last manual save are removed when closing a document
-* "Adapt to subtitles" keeps italics and bold when splitting a segment into two lines
-* Fixed auto-align giving timings to the wrong sentences when a sentence has no words (only punctuation or metadata)
-* Fixed auto-align running again by itself after a later transcription
-* "Clear cache → Scenes" no longer deletes the transcription instead of the scenes
-* Fixed a crash when zooming the waveform before a media file is loaded
-* The waveform view no longer scrolls past the start or end of the media (wheel scrolling, following the playhead)
-* Fixed an error when the EAF export fails
 
 ## [1.1] 2026-05-01
 

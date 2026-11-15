@@ -260,7 +260,6 @@ class WaveformLayer(RenderLayer):
         margin = ctx.width / ctx.ppsec  # 1 viewport in seconds
         cache_t_left = ctx.t_left - margin
         cache_width = ctx.width * 3
-        print("rebuild cache", cache_width)
 
         chart = self._waveform.get(cache_t_left, cache_width)
 
