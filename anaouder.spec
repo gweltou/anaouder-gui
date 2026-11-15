@@ -54,6 +54,9 @@ def get_binaries():
         "Darwin": "darwin",
         "Windows": "win32",
     }[platform.system()]
+    # static_ffmpeg 3.0 puts arm64 binaries in 'darwin_arm64' / 'linux_arm64'
+    if platform.machine().lower() in ("arm64", "aarch64") and ffmpeg_platform != "win32":
+        ffmpeg_platform += "_arm64"
 
     # static_ffmpeg downloads its binaries on first use only:
     # run `python -c "import static_ffmpeg; static_ffmpeg.add_paths()"` once before building
@@ -100,6 +103,7 @@ a = Analysis(
         ("./icons/volume.png", "icons/"),
         ("./icons/rabbit-fast.png", "icons/"),
         ("./icons/folder.png", "icons/"),
+        ("./icons/diskette.png", "icons/"),
 
         ("./icons/undo.png", "icons/"),
         ("./icons/redo.png", "icons/"),

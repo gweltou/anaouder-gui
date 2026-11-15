@@ -18,18 +18,20 @@ if hasattr(sys, '_MEIPASS'):
     # We are running in a PyInstaller bundle
     bundle_dir = sys._MEIPASS
     system_name = platform.system()
+    # static_ffmpeg 3.0 puts arm64 binaries in 'darwin_arm64' / 'linux_arm64'
+    arch_suffix = "_arm64" if platform.machine().lower() in ("arm64", "aarch64") else ""
 
     if system_name == "Linux":
-        ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "linux", "ffmpeg")
-        ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "linux", "ffprobe")
+        ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "linux" + arch_suffix, "ffmpeg")
+        ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "linux" + arch_suffix, "ffprobe")
 
     elif system_name == "Windows":
         ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "win32", "ffmpeg.exe")
         ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "win32", "ffprobe.exe")
 
     elif system_name == "Darwin":
-        ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "darwin", "ffmpeg")
-        ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "darwin", "ffprobe")
+        ffmpeg_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "darwin" + arch_suffix, "ffmpeg")
+        ffprobe_path = os.path.join(bundle_dir, "static_ffmpeg", "bin", "darwin" + arch_suffix, "ffprobe")
 
     # Apply the environment variables if we found a path
     if system_name in ("Linux", "Windows", "Darwin"):

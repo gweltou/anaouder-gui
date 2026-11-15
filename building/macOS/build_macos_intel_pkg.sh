@@ -20,6 +20,7 @@ echo "== BUILDING ${APP_NAME} ${VERSION} (${ARCH}) =="
 
 # Install the package so its metadata (read at runtime by anaouder/version.py) matches pyproject.toml
 pip install -e ".[build]"
+
 # static_ffmpeg downloads its binaries on first use only; the spec file bundles them
 python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
 

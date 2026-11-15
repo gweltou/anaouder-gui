@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "requests>=2.28",
     "pyside6>=6.9",
-    "static-ffmpeg>=2.13",
+    "static-ffmpeg==3.0",
     "pydub>=0.25,<0.26",
     "audioop-lts; python_version>='3.13'",
     "vosk>=0.3.44",
