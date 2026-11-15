@@ -113,7 +113,7 @@ from anaouder.strings import app_strings
 from anaouder.transcriber import TranscriptionService
 from anaouder.ui.about_dialog import AboutDialog
 from anaouder.ui.dialogs import Prompts
-from anaouder.ui.icons import IconWidget, icons, loadIcons
+from anaouder.ui.icons import IconWidget, icons, loadIcons, switchIconTheme
 from anaouder.ui.toolbar_button import ToolbarButton
 from anaouder.ui.parameters_dialog import ParametersDialog
 from anaouder.ui.text_highlighter import Highlighter
@@ -225,7 +225,9 @@ class MainWindow(QMainWindow):
 
     def updateThemeColors(self) -> None:
         """Propagate the colorSchemeChanged signal to chilren widget components"""
-        theme.updateTheme(QApplication.styleHints().colorScheme())
+        color_scheme = QApplication.styleHints().colorScheme()
+        theme.updateTheme(color_scheme)
+        switchIconTheme(color_scheme == Qt.ColorScheme.Dark)
         self.text_widget.updateThemeColors()
         self.waveform.updateThemeColors()
         self.timecode_widget.updateThemeColors()
@@ -690,12 +692,12 @@ class MainWindow(QMainWindow):
 
         self.undo_button = ToolbarButton()
         self.undo_button.setDefaultAction(self.action.undo)
-        self.undo_button.setEnabled(False)
+        self.action.undo.setEnabled(False)
         undo_redo_layout.addWidget(self.undo_button)
 
         self.redo_button = ToolbarButton()
         self.redo_button.setDefaultAction(self.action.redo)
-        self.redo_button.setEnabled(False)
+        self.action.redo.setEnabled(False)
         undo_redo_layout.addWidget(self.redo_button)
 
         top_bar_layout.addLayout(undo_redo_layout)
@@ -2109,15 +2111,10 @@ class MainWindow(QMainWindow):
 
 
     def onUndoStackIndexChanged(self, index: int) -> None:
-        if index == 0:
-            self.undo_button.setEnabled(False)
-        else:
-            self.undo_button.setEnabled(True)
-
-        if index < self.undo_stack.count():
-            self.redo_button.setEnabled(True)
-        else:
-            self.redo_button.setEnabled(False)
+        # Enable the actions rather than the buttons: a button follows
+        # its action again whenever the action changes (icon, tooltip...)
+        self.action.undo.setEnabled(index > 0)
+        self.action.redo.setEnabled(index < self.undo_stack.count())
 
 
     def onAutoSegment(self) -> None:

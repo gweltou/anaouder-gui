@@ -21,7 +21,8 @@
 * Document auto-rescue after a crash
 * Autosaves newer than the last manual save are removed when closing a document
 * Modern toolbar buttons: flat, bigger, highlighted on mouse hover, with icons of uniform size
-* Light icons in dark mode
+* Light icons in dark mode, switched live with the system theme
+* Undo/Redo menu entries greyed out when there is nothing to undo/redo
 
 ## [1.1] 2026-05-01
 
