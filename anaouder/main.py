@@ -1396,8 +1396,6 @@ class MainWindow(QMainWindow):
         Load a Media File and update the Media Player and Waveform Widget.
         Should be called after loading the document (to open the Video Widget)
         """
-        ## XXX: Use QAudioDecoder instead maybe ?
-
         # Stop the scene detector
         if self.scene_detect_action.isChecked():
             self.scene_detect_action.setChecked(False)
