@@ -232,7 +232,7 @@ class FilePrompts:
         file_path = Path(file_path)
 
         if remember_dir:
-            app_settings.setValue("last_opened_folder", file_path.parent)
+            app_settings.setValue("last_opened_folder", str(file_path.parent))
 
         return file_path
 

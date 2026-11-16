@@ -6,7 +6,6 @@
 * "Close file" command in file menu
 * Trackpad drag and zoom on waveform
 * Better waveform (looks and optimization)
-* Zooming the waveform is centered on the playhead when following it
 * Progress bar in block number's column (left of text)
 * Length of longest line in segment displayed in status bar
 * Set "preferences" shortcut to standard "ctrl+,"
@@ -22,7 +21,6 @@
 * Autosaves newer than the last manual save are removed when closing a document
 * Modern toolbar buttons: flat, bigger, highlighted on mouse hover, with icons of uniform size
 * Light icons in dark mode, switched live with the system theme
-* Undo/Redo menu entries greyed out when there is nothing to undo/redo
 
 ## [1.1] 2026-05-01
 

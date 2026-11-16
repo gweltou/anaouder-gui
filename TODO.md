@@ -2,7 +2,7 @@
 
 Single list of pending work for Anaouder: packaging chores, features, bugs and `TODO`/`XXX` comments found in the code.
 It merges `docs/TODO.txt` (old, French, partly outdated) and the comments in `anaouder/`.
-Last audit: 2026-11-16 (all `unverified` entries re-checked against the code, most with headless repros; #39, #40, #45 and #65 turned out stale and were removed; #96-#97 were found on the way). Previous audit: 2026-11-13 (full read of the largest source files; see #49-#58, #67-#69; #71-#80 come from the old `PLAN.md` review).
+Last audit: 2026-11-16.
 
 ## How to use this file
 
@@ -88,4 +88,3 @@ Bugs from `docs/TODO.txt` have not been re-reproduced unless stated; `unverified
 - [ ] **#78 · S4 · valid — Test setup.** Add `tests/conftest.py` with a session-wide `QApplication` fixture (or adopt `pytest-qt`) and set `QT_QPA_PLATFORM=offscreen` by default (`os.environ.setdefault` in `conftest.py`); several test modules build their own app, and `test_adapt_subtitles.py` builds a whole `MainWindow`. Move the `test_file.*` fixtures into `tests/data/`.
 - [ ] **#79 · S4 · valid — Test coverage gaps.** No tests for `services/caption_renderer.py`, `services/task.py` (`TaskQueue` chaining/cancel), `services/model_manager.py`, `services/segment_exporter/`, or the `txt` / `rtf` formats in `file_io/`.
 - [ ] **#80 · S4 · valid — One convention for UI strings.** Translatable strings are spread across `strings.py`, `lang/` and `self.tr()` / `QCoreApplication.translate` calls in ~18 modules, with `.ts` files in `translations/`. Pick one (probably `tr()` + `strings.py` for shared strings) and document it in `docs/internationalization.txt`.
-

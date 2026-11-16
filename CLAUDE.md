@@ -38,6 +38,11 @@ Entry: `main.py` (ffmpeg setup, logging) → `anaouder/main.py` (`main()`, `Tran
 
 **Other.** `cache_system.py` stores per-media-file (fingerprint-based) transcription/waveform data in the user cache dir; `settings.py` persists preferences; `strings.py` holds shared UI strings; `ui/` contains widgets (waveform, text highlighter, timecode display, theme, dialogs).
 
+## Coding style
+
+- Use type annotations.
+- `X | None` for type annotations (Ruff UP045)
+
 ## Task tracking
 
 `TODO.md` (repo root) is the single list of pending tasks, bugs and code `TODO`s, each with a number, a status marker (`[ ]` / `[~]`), a severity (S1–S4) and a validity check. Read it before non-trivial work, reference tasks by number (e.g. "fix #30"), mark it `[~]` when you start, and when it is finished delete its entry (reference the number in the commit message) and remove the matching `TODO` comment in the code. Never reuse a task number: new tasks take the next number after the "highest number used" noted in the file, which you then bump. The application package is `anaouder` (renamed from `src` in task #1); import as `anaouder.<module>`.
