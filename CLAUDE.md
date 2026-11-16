@@ -40,9 +40,12 @@ Entry: `main.py` (ffmpeg setup, logging) → `anaouder/main.py` (`main()`, `Tran
 
 ## Coding style
 
+- Name of functions and methods that don't depend on Qt should use snake case.
+- Name of functions and methods that are thightly tied to Qt should use camel case.
 - Use type annotations.
-- `X | None` for type annotations.
-- Use `list` instead of `List` for type annotation.
+- Use `X | None` instead of `Optional`.
+- Use `list` instead of `List`.
+- Don't reference TODO tasks' numbers in code or tests.
 
 ## Task tracking
 

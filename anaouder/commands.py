@@ -18,23 +18,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-import logging
 from copy import deepcopy
 from dataclasses import dataclass
 
 from PySide6.QtGui import (
     QTextBlock,
     QTextCursor,
-    QTextDocument,
     QUndoCommand,
-)
-from PySide6.QtWidgets import (
-    QTextEdit,
 )
 
 from anaouder.interfaces import (
     DocumentInterface,
-    MyTextBlockUserData,
     Segment,
     SegmentId,
     TextEditorInterface,
@@ -92,14 +86,9 @@ class JoinUtterancesCommand(QUndoCommand):
     Join several aligned utterances into the first one (in document order).
 
     Every block between the first and the last joined utterance (comments,
-    unaligned or metadata-only blocks) is joined as well, so the text keeps
-    its document order whether its blocks are aligned or not. The joined
+    unaligned or metadata-only blocks) is joined as well. The joined
     utterance keeps the id of the first block, with a segment spanning all
     the joined segments.
-
-    Text formatting (bold, italic, line breaks) is kept by working on the
-    blocks' format fragments rather than on their plain text or HTML.
-    Undo restores every block with its metadata and segment.
     """
 
     def __init__(
