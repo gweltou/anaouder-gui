@@ -59,6 +59,22 @@ class OperationCancelled(FileOperationError):
 
 
 
+def media_path_relative_to(media_path: Path, ali_path: Path) -> str:
+    """Return the media path as written in the `media-path` metadata of `ali_path`.
+
+    The path is relative to the folder of the ALI file, so that the link
+    survives moving both files together and works for autosaves, which are
+    written in a subfolder. Falls back to the absolute path when no relative
+    path exists (e.g. different drives on Windows).
+    """
+    media_path = Path(media_path).absolute()
+    try:
+        relative = os.path.relpath(media_path, Path(ali_path).absolute().parent)
+    except ValueError:
+        return media_path.as_posix()
+    return Path(relative).as_posix()
+
+
 class FileManager(QObject):
     # open_media_requested = Signal(Path)
     recent_files_updated = Signal()
@@ -396,7 +412,9 @@ class FileManager(QObject):
             with file_path.open("w", encoding="utf-8") as _fout:
                 if media_path:
                     # Write media-path metadata if provided
-                    _fout.write(f"{{media-path: {media_path.name}}}\n")
+                    _fout.write(
+                        f"{{media-path: {media_path_relative_to(media_path, file_path)}}}\n"
+                    )
 
                 for text, segment in data:
                     # Remove the next media-path metadata occurence

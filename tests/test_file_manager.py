@@ -223,3 +223,42 @@ def test_export_eaf_error_does_not_raise(tmp_path: Path, monkeypatch):
     manager = FileManager(Prompts())
     manager.export_to_text_format(None, [("text", (0.0, 1.0))], "eaf")
     assert not out.exists()
+
+
+def test_media_path_written_relative_to_ali(file_manager: FileManager, tmp_path: Path):
+    """#44: the media link must resolve from wherever the ALI file is saved"""
+    media = tmp_path / "media" / "rec.wav"
+    media.parent.mkdir()
+    media.write_bytes(b"")
+    ali = tmp_path / "docs" / "other_name.ali"
+    ali.parent.mkdir()
+
+    file_manager.save_ali_file(ali, DATA, media)
+    assert ali.read_text(encoding="utf-8").splitlines()[0] == (
+        "{media-path: ../media/rec.wav}"
+    )
+    assert file_manager.read_ali_file(ali)["media-path"] == media.resolve()
+
+
+def test_auto_save_media_path_resolves(file_manager: FileManager, ali_file: Path):
+    """#44: autosaves live in a subfolder, their media link must still resolve"""
+    media = ali_file.parent / "rec.wav"
+    media.write_bytes(b"")
+    app_settings.setValue("autosave/interval_minute", 0.0)
+    file_manager.auto_save(ali_file, DATA, media, 1)
+
+    backups = file_manager.get_backup_list(ali_file)
+    assert len(backups) == 1
+    backup, _ = backups[0]
+    assert file_manager.read_ali_file(backup)["media-path"] == media.resolve()
+
+
+def test_media_path_replaces_old_link(file_manager: FileManager, tmp_path: Path):
+    """#44: a relinked media replaces the old `media-path` block"""
+    media = tmp_path / "new.wav"
+    ali = tmp_path / "doc.ali"
+    data = [("{media-path: old.wav}", None)] + DATA
+    file_manager.save_ali_file(ali, data, media)
+    content = ali.read_text(encoding="utf-8")
+    assert content.count("media-path") == 1
+    assert "{media-path: new.wav}" in content

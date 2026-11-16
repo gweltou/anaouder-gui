@@ -106,3 +106,34 @@ def test_replace_word(main_window):
 
     block_html = main_window.document_controller.getBlockHtml(block)
     #assert block_html == "Ur ger <I>test</I><BR>hag ur ger <B>druz</B>"
+
+
+def test_selection_over_unaligned_block_ignores_it(main_window):
+    """#96: selecting across an unaligned block must not select id -1"""
+    dc = main_window.document_controller
+    dc.clear()
+    first = dc.addSegment([0.0, 2.0])
+    main_window.text_widget.appendSentence("first", first)
+    main_window.text_widget.appendSentence("not aligned", None)
+    third = dc.addSegment([3.0, 5.0])
+    main_window.text_widget.appendSentence("third", third)
+    # A block that still holds the id of a deleted segment
+    stale = dc.addSegment([6.0, 8.0])
+    main_window.text_widget.appendSentence("stale", stale)
+    dc.removeSegment(stale)
+
+    cursor = main_window.text_widget.textCursor()
+    cursor.setPosition(dc.getBlockById(first).position())
+    main_window.text_widget.setTextCursor(cursor)
+    cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
+    main_window.text_widget.setTextCursor(cursor)
+
+    assert main_window.waveform.active_segments == [first, third]
+    assert dc.selected_segments == [first, third]
+    for seg_id in main_window.waveform.active_segments:
+        dc.segments[seg_id]  # what transcribeAction does: must not raise
+
+    # Cursor (no selection) in an unaligned block selects nothing
+    cursor = QTextCursor(dc.getBlockById(first).next())
+    main_window.text_widget.setTextCursor(cursor)
+    assert dc.selected_segments == []

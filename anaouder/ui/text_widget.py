@@ -170,7 +170,7 @@ class TextEditWidget(QTextEdit):
 
     def setSentenceText(self, text: str, segment_id: SegmentId):
         """
-        TODO: move this to a private method of JoinUtterancesCommand? It is not used anywhere else
+        TODO: remove, it is only used by a test now (#63)
         """
         block = self.document_controller.getBlockById(segment_id)
         if not block:
@@ -877,26 +877,36 @@ class TextEditWidget(QTextEdit):
 
             assert start_pos <= end_pos
 
+            # Only aligned blocks are selected: unaligned blocks and comments
+            # have no segment (id -1), and callers index `segments` with them
             selected_ids = []
 
             current_block = start_block
             while True:
-                block_id = self.document_controller.getBlockId(current_block)
-                selected_ids.append(block_id)
+                block_id = self._getAlignedBlockId(current_block)
+                if block_id >= 0:
+                    selected_ids.append(block_id)
                 if current_block == end_block:
                     break
                 current_block = current_block.next()
 
-            active_block = self.document_controller.getBlockId(start_block)
+            active_block = self._getAlignedBlockId(start_block)
             self.cursor_changed_signal.emit(selected_ids, active_block)
 
         else:
-            current_block = cursor.block()
-            block_id = self.document_controller.getBlockId(current_block)
+            block_id = self._getAlignedBlockId(cursor.block())
             if block_id >= 0:
                 self.cursor_changed_signal.emit([block_id], block_id)
             else:
                 self.cursor_changed_signal.emit([], -1)
+
+
+    def _getAlignedBlockId(self, block: QTextBlock) -> SegmentId:
+        """Return the segment id of an aligned block, or -1"""
+        block_id = self.document_controller.getBlockId(block)
+        if block_id in self.document_controller.segments:
+            return block_id
+        return -1
 
 
     def contextMenuEvent(self, event):

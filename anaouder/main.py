@@ -1093,7 +1093,6 @@ class MainWindow(QMainWindow):
         self,
         file_path: Path,
         media_path: Path | None = None,
-        # is_autosave = False
     ) -> bool:
         """Save document as an ALI file.
         Parse the internal document and sends the data to the File Manager.
@@ -1102,10 +1101,9 @@ class MainWindow(QMainWindow):
         Args:
             file_path (Path):
                 Path to save to
-            media_path (str | None):
-                Overwrite the media path linked to this file
-            is_autosave (bool):
-                Keep undo stack if True
+            media_path (Path | None):
+                Media file linked to this document,
+                defaults to the currently loaded media
 
         Returns:
             True if successful, False otherwise
@@ -1113,8 +1111,8 @@ class MainWindow(QMainWindow):
         logger.debug(f"MainWindow._saveFile({file_path=}, {media_path=})")
         data = self.document_controller.getData()
 
-        # if media_path is None:
-        #     media_path = self.document_controller.media_path
+        if media_path is None:
+            media_path = self.media_path
 
         try:
             self.file_manager.save_ali_file(

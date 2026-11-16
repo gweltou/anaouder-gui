@@ -415,3 +415,131 @@ def test_align_block_with_segment_undo_removes_highlight(main_window):
 
     main_window.undo_stack.redo()
     assert _has_background(block)
+
+
+def _load_blocks(main_window, texts_and_segments):
+    """Load a document of (html text, segment or None) blocks"""
+    main_window.document_controller.clear()
+    for text, segment in texts_and_segments:
+        seg_id = (
+            main_window.document_controller.addSegment(list(segment))
+            if segment is not None
+            else None
+        )
+        main_window.text_widget.appendSentence(text, seg_id)
+
+
+def _blocks_html(main_window) -> list[str]:
+    dc = main_window.document_controller
+    return [dc.getBlockHtml(block) for block in dc.iterBlocks()]
+
+
+def _join(main_window, seg_ids):
+    main_window.undo_stack.push(
+        JoinUtterancesCommand(
+            main_window.document_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            seg_ids,
+        )
+    )
+
+
+def test_join_utterances_keeps_formatting(main_window):
+    """#30 (a): joining must not turn formatting into literal markup"""
+    _load_blocks(
+        main_window,
+        [("aaa <B>bold</B>", (0.0, 2.0)), ("ccc <I>it</I>", (3.0, 5.0))],
+    )
+    before = _blocks_html(main_window)
+    assert before[-2:] == ["aaa <B>bold</B>", "ccc <I>it</I>"]
+
+    _join(main_window, [0, 1])
+    after = _blocks_html(main_window)
+    assert after[-1] == "aaa <B>bold</B> ccc <I>it</I>"
+    assert "<B>" not in main_window.text_widget.document().toPlainText()
+
+    main_window.undo_stack.undo()
+    assert _blocks_html(main_window) == before
+
+    main_window.undo_stack.redo()
+    assert _blocks_html(main_window) == after
+
+
+def test_join_utterances_undo_keeps_block_order(main_window):
+    """#30 (b): undo must put a removed block back after the blocks in between"""
+    _load_blocks(
+        main_window,
+        [
+            ("first", (0.0, 2.0)),
+            ("# comment", None),
+            ("not aligned", None),
+            ("second", (3.0, 5.0)),
+            ("third", (6.0, 8.0)),
+        ],
+    )
+    undo_redo_command(
+        main_window,
+        JoinUtterancesCommand(
+            main_window.document_controller,
+            main_window.text_widget,
+            main_window.waveform,
+            [0, 1],
+        ),
+    )
+    main_window.undo_stack.undo()
+    texts = [b.text() for b in main_window.document_controller.iterBlocks()]
+    assert texts[-5:] == ["first", "# comment", "not aligned", "second", "third"]
+
+
+def test_join_utterances_undo_restores_density(main_window):
+    """#31: restored blocks keep their metadata, density and colour"""
+    _load_blocks(
+        main_window,
+        [
+            ("Linenn kentañ", (0.0, 2.0)),
+            ("Eil linenn", (3.0, 4.0)),
+            ("Trede linenn", (5.0, 9.0)),
+        ],
+    )
+    dc = main_window.document_controller
+    dc.updateBlockMetadata(dc.getBlockById(1), {"font": "Arial"})
+    densities = {i: dc.getUtteranceDensity(i) for i in (0, 1, 2)}
+
+    _join(main_window, [0, 1, 2])
+    assert dc.getBlockMetadata(dc.getBlockById(0))["density"] == pytest.approx(
+        len("Linenn kentañ Eil linenn Trede linenn") / 9.0
+    )
+
+    main_window.undo_stack.undo()
+    for seg_id in (0, 1, 2):
+        block = dc.getBlockById(seg_id)
+        assert dc.getBlockMetadata(block).get("density") == pytest.approx(
+            densities[seg_id]
+        )
+        assert _has_background(block)
+    assert dc.getBlockMetadata(dc.getBlockById(1))["font"] == "Arial"
+
+
+def test_manual_save_writes_media_path(main_window, tmp_path, monkeypatch):
+    """#44: a manual save (or relink) must write the media link"""
+    from anaouder.file_io.file_manager import FileManager
+
+    # Don't add the temporary files to the user's recent files
+    monkeypatch.setattr(main_window.file_manager, "add_recent_file", lambda _: None)
+
+    tests_dir = Path("tests").resolve()
+    main_window.openMediaFile(tests_dir / "test_file.wav")
+    load_document(main_window)
+
+    saved = tmp_path / "other_name.ali"
+    assert main_window._saveFile(saved)
+    assert FileManager.read_ali_file(saved)["media-path"] == tests_dir / "test_file.wav"
+
+    # Relink to another media: the old link is replaced, not kept
+    main_window.text_widget.appendSentence("{media-path: test_file.wav}", None)
+    main_window.openMediaFile(tests_dir / "test_file.m4a")
+    assert main_window._saveFile(saved)
+    content = saved.read_text(encoding="utf-8")
+    assert content.count("media-path") == 1
+    assert FileManager.read_ali_file(saved)["media-path"] == tests_dir / "test_file.m4a"
