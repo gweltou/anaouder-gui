@@ -41,7 +41,8 @@ Entry: `main.py` (ffmpeg setup, logging) → `anaouder/main.py` (`main()`, `Tran
 ## Coding style
 
 - Use type annotations.
-- `X | None` for type annotations (Ruff UP045)
+- `X | None` for type annotations.
+- Use `list` instead of `List` for type annotation.
 
 ## Task tracking
 

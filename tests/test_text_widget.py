@@ -109,7 +109,7 @@ def test_replace_word(main_window):
 
 
 def test_selection_over_unaligned_block_ignores_it(main_window):
-    """#96: selecting across an unaligned block must not select id -1"""
+    """Selecting across an unaligned block must not select id -1"""
     dc = main_window.document_controller
     dc.clear()
     first = dc.addSegment([0.0, 2.0])

@@ -13,7 +13,6 @@ from anaouder.commands import (
     InsertBlockCommand,
     InsertTextCommand,
     JoinUtterancesCommand,
-    ReplaceTextCommand,
 )
 from anaouder.main import (
     AlignWithSelectionCommand,
@@ -207,9 +206,6 @@ def test_resize_segment(main_window):
 def test_align_with_selection(main_window):
     load_document(main_window)
     block = main_window.text_widget.document().findBlockByNumber(3)
-    # cursor = main_window.text_edit.textCursor()
-    # cursor.movePosition(QTextCursor.Start)
-    # cursor.movePosition(QTextCursor.NextBlock, QTextCursor.MoveAnchor, 2)
 
     block_id = main_window.document_controller.getBlockId(block)
     segment = main_window.document_controller.getSegment(block_id)
@@ -299,7 +295,6 @@ def test_delete_first_utterance(main_window):
 
 
 def test_join_with_prev_nonaligned(main_window):
-    print("********************* test_join_with_prev_nonaligned")
     load_document_2(main_window)
     main_window.text_widget.printDocumentStructure()
 
@@ -333,7 +328,6 @@ def test_join_with_prev_nonaligned(main_window):
 
 
 def test_join_with_next_nonaligned(main_window):
-    print("********************* test_join_with_next_nonaligned")
     load_document_2(main_window)
     main_window.text_widget.printDocumentStructure()
 
@@ -446,7 +440,7 @@ def _join(main_window, seg_ids):
 
 
 def test_join_utterances_keeps_formatting(main_window):
-    """#30 (a): joining must not turn formatting into literal markup"""
+    """Joining must not turn formatting into literal markup"""
     _load_blocks(
         main_window,
         [("aaa <B>bold</B>", (0.0, 2.0)), ("ccc <I>it</I>", (3.0, 5.0))],
@@ -466,34 +460,75 @@ def test_join_utterances_keeps_formatting(main_window):
     assert _blocks_html(main_window) == after
 
 
-def test_join_utterances_undo_keeps_block_order(main_window):
-    """#30 (b): undo must put a removed block back after the blocks in between"""
+def test_join_utterances_includes_blocks_in_between(main_window):
+    """Blocks between the joined utterances are joined too, in document order,
+    and undo restores every block with its metadata"""
     _load_blocks(
         main_window,
         [
             ("first", (0.0, 2.0)),
             ("# comment", None),
+            ("{speaker: Anna}", None),
             ("not aligned", None),
             ("second", (3.0, 5.0)),
             ("third", (6.0, 8.0)),
         ],
     )
+    dc = main_window.document_controller
+
+    def texts():
+        return [b.text() for b in dc.iterBlocks()][-6:]
+
+    before = texts()
     undo_redo_command(
         main_window,
-        JoinUtterancesCommand(
-            main_window.document_controller,
-            main_window.text_widget,
-            main_window.waveform,
-            [0, 1],
-        ),
+        JoinUtterancesCommand(dc, main_window.text_widget, main_window.waveform, [0, 1]),
     )
+    joined = texts()
+    assert joined[-2:] == [
+        "first # comment {speaker: Anna} not aligned second",
+        "third",
+    ]
+    assert dc.segments == {0: [0.0, 5.0], 2: [6.0, 8.0]}
+
     main_window.undo_stack.undo()
-    texts = [b.text() for b in main_window.document_controller.iterBlocks()]
-    assert texts[-5:] == ["first", "# comment", "not aligned", "second", "third"]
+    assert texts() == before
+    assert dc.getBlockId(dc.getBlockById(1)) == 1
+    assert [dc.getBlockType(b).name for b in dc.iterBlocks()][-6:] == [
+        "ALIGNED",
+        "EMPTY_OR_COMMENT",
+        "METADATA_ONLY",
+        "NOT_ALIGNED",
+        "ALIGNED",
+        "ALIGNED",
+    ]
+
+    main_window.undo_stack.redo()
+    assert texts()[-2:] == joined[-2:]
+
+
+def test_join_utterances_keeps_document_order(main_window):
+    """Text is joined in document order, even when segments are not in time order"""
+    _load_blocks(
+        main_window,
+        [("first", (5.0, 7.0)), ("not aligned", None), ("second", (1.0, 3.0))],
+    )
+    dc = main_window.document_controller
+    _join(main_window, [1, 0])
+    assert [b.text() for b in dc.iterBlocks()][-1] == "first not aligned second"
+    assert dc.segments == {0: [1.0, 7.0]}
+
+    main_window.undo_stack.undo()
+    assert [b.text() for b in dc.iterBlocks()][-3:] == [
+        "first",
+        "not aligned",
+        "second",
+    ]
+    assert dc.segments == {0: [5.0, 7.0], 1: [1.0, 3.0]}
 
 
 def test_join_utterances_undo_restores_density(main_window):
-    """#31: restored blocks keep their metadata, density and colour"""
+    """Restored blocks keep their metadata, density and colour"""
     _load_blocks(
         main_window,
         [
@@ -522,7 +557,7 @@ def test_join_utterances_undo_restores_density(main_window):
 
 
 def test_manual_save_writes_media_path(main_window, tmp_path, monkeypatch):
-    """#44: a manual save (or relink) must write the media link"""
+    """A manual save (or relink) must write the media link"""
     from anaouder.file_io.file_manager import FileManager
 
     # Don't add the temporary files to the user's recent files

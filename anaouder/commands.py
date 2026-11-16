@@ -21,7 +21,6 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Optional
 
 from PySide6.QtGui import (
     QTextBlock,
@@ -90,13 +89,17 @@ class CreateNewEmptyUtteranceCommand(QUndoCommand):
 
 class JoinUtterancesCommand(QUndoCommand):
     """
-    Join several aligned utterances into the first one.
+    Join several aligned utterances into the first one (in document order).
+
+    Every block between the first and the last joined utterance (comments,
+    unaligned or metadata-only blocks) is joined as well, so the text keeps
+    its document order whether its blocks are aligned or not. The joined
+    utterance keeps the id of the first block, with a segment spanning all
+    the joined segments.
 
     Text formatting (bold, italic, line breaks) is kept by working on the
     blocks' format fragments rather than on their plain text or HTML.
-    Blocks between the joined utterances (comments, unaligned blocks)
-    are left in place, and undo puts every removed block back at its
-    original block number, with its original metadata.
+    Undo restores every block with its metadata and segment.
     """
 
     def __init__(
@@ -110,27 +113,40 @@ class JoinUtterancesCommand(QUndoCommand):
         self.document_controller = document_controller
         self.text_widget = text_widget
         self.waveform = waveform
-        self.seg_ids = sorted(
-            seg_ids, key=lambda x: self.document_controller.segments[x][0]
-        )
-        # Saved state of every joined utterance, in self.seg_ids order
-        self.saved: list[_SavedUtterance] = []
+        self.seg_ids = list(seg_ids)
+        # Saved state of every block in the joined range, in document order
+        self.saved: list[_SavedBlock] = []
         self.prev_cursor = self.text_widget.getCursorState()
 
-    def _save_utterances(self) -> None:
-        self.saved = []
+    def _save_blocks(self) -> None:
+        """Save every block from the first to the last joined utterance"""
+        dc = self.document_controller
+        block_numbers = []
         for seg_id in self.seg_ids:
-            block = self.document_controller.getBlockById(seg_id)
+            block = dc.getBlockById(seg_id)
             assert block is not None
+            block_numbers.append(block.blockNumber())
+
+        self.saved = []
+        block = dc.getBlockByNumber(min(block_numbers))
+        while block is not None and block.isValid():
+            seg_id = dc.getBlockId(block)
+            segment = dc.segments.get(seg_id)
             self.saved.append(
-                _SavedUtterance(
-                    seg_id=seg_id,
+                _SavedBlock(
                     block_number=block.blockNumber(),
                     fragments=self.text_widget.getBlockFragments(block),
-                    metadata=deepcopy(self.document_controller.getBlockMetadata(block)),
-                    segment=list(self.document_controller.segments[seg_id]),
+                    metadata=deepcopy(dc.getBlockMetadata(block)),
+                    seg_id=seg_id if segment is not None else None,
+                    segment=list(segment) if segment is not None else None,
                 )
             )
+            if block.blockNumber() == max(block_numbers):
+                break
+            block = block.next()
+
+    def _aligned_ids(self) -> list[SegmentId]:
+        return [s.seg_id for s in self.saved if s.seg_id is not None]
 
     def _refresh_utterance(self, seg_id: SegmentId) -> None:
         """Recompute the density of an utterance and rehighlight its block"""
@@ -140,53 +156,54 @@ class JoinUtterancesCommand(QUndoCommand):
             self.text_widget.highlighter.rehighlightBlock(block)
 
     def undo(self):
+        dc = self.document_controller
         first = self.saved[0]
-        doc = self.text_widget.document()
+        assert first.seg_id is not None and first.segment is not None
 
         # Restore the first utterance
-        first_block = doc.findBlockByNumber(first.block_number)
-        self.text_widget.setBlockFragments(first_block, first.fragments)
-        self.document_controller.setBlockMetadata(first_block, deepcopy(first.metadata))
-        self.document_controller.updateSegment(first.seg_id, list(first.segment))
+        block = self.text_widget.document().findBlockByNumber(first.block_number)
+        self.text_widget.setBlockFragments(block, first.fragments)
+        dc.setBlockMetadata(block, deepcopy(first.metadata))
+        dc.updateSegment(first.seg_id, list(first.segment))
 
-        # Restore the other utterances at their original block numbers.
-        # Going in document order, every block before the one being
-        # restored is already back in place.
-        for saved in sorted(self.saved[1:], key=lambda s: s.block_number):
-            prev_block = doc.findBlockByNumber(saved.block_number - 1)
-            cursor = QTextCursor(prev_block)
+        # Restore the other blocks right after it, in document order
+        for saved in self.saved[1:]:
+            cursor = QTextCursor(block)
             cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
             cursor.insertBlock()
             block = cursor.block()
             self.text_widget.setBlockFragments(block, saved.fragments)
-            self.document_controller.addSegment(list(saved.segment), saved.seg_id)
-            self.document_controller.setBlockMetadata(block, deepcopy(saved.metadata))
+            if saved.seg_id is not None and saved.segment is not None:
+                dc.addSegment(list(saved.segment), saved.seg_id)
+            dc.setBlockMetadata(block, deepcopy(saved.metadata) or None)
 
-        for seg_id in self.seg_ids:
+        aligned_ids = self._aligned_ids()
+        for seg_id in aligned_ids:
             self._refresh_utterance(seg_id)
 
-        self.document_controller.select_utterances(self.seg_ids)
-        self.document_controller.must_sort = True
+        dc.select_utterances(aligned_ids)
+        dc.must_sort = True
         self.text_widget.setCursorState(self.prev_cursor)
         self.waveform.must_redraw = True
 
     def redo(self):
         logger.debug(f"JoinUtterancesCommand {self.seg_ids=}")
-        self._save_utterances()
+        dc = self.document_controller
+        self._save_blocks()
         first = self.saved[0]
+        assert first.seg_id is not None and first.segment is not None
 
-        # Remove all utterances except the first one, last block first
+        # Remove all blocks except the first one, last block first
         # so that the saved block numbers stay valid
-        for saved in sorted(
-            self.saved[1:], key=lambda s: s.block_number, reverse=True
-        ):
+        for saved in reversed(self.saved[1:]):
             block = self.text_widget.document().findBlockByNumber(saved.block_number)
             cursor = QTextCursor(block)
             cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
             cursor.removeSelectedText()
-            self.document_controller.removeSegment(saved.seg_id)
+            if saved.seg_id is not None:
+                dc.removeSegment(saved.seg_id)
 
-        # Join all text in the first utterance
+        # Join all text in the first block, in document order
         joined_fragments: list[tuple[str, set]] = []
         for saved in self.saved:
             fragments = _strip_fragments(saved.fragments)
@@ -199,8 +216,9 @@ class JoinUtterancesCommand(QUndoCommand):
         self.text_widget.setBlockFragments(first_block, joined_fragments)
 
         # Join waveform segments
-        new_segment = [first.segment[0], self.saved[-1].segment[1]]
-        self.document_controller.updateSegment(first.seg_id, new_segment)
+        segments = [s.segment for s in self.saved if s.segment is not None]
+        new_segment = [min(s[0] for s in segments), max(s[1] for s in segments)]
+        dc.updateSegment(first.seg_id, new_segment)
         self._refresh_utterance(first.seg_id)
 
         # Put the cursor at the end of the first utterance's original text
@@ -213,16 +231,16 @@ class JoinUtterancesCommand(QUndoCommand):
 
         self.waveform.active_segments = [first.seg_id]
         self.waveform.must_redraw = True
-        self.document_controller.must_sort = True
+        dc.must_sort = True
 
 
 @dataclass
-class _SavedUtterance:
-    seg_id: SegmentId
+class _SavedBlock:
     block_number: int
     fragments: list[tuple[str, set]]
     metadata: dict
-    segment: Segment
+    seg_id: SegmentId | None
+    segment: Segment | None
 
 
 def _strip_fragments(fragments: list[tuple[str, set]]) -> list[tuple[str, set]]:
@@ -504,7 +522,7 @@ class DeleteTextCommand(QUndoCommand):
 
 
 class InsertBlockCommand(QUndoCommand):
-    """Create a new text block in the document
+    """Create a new text block in the document.
 
     Args:
         position (int):
@@ -524,7 +542,7 @@ class InsertBlockCommand(QUndoCommand):
         text_edit: TextEditorInterface,
         position: int,
         text="",
-        seg_id: Optional[int] = None,
+        seg_id: int | None = None,
         after=False,
     ):
         logger.debug(
@@ -596,9 +614,6 @@ class InsertBlockCommand(QUndoCommand):
 
         cursor = self.text_edit.textCursor()
         cursor.setPosition(self.position)
-        current_block = cursor.block()
-        # old_data = self.document_controller.getBlockMetadata(current_block)
-
         cursor.insertBlock()
 
         if self.after:
@@ -735,14 +750,14 @@ class MoveTextCursor(QUndoCommand):
 
 
 class AddSegmentCommand(QUndoCommand):
-    """Define a new audio segment"""
+    """Define a new audio segment."""
 
     def __init__(
         self,
         document_controller: DocumentInterface,
         waveform_widget: WaveformInterface,
         segment: Segment,
-        seg_id: Optional[SegmentId] = None,
+        seg_id: SegmentId | None = None,
     ):
         super().__init__()
         self.document_controller = document_controller
@@ -797,7 +812,7 @@ class DeleteSegmentsCommand(QUndoCommand):
         document_controller: DocumentInterface,
         text_edit: TextEditorInterface,
         waveform_widget: WaveformInterface,
-        seg_ids: List[SegmentId],
+        seg_ids: list[SegmentId],
     ):
         super().__init__()
         self.document_controller = document_controller

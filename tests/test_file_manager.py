@@ -226,7 +226,7 @@ def test_export_eaf_error_does_not_raise(tmp_path: Path, monkeypatch):
 
 
 def test_media_path_written_relative_to_ali(file_manager: FileManager, tmp_path: Path):
-    """#44: the media link must resolve from wherever the ALI file is saved"""
+    """The media link must resolve from wherever the ALI file is saved"""
     media = tmp_path / "media" / "rec.wav"
     media.parent.mkdir()
     media.write_bytes(b"")
@@ -241,7 +241,7 @@ def test_media_path_written_relative_to_ali(file_manager: FileManager, tmp_path:
 
 
 def test_auto_save_media_path_resolves(file_manager: FileManager, ali_file: Path):
-    """#44: autosaves live in a subfolder, their media link must still resolve"""
+    """Autosaves live in a subfolder, their media link must still resolve"""
     media = ali_file.parent / "rec.wav"
     media.write_bytes(b"")
     app_settings.setValue("autosave/interval_minute", 0.0)
@@ -254,7 +254,7 @@ def test_auto_save_media_path_resolves(file_manager: FileManager, ali_file: Path
 
 
 def test_media_path_replaces_old_link(file_manager: FileManager, tmp_path: Path):
-    """#44: a relinked media replaces the old `media-path` block"""
+    """A relinked media replaces the old `media-path` block"""
     media = tmp_path / "new.wav"
     ali = tmp_path / "doc.ali"
     data = [("{media-path: old.wav}", None)] + DATA

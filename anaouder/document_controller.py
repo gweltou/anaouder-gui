@@ -815,7 +815,8 @@ class DocumentController(QObject):
     def joinUtterances(self, segment_ids) -> None:
         """
         Join many segments in one.
-        Keep the segment ID of the earliest segment among the selected ones.
+        Keep the segment ID of the first selected utterance in the document;
+        the blocks between the selected utterances are joined as well.
         """
         if self.text_widget is None or self.waveform_widget is None:
             return
