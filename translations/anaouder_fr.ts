@@ -38,7 +38,7 @@
     <message>
         <location filename="../anaouder/actions.py" line="134"/>
         <source>Quit</source>
-        <translation type="unfinished"></translation>
+        <translation>Quitter</translation>
     </message>
     <message>
         <location filename="../anaouder/actions.py" line="142"/>
