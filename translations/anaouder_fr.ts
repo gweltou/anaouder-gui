@@ -28,7 +28,7 @@
     <message>
         <location filename="../anaouder/actions.py" line="128"/>
         <source>Close file</source>
-        <translation type="unfinished"></translation>
+        <translation>Fermer</translation>
     </message>
     <message>
         <location filename="../anaouder/actions.py" line="134"/>
@@ -168,12 +168,12 @@
     <message>
         <location filename="../anaouder/actions.py" line="269"/>
         <source>Bold</source>
-        <translation type="unfinished">Gras</translation>
+        <translation>Gras</translation>
     </message>
     <message>
         <location filename="../anaouder/actions.py" line="275"/>
         <source>Italic</source>
-        <translation type="unfinished">Italique</translation>
+        <translation>Italique</translation>
     </message>
     <message>
         <location filename="../anaouder/actions.py" line="281"/>
@@ -188,17 +188,17 @@
     <message>
         <location filename="../anaouder/actions.py" line="295"/>
         <source>Split at playhead</source>
-        <translation type="unfinished"></translation>
+        <translation>Séparer sous la tête de lecture</translation>
     </message>
     <message>
         <location filename="../anaouder/actions.py" line="298"/>
         <source>Move segment head</source>
-        <translation type="unfinished"></translation>
+        <translation>Déplacer le début du segment</translation>
     </message>
     <message>
         <location filename="../anaouder/actions.py" line="302"/>
         <source>Move segment tail</source>
-        <translation type="unfinished"></translation>
+        <translation>Déplacer la fin du segment</translation>
     </message>
 </context>
 <context>
@@ -645,12 +645,12 @@
     <message>
         <location filename="../anaouder/main.py" line="2584"/>
         <source>dur: {}</source>
-        <translation type="unfinished"></translation>
+        <translation>dur: {}</translation>
     </message>
     <message>
         <location filename="../anaouder/main.py" line="2606"/>
         <source>len: {}</source>
-        <translation type="unfinished"></translation>
+        <translation>long: {}</translation>
     </message>
     <message>
         <location filename="../anaouder/main.py" line="2645"/>
@@ -767,7 +767,7 @@
     <message>
         <location filename="../anaouder/main.py" line="1590"/>
         <source>Select Input RTF File</source>
-        <translation type="unfinished"></translation>
+        <translation>Choisir un fichier RTF</translation>
     </message>
     <message>
         <location filename="../anaouder/main.py" line="2577"/>
@@ -867,7 +867,7 @@
     <message>
         <location filename="../anaouder/auto_segment.py" line="48"/>
         <source>{n} segments found</source>
-        <translation type="unfinished">{n} segments trouvés</translation>
+        <translation>{n} segments trouvés</translation>
     </message>
 </context>
 <context>
@@ -1017,7 +1017,7 @@
     <message>
         <location filename="../anaouder/strings.py" line="68"/>
         <source>Could not read file</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossible de lire le fichier</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="69"/>
@@ -1028,31 +1028,31 @@
         <location filename="../anaouder/strings.py" line="74"/>
         <source>c/s</source>
         <comment>character per second</comment>
-        <translation type="unfinished">car/s</translation>
+        <translation>car/s</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="75"/>
         <source>c</source>
         <comment>character</comment>
-        <translation type="unfinished"></translation>
+        <translation>c</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="76"/>
         <source>s</source>
         <comment>second</comment>
-        <translation type="unfinished">s</translation>
+        <translation>s</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="77"/>
         <source>mn</source>
         <comment>minute</comment>
-        <translation type="unfinished">mn</translation>
+        <translation>mn</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="78"/>
         <source>h</source>
         <comment>hour</comment>
-        <translation type="unfinished">h</translation>
+        <translation>h</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="64"/>
@@ -1062,7 +1062,7 @@
     <message>
         <location filename="../anaouder/strings.py" line="70"/>
         <source>Wrong file type</source>
-        <translation type="unfinished"></translation>
+        <translation>Mauvais type de fichier</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="73"/>
@@ -1228,12 +1228,12 @@
     <message>
         <location filename="../anaouder/transcriber.py" line="429"/>
         <source>Transcribing whole file</source>
-        <translation type="unfinished">Transcription du fichier entier</translation>
+        <translation>Transcription du fichier entier</translation>
     </message>
     <message>
         <location filename="../anaouder/transcriber.py" line="533"/>
         <source>Error during transcription: {error}</source>
-        <translation type="unfinished">Problème lors de la transcription&#xa0;: {error}</translation>
+        <translation>Problème lors de la transcription&#xa0;: {error}</translation>
     </message>
 </context>
 <context>
