@@ -2,8 +2,10 @@
 
 ## [Unreleased]
 
+## [1.2] 2026-11-21
+
 * "Open file" and "Save file" buttons in the top toolbar
-* "Close file" command in file menu
+* "Close file" command in the file menu
 * Trackpad drag and zoom on waveform
 * Better waveform (looks and optimization)
 * Progress bar in block number's column (left of text)
@@ -19,11 +21,8 @@
 * Global terminal logger
 * Document auto-rescue after a crash
 * Autosaves newer than the last manual save are removed when closing a document
-* Modern toolbar buttons: flat, bigger, highlighted on mouse hover, with icons of uniform size
+* Flat design toolbar buttons
 * Light icons in dark mode, switched live with the system theme
-* Fixed the media link (`media-path`) not being written on manual save, and written relative to the `.ali` file so it still works from another folder or from autosaves
-* Fixed joining utterances losing bold/italic formatting, and undo of a join moving blocks or losing the density colour
-* Fixed a crash when recognizing a text selection that includes unaligned lines
 
 ## [1.1] 2026-05-01
 
