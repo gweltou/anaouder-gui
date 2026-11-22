@@ -29,7 +29,7 @@
     <message>
         <location filename="../anaouder/actions.py" line="128"/>
         <source>Close file</source>
-        <translation>Serriñ ar restr</translation>
+        <translation>Serriñ an teul</translation>
     </message>
     <message>
         <location filename="../anaouder/actions.py" line="134"/>
@@ -238,52 +238,52 @@
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="61"/>
         <source>Adapt to Subtitles</source>
-        <translation type="unfinished"></translation>
+        <translation>Azasaat d&apos;an Istitloù</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="76"/>
         <source>Apply to</source>
-        <translation type="unfinished">Arloañ da</translation>
+        <translation>Arloañ da</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="80"/>
         <source>Selected segments</source>
-        <translation type="unfinished">Rannoù diuzet</translation>
+        <translation>Rannoù diuzet</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="82"/>
         <source>All segments</source>
-        <translation type="unfinished">An holl rannoù</translation>
+        <translation>An holl rannoù</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="89"/>
         <source>Timing &amp; Length</source>
-        <translation type="unfinished"></translation>
+        <translation>Mare ha padelezh</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="93"/>
         <source>Apply subtitles length and interval rules</source>
-        <translation type="unfinished">Arloañ hirder an istitloù ha reolennoù ar c&apos;houlzadoù</translation>
+        <translation>Arloañ hirder an istitloù ha reolennoù ar c&apos;houlzadoù</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="98"/>
         <source>Text Formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Mentrezhañ an destenn</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="103"/>
         <source>Remove verbal fillers (e.g., &quot;hum&quot;, &quot;err&quot;)</source>
-        <translation type="unfinished"></translation>
+        <translation>Dilemel ar gerioù leuniañ (&apos;euh&quot;, &quot;heñ&quot;...)</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="106"/>
         <source>Convert quotation marks ( &quot;…&quot; → « … » )</source>
-        <translation type="unfinished"></translation>
+        <translation>Kemmañ ar c&apos;hlochedigoù ( &quot;…&quot; → « … » )</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="110"/>
         <source>Convert apostrophes</source>
-        <translation type="unfinished"></translation>
+        <translation>Kemmañ ar skraboù</translation>
     </message>
     <message>
         <location filename="../anaouder/services/adapt_subtitles.py" line="129"/>
@@ -311,7 +311,7 @@
     <message>
         <location filename="../anaouder/ui/parameters_dialog.py" line="894"/>
         <source>No media file loaded</source>
-        <translation type="unfinished">Media ebet a zo karget</translation>
+        <translation>Media ebet a zo karget</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/parameters_dialog.py" line="900"/>
@@ -392,57 +392,57 @@
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="120"/>
         <source>Export to</source>
-        <translation type="unfinished"></translation>
+        <translation>Ezporzhiañ da</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="133"/>
         <source>Output File</source>
-        <translation type="unfinished">Hent ar restr</translation>
+        <translation>Hent ar restr</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="137"/>
         <source>Select a file</source>
-        <translation type="unfinished"></translation>
+        <translation>Diuzit ur restr</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="155"/>
         <source>&amp;Cancel</source>
-        <translation type="unfinished">&amp;Nullañ</translation>
+        <translation>&amp;Nullañ</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="158"/>
         <source>&amp;Export</source>
-        <translation type="unfinished"></translation>
+        <translation>E&amp;zporzhiañ</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="173"/>
         <source>SubRip subtitles files</source>
-        <translation type="unfinished"></translation>
+        <translation>Istitloù SubRip</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="174"/>
         <source>Text files</source>
-        <translation type="unfinished"></translation>
+        <translation>Testennoù krai</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="175"/>
         <source>Elan files</source>
-        <translation type="unfinished"></translation>
+        <translation>Restroù Elan</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="177"/>
         <source>File</source>
-        <translation type="unfinished"></translation>
+        <translation>Restr</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="178"/>
         <source>All files</source>
-        <translation type="unfinished"></translation>
+        <translation>An holl restroù</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="190"/>
         <source>Export to {type}</source>
-        <translation type="unfinished"></translation>
+        <translation>Ezporzhiañ da {type}</translation>
     </message>
 </context>
 <context>
@@ -451,61 +451,61 @@
         <location filename="../anaouder/exports/segment_exporter.py" line="56"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="52"/>
         <source>Export segments</source>
-        <translation type="unfinished"></translation>
+        <translation>Ezporzhiañ ar rannoù</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="85"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="81"/>
         <source>&amp;Cancel</source>
-        <translation type="unfinished">&amp;Nullañ</translation>
+        <translation>&amp;Nullañ</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="88"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="84"/>
         <source>&amp;Export</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">E&amp;zporzhiañ</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="101"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="97"/>
         <source>Apply to</source>
-        <translation type="unfinished">Arloañ da</translation>
+        <translation>Arloañ da</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="105"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="101"/>
         <source>Selected segments</source>
-        <translation type="unfinished">Rannoù diuzet</translation>
+        <translation>Rannoù diuzet</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="109"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="105"/>
         <source>All segments</source>
-        <translation type="unfinished">An holl rannoù</translation>
+        <translation>An holl rannoù</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="116"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="112"/>
         <source>Output File(s)</source>
-        <translation type="unfinished"></translation>
+        <translation>Hent ar restr(où)</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="150"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="146"/>
         <source>Output Folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Hent an teuliad</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="172"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="168"/>
         <source>Output Format</source>
-        <translation type="unfinished"></translation>
+        <translation>Stumm Ezporzhiañ</translation>
     </message>
     <message>
         <location filename="../anaouder/exports/segment_exporter.py" line="187"/>
         <location filename="../anaouder/services/segment_exporter/dialog.py" line="183"/>
         <source>Export directory</source>
-        <translation type="unfinished"></translation>
+        <translation>Teuliad ezporzhiañ</translation>
     </message>
 </context>
 <context>
@@ -548,33 +548,33 @@
     <message>
         <location filename="../anaouder/file_io/file_manager.py" line="152"/>
         <source>Read Error</source>
-        <translation type="unfinished">Fazi Lenn</translation>
+        <translation>Fazi Lenn</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/file_manager.py" line="153"/>
         <source>Couldn&apos;t read file &apos;{filename}&apos;</source>
-        <translation type="unfinished">Dibosubl lenn ar restr &apos;{filename}&apos;</translation>
+        <translation>Dibosubl eo lenn ar restr &apos;{filename}&apos;</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/file_manager.py" line="311"/>
         <source>Select Elan file</source>
-        <translation type="unfinished"></translation>
+        <translation>Diuzit ur restr Elan</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/file_manager.py" line="503"/>
         <source>Autosave failed: {exception}</source>
-        <translation type="unfinished">Kudenn emenrollañ: {exception}</translation>
+        <translation>Kudenn emenrollañ: {exception}</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/file_manager.py" line="548"/>
         <location filename="../anaouder/file_io/file_manager.py" line="567"/>
         <source>Couldn&apos;t export file: {error}</source>
-        <translation type="unfinished">N&apos;eo ket bet ezporzhiet ar restr: {error}</translation>
+        <translation>N&apos;eo ket bet ezporzhiet ar restr: {error}</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/file_manager.py" line="561"/>
         <source>Exported &apos;{path}&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Ezporzhiet &apos;{path}&apos;</translation>
     </message>
 </context>
 <context>
@@ -625,12 +625,12 @@
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="38"/>
         <source>Choose EAF tiers to import</source>
-        <translation type="unfinished"></translation>
+        <translation>Diuzit ar roudenn da enporzhiañ</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="48"/>
         <source>Tiers</source>
-        <translation type="unfinished"></translation>
+        <translation>Roudennoù</translation>
     </message>
 </context>
 <context>
@@ -937,7 +937,7 @@
     <message>
         <location filename="../anaouder/main.py" line="1128"/>
         <source>Couldn&apos;t save file to &apos;{filename}&apos;</source>
-        <translation>Dibosubl da saveteiñ ar restr &apos;{filename}&apos;</translation>
+        <translation>Dibosubl eo enrollañ ar restr &apos;{filename}&apos;</translation>
     </message>
     <message>
         <source>Autosave failed: {exception}</source>
@@ -1130,17 +1130,17 @@
     <message>
         <location filename="../anaouder/ui/dialogs.py" line="22"/>
         <source>Please wait</source>
-        <translation type="unfinished"></translation>
+        <translation>Gortozit mar plij</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/dialogs.py" line="49"/>
         <source>Cancel</source>
-        <translation type="unfinished">Nullañ</translation>
+        <translation>Nullañ</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/dialogs.py" line="68"/>
         <source>Cancelling</source>
-        <translation type="unfinished"></translation>
+        <translation>O nullañ</translation>
     </message>
 </context>
 <context>
@@ -1182,7 +1182,7 @@
     <message>
         <location filename="../anaouder/transcriber.py" line="150"/>
         <source>Transcribing whole file</source>
-        <translation>Treuzskrivañ ar restr a-bezh</translation>
+        <translation>Treuzskrivañ an teul a-bezh</translation>
     </message>
     <message>
         <location filename="../anaouder/transcriber.py" line="241"/>
@@ -1200,47 +1200,47 @@
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="78"/>
         <source>Render captions</source>
-        <translation type="unfinished"></translation>
+        <translation>Tresañ an istitloù</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="99"/>
         <source>Font:</source>
-        <translation type="unfinished"></translation>
+        <translation>Skritur :</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="118"/>
         <source>Preview:</source>
-        <translation type="unfinished"></translation>
+        <translation>Raksell :</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="135"/>
         <source>Start frame</source>
-        <translation type="unfinished"></translation>
+        <translation>Skeudenn gentañ</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="138"/>
         <source>End frame</source>
-        <translation type="unfinished"></translation>
+        <translation>Skeudenn diwezhañ</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="157"/>
         <source>Render frames</source>
-        <translation type="unfinished"></translation>
+        <translation>Tresañ ar skeudennoù</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="157"/>
         <source>Render frames and burn video</source>
-        <translation type="unfinished"></translation>
+        <translation>Tresañ ar skeudennoù hag engravañ ar video</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="226"/>
         <source>Frames rendered successfuly</source>
-        <translation type="unfinished"></translation>
+        <translation>Treset eo bet ar skeudennoù</translation>
     </message>
     <message>
         <location filename="../anaouder/ui/render_dialog.py" line="285"/>
         <source>Rendering frames</source>
-        <translation type="unfinished"></translation>
+        <translation>O tresañ ar skeudennoù</translation>
     </message>
 </context>
 <context>
@@ -1248,7 +1248,7 @@
     <message>
         <location filename="../anaouder/services/caption_renderer.py" line="698"/>
         <source>Rendering frames</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">O tresañ ar skeudennoù</translation>
     </message>
 </context>
 <context>
@@ -1421,7 +1421,7 @@
     <message>
         <location filename="../anaouder/strings.py" line="70"/>
         <source>Wrong file type</source>
-        <translation>Stumm restr fall</translation>
+        <translation>Doare restr fall</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="73"/>
@@ -1467,7 +1467,7 @@
     <message>
         <location filename="../anaouder/strings.py" line="83"/>
         <source>file(s)</source>
-        <translation>restr</translation>
+        <translation>restr(où)</translation>
     </message>
     <message>
         <location filename="../anaouder/strings.py" line="84"/>
@@ -1600,7 +1600,7 @@
     <message>
         <location filename="../anaouder/services/caption_renderer.py" line="749"/>
         <source>Burning captions on video</source>
-        <translation type="unfinished"></translation>
+        <translation>Engravañ an istiloù war ar video</translation>
     </message>
 </context>
 <context>
@@ -1608,7 +1608,7 @@
     <message>
         <location filename="../anaouder/transcriber.py" line="429"/>
         <source>Transcribing whole file</source>
-        <translation>Treuzskrivañ ar restr a-bezh</translation>
+        <translation>Treuzskrivañ an teul a-bezh</translation>
     </message>
     <message>
         <location filename="../anaouder/transcriber.py" line="533"/>
@@ -1674,47 +1674,47 @@
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="267"/>
         <source>No media file</source>
-        <translation type="unfinished">Restr media ebet</translation>
+        <translation>Restr media ebet</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="269"/>
         <source>Couldn&apos;t find media file for &apos;{filename}&apos;</source>
-        <translation type="unfinished">N&apos;eo ket bet kavet a restr media evit &apos;{filename}&apos;</translation>
+        <translation>N&apos;eo ket bet kavet a restr media evit &apos;{filename}&apos;</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="275"/>
         <source>&apos;{filepath}&apos; doesn&apos;t exist.</source>
-        <translation type="unfinished">&apos;{filepath}&apos; n&apos;eus ket anezhi.</translation>
+        <translation>&apos;{filepath}&apos; n&apos;eus ket anezhi.</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="316"/>
         <source>Recover the last autosave of &apos;{filename}&apos;?</source>
-        <translation type="unfinished"></translation>
+        <translation>Digeriñ an teul emenrollet diwezhañ evit &apos;{filename}&apos; ?</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="356"/>
         <source>The autosaved file has more recent changes.</source>
-        <translation type="unfinished">An teul emenrollet a zo nevesoc&apos;h.</translation>
+        <translation>An teul emenrollet a zo nevesoc&apos;h.</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="357"/>
         <source>Load autosaved file?</source>
-        <translation type="unfinished">Digeriñ an teul emenrollet ?</translation>
+        <translation>Digeriñ an teul emenrollet ?</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="383"/>
         <source>Multiple autosaved files found.</source>
-        <translation type="unfinished">Meur a teulioù emenrollet a zo.</translation>
+        <translation>Meur a teulioù emenrollet a zo.</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="384"/>
         <source>Select one to load:</source>
-        <translation type="unfinished">Dibabit unan :</translation>
+        <translation>Dibabit unan :</translation>
     </message>
     <message>
         <location filename="../anaouder/file_io/dialogs.py" line="314"/>
         <source>The application did not close properly.</source>
-        <translation type="unfinished"></translation>
+        <translation>An arload en eus serret en un doare trum.</translation>
     </message>
 </context>
 </TS>
