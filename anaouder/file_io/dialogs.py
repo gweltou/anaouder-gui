@@ -175,7 +175,8 @@ class ExportDialog(QDialog):
             "eaf": self.tr("Elan files"),
         }
         type_desc = type_map.get(self.file_type, self.tr("File"))
-        filter_str = f"{type_desc} (*.{self.file_type});;{self.tr('All files')} (*.*)"
+        all_files_desc = self.tr('All files')
+        filter_str = f"{type_desc} (*.{self.file_type});;{all_files_desc} (*.*)"
 
         current_path = Path(self.file_path_input.text() or Path.home())
         dir_path = (
@@ -309,14 +310,17 @@ class FilePrompts:
 
     def askRecoverAfterCrash(self, file_path: Path) -> bool:
         """Ask whether the document open during a crash should be recovered."""
-        question = self.main_window.tr(
-            "Recover the last autosave of '{filename}'?"
-        ).format(filename=file_path.name)
+        message = "\n\n".join([
+            self.main_window.tr("The application did not close properly."),
+            self.main_window.tr(
+                "Recover the last autosave of '{filename}'?"
+            ).format(filename=file_path.name)
+        ])
+
         msg_box = QMessageBox(
             QMessageBox.Icon.Question,
             app_strings.TR_AUTOSAVE_BACKUPS,
-            self.main_window.tr("The application did not close properly.")
-            + "\n\n" + question,
+            message,
             parent=self.main_window,
         )
         yes_button = msg_box.addButton(
@@ -349,8 +353,8 @@ class FilePrompts:
         msg_box = QMessageBox(
             QMessageBox.Icon.Question,
             app_strings.TR_AUTOSAVE_BACKUPS,
-            f"{self.main_window.tr('The autosaved file has more recent changes.')}\n\n"
-            f"{self.main_window.tr('Load autosaved file?')}",
+            self.main_window.tr('The autosaved file has more recent changes.') + "\n\n" +\
+            self.main_window.tr('Load autosaved file?'),
             parent=self.main_window,
         )
 
@@ -375,10 +379,10 @@ class FilePrompts:
         m = DIALOG_CONTENT_MARGIN
         main_layout.setContentsMargins(m, m, m, m)
 
-        message = (
-            f"{self.main_window.tr('Multiple autosaved files found.')}\n\n"
-            f"{self.main_window.tr('Select one to load:')}"
-        )
+        message = "\n\n".join([
+            self.main_window.tr('Multiple autosaved files found.'),
+            self.main_window.tr('Select one to load:')
+        ])
         main_layout.addWidget(QLabel(message))
 
         list_widget = QListWidget()

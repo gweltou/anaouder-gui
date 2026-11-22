@@ -31,7 +31,8 @@ from anaouder.ui.icons import icons
 
 
 def getActionTooltip(action: QAction) -> str:
-    text = action.text().replace("&", "").removesuffix("...")
+    text = action.text().split('\t')[0] # remove shortcut suffix inserted by ActionWithShortcutHint
+    text = text.replace("&", "").removesuffix("...")
     return f"{text} <{action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)}>"
 
 
@@ -43,6 +44,8 @@ class ActionWithShortcutHint(QAction):
         super().__init__(label, parent)
 
     def setShortcut(self, shortcut: QKeySequence) -> None:
+        """This method conflicts with the function `getActionTooltip`
+        by rewriting the action's text content."""
         super().setShortcut(shortcut)
 
         if is_darwin:

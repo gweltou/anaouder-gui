@@ -4,8 +4,9 @@
 <context>
     <name>AboutDialog</name>
     <message>
+        <location filename="../anaouder/ui/about_dialog.py" line="52"/>
         <source>About</source>
-        <translation type="vanished">À propos</translation>
+        <translation>À propos</translation>
     </message>
 </context>
 <context>
@@ -233,46 +234,126 @@
     </message>
 </context>
 <context>
+    <name>AdaptUtterancesDialog</name>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="61"/>
+        <source>Adapt to Subtitles</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="76"/>
+        <source>Apply to</source>
+        <translation type="unfinished">Appliquer à</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="80"/>
+        <source>Selected segments</source>
+        <translation type="unfinished">Segments séléctionnées</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="82"/>
+        <source>All segments</source>
+        <translation type="unfinished">Tous les segments</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="89"/>
+        <source>Timing &amp; Length</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="93"/>
+        <source>Apply subtitles length and interval rules</source>
+        <translation type="unfinished">Appliquer les règles de longueur et d&apos;intervalle aux sous-titres</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="98"/>
+        <source>Text Formatting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="103"/>
+        <source>Remove verbal fillers (e.g., &quot;hum&quot;, &quot;err&quot;)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="106"/>
+        <source>Convert quotation marks ( &quot;…&quot; → « … » )</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="110"/>
+        <source>Convert apostrophes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="129"/>
+        <source>&lt;span style=&apos;font-size: 16pt; font-weight: bold;&apos;&gt;’&lt;/span&gt; → &lt;span style=&apos;font-size: 16pt; font-weight: bold;&apos;&gt;&apos;&lt;/span&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/services/adapt_subtitles.py" line="143"/>
+        <source>&lt;span style=&apos;font-size: 16pt; font-weight: bold;&apos;&gt;&apos;&lt;/span&gt; → &lt;span style=&apos;font-size: 16pt; font-weight: bold;&apos;&gt;’&lt;/span&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>CachePanel</name>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="883"/>
         <source>Current file cache</source>
-        <translation type="vanished">Cache du fichier actuel</translation>
+        <translation>Cache du fichier actuel</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="892"/>
         <source>Media fingerprint</source>
-        <translation type="vanished">Empreinte digitale du media</translation>
+        <translation>Empreinte digitale du media</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="894"/>
+        <source>No media file loaded</source>
+        <translation type="unfinished">Aucun média chargé</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="900"/>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="946"/>
         <source>Size on disk</source>
-        <translation type="vanished">Place sur le disque</translation>
+        <translation>Place sur le disque</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="907"/>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="967"/>
         <source>Clear cache</source>
-        <translation type="vanished">Vider le cache</translation>
+        <translation>Vider le cache</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="917"/>
         <source>Clear cache for current file only</source>
-        <translation type="vanished">Vider le cache pour le fichier actuel uniquement</translation>
+        <translation>Vider le cache pour le fichier actuel uniquement</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="932"/>
         <source>Global cache</source>
-        <translation type="vanished">Cache global</translation>
+        <translation>Cache global</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="936"/>
         <source>Open folder</source>
-        <translation type="vanished">Ouvrir le dossier</translation>
+        <translation>Ouvrir le dossier</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="938"/>
         <source>Open cache folder in file explorer</source>
-        <translation type="vanished">Ouvrir le dossier de cache dans l&apos;explorateur de fichier</translation>
+        <translation>Ouvrir le dossier de cache dans l&apos;explorateur de fichier</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="951"/>
         <source>Size limit</source>
-        <translation type="vanished">Limite de taille</translation>
+        <translation>Limite de taille</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="978"/>
         <source>Clear global cache</source>
-        <translation type="vanished">Vider le cache global</translation>
+        <translation>Vider le cache global</translation>
     </message>
 </context>
 <context>
@@ -286,20 +367,145 @@
 <context>
     <name>DownloadProgressDialog</name>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="107"/>
         <source>Downloading {}</source>
-        <translation type="vanished">Téléchargement {}</translation>
+        <translation>Téléchargement {}</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="113"/>
         <source>Downloading {}...</source>
-        <translation type="vanished">Téléchargement {}...</translation>
+        <translation>Téléchargement {}...</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="186"/>
         <source>Verifying checksum...</source>
-        <translation type="vanished">Vérification de la somme de contrôle...</translation>
+        <translation>Vérification de la somme de contrôle...</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="201"/>
         <source>Extracting downloaded files...</source>
-        <translation type="vanished">Extraction des fichiers téléchargés...</translation>
+        <translation>Extraction des fichiers téléchargés...</translation>
+    </message>
+</context>
+<context>
+    <name>ExportDialog</name>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="120"/>
+        <source>Export to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="133"/>
+        <source>Output File</source>
+        <translation type="unfinished">Fichier de sortie</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="137"/>
+        <source>Select a file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="155"/>
+        <source>&amp;Cancel</source>
+        <translation type="unfinished">&amp;Annuler</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="158"/>
+        <source>&amp;Export</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="173"/>
+        <source>SubRip subtitles files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="174"/>
+        <source>Text files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="175"/>
+        <source>Elan files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="177"/>
+        <source>File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="178"/>
+        <source>All files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="190"/>
+        <source>Export to {type}</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ExportSegmentDialog</name>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="56"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="52"/>
+        <source>Export segments</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="85"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="81"/>
+        <source>&amp;Cancel</source>
+        <translation type="unfinished">&amp;Annuler</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="88"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="84"/>
+        <source>&amp;Export</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="101"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="97"/>
+        <source>Apply to</source>
+        <translation type="unfinished">Appliquer à</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="105"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="101"/>
+        <source>Selected segments</source>
+        <translation type="unfinished">Segments séléctionnées</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="109"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="105"/>
+        <source>All segments</source>
+        <translation type="unfinished">Tous les segments</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="116"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="112"/>
+        <source>Output File(s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="150"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="146"/>
+        <source>Output Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="172"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="168"/>
+        <source>Output Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/exports/segment_exporter.py" line="187"/>
+        <location filename="../anaouder/services/segment_exporter/dialog.py" line="183"/>
+        <source>Export directory</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -338,38 +544,93 @@
     </message>
 </context>
 <context>
+    <name>FileManager</name>
+    <message>
+        <location filename="../anaouder/file_io/file_manager.py" line="152"/>
+        <source>Read Error</source>
+        <translation type="unfinished">Erreur de lecture</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/file_manager.py" line="153"/>
+        <source>Couldn&apos;t read file &apos;{filename}&apos;</source>
+        <translation type="unfinished">Impossible de lire le fichier &apos;{filename}&apos;</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/file_manager.py" line="311"/>
+        <source>Select Elan file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/file_manager.py" line="503"/>
+        <source>Autosave failed: {exception}</source>
+        <translation type="unfinished">Échet de la sauvegarde automatique : {exception}</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/file_manager.py" line="548"/>
+        <location filename="../anaouder/file_io/file_manager.py" line="567"/>
+        <source>Couldn&apos;t export file: {error}</source>
+        <translation type="unfinished">Échec lors de l&apos;export du fichier : {error}</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/file_manager.py" line="561"/>
+        <source>Exported &apos;{path}&apos;</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>GeneralPanel</name>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="350"/>
         <source>Language of user interface</source>
-        <translation type="vanished">Langue de l&apos;interface utilisateur</translation>
+        <translation>Langue de l&apos;interface utilisateur</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="369"/>
         <source>Subtitles style</source>
-        <translation type="vanished">Style des sous-titres</translation>
+        <translation>Style des sous-titres</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="372"/>
         <source>Subtitles font color</source>
-        <translation type="vanished">Couleur de la police des sous-titres</translation>
+        <translation>Couleur de la police des sous-titres</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="383"/>
         <source>Background rectangle</source>
-        <translation type="vanished">Cartouche</translation>
+        <translation>Cartouche</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="402"/>
         <source>Reset to default</source>
-        <translation type="vanished">Réglages par défaut</translation>
+        <translation>Réglages par défaut</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="409"/>
         <source>Auto Save</source>
-        <translation type="vanished">Sauvegarde Automatique</translation>
+        <translation>Sauvegarde Automatique</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="428"/>
         <source>Save every</source>
-        <translation type="vanished">Sauver tous les</translation>
+        <translation>Sauver tous les</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="442"/>
         <source>Keep only</source>
-        <translation type="vanished">Ne garder que</translation>
+        <translation>Ne garder que</translation>
+    </message>
+</context>
+<context>
+    <name>ImportDialogEAF</name>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="38"/>
+        <source>Choose EAF tiers to import</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="48"/>
+        <source>Tiers</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -797,43 +1058,70 @@
 <context>
     <name>ModelsPanel</name>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="536"/>
         <source>Language</source>
-        <translation type="vanished">Langue</translation>
+        <translation>Langue</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="554"/>
         <source>Online Models</source>
-        <translation type="vanished">Modèles en ligne</translation>
+        <translation>Modèles en ligne</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="560"/>
         <source>Download</source>
-        <translation type="vanished">Télécharger</translation>
+        <translation>Télécharger</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="568"/>
         <source>Local Models</source>
-        <translation type="vanished">Modèles locaux</translation>
+        <translation>Modèles locaux</translation>
     </message>
 </context>
 <context>
     <name>ParametersDialog</name>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="288"/>
         <source>Parameters</source>
-        <translation type="vanished">Paramètres</translation>
+        <translation>Paramètres</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="293"/>
         <source>General</source>
-        <translation type="vanished">Général</translation>
+        <translation>Général</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="294"/>
         <source>Models</source>
-        <translation type="vanished">Modèles</translation>
+        <translation>Modèles</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="297"/>
         <source>Subtitles Rules</source>
-        <translation type="vanished">Sous-titres</translation>
+        <translation>Sous-titres</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="300"/>
         <source>Cache</source>
-        <translation type="vanished">Cache</translation>
+        <translation>Cache</translation>
+    </message>
+</context>
+<context>
+    <name>ProgressDialog</name>
+    <message>
+        <location filename="../anaouder/ui/dialogs.py" line="22"/>
+        <source>Please wait</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/dialogs.py" line="49"/>
+        <source>Cancel</source>
+        <translation type="unfinished">Annuler</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/dialogs.py" line="68"/>
+        <source>Cancelling</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -890,6 +1178,62 @@
         <location filename="../anaouder/transcriber.py" line="271"/>
         <source>Transcribing</source>
         <translation>Transcription</translation>
+    </message>
+</context>
+<context>
+    <name>RenderCaptionsDialog</name>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="78"/>
+        <source>Render captions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="99"/>
+        <source>Font:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="118"/>
+        <source>Preview:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="135"/>
+        <source>Start frame</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="138"/>
+        <source>End frame</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="157"/>
+        <source>Render frames</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="157"/>
+        <source>Render frames and burn video</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="226"/>
+        <source>Frames rendered successfuly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/ui/render_dialog.py" line="285"/>
+        <source>Rendering frames</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RendererWorker</name>
+    <message>
+        <location filename="../anaouder/services/caption_renderer.py" line="698"/>
+        <source>Rendering frames</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1164,48 +1508,59 @@
 <context>
     <name>SubtitlesPanel</name>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="655"/>
         <source>Preferences</source>
-        <translation type="vanished">Préférences</translation>
+        <translation>Préférences</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="659"/>
         <source>Netflix default</source>
-        <translation type="vanished">Règles Netflix</translation>
+        <translation>Règles Netflix</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="660"/>
         <source>Custom</source>
-        <translation type="vanished">Personnalisé</translation>
+        <translation>Personnalisé</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="670"/>
         <source>Subtitles duration</source>
-        <translation type="vanished">Durée des sous-titres</translation>
+        <translation>Durée des sous-titres</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="699"/>
         <source>Time gap between subtitles</source>
-        <translation type="vanished">Intervalle entre les sous-titres</translation>
+        <translation>Intervalle entre les sous-titres</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="715"/>
         <source>Auto extend</source>
-        <translation type="vanished">Extension automatique</translation>
+        <translation>Extension automatique</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="726"/>
         <source>when gap is under</source>
-        <translation type="vanished">quand l&apos;intervalle est en-dessous de</translation>
+        <translation>quand l&apos;intervalle est en-dessous de</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="732"/>
         <source>Text length and density</source>
-        <translation type="vanished">Longueur et densité du texte</translation>
+        <translation>Longueur et densité du texte</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="737"/>
         <source>chars</source>
-        <translation type="vanished">carac.</translation>
+        <translation>carac.</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="740"/>
         <source>Text margin size</source>
-        <translation type="vanished">Taille de la marge du texte</translation>
+        <translation>Taille de la marge du texte</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/parameters_dialog.py" line="751"/>
         <source>Characters per second</source>
-        <translation type="vanished">Caractères par seconde</translation>
+        <translation>Caractères par seconde</translation>
     </message>
 </context>
 <context>
@@ -1215,12 +1570,22 @@
         <translation type="vanished">Aucun média chargé</translation>
     </message>
     <message>
+        <location filename="../anaouder/services/aligner.py" line="455"/>
         <source>Aligning text with speech...</source>
-        <translation type="vanished">Alignement du texte et de la parole...</translation>
+        <translation>Alignement du texte et de la parole...</translation>
     </message>
     <message>
+        <location filename="../anaouder/services/aligner.py" line="503"/>
         <source>Hidden transcription...</source>
-        <translation type="vanished">Transcription cachée...</translation>
+        <translation>Transcription cachée...</translation>
+    </message>
+</context>
+<context>
+    <name>VideoBurnerWorker</name>
+    <message>
+        <location filename="../anaouder/services/caption_renderer.py" line="749"/>
+        <source>Burning captions on video</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1239,8 +1604,9 @@
 <context>
     <name>WaveformWidget</name>
     <message>
+        <location filename="../anaouder/ui/waveform/waveform_widget.py" line="154"/>
         <source>Add utterance</source>
-        <translation type="vanished">Ajouter une énonciation</translation>
+        <translation>Ajouter une énonciation</translation>
     </message>
     <message>
         <source>Auto transcribe</source>
@@ -1259,28 +1625,81 @@
         <translation type="vanished">Découper ici</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/waveform/waveform_widget.py" line="1080"/>
         <source>Join segments</source>
-        <translation type="vanished">Joindre les segments</translation>
+        <translation>Joindre les segments</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/waveform/waveform_widget.py" line="1088"/>
         <source>Delete utterances</source>
-        <translation type="vanished">Supprimer les segments</translation>
+        <translation>Supprimer les segments</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/waveform/waveform_widget.py" line="1088"/>
         <source>Delete utterance</source>
-        <translation type="vanished">Supprimer le segment</translation>
+        <translation>Supprimer le segment</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/waveform/waveform_widget.py" line="1091"/>
         <source>Delete audio segments</source>
-        <translation type="vanished">Supprimer les segments audio</translation>
+        <translation>Supprimer les segments audio</translation>
     </message>
     <message>
+        <location filename="../anaouder/ui/waveform/waveform_widget.py" line="1093"/>
         <source>Delete audio segment</source>
-        <translation type="vanished">Supprimer le segment audio</translation>
+        <translation>Supprimer le segment audio</translation>
     </message>
     <message>
         <source>next</source>
         <translation type="vanished">suiv</translation>
+    </message>
+</context>
+<context>
+    <name>self.main_window</name>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="267"/>
+        <source>No media file</source>
+        <translation type="unfinished">Aucun média</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="269"/>
+        <source>Couldn&apos;t find media file for &apos;{filename}&apos;</source>
+        <translation type="unfinished">Impossible de trouver le média pour &apos;{filename}&apos;</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="275"/>
+        <source>&apos;{filepath}&apos; doesn&apos;t exist.</source>
+        <translation type="unfinished">&apos;{filepath}&apos; n&apos;existe pas.</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="316"/>
+        <source>Recover the last autosave of &apos;{filename}&apos;?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="356"/>
+        <source>The autosaved file has more recent changes.</source>
+        <translation type="unfinished">Le fichier de sauvegarde automatique est plus récent.</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="357"/>
+        <source>Load autosaved file?</source>
+        <translation type="unfinished">Charger la sauvegarde automatique ?</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="383"/>
+        <source>Multiple autosaved files found.</source>
+        <translation type="unfinished">Plusieurs fichiers de sauvegarde automatique ont été trouvés.</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="384"/>
+        <source>Select one to load:</source>
+        <translation type="unfinished">Choisissez une sauvegarde à restaurer :</translation>
+    </message>
+    <message>
+        <location filename="../anaouder/file_io/dialogs.py" line="314"/>
+        <source>The application did not close properly.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

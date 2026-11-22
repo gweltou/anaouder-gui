@@ -59,7 +59,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-import anaouder.lang as lang
+from anaouder import lang
 from anaouder.cache_system import cache
 from anaouder.services.logger import logger
 from anaouder.settings import (
@@ -275,7 +275,7 @@ class ParametersDialog(QDialog):
         cache_scenes_cleared = Signal()
         cache_transcription_cleared = Signal()
 
-    def __init__(self, parent, media_path: Optional[Path]):
+    def __init__(self, parent, media_path: Path | None):
         super().__init__(parent)
 
         if media_path:
